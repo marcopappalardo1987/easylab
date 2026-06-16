@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Ambiente / segreti (mai versionati — vedi docs/Architettura/Setup Repository e Ambienti.md)
+.env
+.env.*
+!.env.example
+
+# Laravel (predisposizione S1 — l'installer completerà questo file)
+/vendor
+/node_modules
+/public/build
+/public/hot
+/public/storage
+/storage/*.key
+/storage/pail
+/bootstrap/cache/*.php
+
+# IDE / editor
+/.idea
+/.vscode
+*.swp
+
+# Log
+*.log

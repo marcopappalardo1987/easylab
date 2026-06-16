@@ -1,0 +1,80 @@
+# CI — Easy Lab (scheletro S0.7)
+# Lint (Pint) + Test (Pest) ad ogni push/PR verso main.
+# NOTA: questo workflow diventa operativo quando l'app Laravel viene inizializzata in S1
+# (prima non esistono composer.json / suite di test). Vedi docs/Architettura/Setup Repository e Ambienti.md §4.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: easylab
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: easylab_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U easylab"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: easylab_test
+      DB_USERNAME: easylab
+      DB_PASSWORD: secret
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_pgsql, redis, mbstring, bcmath
+          coverage: none
+
+      # --- Gli step seguenti richiedono l'app Laravel (S1). ---
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Lint (Pint)
+        run: ./vendor/bin/pint --test
+
+      - name: Run migrations
+        run: php artisan migrate --force
+
+      - name: Test (Pest)
+        run: ./vendor/bin/pest --ci
