@@ -1,19 +1,19 @@
 <?php
 
+use App\Livewire\Settings\TwoFactorAuthentication;
+use App\Livewire\SystemCheck;
 use Illuminate\Support\Facades\Route;
 
-/*
- | Per ora la root rimanda alla login. L'autenticazione vera (Fortify + 2FA)
- | arriva nello Sprint 1 · punto 4: la vista resources/views/auth/login.blade.php
- | diventerà la login view registrata in Fortify, senza riscriverla.
- */
+// Login, logout, reset password, verifica email e 2FA sono registrati da Fortify
+// (vedi App\Providers\FortifyServiceProvider). La root rimanda alla login;
+// dopo l'accesso Fortify reindirizza a `home` = /dashboard.
 Route::redirect('/', '/login');
 
-Route::get('/login', fn () => view('auth.login'))->name('login');
+// Area autenticata.
+Route::middleware('auth')->group(function () {
+    Route::view('/dashboard', 'dashboard')->name('dashboard');
+    Route::get('/settings/security', TwoFactorAuthentication::class)->name('settings.security');
+});
 
-// Stub temporaneo: finché Fortify non gestisce l'autenticazione (S4),
-// il submit non autentica ma mostra un avviso, evitando un 405.
-Route::post('/login', fn () => back()->with(
-    'status',
-    'Autenticazione non ancora attiva: sarà disponibile dallo Sprint 1 · punto 4 (Fortify + 2FA).'
-))->name('login.attempt');
+// Verifica TALL stack (Sprint 1 · punto 3) — rotta temporanea, rimovibile dal punto 10.
+Route::get('/_tall-check', SystemCheck::class);

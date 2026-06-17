@@ -12,7 +12,7 @@
 - [ ] Installare Tailwind CSS, PostCSS e Autoprefixer (npm install -D tailwindcss postcss autoprefixer).
 - [ ] Inizializzare la configurazione di Tailwind (npx tailwindcss init -p).
 - [ ] Mappare i percorsi delle viste Blade all'interno del file tailwind.config.js.
-- [ ] Installare Alpine.js (npm install alpinejs) se serve una gestione custom oltre a quella nativa di Livewire 3.
+- [ ] Installare Alpine.js (npm install alpinejs) se serve una gestione custom oltre a quella nativa di Livewire 4.
 - [ ] Compilare gli asset frontend (npm run build o npm run dev).
 
 **⚙️ SaaS, Ruoli e Autenticazione**

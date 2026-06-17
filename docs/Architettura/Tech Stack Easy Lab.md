@@ -18,7 +18,7 @@ Abbiamo scelto il **TALL Stack**. Questo permette di avere la reattività di una
 
 - Tailwind CSS: Per uno styling rapido, responsivo (mobile-first per i tecnici con QR code) e coerente.
 - Alpine.js: Per le interazioni UI leggere lato client (es. apertura modali, dropdown, toggle semafori).
-- Laravel Livewire 3: Il cuore dinamico. Permette di creare tabelle filtrabili in tempo reale (es. ricerca del ricambio specifico su tutte le macchine) scrivendo solo codice PHP/Blade.
+- Laravel Livewire 4: Il cuore dinamico. Permette di creare tabelle filtrabili in tempo reale (es. ricerca del ricambio specifico su tutte le macchine) scrivendo solo codice PHP/Blade.
 - Laravel Blade: Il motore di templating pulito e sicuro per le viste.
 
 3. Gestione Dati e Database

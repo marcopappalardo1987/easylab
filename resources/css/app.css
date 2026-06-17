@@ -3,6 +3,11 @@
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
+/* Alpine: nasconde gli elementi x-cloak finché Alpine non è inizializzato */
+[x-cloak] {
+    display: none !important;
+}
+
 /*
  | Design System Base — Easy Lab (docs/Design/Design System Base.md)
  | Token Tailwind v4: palette brand (Teal), neutri (Slate), stati semaforo

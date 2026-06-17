@@ -20,7 +20,7 @@
 - **Storage documenti:** DigitalOcean Spaces (S3-compatible), percorsi isolati per `tenant_id`. Upload privati con URL firmate a scadenza.
 - **2FA:** abilitata via Jetstream/Fortify; **obbligatoria per Developer/Superadmin/Admin**, opzionale per gli altri.
 - **Testing:** Pest. Suite obbligatoria di **isolamento multi-tenant** + feature test su billing, semaforo, scadenze. CI su GitHub Actions.
-- **Versione Laravel:** ultima stabile verificata al kickoff (Laravel 12/13), Livewire 3, PHP 8.3+. La "Laravel 13" indicata nel Tech Stack va confermata GA prima di partire.
+- **Versione Laravel:** in uso Laravel 13, Livewire 4, PHP 8.4 (installati in S1). La scelta di Livewire 4 (anziché 3) è stata fatta in fase di setup essendo il progetto greenfield.
 - **Email:** SMTP (provider tipo Postmark/SES/Mailgun), invii accodati su Redis.
 
 **Legenda.** `[CORE]` essenziale MVP · `[STRETCH]` slitta per primo · `[V1.1]` fuori MVP · ⚠ rischio/nota · 🔗 ADR collegato.
@@ -93,10 +93,10 @@ gantt
 **Obiettivo:** un'app Laravel deployabile con autenticazione, ruoli e code funzionanti. *(Assorbe e completa la "Fase 1 - ToDo List Installazione Stack".)*
 **Dipendenze:** S0 (ambienti, repo).
 
-- [x] `[CORE]` Inizializzare progetto Laravel; configurare `.env` (DB PostgreSQL, Redis cache+queue). *(Laravel 13 installato alla radice; `.env` → pgsql `easylab` + Redis cache/queue. ⚠️ Avviare Redis in Herd prima del punto 2.)*
-- [ ] `[CORE]` Eseguire migrazioni base; verificare connessione DB/Redis.
-- [ ] `[CORE]` Installare **TALL stack**: Livewire 3, Tailwind, Alpine; pipeline asset (Vite).
-- [ ] `[CORE]` Installare e configurare **auth scaffold** (Jetstream/Fortify) con 2FA. 🔗 ADR-012
+- [x] `[CORE]` Inizializzare progetto Laravel; configurare `.env` (DB PostgreSQL, Redis cache+queue). *(Laravel 13 installato alla radice; `.env` → pgsql `easylab` + Redis cache/queue.)*
+- [x] `[CORE]` Eseguire migrazioni base; verificare connessione DB/Redis. *(Migrazioni base ok; PostgreSQL e Redis verificati da Laravel. Redis locale via Homebrew — `brew services` — non Herd Pro.)*
+- [x] `[CORE]` Installare **TALL stack**: Livewire 4, Tailwind, Alpine; pipeline asset (Vite). *(Livewire v4.3.1 + layout `layouts.app`; Tailwind v4 e Vite già configurati con i token del design system; Alpine incluso in Livewire. Verifica: componente `SystemCheck` su `/_tall-check`.)*
+- [x] `[CORE]` Installare e configurare **auth scaffold** (Fortify) con 2FA. 🔗 ADR-012 *(Fortify headless + viste design system; login/logout/reset/verifica email + 2FA TOTP completa (QR, recovery codes, challenge) su `/settings/security`; dashboard minima; test Pest verdi. Registrazione pubblica rimandata a S5; enforcement 2FA per-ruolo al punto 5 coi ruoli spatie.)*
 - [ ] `[CORE]` Installare **spatie/laravel-permission**; `RolesAndPermissionsSeeder` con i default da S0 (catalogo + matrice di `../Architettura/Schema Ruoli e Permessi.md`). 🔗 ADR-006/016
 - [ ] `[CORE]` Installare **lab404/laravel-impersonate** (config, ancora senza UI). 🔗 ADR (Superadmin)
 - [ ] `[CORE]` Installare **spatie/laravel-activitylog** (audit log) e abilitarlo sui modelli sensibili. 🔗 ADR-005/007/013

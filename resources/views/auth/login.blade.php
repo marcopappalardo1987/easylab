@@ -50,7 +50,7 @@
                     <div>
                         <div class="flex items-center justify-between">
                             <label for="password" class="block text-sm font-medium text-neutral-800">Password</label>
-                            <a href="#" class="text-sm font-medium text-primary-600 hover:text-primary-700">Password dimenticata?</a>
+                            <a href="{{ route('password.request') }}" class="text-sm font-medium text-primary-600 hover:text-primary-700">Password dimenticata?</a>
                         </div>
                         <input id="password" name="password" type="password" autocomplete="current-password" required
                                placeholder="••••••••"
