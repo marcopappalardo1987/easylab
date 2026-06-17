@@ -79,9 +79,9 @@ gantt
 - [x] `[CORE]` Definire lo **schema dei ruoli e permessi** (Developer, Superadmin, Admin, Responsabile Reparto, Tenant, Tecnico) con la matrice permessi per risorsa, in `../Architettura/Schema Ruoli e Permessi.md`. 🔗 ADR-006/007
 - [x] `[CORE]` **Wireframe** delle viste chiave: dashboard semaforo, scheda strumento (tab Anagrafica/Interventi/Ricambi/Documenti/Garanzie), vista mobile tecnico, dashboard Superadmin, alberatura+lista strumenti — in `../Design/Wireframe Viste Chiave.md`.
 - [x] `[CORE]` Definire il **design system** base (palette, componenti Tailwind, stati semaforo 🟢🟠🔴) e l'impostazione mobile-first — in `../Design/Design System Base.md`.
-- [ ] `[CORE]` Predisporre **repository Git** privato, branch strategy, convenzioni di commit. *(Specifica pronta in `../Architettura/Setup Repository e Ambienti.md`; resta da creare il repo privato.)*
+- [x] `[CORE]` Predisporre **repository Git** privato, branch strategy, convenzioni di commit. *(Repo privato creato: [marcopappalardo1987/easylab](https://github.com/marcopappalardo1987/easylab); branch/commit convention in `../Architettura/Setup Repository e Ambienti.md`. ⏳ Branch protection su `main` richiede GitHub Pro/Team.)*
 - [ ] `[CORE]` Creare gli **ambienti**: locale (Herd), staging, produzione (Forge + DigitalOcean). Provisioning base server. 🔗 Tech Stack §6 *(Specifica/.env pronti; resta il provisioning Forge/DigitalOcean.)*
-- [ ] `[CORE]` Impostare **CI** (GitHub Actions: lint + test) scheletro. *(Scheletro pronto in `.github/workflows/ci.yml`; si attiva con l'app in S1.)*
+- [x] `[CORE]` Impostare **CI** (GitHub Actions: lint + test) scheletro. *(Scheletro versionato in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml): PostgreSQL+Redis, PHP 8.3, Pint + Pest. Si attiva con l'app in S1.)*
 - [x] `[STRETCH]` Bozza **informativa privacy/GDPR** e registro trattamenti (utile per ADR-013/015) — in `../Architettura/Privacy GDPR e Registro Trattamenti.md`.
 
 **Definition of Done:** ERD approvato, wireframe delle 5 viste chiave pronti, repo + CI + ambiente staging raggiungibili.
@@ -93,7 +93,7 @@ gantt
 **Obiettivo:** un'app Laravel deployabile con autenticazione, ruoli e code funzionanti. *(Assorbe e completa la "Fase 1 - ToDo List Installazione Stack".)*
 **Dipendenze:** S0 (ambienti, repo).
 
-- [ ] `[CORE]` Inizializzare progetto Laravel; configurare `.env` (DB PostgreSQL, Redis cache+queue).
+- [x] `[CORE]` Inizializzare progetto Laravel; configurare `.env` (DB PostgreSQL, Redis cache+queue). *(Laravel 13 installato alla radice; `.env` → pgsql `easylab` + Redis cache/queue. ⚠️ Avviare Redis in Herd prima del punto 2.)*
 - [ ] `[CORE]` Eseguire migrazioni base; verificare connessione DB/Redis.
 - [ ] `[CORE]` Installare **TALL stack**: Livewire 3, Tailwind, Alpine; pipeline asset (Vite).
 - [ ] `[CORE]` Installare e configurare **auth scaffold** (Jetstream/Fortify) con 2FA. 🔗 ADR-012

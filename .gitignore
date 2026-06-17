@@ -19,7 +19,23 @@
 # IDE / editor
 /.idea
 /.vscode
+/.nova
+/.zed
+/.cursor
+/.codex
 *.swp
+.phpactor.json
+_ide_helper.php
+
+# Test / cache
+/.phpunit.cache
+.phpunit.result.cache
+/auth.json
+
+# Misc
+Homestead.json
+Homestead.yaml
+Thumbs.db
 
 # Log
 *.log

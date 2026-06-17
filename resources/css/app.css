@@ -1,0 +1,47 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+/*
+ | Design System Base — Easy Lab (docs/Design/Design System Base.md)
+ | Token Tailwind v4: palette brand (Teal), neutri (Slate), stati semaforo
+ | e accenti funzionali. Niente hex inline nei componenti: solo questi token.
+ */
+@theme {
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+
+    /* Brand / Primary (Teal) */
+    --color-primary-50: #f0fdfa;
+    --color-primary-100: #ccfbf1;
+    --color-primary-500: #14b8a6;
+    --color-primary-600: #0d9488;
+    --color-primary-700: #0f766e;
+    --color-primary-900: #134e4a;
+
+    /* Neutri (Slate) */
+    --color-neutral-50: #f8fafc;
+    --color-neutral-100: #f1f5f9;
+    --color-neutral-200: #e2e8f0;
+    --color-neutral-400: #94a3b8;
+    --color-neutral-600: #475569;
+    --color-neutral-800: #1e293b;
+    --color-neutral-900: #0f172a;
+
+    /* Stati semaforo (semantici) — ADR-005 */
+    --color-success-100: #dcfce7;
+    --color-success-500: #16a34a;
+    --color-success-600: #15803d;
+    --color-warning-100: #fef3c7;
+    --color-warning-500: #f59e0b;
+    --color-warning-800: #92400e;
+    --color-danger-100: #fee2e2;
+    --color-danger-500: #dc2626;
+    --color-danger-600: #b91c1c;
+
+    /* Accenti funzionali */
+    --color-info-500: #2563eb;
+    --color-obsolete-500: #7c3aed;
+    --color-locked-500: #64748b;
+}
