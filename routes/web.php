@@ -16,5 +16,11 @@ Route::middleware(['auth', 'two-factor.enforce'])->group(function () {
     Route::get('/settings/security', TwoFactorAuthentication::class)->name('settings.security');
 });
 
+// Impersonation (lab404) — rotte gate-protette da canImpersonate, ancora SENZA UI.
+// Fuori dal gruppo two-factor.enforce così la rotta di uscita resta sempre raggiungibile.
+Route::middleware('auth')->group(function () {
+    Route::impersonate();
+});
+
 // Verifica TALL stack (Sprint 1 · punto 3) — rotta temporanea, rimovibile dal punto 10.
 Route::get('/_tall-check', SystemCheck::class);
