@@ -16,11 +16,13 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // Ruoli e permessi (default da S0) prima di assegnarli agli utenti.
+        $this->call(RolesAndPermissionsSeeder::class);
+
         // Account Developer (AdVision Plus) — accesso tecnico totale alla piattaforma.
         // Credenziali da .env (DEVELOPER_EMAIL/DEVELOPER_PASSWORD): la password reale
-        // non vive nel repo. Il ruolo "Developer" verrà assegnato qui non appena
-        // spatie/laravel-permission sarà installato (Sprint 1 · punto 5).
-        User::updateOrCreate(
+        // non vive nel repo.
+        $developer = User::updateOrCreate(
             ['email' => env('DEVELOPER_EMAIL', 'info@advisionplus.com')],
             [
                 'name' => 'AdVision Plus',
@@ -28,5 +30,7 @@ class DatabaseSeeder extends Seeder
                 'email_verified_at' => now(),
             ],
         );
+
+        $developer->syncRoles(['Developer']);
     }
 }

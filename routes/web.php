@@ -9,8 +9,9 @@ use Illuminate\Support\Facades\Route;
 // dopo l'accesso Fortify reindirizza a `home` = /dashboard.
 Route::redirect('/', '/login');
 
-// Area autenticata.
-Route::middleware('auth')->group(function () {
+// Area autenticata. Il middleware two-factor.enforce forza il 2FA sui ruoli
+// privilegiati (si auto-esclude da settings.security per consentirne l'attivazione).
+Route::middleware(['auth', 'two-factor.enforce'])->group(function () {
     Route::view('/dashboard', 'dashboard')->name('dashboard');
     Route::get('/settings/security', TwoFactorAuthentication::class)->name('settings.security');
 });

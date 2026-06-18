@@ -2,7 +2,7 @@
 
 *Definisce i 6 ruoli applicativi e la **matrice permessi per risorsa** che li governa. Traduce in permessi nominati (stile `spatie/laravel-permission`) le decisioni di accesso degli ADR-006/007 e i vincoli di privacy/tracciamento di ADR-004/005/013. Questo documento è il **contratto** per il seeder ruoli/permessi dello Sprint 1 (task "Installare spatie/laravel-permission; definire ruoli/permessi base da S0"). In caso di conflitto fra questo file e un ADR, vince l'ADR (e questo file va corretto).*
 
-> **Stato:** bozza di Sprint 0 (task S0.2). Da approvare prima di scrivere il seeder.
+> **Stato:** implementato in Sprint 1 · punto 5 — `config/rbac.php` + `RolesAndPermissionsSeeder` (56 permessi, 6 ruoli, set bloccato). Dopo il seeding la fonte di verità è il DB (ADR-016 §7).
 
 ---
 
@@ -124,7 +124,8 @@ Risorse derivate dall'ERD §3–§9. Questo è l'elenco canonico che il seeder S
 | `letture_contaore.view` | ✅ | ✅ | ✅ | ✅ ¹ | ✅ | ✅ ² |
 | `letture_contaore.create` | ✅ | ✅ | ✅ | ✅ ¹ | ❌ | ✅ ² |
 | `ricambi.view` | ✅ | ✅ | ✅ | ✅ ¹ | ✅ ³ | ✅ ² |
-| `ricambi.create/update/delete` | ✅ | ✅ | ✅ | ✅ ¹ | ❌ | ✅ ² ⁴ |
+| `ricambi.create` | ✅ | ✅ | ✅ | ✅ ¹ | ❌ | ✅ ² ⁴ |
+| `ricambi.update/delete` | ✅ | ✅ | ✅ | ✅ ¹ | ❌ | ❌ ⁴ |
 | `ricambi.merge` *(STRETCH)* | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `ricambio_utilizzo.view` | ✅ | ✅ | ✅ | ✅ ¹ | ✅ ³ | ✅ ² |
 | `ricambio_utilizzo.create/update/delete` | ✅ | ✅ | ✅ | ✅ ¹ | ❌ | ✅ ² |
@@ -152,7 +153,7 @@ Risorse derivate dall'ERD §3–§9. Questo è l'elenco canonico che il seeder S
 - ¹ **Responsabile Reparto / Admin:** limitato al proprio Ente; il Responsabile è ulteriormente ristretto al **sotto-albero** assegnato (`responsabile_unita`, 🔗 ADR-006). `Admin.utenti.*` e `audit.view` valgono solo per il proprio Ente.
 - ² **Tecnico:** solo strumenti in **portafoglio ∪ assegnazione** (🔗 ADR-007); ogni accesso loggato (cross-tenant).
 - ³ **Tenant:** vede ricambi/utilizzi montati sulle proprie macchine, **ma non** la garanzia del pezzo (`garanzie.ricambio.*` = ❌, 🔗 ADR-004).
-- ⁴ **Tecnico:** può creare voci di catalogo "al volo" durante l'intervento (autocomplete, 🔗 ADR-008); aggiornare/cancellare il catalogo resta operazione di Admin.
+- ⁴ **Tecnico:** ha **solo `ricambi.create`** — può creare voci di catalogo "al volo" durante l'intervento (autocomplete, 🔗 ADR-008); **aggiornare/cancellare il catalogo resta operazione di Admin** (`ricambi.update/delete` = ❌). Risolto in S1 a favore di questa nota (seeder coerente).
 
 ---
 
