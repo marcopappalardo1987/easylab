@@ -1,22 +1,12 @@
 <x-layouts.app title="Dashboard — Easy Lab">
-    {{-- Landing autenticata minima. La shell dashboard reale (top bar, albero, navigazione) è il punto 10. --}}
-    <div class="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6">
+    <div class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
 
-        <div class="flex items-center justify-between">
-            <div>
-                <h1 class="text-2xl font-bold tracking-tight text-neutral-900">Ciao, {{ auth()->user()->name }}</h1>
-                <p class="mt-1 text-sm text-neutral-600">{{ auth()->user()->email }}</p>
-            </div>
-            <form method="POST" action="{{ route('logout') }}">
-                @csrf
-                <button type="submit"
-                        class="inline-flex items-center justify-center rounded-md border border-neutral-200 bg-white px-4 py-2.5 font-medium text-neutral-800 transition hover:bg-neutral-50">
-                    Esci
-                </button>
-            </form>
+        <div>
+            <h1 class="text-2xl font-bold tracking-tight text-neutral-900">Dashboard</h1>
+            <p class="mt-1 text-sm text-neutral-600">Benvenuto in Easy Lab, {{ auth()->user()->name }}.</p>
         </div>
 
-        <div class="mt-8 grid gap-4 sm:grid-cols-2">
+        <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {{-- Sicurezza / 2FA --}}
             <a href="{{ route('settings.security') }}"
                class="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm transition hover:border-primary-600">

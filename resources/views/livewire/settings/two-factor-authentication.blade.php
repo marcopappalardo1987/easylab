@@ -1,10 +1,7 @@
 <div class="mx-auto w-full max-w-2xl px-4 py-10 sm:px-6">
 
     {{-- Header --}}
-    <div class="flex items-center justify-between">
-        <h1 class="text-2xl font-bold tracking-tight text-neutral-900">Sicurezza</h1>
-        <a href="{{ route('dashboard') }}" class="text-sm font-medium text-primary-600 hover:text-primary-700">&larr; Dashboard</a>
-    </div>
+    <h1 class="text-2xl font-bold tracking-tight text-neutral-900">Sicurezza</h1>
 
     <div class="mt-8 rounded-lg border border-neutral-200 bg-white p-6 shadow-sm md:p-8">
 
