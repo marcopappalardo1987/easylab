@@ -23,7 +23,7 @@ it('lets only users with utenti.impersonate impersonate', function () {
     expect($tenant->canImpersonate())->toBeFalse();
 });
 
-it('protects platform-privileged accounts from being impersonated', function () {
+it('protects only the Developer from being impersonated', function () {
     $developer = User::factory()->create();
     $developer->assignRole('Developer');
     $superadmin = User::factory()->create();
@@ -31,9 +31,11 @@ it('protects platform-privileged accounts from being impersonated', function () 
     $tenant = User::factory()->create();
     $tenant->assignRole('Tenant');
 
-    expect($tenant->canBeImpersonated())->toBeTrue();
     expect($developer->canBeImpersonated())->toBeFalse();
-    expect($superadmin->canBeImpersonated())->toBeFalse();
+    // Il Superadmin è impersonabile (dal Developer); il proprietario di
+    // piattaforma non è un account intoccabile come il Developer.
+    expect($superadmin->canBeImpersonated())->toBeTrue();
+    expect($tenant->canBeImpersonated())->toBeTrue();
 });
 
 it('allows a Superadmin to take and leave impersonation', function () {

@@ -1,6 +1,8 @@
 <?php
 
+use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Settings\TwoFactorAuthentication;
+use App\Livewire\Strumenti\SchedaStrumento;
 use Illuminate\Support\Facades\Route;
 
 // Login, logout, reset password, verifica email e 2FA sono registrati da Fortify
@@ -12,6 +14,12 @@ Route::redirect('/', '/login');
 // privilegiati (si auto-esclude da settings.security per consentirne l'attivazione).
 Route::middleware(['auth', 'two-factor.enforce'])->group(function () {
     Route::view('/dashboard', 'dashboard')->name('dashboard');
+    Route::get('/anagrafica', Albero::class)
+        ->middleware('can:unita_organizzativa.view')
+        ->name('anagrafica.index');
+    Route::get('/strumenti/{strumento}', SchedaStrumento::class)
+        ->middleware('can:strumenti.view')
+        ->name('strumenti.show');
     Route::get('/settings/security', TwoFactorAuthentication::class)->name('settings.security');
 });
 

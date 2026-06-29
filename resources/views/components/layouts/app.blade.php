@@ -60,6 +60,13 @@
                             Sicurezza
                         </x-app.nav-link>
 
+                        @can('unita_organizzativa.view')
+                            <x-app.nav-link :href="route('anagrafica.index')" :active="request()->routeIs('anagrafica.*')">
+                                <svg class="h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+                                Anagrafica
+                            </x-app.nav-link>
+                        @endcan
+
                         <p class="px-3 pt-4 pb-1 text-xs font-semibold tracking-wide text-neutral-400 uppercase">Prossimamente</p>
                         <x-app.nav-link :disabled="true">Strumenti</x-app.nav-link>
                         <x-app.nav-link :disabled="true">Interventi</x-app.nav-link>
