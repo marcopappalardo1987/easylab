@@ -2,6 +2,7 @@
 
 use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Settings\TwoFactorAuthentication;
+use App\Livewire\Strumenti\ElencoStrumenti;
 use App\Livewire\Strumenti\SchedaStrumento;
 use Illuminate\Support\Facades\Route;
 
@@ -17,6 +18,9 @@ Route::middleware(['auth', 'two-factor.enforce'])->group(function () {
     Route::get('/anagrafica', Albero::class)
         ->middleware('can:unita_organizzativa.view')
         ->name('anagrafica.index');
+    Route::get('/strumenti', ElencoStrumenti::class)
+        ->middleware('can:strumenti.view')
+        ->name('strumenti.index');
     Route::get('/strumenti/{strumento}', SchedaStrumento::class)
         ->middleware('can:strumenti.view')
         ->name('strumenti.show');
