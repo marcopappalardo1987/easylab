@@ -8,6 +8,7 @@ use Database\Factories\StrumentoFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -49,5 +50,15 @@ class Strumento extends Model
     public function unita(): BelongsTo
     {
         return $this->belongsTo(UnitaOrganizzativa::class, 'unita_organizzativa_id');
+    }
+
+    /**
+     * Storico spostamenti (append-only), più recente in alto.
+     */
+    public function spostamenti(): HasMany
+    {
+        return $this->hasMany(SpostamentoStrumento::class, 'strumento_id')
+            ->orderByDesc('data')
+            ->orderByDesc('id');
     }
 }

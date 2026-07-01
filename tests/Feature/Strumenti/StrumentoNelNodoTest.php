@@ -21,13 +21,13 @@ it('lists strumenti of the selected node', function () {
     Strumento::factory()->forNode($this->dept)->create(['nome' => 'Microscopio']);
 
     Livewire::actingAs($this->admin)->test(Albero::class)
-        ->call('select', $this->dept->id)
+        ->call('open', $this->dept->id)
         ->assertSee('Microscopio');
 });
 
 it('lets an admin add a strumento to a node with parametri', function () {
     Livewire::actingAs($this->admin)->test(Albero::class)
-        ->call('select', $this->dept->id)
+        ->call('open', $this->dept->id)
         ->call('addStrumento')
         ->assertSet('showStrumentoForm', true)
         ->set('strumentoForm.nome', 'Bilancia')
@@ -45,7 +45,7 @@ it('lets an admin add a strumento to a node with parametri', function () {
 
 it('does not allow adding a strumento on the ente node', function () {
     Livewire::actingAs($this->admin)->test(Albero::class)
-        ->call('select', $this->ente->id)
+        ->call('open', $this->ente->id)
         ->call('addStrumento')
         ->assertSet('showStrumentoForm', false)
         ->assertSet('notice', "Aggiungi gli strumenti a un dipartimento o sotto-laboratorio, non all'Ente.");
@@ -56,7 +56,7 @@ it('forbids a Tenant from adding a strumento', function () {
     $tenant->assignRole('Tenant');
 
     Livewire::actingAs($tenant)->test(Albero::class)
-        ->call('select', $this->dept->id)
+        ->call('open', $this->dept->id)
         ->call('addStrumento')
         ->assertForbidden();
 });

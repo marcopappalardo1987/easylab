@@ -137,7 +137,7 @@ it('blocks deleting a node that has children', function () {
     Livewire::actingAs($admin)->test(Albero::class)
         ->call('confirmDelete', $dip->id)
         ->call('delete')
-        ->assertSet('notice', 'Elimina prima i nodi figli.');
+        ->assertSet('notice', 'Elimina prima le unità interne.');
 
     expect(UnitaOrganizzativa::withoutGlobalScopes()->find($dip->id))->not->toBeNull();
 });
@@ -148,7 +148,7 @@ it('blocks deleting the ente node', function () {
     Livewire::actingAs($admin)->test(Albero::class)
         ->call('confirmDelete', $ente->id)
         ->call('delete')
-        ->assertSet('notice', 'Il nodo Ente non può essere eliminato.');
+        ->assertSet('notice', 'L\'Ente non può essere eliminato.');
 
     expect(UnitaOrganizzativa::withoutGlobalScopes()->find($ente->id))->not->toBeNull();
 });
