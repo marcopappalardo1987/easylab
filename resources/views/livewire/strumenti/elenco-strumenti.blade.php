@@ -4,7 +4,12 @@
 
 <div class="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
 
-    <h1 class="text-2xl font-bold tracking-tight text-neutral-900">Strumenti</h1>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <h1 class="text-2xl font-bold tracking-tight text-neutral-900">Strumenti</h1>
+        @can('strumenti.create')
+            <x-ui.button variant="secondary" :href="route('strumenti.import')" wire:navigate>⬇ Importa CSV</x-ui.button>
+        @endcan
+    </div>
 
     @include('livewire.strumenti._tabs')
 

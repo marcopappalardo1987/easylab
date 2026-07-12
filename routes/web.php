@@ -3,6 +3,7 @@
 use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Settings\TwoFactorAuthentication;
 use App\Livewire\Strumenti\ElencoStrumenti;
+use App\Livewire\Strumenti\ImportStrumenti;
 use App\Livewire\Strumenti\ModelliStrumenti;
 use App\Livewire\Strumenti\SchedaStrumento;
 use Illuminate\Support\Facades\Route;
@@ -22,10 +23,14 @@ Route::middleware(['auth', 'two-factor.enforce'])->group(function () {
     Route::get('/strumenti', ElencoStrumenti::class)
         ->middleware('can:strumenti.view')
         ->name('strumenti.index');
-    // Prima della rotta {strumento}: altrimenti "modelli" verrebbe risolto come id.
+    // Prima della rotta {strumento}: altrimenti "modelli"/"import" verrebbero
+    // risolti come id dello strumento.
     Route::get('/strumenti/modelli', ModelliStrumenti::class)
         ->middleware('can:strumenti.view')
         ->name('strumenti.modelli');
+    Route::get('/strumenti/import', ImportStrumenti::class)
+        ->middleware('can:strumenti.create')
+        ->name('strumenti.import');
     Route::get('/strumenti/{strumento}', SchedaStrumento::class)
         ->middleware('can:strumenti.view')
         ->name('strumenti.show');
