@@ -50,7 +50,13 @@
             <dl class="grid gap-x-6 gap-y-4 sm:grid-cols-2">
                 <div>
                     <dt class="text-xs font-medium tracking-wide text-neutral-400 uppercase">Modello</dt>
-                    <dd class="mt-0.5 text-sm text-neutral-800">{{ $strumento->modello ?: '—' }}</dd>
+                    <dd class="mt-0.5 text-sm text-neutral-800">
+                        {{ $strumento->modello ?: '—' }}
+                        @if ($strumento->modello)
+                            <a href="{{ route('strumenti.modelli', ['search' => $strumento->modello]) }}" wire:navigate
+                                class="ml-2 text-xs text-primary-600 hover:text-primary-700">dove altro è installato →</a>
+                        @endif
+                    </dd>
                 </div>
                 <div>
                     <dt class="text-xs font-medium tracking-wide text-neutral-400 uppercase">Matricola</dt>

@@ -5,6 +5,7 @@ namespace App\Livewire\Strumenti;
 use App\Enums\TipoUnitaOrganizzativa;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
+use Illuminate\Support\Collection;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -86,6 +87,39 @@ class ElencoStrumenti extends Component
         return array_map('intval', array_keys($ids));
     }
 
+    /**
+     * Percorso gerarchico completo di ogni nodo, Ente incluso:
+     * id → ['Ente', 'Dipartimento', 'Sotto-laboratorio']. L'Ente serve quando un
+     * utente potrà vedere più Enti (Rivenditori, V1.1). Costruito in una sola
+     * passata per evitare N+1 sulle righe della tabella.
+     *
+     * @param  Collection<int, UnitaOrganizzativa>  $nodi
+     * @return array<int, list<string>>
+     */
+    protected function percorsi($nodi): array
+    {
+        $byId = $nodi->keyBy('id');
+        $percorsi = [];
+
+        foreach ($nodi as $nodo) {
+            if ($nodo->tipo === TipoUnitaOrganizzativa::Ente) {
+                continue; // gli strumenti non stanno mai sull'Ente
+            }
+
+            $catena = [];
+            $corrente = $nodo;
+            // Risale fino alla radice visibile (per il Responsabile: il suo reparto).
+            while ($corrente !== null) {
+                array_unshift($catena, $corrente->nome);
+                $corrente = $corrente->parent_id !== null ? $byId->get($corrente->parent_id) : null;
+            }
+
+            $percorsi[$nodo->id] = $catena;
+        }
+
+        return $percorsi;
+    }
+
     public function render()
     {
         $sortBy = in_array($this->sortBy, self::SORTABLE, true) ? $this->sortBy : 'nome';
@@ -108,13 +142,13 @@ class ElencoStrumenti extends Component
 
         $strumenti = $query->orderBy($sortBy, $sortDir)->paginate(20);
 
-        $nodi = UnitaOrganizzativa::where('tipo', '!=', TipoUnitaOrganizzativa::Ente->value)
-            ->orderBy('nome')
-            ->get();
+        $tuttiNodi = UnitaOrganizzativa::orderBy('nome')->get();
+        $nodi = $tuttiNodi->where('tipo', '!=', TipoUnitaOrganizzativa::Ente)->values();
 
         return view('livewire.strumenti.elenco-strumenti', [
             'strumenti' => $strumenti,
             'nodi' => $nodi,
+            'percorsi' => $this->percorsi($tuttiNodi),
             'sortBy' => $sortBy,
             'sortDir' => $sortDir,
         ]);

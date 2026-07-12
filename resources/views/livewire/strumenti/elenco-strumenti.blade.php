@@ -6,6 +6,8 @@
 
     <h1 class="text-2xl font-bold tracking-tight text-neutral-900">Strumenti</h1>
 
+    @include('livewire.strumenti._tabs')
+
     {{-- Filtri --}}
     <x-ui.card class="mt-6">
         <div class="grid gap-3 sm:grid-cols-[1fr_auto]">
@@ -32,14 +34,14 @@
                     <tr>
                         @foreach (['nome' => 'Nome', 'modello' => 'Modello', 'matricola' => 'Matricola'] as $col => $label)
                             <th class="px-4 py-3 font-semibold">
-                                <button type="button" wire:click="sort('{{ $col }}')" class="inline-flex items-center gap-1 hover:text-neutral-700">
+                                <button type="button" wire:click="sort('{{ $col }}')" class="inline-flex items-center gap-1 uppercase hover:text-neutral-700">
                                     {{ $label }} <span class="text-primary-600">{{ $arrow($col) }}</span>
                                 </button>
                             </th>
                         @endforeach
                         <th class="px-4 py-3 font-semibold">Ubicazione</th>
                         <th class="px-4 py-3 font-semibold">
-                            <button type="button" wire:click="sort('data_installazione')" class="inline-flex items-center gap-1 hover:text-neutral-700">
+                            <button type="button" wire:click="sort('data_installazione')" class="inline-flex items-center gap-1 uppercase hover:text-neutral-700">
                                 Installazione <span class="text-primary-600">{{ $arrow('data_installazione') }}</span>
                             </button>
                         </th>
@@ -54,7 +56,17 @@
                             </td>
                             <td class="px-4 py-3 text-neutral-600">{{ $s->modello ?: '—' }}</td>
                             <td class="px-4 py-3 text-neutral-600">{{ $s->matricola ?: '—' }}</td>
-                            <td class="px-4 py-3 text-neutral-600">{{ $s->unita?->nome ?: '—' }}</td>
+                            <td class="px-4 py-3 text-neutral-600">
+                                @php $percorso = $percorsi[$s->unita_organizzativa_id] ?? []; @endphp
+                                @if ($percorso)
+                                    @foreach ($percorso as $segmento)
+                                        @if (! $loop->first)<span class="text-neutral-300">›</span>@endif
+                                        <span>{{ $segmento }}</span>
+                                    @endforeach
+                                @else
+                                    —
+                                @endif
+                            </td>
                             <td class="px-4 py-3 text-neutral-600">{{ $s->data_installazione?->format('d/m/Y') ?: '—' }}</td>
                         </tr>
                     @empty
