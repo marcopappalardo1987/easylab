@@ -35,7 +35,12 @@
             <button type="button" x-on:click="tab = 'anagrafica'"
                 :class="tab === 'anagrafica' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
                 class="border-b-2 px-3 py-2 font-medium">Anagrafica</button>
-            @foreach (['Interventi', 'Ricambi', 'Documenti'] as $t)
+            @can('interventi.view')
+                <button type="button" x-on:click="tab = 'interventi'"
+                    :class="tab === 'interventi' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
+                    class="border-b-2 px-3 py-2 font-medium">Interventi</button>
+            @endcan
+            @foreach (['Ricambi', 'Documenti'] as $t)
                 <span class="cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-neutral-300" title="In arrivo (S3/S4)">{{ $t }}</span>
             @endforeach
             @can('garanzie.macchina.view')
@@ -115,6 +120,15 @@
             </x-ui.card>
         @endcan
     </div>
+
+    {{-- Tab Interventi (S3 punto 2): lista attività, fonte di verità del semaforo (ADR-005).
+         x-cloak: senza, il pannello sarebbe visibile sotto l'Anagrafica finché Alpine non
+         monta. Nasconde in CSS senza togliere il markup, quindi i test lo vedono comunque. --}}
+    @can('interventi.view')
+        <div x-show="tab === 'interventi'" x-cloak class="mt-6">
+            @include('livewire.strumenti._interventi')
+        </div>
+    @endcan
 
     {{-- Modale modifica --}}
     @if ($showForm)

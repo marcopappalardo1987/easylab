@@ -53,6 +53,17 @@ class Strumento extends Model
     }
 
     /**
+     * Attività/interventi (ERD §5.2): storico passato + pianificati, scadenza
+     * più recente in alto. Fonte di verità del semaforo (ADR-005).
+     */
+    public function interventi(): HasMany
+    {
+        return $this->hasMany(Intervento::class, 'strumento_id')
+            ->orderByDesc('data_scadenza')
+            ->orderByDesc('id');
+    }
+
+    /**
      * Storico spostamenti (append-only), più recente in alto.
      */
     public function spostamenti(): HasMany

@@ -2,20 +2,25 @@
 
 namespace App\Livewire\Strumenti;
 
+use App\Enums\StatoIntervento;
 use App\Enums\TipoSpostamento;
 use App\Enums\TipoUnitaOrganizzativa;
 use App\Livewire\Concerns\ManagesStrumentoForm;
+use App\Models\Intervento;
 use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
 /**
- * Scheda strumento a tab (S2 punto 5). Tab Anagrafica popolato; Interventi/
- * Ricambi/Documenti/Garanzie sono placeholder (S3/S4). View + edit + delete del
- * singolo strumento; isolamento via route-model binding scopato (404 fuori Ente).
+ * Scheda strumento a tab (S2 punto 5). Tab Anagrafica e Interventi (lista
+ * read-only, S3 punto 2) popolati; Ricambi/Documenti/Garanzie sono placeholder
+ * (S3/S4). View + edit + delete del singolo strumento; isolamento via
+ * route-model binding scopato (404 fuori Ente).
  */
 #[Layout('components.layouts.app')]
 class SchedaStrumento extends Component
@@ -144,8 +149,49 @@ class SchedaStrumento extends Component
 
         return view('livewire.strumenti.scheda-strumento', [
             'percorso' => $percorso->implode(' › '),
+            'interventi' => $this->interventiPerUrgenza(),
             'spostamenti' => $this->strumento->spostamenti()->with(['daNodo', 'aNodo', 'eseguitoBy'])->get(),
             'nodiDestinazione' => $nodiDestinazione,
         ]);
+    }
+
+    /**
+     * Lista del tab Interventi (S3 punto 2), ordinata per urgenza: scaduti-non-
+     * fatti, poi pianificati (scadenza più vicina in cima), infine lo storico.
+     *
+     * L'ordinamento è in PHP e non in SQL di proposito: un `orderByRaw` con un
+     * CASE duplicherebbe in SQL la regola di `Intervento::isScaduto()` (due
+     * copie del confine `< oggi` che possono divergere), e servirebbero
+     * direzioni miste con NULL, il cui ordinamento cambia da un DB all'altro.
+     * Qui il set è di un solo strumento: poche decine di righe già caricate.
+     *
+     * @return Collection<int, Intervento>
+     */
+    private function interventiPerUrgenza(): Collection
+    {
+        if (! Gate::allows('interventi.view')) {
+            return collect();
+        }
+
+        return $this->strumento->interventi()
+            ->with('tecnico') // NON `tecnico:id,name`: tecnicoLabel() legge tenant_id
+            ->get()
+            ->sortBy([
+                fn (Intervento $a, Intervento $b) => $this->urgenza($a) <=> $this->urgenza($b),
+                fn (Intervento $a, Intervento $b) => $this->urgenza($a) === 2
+                    ? $b->data_esecuzione <=> $a->data_esecuzione // storico: eseguiti di recente in cima
+                    : $a->data_scadenza <=> $b->data_scadenza,    // aperti: scadenza più vecchia/vicina in cima
+            ])
+            ->values();
+    }
+
+    /** 0 = scaduto-non-fatto · 1 = pianificato · 2 = fatto. */
+    private function urgenza(Intervento $intervento): int
+    {
+        return match (true) {
+            $intervento->isScaduto() => 0,
+            $intervento->stato === StatoIntervento::NonFatto => 1,
+            default => 2,
+        };
     }
 }
