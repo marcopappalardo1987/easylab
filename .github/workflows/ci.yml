@@ -54,10 +54,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PHP 8.3
+      # PHP 8.4: il composer.lock è risolto con Symfony 8.x, che richiede >= 8.4.1.
+      # Deve restare allineato al vincolo `php` di composer.json e al server Forge.
+      - name: Setup PHP 8.4
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: pdo_pgsql, redis, mbstring, bcmath
           coverage: none
 
