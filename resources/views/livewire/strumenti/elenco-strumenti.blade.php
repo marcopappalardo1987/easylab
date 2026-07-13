@@ -15,19 +15,35 @@
 
     {{-- Filtri --}}
     <x-ui.card class="mt-6">
-        <div class="grid gap-3 sm:grid-cols-[1fr_auto]">
-            <x-ui.input name="search" wire:model.live.debounce.300ms="search"
-                placeholder="Cerca per nome, modello, matricola…" />
+        @php
+            // Il select Ente compare solo se l'utente ne vede più di uno
+            // (oggi mai, ADR-018; con i Rivenditori V1.1 sì).
+            $mostraEnti = $enti->count() > 1;
+        @endphp
 
-            <div>
-                <select wire:model.live="ubicazioneId"
-                    class="block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none sm:w-64">
-                    <option value="">Tutte le ubicazioni</option>
-                    @foreach ($nodi as $nodo)
-                        <option value="{{ $nodo->id }}">{{ $nodo->nome }}</option>
+        <div class="flex flex-wrap items-center gap-3">
+            <div class="min-w-56 flex-1">
+                <x-ui.input name="search" wire:model.live.debounce.300ms="search"
+                    placeholder="Cerca per nome, modello, matricola…" />
+            </div>
+
+            @if ($mostraEnti)
+                <select wire:model.live="enteId"
+                    class="block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none sm:w-56">
+                    <option value="">Tutti gli Enti</option>
+                    @foreach ($enti as $ente)
+                        <option value="{{ $ente->id }}">{{ $ente->nome }}</option>
                     @endforeach
                 </select>
-            </div>
+            @endif
+
+            <select wire:model.live="ubicazioneId"
+                class="block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none sm:w-64">
+                <option value="">Tutte le ubicazioni</option>
+                @foreach ($nodi as $nodo)
+                    <option value="{{ $nodo->id }}">{{ $nodo->nome }}</option>
+                @endforeach
+            </select>
         </div>
     </x-ui.card>
 

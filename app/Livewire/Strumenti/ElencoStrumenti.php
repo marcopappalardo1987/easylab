@@ -24,6 +24,14 @@ class ElencoStrumenti extends Component
     #[Url]
     public string $search = '';
 
+    /**
+     * Filtro Ente. Oggi ogni utente ne vede uno solo (ADR-018) → il select è
+     * nascosto; diventerà operativo quando un utente potrà gestire più Enti
+     * (Rivenditori, V1.1).
+     */
+    #[Url]
+    public ?int $enteId = null;
+
     #[Url]
     public ?int $ubicazioneId = null;
 
@@ -42,6 +50,13 @@ class ElencoStrumenti extends Component
 
     public function updatingUbicazioneId(): void
     {
+        $this->resetPage();
+    }
+
+    /** Cambiando Ente cambia l'elenco delle ubicazioni → il filtro va azzerato. */
+    public function updatingEnteId(): void
+    {
+        $this->ubicazioneId = null;
         $this->resetPage();
     }
 
@@ -136,6 +151,10 @@ class ElencoStrumenti extends Component
             });
         }
 
+        if ($this->enteId !== null) {
+            $query->where('tenant_id', $this->enteId);
+        }
+
         if ($this->ubicazioneId !== null) {
             $query->whereIn('unita_organizzativa_id', $this->sottoAlbero($this->ubicazioneId));
         }
@@ -143,10 +162,17 @@ class ElencoStrumenti extends Component
         $strumenti = $query->orderBy($sortBy, $sortDir)->paginate(20);
 
         $tuttiNodi = UnitaOrganizzativa::orderBy('nome')->get();
-        $nodi = $tuttiNodi->where('tipo', '!=', TipoUnitaOrganizzativa::Ente)->values();
+        $enti = $tuttiNodi->where('tipo', TipoUnitaOrganizzativa::Ente)->values();
+
+        // Le ubicazioni selezionabili seguono l'Ente scelto (filtro a cascata).
+        $nodi = $tuttiNodi
+            ->reject(fn (UnitaOrganizzativa $n) => $n->tipo === TipoUnitaOrganizzativa::Ente)
+            ->when($this->enteId !== null, fn ($c) => $c->where('tenant_id', $this->enteId))
+            ->values();
 
         return view('livewire.strumenti.elenco-strumenti', [
             'strumenti' => $strumenti,
+            'enti' => $enti,
             'nodi' => $nodi,
             'percorsi' => $this->percorsi($tuttiNodi),
             'sortBy' => $sortBy,
