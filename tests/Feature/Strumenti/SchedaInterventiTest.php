@@ -132,9 +132,9 @@ it('never shows the name of a tecnico belonging to another ente', function () {
         ->assertDontSee('Mario Rossi');
 });
 
-it('shows the list to a Tenant but no actions (read-only, punto 2)', function () {
-    // Congela il perimetro: i bottoni arrivano col punto 3, che aggiornerà
-    // questo test consapevolmente.
+it('shows the list to a Tenant but no actions (read-only)', function () {
+    // Il Tenant ha solo interventi.view: dal punto 3 i bottoni esistono, ma
+    // sono tutti gated → per lui la tabella resta a 5 colonne, senza azioni.
     $tenant = User::factory()->create(['tenant_id' => $this->ente->id]);
     $tenant->assignRole('Tenant');
 

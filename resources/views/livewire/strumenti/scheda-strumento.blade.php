@@ -155,6 +155,90 @@
         </x-ui.modal>
     @endif
 
+    {{-- Modale nuovo/modifica intervento (S3 punto 3) --}}
+    @if ($showInterventoForm)
+        <x-ui.modal :title="$editingInterventoId ? 'Modifica intervento' : 'Nuovo intervento'" close="closeInterventoForm">
+            <form wire:submit="saveIntervento" class="space-y-5">
+                <x-ui.textarea name="interventoForm.descrizione" label="Descrizione" wire:model="interventoForm.descrizione" />
+
+                <div>
+                    <label for="interventoTipo" class="block text-sm font-medium text-neutral-800">Tipo</label>
+                    <select id="interventoTipo" wire:model="interventoForm.tipo"
+                        class="mt-1 block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
+                        @foreach (App\Enums\TipoIntervento::cases() as $tipo)
+                            <option value="{{ $tipo->value }}">{{ ucfirst($tipo->value) }}</option>
+                        @endforeach
+                    </select>
+                    @error('interventoForm.tipo') <p class="mt-1 text-sm text-danger-600">{{ $message }}</p> @enderror
+                </div>
+
+                <x-ui.input name="interventoForm.data_scadenza" label="Data scadenza" type="date" wire:model="interventoForm.data_scadenza" />
+
+                @can('interventi.assign')
+                    <div>
+                        <label for="interventoTecnico" class="block text-sm font-medium text-neutral-800">Assegnatario</label>
+                        <select id="interventoTecnico" wire:model="interventoForm.tecnico_id"
+                            class="mt-1 block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
+                            <option value="">— Nessun assegnatario —</option>
+                            @foreach ($assegnatari as $tecnico)
+                                <option value="{{ $tecnico->id }}">{{ $tecnico->name }}</option>
+                            @endforeach
+                        </select>
+                        @error('interventoForm.tecnico_id') <p class="mt-1 text-sm text-danger-600">{{ $message }}</p> @enderror
+                    </div>
+                @endcan
+
+                @if ($editingInterventoId === null)
+                    {{-- Inserimento storico (backlog punto 3): un intervento già eseguito
+                         si registra in un passo, senza transitare da scaduto-non-fatto. --}}
+                    <label class="flex items-center gap-2 text-sm text-neutral-800">
+                        <input type="checkbox" wire:model.live="interventoForm.gia_eseguito"
+                            class="rounded border-neutral-300 text-primary-600 focus:ring-primary-600">
+                        Già eseguito
+                    </label>
+                    @if ($interventoForm['gia_eseguito'])
+                        <x-ui.input name="interventoForm.data_esecuzione" label="Data esecuzione" type="date" wire:model="interventoForm.data_esecuzione" />
+                    @endif
+                @endif
+
+                <div class="flex justify-end gap-3">
+                    <x-ui.button variant="secondary" wire:click="closeInterventoForm">Annulla</x-ui.button>
+                    <x-ui.button type="submit" wire:loading.attr="disabled">Salva</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
+    @endif
+
+    {{-- Modale spunta "Fatto" --}}
+    @if ($showCompletaForm)
+        <x-ui.modal title="Segna come fatto" close="closeCompleta">
+            <form wire:submit="completa" class="space-y-5">
+                <p class="text-sm text-neutral-600">
+                    «{{ $interventi->firstWhere('id', $completingInterventoId)?->descrizione }}»
+                </p>
+                <x-ui.input name="dataEsecuzione" label="Data esecuzione" type="date" wire:model="dataEsecuzione" />
+                <div class="flex justify-end gap-3">
+                    <x-ui.button variant="secondary" wire:click="closeCompleta">Annulla</x-ui.button>
+                    <x-ui.button type="submit" wire:loading.attr="disabled">Conferma</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
+    @endif
+
+    {{-- Conferma eliminazione intervento --}}
+    @if ($deletingInterventoId)
+        <x-ui.modal title="Conferma eliminazione">
+            <p class="text-sm text-neutral-600">
+                Eliminare l'intervento «{{ $interventi->firstWhere('id', $deletingInterventoId)?->descrizione }}»?
+                L'operazione è reversibile (soft delete).
+            </p>
+            <div class="mt-6 flex justify-end gap-3">
+                <x-ui.button variant="secondary" wire:click="$set('deletingInterventoId', null)">Annulla</x-ui.button>
+                <x-ui.button variant="danger" wire:click="eliminaIntervento" wire:loading.attr="disabled">Elimina</x-ui.button>
+            </div>
+        </x-ui.modal>
+    @endif
+
     {{-- Modale sposta --}}
     @if ($showMoveForm)
         <x-ui.modal title="Sposta strumento" close="closeMove">
