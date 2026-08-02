@@ -2,8 +2,11 @@
 
 namespace App\Models;
 
+use App\Enums\StatoIntervento;
+use App\Enums\StatoSemaforo;
 use App\Models\Concerns\BelongsToOrgNode;
 use App\Models\Concerns\BelongsToTenant;
+use App\Support\Semaforo;
 use Database\Factories\StrumentoFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -61,6 +64,49 @@ class Strumento extends Model
         return $this->hasMany(Intervento::class, 'strumento_id')
             ->orderByDesc('data_scadenza')
             ->orderByDesc('id');
+    }
+
+    /**
+     * Prossimo intervento aperto (non_fatto con scadenza minima): l'unico dato
+     * che serve al semaforo e alla colonna "Prossima scadenza".
+     *
+     * Se la relazione è già caricata la riusa (zero query extra); altrimenti
+     * una first() servita dall'indice (strumento_id, stato, data_scadenza).
+     * `reorder()` è OBBLIGATORIO: la relazione ordina per data_scadenza DESC,
+     * quindi senza si otterrebbe la scadenza più LONTANA invece della prossima.
+     */
+    public function prossimoInterventoAperto(): ?Intervento
+    {
+        if ($this->relationLoaded('interventi')) {
+            return $this->interventi
+                ->filter(fn (Intervento $i) => $i->stato === StatoIntervento::NonFatto)
+                ->sortBy([['data_scadenza', 'asc'], ['id', 'asc']])
+                ->first();
+        }
+
+        return $this->interventi()->reorder()
+            ->where('stato', StatoIntervento::NonFatto->value)
+            ->orderBy('data_scadenza')->orderBy('id')
+            ->first();
+    }
+
+    /**
+     * Stato calcolato (ADR-005): derivato, MAI persistito. Le garanzie
+     * (secondo input di Semaforo::calcola) arrivano col punto 7.
+     */
+    public function statoSemaforoCalcolato(): StatoSemaforo
+    {
+        return Semaforo::calcola($this->prossimoInterventoAperto()?->data_scadenza);
+    }
+
+    /**
+     * Stato mostrato = forzato se presente, altrimenti calcolato (ADR-005).
+     * Oggi ≡ calcolato: le colonne forced_* arrivano col punto 5. La UI deve
+     * chiamare SEMPRE questo metodo, mai statoSemaforoCalcolato().
+     */
+    public function statoSemaforoEffettivo(): StatoSemaforo
+    {
+        return $this->statoSemaforoCalcolato();
     }
 
     /**

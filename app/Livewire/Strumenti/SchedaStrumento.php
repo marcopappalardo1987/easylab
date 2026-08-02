@@ -357,6 +357,8 @@ class SchedaStrumento extends Component
 
         return view('livewire.strumenti.scheda-strumento', [
             'percorso' => $percorso->implode(' › '),
+            // Semaforo (ADR-005): sempre lo stato "effettivo" (forzato ?? calcolato).
+            'semaforo' => $this->strumento->statoSemaforoEffettivo(),
             'interventi' => $this->interventiPerUrgenza(),
             // Solo a modale aperta e con permesso: a modale chiusa zero query
             // extra su users (il test N+1 del punto 2 lo congela).

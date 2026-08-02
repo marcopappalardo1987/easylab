@@ -4,7 +4,8 @@
 
     // Stato di riga a 3 valori (l'enum ne ha 2): colore + simbolo + etichetta,
     // perché il Design System vieta di affidare lo stato al solo colore.
-    // "Imminente" non esiste qui: è il motore semaforo (punto 4).
+    // "Imminente" non esiste qui: è una proprietà dello STRUMENTO, aggregata
+    // con soglia da App\Support\Semaforo (ADR-005), non della singola riga.
     $statoRiga = fn ($i) => match (true) {
         $i->stato === StatoIntervento::Fatto => ['success', '✓', 'Fatto'],
         $i->isScaduto() => ['danger', '✗', 'Scaduto'],

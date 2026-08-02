@@ -6,6 +6,7 @@ use App\Enums\StatoIntervento;
 use App\Enums\TipoIntervento;
 use App\Models\Concerns\BelongsToOrgNodeThroughStrumento;
 use App\Models\Concerns\BelongsToTenant;
+use App\Support\Semaforo;
 use Carbon\CarbonInterface;
 use Database\Factories\InterventoFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -129,6 +130,30 @@ class Intervento extends Model
     {
         $query->where('stato', StatoIntervento::NonFatto->value)
             ->where('data_scadenza', '<', today()->toDateString());
+    }
+
+    /**
+     * Interventi aperti la cui scadenza è già passata O cade entro la soglia
+     * "imminente": esattamente le due condizioni che accendono l'arancione
+     * (ADR-005). È la forma SQL della regola di App\Support\Semaforo::calcola(),
+     * e serve a filtrare TRA strumenti (elenco, dashboard S6) dove il calcolo
+     * per-model non è utilizzabile senza rompere la paginazione.
+     *
+     * La soglia arriva da Semaforo, non è riscritta qui: un test verifica che
+     * questo scope e il calcolo per-model restino d'accordo.
+     *
+     * Il confine è INCLUSIVO (oggi+soglia è imminente) ma si esprime come
+     * `< oggi+soglia+1`, MAI come `<= oggi+soglia`: su SQLite le date sono
+     * stringhe 'Y-m-d H:i:s' e `'2026-08-31 00:00:00' <= '2026-08-31'` è falso
+     * (confronto lessicografico), mentre su Postgres è vero. Con `<` sul giorno
+     * successivo i due driver danno lo stesso risultato.
+     *
+     * @param  Builder<Intervento>  $query
+     */
+    public function scopeApertiEntroSoglia(Builder $query): void
+    {
+        $query->where('stato', StatoIntervento::NonFatto->value)
+            ->where('data_scadenza', '<', today()->addDays(Semaforo::giorniImminente() + 1)->toDateString());
     }
 
     /**

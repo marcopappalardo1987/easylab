@@ -1,5 +1,24 @@
 @php
     $arrow = fn ($col) => $sortBy === $col ? ($sortDir === 'asc' ? '↑' : '↓') : '';
+
+    // Colonna "Prossima scadenza" (wireframe §1): il prossimo intervento aperto.
+    // "Scaduto" viene da isScaduto() sul model — definizione canonica, mai
+    // riscritta qui.
+    $scadenzaLabel = function ($prossimo) {
+        if ($prossimo === null) {
+            return '—';
+        }
+
+        $tipo = ucfirst($prossimo->tipo->value);
+
+        if ($prossimo->isScaduto()) {
+            return $tipo.' — scaduta';
+        }
+
+        $giorni = (int) today()->diffInDays($prossimo->data_scadenza);
+
+        return $giorni === 0 ? $tipo.' — oggi' : "{$tipo} tra {$giorni} gg";
+    };
 @endphp
 
 <div class="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
@@ -44,6 +63,15 @@
                     <option value="{{ $nodo->id }}">{{ $nodo->nome }}</option>
                 @endforeach
             </select>
+
+            {{-- Filtro semaforo (ADR-005). "Non idoneo" arriva con la forzatura
+                 manuale (punto 5): finché non esiste, non è selezionabile. --}}
+            <select wire:model.live="stato"
+                class="block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none sm:w-52">
+                <option value="">Tutti gli stati</option>
+                <option value="arancione">◐ Azione richiesta</option>
+                <option value="verde">● In regola</option>
+            </select>
         </div>
     </x-ui.card>
 
@@ -53,25 +81,31 @@
             <table class="w-full text-left text-sm">
                 <thead class="border-b border-neutral-200 text-xs tracking-wide text-neutral-400 uppercase">
                     <tr>
-                        @foreach (['nome' => 'Nome', 'modello' => 'Modello', 'matricola' => 'Matricola'] as $col => $label)
+                        {{-- Tutte le colonne sono ordinabili: le tre derivate (stato,
+                             ubicazione, prossima scadenza) via sottoquery lato DB. --}}
+                        @foreach ([
+                            'stato' => 'Stato',
+                            'nome' => 'Nome',
+                            'modello' => 'Modello',
+                            'matricola' => 'Matricola',
+                            'ubicazione' => 'Ubicazione',
+                            'data_installazione' => 'Installazione',
+                            'prossima_scadenza' => 'Prossima scadenza',
+                        ] as $col => $label)
                             <th class="px-4 py-3 font-semibold">
-                                <button type="button" wire:click="sort('{{ $col }}')" class="inline-flex items-center gap-1 uppercase hover:text-neutral-700">
+                                <button type="button" wire:click="sort('{{ $col }}')"
+                                    class="inline-flex items-center gap-1 text-left uppercase hover:text-neutral-700">
                                     {{ $label }} <span class="text-primary-600">{{ $arrow($col) }}</span>
                                 </button>
                             </th>
                         @endforeach
-                        <th class="px-4 py-3 font-semibold">Ubicazione</th>
-                        <th class="px-4 py-3 font-semibold">
-                            <button type="button" wire:click="sort('data_installazione')" class="inline-flex items-center gap-1 uppercase hover:text-neutral-700">
-                                Installazione <span class="text-primary-600">{{ $arrow('data_installazione') }}</span>
-                            </button>
-                        </th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-neutral-100">
                     @forelse ($strumenti as $s)
                         <tr wire:key="str-{{ $s->id }}" class="cursor-pointer hover:bg-neutral-50"
                             onclick="window.location='{{ route('strumenti.show', $s) }}'">
+                            <td class="px-4 py-3"><x-ui.semaforo :stato="$semafori[$s->id]" /></td>
                             <td class="px-4 py-3 font-medium text-neutral-900">
                                 <a href="{{ route('strumenti.show', $s) }}" wire:navigate class="hover:text-primary-700">{{ $s->nome }}</a>
                             </td>
@@ -89,10 +123,14 @@
                                 @endif
                             </td>
                             <td class="px-4 py-3 text-neutral-600">{{ $s->data_installazione?->format('d/m/Y') ?: '—' }}</td>
+                            @php $prossimo = $prossimi[$s->id] ?? null; @endphp
+                            <td class="px-4 py-3 whitespace-nowrap {{ $prossimo?->isScaduto() ? 'font-medium text-warning-800' : 'text-neutral-600' }}">
+                                {{ $scadenzaLabel($prossimo) }}
+                            </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="px-4 py-10 text-center text-sm text-neutral-400">
+                            <td colspan="7" class="px-4 py-10 text-center text-sm text-neutral-400">
                                 {{ (filled($search) || $ubicazioneId) ? 'Nessun risultato per i filtri applicati.' : 'Nessuno strumento.' }}
                             </td>
                         </tr>
@@ -102,7 +140,22 @@
         </div>
     </x-ui.card>
 
-    <div class="mt-4">
-        {{ $strumenti->links() }}
+    <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2 text-sm text-neutral-600">
+            <label for="perPage">Righe per pagina</label>
+            <select id="perPage" wire:model.live="perPage"
+                class="rounded-md border border-neutral-200 py-1.5 pr-8 pl-2 text-sm text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
+                @foreach ($this->opzioniPerPage() as $opzione)
+                    <option value="{{ $opzione }}">{{ $opzione }}</option>
+                @endforeach
+            </select>
+            <span class="text-neutral-400">
+                {{ $strumenti->firstItem() ?? 0 }}–{{ $strumenti->lastItem() ?? 0 }} di {{ $strumenti->total() }}
+            </span>
+        </div>
+
+        <div class="flex-1">
+            {{ $strumenti->links() }}
+        </div>
     </div>
 </div>

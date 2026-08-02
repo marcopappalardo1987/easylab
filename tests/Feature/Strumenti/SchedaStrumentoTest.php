@@ -1,6 +1,7 @@
 <?php
 
 use App\Livewire\Strumenti\SchedaStrumento;
+use App\Models\Intervento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
@@ -84,4 +85,18 @@ it('lets a Responsabile edit a strumento in its subtree but 404 outside', functi
     $strFuori = Strumento::factory()->forNode($altro)->create();
 
     $this->actingAs($resp)->get(route('strumenti.show', $strFuori))->assertNotFound();
+});
+
+it('shows the semaforo badge in the header', function () {
+    // Senza interventi: in regola.
+    $this->actingAs($this->admin)->get(route('strumenti.show', $this->strumento))
+        ->assertOk()
+        ->assertSee('In regola');
+
+    // Con un intervento scaduto-non-fatto: arancione automatico (DoD S3).
+    Intervento::factory()->forStrumento($this->strumento)->scaduto()->create();
+
+    $this->actingAs($this->admin)->get(route('strumenti.show', $this->strumento))
+        ->assertSee('Azione richiesta')
+        ->assertDontSee('In regola');
 });

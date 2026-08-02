@@ -9,7 +9,11 @@
     {{-- Header --}}
     <div class="mt-3 flex flex-wrap items-start justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-bold tracking-tight text-neutral-900">{{ $strumento->nome }}</h1>
+            {{-- Semaforo (ADR-005): segnale di sintesi, la fonte di verità resta il tab Interventi. --}}
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <h1 class="text-2xl font-bold tracking-tight text-neutral-900">{{ $strumento->nome }}</h1>
+                <x-ui.semaforo :stato="$semaforo" size="md" :label="true" />
+            </div>
             <p class="mt-1 text-sm text-neutral-600">
                 @if ($strumento->modello)<span class="font-medium text-neutral-800">{{ $strumento->modello }}</span> · @endif
                 {{ $percorso }}
