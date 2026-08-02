@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Enums\StatoIntervento;
+use App\Enums\StatoSemaforo;
 use App\Enums\TipoIntervento;
 use App\Enums\TipoSpostamento;
 use App\Enums\TipoUnitaOrganizzativa;
@@ -14,6 +15,7 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
@@ -49,19 +51,39 @@ class DemoSeeder extends Seeder
         'Spettrometria', 'Diagnostica Rapida',
     ];
 
-    /** Modelli di strumento: nome → prefisso matricola. */
-    private const STRUMENTI = [
-        'Autoclave' => 'AUT', 'Centrifuga refrigerata' => 'CFR', 'Spettrofotometro UV-Vis' => 'SPU',
-        'Incubatore a CO2' => 'INC', 'Cappa a flusso laminare' => 'CFL', 'Microscopio ottico' => 'MIC',
-        'Bilancia analitica' => 'BIL', 'Congelatore -80 °C' => 'FRZ', 'Agitatore magnetico' => 'AGM',
-        'pHmetro da banco' => 'PHM', 'Termociclatore PCR' => 'PCR', 'Bagno termostatico' => 'BGT',
-        'Stufa a secco' => 'STF', 'Cappa chimica aspirante' => 'CCA', 'Vortex da laboratorio' => 'VRT',
-        'Liofilizzatore' => 'LIO', 'Citofluorimetro' => 'CIT', 'Analizzatore ematologico' => 'AEM',
-        'Densitometro osseo' => 'DEN', 'Cromatografo HPLC' => 'HPL', 'Micropipetta automatica' => 'MPA',
-        'Contatore di colonie' => 'CCL', 'Distillatore per acqua' => 'DST', 'Frigoemoteca' => 'FEM',
+    /**
+     * Catalogo strumenti: nome → varianti commerciali [modello, sigla matricola].
+     *
+     * I modelli sono un insieme CHIUSO e volutamente piccolo: lo stesso modello
+     * deve ripetersi su molte unità e in molti laboratori, altrimenti la vista
+     * "Per modello" (S2) mostra migliaia di righe da un'unità e non aggrega
+     * nulla. È l'errore della prima versione, che infilava un numero casuale
+     * nel nome del modello rendendolo di fatto unico per ogni pezzo.
+     */
+    private const CATALOGO = [
+        'Autoclave' => [['Thermo Steri-200', 'AUT'], ['Hettich Vapor-450', 'AUT']],
+        'Centrifuga refrigerata' => [['Eppendorf 5810R', 'CFR'], ['Hettich Rotina 420R', 'CFR']],
+        'Spettrofotometro UV-Vis' => [['Thermo Evolution 220', 'SPU'], ['Shimadzu UV-1900', 'SPU']],
+        'Incubatore a CO2' => [['Binder CB-170', 'INC'], ['Memmert ICO-105', 'INC']],
+        'Cappa a flusso laminare' => [['Faster SafeFast Elite', 'CFL'], ['Thermo MSC-Advantage', 'CFL']],
+        'Microscopio ottico' => [['Zeiss Primostar 3', 'MIC'], ['Leica DM750', 'MIC']],
+        'Bilancia analitica' => [['Sartorius Entris II', 'BIL'], ['Mettler XPR-205', 'BIL']],
+        'Congelatore -80 °C' => [['Thermo TSX-400', 'FRZ'], ['Haier DW-86L', 'FRZ']],
+        'Agitatore magnetico' => [['IKA RCT Basic', 'AGM'], ['Velp AREC-X', 'AGM']],
+        'pHmetro da banco' => [['Hanna HI-2020', 'PHM'], ['Mettler S220', 'PHM']],
+        'Termociclatore PCR' => [['Bio-Rad C1000', 'PCR'], ['Thermo ProFlex', 'PCR']],
+        'Bagno termostatico' => [['Memmert WNB-14', 'BGT'], ['Julabo Corio CD', 'BGT']],
+        'Stufa a secco' => [['Binder ED-56', 'STF'], ['Memmert UN-75', 'STF']],
+        'Cappa chimica aspirante' => [['Asem Labline 1800', 'CCA'], ['Faster FlowFast H', 'CCA']],
+        'Liofilizzatore' => [['Christ Alpha 2-4', 'LIO'], ['Telstar LyoQuest', 'LIO']],
+        'Citofluorimetro' => [['BD FACSLyric', 'CIT'], ['Beckman CytoFLEX', 'CIT']],
+        'Analizzatore ematologico' => [['Sysmex XN-1000', 'AEM'], ['Mindray BC-6800', 'AEM']],
+        'Cromatografo HPLC' => [['Agilent 1260 Infinity', 'HPL'], ['Waters Arc HPLC', 'HPL']],
+        'Contatore di colonie' => [['Interscience Scan 500', 'CCL'], ['Schuett Count', 'CCL']],
+        'Distillatore per acqua' => [['Millipore Milli-Q IQ', 'DST'], ['Elga Purelab Flex', 'DST']],
+        'Frigoemoteca' => [['Fiocchetti Emoteca 700', 'FEM'], ['Angelantoni BBR-625', 'FEM']],
+        'Vortex da laboratorio' => [['IKA Vortex 3', 'VRT'], ['Velp ZX4', 'VRT']],
     ];
-
-    private const COSTRUTTORI = ['Thermo', 'Eppendorf', 'Sartorius', 'Hettich', 'Memmert', 'Binder', 'Zeiss', 'Leica'];
 
     private const NOMI = ['Luca', 'Giulia', 'Marco', 'Francesca', 'Alessandro', 'Chiara', 'Davide', 'Sara', 'Matteo', 'Elena', 'Andrea', 'Valentina', 'Simone', 'Martina', 'Federico', 'Ilaria'];
 
@@ -146,6 +168,7 @@ class DemoSeeder extends Seeder
         $strumentiIds = $this->creaStrumenti($ente, $nodi);
         $this->creaInterventi($ente, $strumentiIds, $tecnici);
         $this->creaSpostamenti($ente, $strumentiIds, $nodi, $utenti['admin']);
+        $this->forzaAlcuniSemafori($ente, $utenti['admin'], $strumentiIds);
     }
 
     /** @return list<int> id dei nodi foglia (dove stanno gli strumenti) */
@@ -211,22 +234,24 @@ class DemoSeeder extends Seeder
     /** @return list<int> */
     private function creaStrumenti(UnitaOrganizzativa $ente, array $nodi): array
     {
-        $modelli = array_keys(self::STRUMENTI);
+        $nomi = array_keys(self::CATALOGO);
         $righe = [];
         $adesso = now();
 
-        // Alcune decine di strumenti per nodo foglia → migliaia per Ente.
+        // Alcune decine di strumenti per nodo foglia → migliaia per Ente. Ogni
+        // unità pesca dal catalogo chiuso, così lo STESSO modello finisce in
+        // molti laboratori e la vista "Per modello" ha qualcosa da aggregare.
         foreach ($nodi as $nodo) {
             foreach (range(1, random_int(20, 35)) as $ignored) {
-                $modello = $modelli[array_rand($modelli)];
-                $sigla = self::STRUMENTI[$modello];
-                $costruttore = self::COSTRUTTORI[array_rand(self::COSTRUTTORI)];
+                $nome = $nomi[array_rand($nomi)];
+                $varianti = self::CATALOGO[$nome];
+                [$modello, $sigla] = $varianti[array_rand($varianti)];
 
                 $righe[] = [
                     'tenant_id' => $ente->id,
                     'unita_organizzativa_id' => $nodo,
-                    'nome' => $modello,
-                    'modello' => $costruttore.' '.$sigla.'-'.random_int(100, 999),
+                    'nome' => $nome,
+                    'modello' => $modello,
                     'matricola' => $sigla.'-'.str_pad((string) random_int(1, 999999), 6, '0', STR_PAD_LEFT),
                     'parametri_tecnici' => json_encode([
                         'Alimentazione' => random_int(0, 1) ? '230 V — 50 Hz' : '400 V — 50 Hz',
@@ -349,6 +374,54 @@ class DemoSeeder extends Seeder
         }
 
         $this->command?->info('  spostamenti: '.count($righe));
+    }
+
+    /**
+     * Qualche semaforo forzato per Ente (ADR-005): due rossi "non idoneo" con
+     * motivo, un arancione e un verde forzato su uno strumento che ha davvero
+     * uno scaduto — quest'ultimo è il caso che mostra bene il principio: il
+     * pallino è verde per decisione umana, ma l'intervento scaduto resta lì.
+     *
+     * Passa dai metodi di dominio (non da insert()) autenticandosi come Admin
+     * dell'Ente: così `forced_by` è realistico e l'audit log si popola come in
+     * esercizio. L'Admin appartiene allo stesso Ente degli strumenti, quindi i
+     * global scope restano coerenti.
+     */
+    private function forzaAlcuniSemafori(UnitaOrganizzativa $ente, User $admin, array $strumentiIds): void
+    {
+        $motivi = [
+            'Non idoneo: perdita dal circuito, in attesa del ricambio',
+            'Fuori servizio dopo il collaudo di sicurezza elettrica',
+        ];
+
+        $scelti = collect($strumentiIds)->shuffle()->take(4)->values();
+        if ($scelti->count() < 4) {
+            return;
+        }
+
+        Auth::login($admin);
+
+        // Due rossi con motivo (obbligatorio per il rosso).
+        foreach ([0, 1] as $i) {
+            Strumento::withoutGlobalScopes()->find($scelti[$i])
+                ?->forzaSemaforo(StatoSemaforo::Rosso, $motivi[$i]);
+        }
+
+        // Un arancione forzato (motivo facoltativo, qui valorizzato).
+        Strumento::withoutGlobalScopes()->find($scelti[2])
+            ?->forzaSemaforo(StatoSemaforo::Arancione, 'Da tenere sotto osservazione dopo la riparazione');
+
+        // Un verde forzato su uno strumento CON uno scaduto: la forzatura non
+        // nasconde il problema, che resta visibile nel tab Interventi.
+        $conScaduto = Intervento::withoutGlobalScopes()->scadute()
+            ->whereIn('strumento_id', $strumentiIds)->value('strumento_id');
+
+        Strumento::withoutGlobalScopes()->find($conScaduto ?? $scelti[3])
+            ?->forzaSemaforo(StatoSemaforo::Verde, 'Verificato sul campo: operativo, scadenza già pianificata');
+
+        Auth::logout();
+
+        $this->command?->info('  semafori forzati: 4 (2 rossi)');
     }
 
     /**
