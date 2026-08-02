@@ -64,13 +64,13 @@
                 @endforeach
             </select>
 
-            {{-- Filtro semaforo (ADR-005). "Non idoneo" arriva con la forzatura
-                 manuale (punto 5): finché non esiste, non è selezionabile. --}}
+            {{-- Filtro semaforo (ADR-005): stato effettivo, cioè forzato se c'è. --}}
             <select wire:model.live="stato"
                 class="block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none sm:w-52">
                 <option value="">Tutti gli stati</option>
                 <option value="arancione">◐ Azione richiesta</option>
                 <option value="verde">● In regola</option>
+                <option value="rosso">■ Non idoneo</option>
             </select>
         </div>
     </x-ui.card>
@@ -105,7 +105,12 @@
                     @forelse ($strumenti as $s)
                         <tr wire:key="str-{{ $s->id }}" class="cursor-pointer hover:bg-neutral-50"
                             onclick="window.location='{{ route('strumenti.show', $s) }}'">
-                            <td class="px-4 py-3"><x-ui.semaforo :stato="$semafori[$s->id]" /></td>
+                            <td class="px-4 py-3">
+                                <span class="inline-flex items-center gap-1">
+                                    <x-ui.semaforo :stato="$semafori[$s->id]" />
+                                    <x-ui.semaforo-forzato :strumento="$s" />
+                                </span>
+                            </td>
                             <td class="px-4 py-3 font-medium text-neutral-900">
                                 <a href="{{ route('strumenti.show', $s) }}" wire:navigate class="hover:text-primary-700">{{ $s->nome }}</a>
                             </td>

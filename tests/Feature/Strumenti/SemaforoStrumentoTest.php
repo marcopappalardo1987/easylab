@@ -97,12 +97,17 @@ it('uses the loaded relation without re-querying when interventi are eager loade
         ->and($queries)->toBe(0);
 });
 
-it('exposes the effective state, which today equals the calculated one', function () {
+it('exposes the effective state, which equals the calculated one when not forced', function () {
     Intervento::factory()->forStrumento($this->strumento)->scaduto()->create();
 
-    // Il ramo "forzato" arriva col punto 5.
     expect($this->strumento->statoSemaforoEffettivo())
         ->toBe($this->strumento->statoSemaforoCalcolato());
+
+    // Con la forzatura vince quella (il caso completo è in ForzaturaSemaforoTest).
+    $this->actingAs($this->admin);
+    $this->strumento->forzaSemaforo(StatoSemaforo::Verde);
+
+    expect($this->strumento->fresh()->statoSemaforoEffettivo())->toBe(StatoSemaforo::Verde);
 });
 
 // --- Allineamento del bulk dell'elenco ---
@@ -120,15 +125,27 @@ it('keeps the elenco bulk aligned with the per-model calculation', function () {
     $tuttiFatti = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Tutti fatti']);
     Intervento::factory()->forStrumento($tuttiFatti)->scaduto()->fatto()->create();
 
+    // Forzati: il bulk deve seguire l'effettivo, non il calcolato.
+    $this->actingAs($this->admin);
+    $forzatoRosso = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Forzato rosso']);
+    $forzatoRosso->forzaSemaforo(StatoSemaforo::Rosso, 'Non idoneo');
+    $forzatoVerde = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Forzato verde con scaduto']);
+    Intervento::factory()->forStrumento($forzatoVerde)->scaduto()->create();
+    $forzatoVerde->forzaSemaforo(StatoSemaforo::Verde);
+
     $semafori = Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)->viewData('semafori');
 
     foreach (Strumento::all() as $s) {
-        expect($semafori[$s->id])->toBe($s->statoSemaforoCalcolato(), "Disallineamento su «{$s->nome}»");
+        expect($semafori[$s->id])->toBe($s->statoSemaforoEffettivo(), "Disallineamento su «{$s->nome}»");
     }
 
-    // E il caso arancione-da-scaduto coincide con scopeScadute().
+    expect($semafori[$forzatoRosso->id])->toBe(StatoSemaforo::Rosso)
+        ->and($semafori[$forzatoVerde->id])->toBe(StatoSemaforo::Verde);
+
+    // Lo scaduto resta scaduto anche sotto una forzatura verde: il semaforo
+    // mostra il forzato, ma il problema non sparisce dai dati (ADR-005).
     $idScaduti = Intervento::scadute()->pluck('strumento_id')->unique();
-    expect($idScaduti->all())->toBe([$scaduto->id])
+    expect($idScaduti->all())->toEqualCanonicalizing([$scaduto->id, $forzatoVerde->id])
         ->and($semafori[$scaduto->id])->toBe(StatoSemaforo::Arancione)
         ->and($semafori[$imminente->id])->toBe(StatoSemaforo::Arancione)
         ->and($semafori[$lontano->id])->toBe(StatoSemaforo::Verde)
@@ -206,6 +223,24 @@ it('filters the elenco by stato semaforo', function () {
         ->assertSee('Ha solo lontani');
 });
 
+it('filters by rosso, which only forced strumenti can be', function () {
+    $this->actingAs($this->admin);
+
+    $rosso = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Dichiarato non idoneo']);
+    $rosso->forzaSemaforo(StatoSemaforo::Rosso, 'Guarnizione rotta');
+    $conScaduto = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Solo scaduto']);
+    Intervento::factory()->forStrumento($conScaduto)->scaduto()->create();
+
+    Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)
+        ->set('stato', 'rosso')
+        ->assertSee('Dichiarato non idoneo')
+        ->assertDontSee('Solo scaduto')
+        ->assertDontSee('Autoclave')
+        ->set('stato', 'arancione')
+        ->assertSee('Solo scaduto')
+        ->assertDontSee('Dichiarato non idoneo');   // forzato rosso, non arancione
+});
+
 it('keeps the stato filter aligned with the per-model calculation', function () {
     // La regola vive in due forme (PHP in Semaforo::calcola, SQL in
     // scopeApertiEntroSoglia): questo test impedisce che divergano.
@@ -216,13 +251,23 @@ it('keeps the stato filter aligned with the per-model calculation', function () 
     }
     Strumento::factory()->forNode($this->dept)->create(['nome' => 'Senza interventi']);
 
-    foreach ([StatoSemaforo::Arancione, StatoSemaforo::Verde] as $stato) {
+    // Forzature: il filtro SQL deve seguirle come fa statoSemaforoEffettivo().
+    $this->actingAs($this->admin);
+    $rosso = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Forzato rosso']);
+    $rosso->forzaSemaforo(StatoSemaforo::Rosso, 'Non idoneo');
+    $verdeForzato = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Forzato verde con scaduto']);
+    Intervento::factory()->forStrumento($verdeForzato)->scaduto()->create();
+    $verdeForzato->forzaSemaforo(StatoSemaforo::Verde);
+    $arancioneForzato = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Forzato arancione senza interventi']);
+    $arancioneForzato->forzaSemaforo(StatoSemaforo::Arancione);
+
+    foreach (StatoSemaforo::cases() as $stato) {
         $filtrati = Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)
             ->set('stato', $stato->value)
             ->viewData('strumenti')->pluck('id')->all();
 
         $attesi = Strumento::all()
-            ->filter(fn (Strumento $s) => $s->statoSemaforoCalcolato() === $stato)
+            ->filter(fn (Strumento $s) => $s->statoSemaforoEffettivo() === $stato)
             ->pluck('id')->all();
 
         expect($filtrati)->toEqualCanonicalizing($attesi, "Filtro «{$stato->value}» disallineato dal calcolo per-model");
@@ -238,18 +283,33 @@ it('resets pagination when the stato filter changes', function () {
 
 // --- Ordinamento delle colonne derivate (SQL, non PHP) ---
 
-it('sorts by stato semaforo in both directions', function () {
+it('sorts by stato semaforo across all three values', function () {
+    $this->actingAs($this->admin);
+
     $arancione = Strumento::factory()->forNode($this->dept)->create(['nome' => 'B arancione']);
     Intervento::factory()->forStrumento($arancione)->scaduto()->create();
-    $verde = Strumento::factory()->forNode($this->dept)->create(['nome' => 'A verde']);
+
+    $rosso = Strumento::factory()->forNode($this->dept)->create(['nome' => 'C rosso']);
+    $rosso->forzaSemaforo(StatoSemaforo::Rosso, 'Non idoneo');
+
+    // Ha uno scaduto (calcolato arancione) ma è forzato verde: deve ordinare
+    // come un verde (ordinale 0), non come un arancione.
+    $verdeForzato = Strumento::factory()->forNode($this->dept)->create(['nome' => 'D verde forzato']);
+    Intervento::factory()->forStrumento($verdeForzato)->scaduto()->create();
+    $verdeForzato->forzaSemaforo(StatoSemaforo::Verde);
 
     $ordine = fn (string $dir) => Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)
         ->set('sortBy', 'stato')->set('sortDir', $dir)
         ->viewData('strumenti')->pluck('id')->all();
 
-    // asc = prima i verdi (ordinale 0), desc = prima quelli da sistemare.
-    expect(head($ordine('asc')))->not->toBe($arancione->id)
-        ->and(head($ordine('desc')))->toBe($arancione->id);
+    $asc = $ordine('asc');
+    $desc = $ordine('desc');
+
+    // asc: verdi (incluso il forzato) → arancioni → rosso in fondo.
+    expect(last($asc))->toBe($rosso->id)
+        ->and(head($desc))->toBe($rosso->id)
+        ->and(array_search($verdeForzato->id, $asc, true))
+        ->toBeLessThan(array_search($arancione->id, $asc, true));
 });
 
 it('sorts by prossima scadenza keeping strumenti without one always last', function () {

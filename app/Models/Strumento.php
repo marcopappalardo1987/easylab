@@ -6,6 +6,7 @@ use App\Enums\StatoIntervento;
 use App\Enums\StatoSemaforo;
 use App\Models\Concerns\BelongsToOrgNode;
 use App\Models\Concerns\BelongsToTenant;
+use App\Support\AuditLog;
 use App\Support\Semaforo;
 use Database\Factories\StrumentoFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,6 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use InvalidArgumentException;
 
 /**
  * Asset/strumento (ERD §5.1). Collocato in un nodo dell'albero
@@ -28,6 +30,12 @@ class Strumento extends Model
 
     protected $table = 'strumenti';
 
+    /**
+     * NOTA: le colonne `forced_*` sono deliberatamente ESCLUSE. Il form della
+     * scheda e l'import CSV scrivono per mass-assignment: tenendole fuori,
+     * nessun payload — presente o futuro — può forzare il semaforo scavalcando
+     * forzaSemaforo()/rimuoviForzatura(), che sono l'unica via.
+     */
     protected $fillable = [
         'tenant_id',
         'reseller_id',
@@ -44,6 +52,8 @@ class Strumento extends Model
         return [
             'parametri_tecnici' => 'array',
             'data_installazione' => 'date',
+            'forced_state' => StatoSemaforo::class,
+            'forced_at' => 'datetime',
         ];
     }
 
@@ -101,12 +111,91 @@ class Strumento extends Model
 
     /**
      * Stato mostrato = forzato se presente, altrimenti calcolato (ADR-005).
-     * Oggi ≡ calcolato: le colonne forced_* arrivano col punto 5. La UI deve
-     * chiamare SEMPRE questo metodo, mai statoSemaforoCalcolato().
+     * La UI deve chiamare SEMPRE questo metodo, mai statoSemaforoCalcolato():
+     * è l'unico punto in cui la forzatura vince, e vale anche per le forme SQL
+     * dell'elenco (filtro e ordinamento), che replicano questa stessa regola.
      */
     public function statoSemaforoEffettivo(): StatoSemaforo
     {
-        return $this->statoSemaforoCalcolato();
+        return $this->forced_state ?? $this->statoSemaforoCalcolato();
+    }
+
+    /**
+     * Utente che ha forzato il semaforo (ADR-005).
+     */
+    public function forcedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'forced_by');
+    }
+
+    /**
+     * Forza manualmente il semaforo (ADR-005, permesso `semaforo.force`): lo
+     * stato forzato vince su quello calcolato finché non viene rimosso. La
+     * forzatura non nasconde nulla — la lista interventi resta la fonte di
+     * verità e continua a mostrare gli scaduti.
+     *
+     * Il motivo è OBBLIGATORIO solo per il rosso: dichiarare uno strumento
+     * "non idoneo" senza dire perché lascia l'audit log senza la sola
+     * informazione che conta. Per verde e arancione resta opzionale (ADR-005:
+     * "opzionale ma raccomandato"). La guardia sta qui e non solo nel form:
+     * vale per qualunque chiamante futuro (QR S4, scheduler S5).
+     *
+     * `forced_by` è sempre l'utente autenticato, mai un valore in ingresso.
+     */
+    public function forzaSemaforo(StatoSemaforo $stato, ?string $motivo = null): bool
+    {
+        if ($stato === StatoSemaforo::Rosso && blank($motivo)) {
+            throw new InvalidArgumentException('Il motivo è obbligatorio quando si forza il rosso (ADR-005).');
+        }
+
+        $calcolato = $this->statoSemaforoCalcolato();
+
+        $this->forced_state = $stato;
+        $this->forced_by = auth()->id();
+        $this->forced_at = now();
+        $this->forced_reason = blank($motivo) ? null : $motivo;
+
+        $salvato = $this->save();
+
+        activity(AuditLog::NAME)
+            ->causedBy(auth()->user())
+            ->performedOn($this)
+            ->withProperties([
+                'stato_calcolato' => $calcolato->value,
+                'forced_state' => $stato->value,
+                'motivo' => $this->forced_reason,
+            ])
+            ->log('Semaforo forzato');
+
+        return $salvato;
+    }
+
+    /**
+     * Rimuove la forzatura: lo stato mostrato torna a quello calcolato.
+     * Loggata come la forzatura — riabilitare uno strumento dichiarato non
+     * idoneo è un atto sensibile quanto dichiararlo tale.
+     */
+    public function rimuoviForzatura(): bool
+    {
+        $precedente = $this->forced_state;
+
+        $this->forced_state = null;
+        $this->forced_by = null;
+        $this->forced_at = null;
+        $this->forced_reason = null;
+
+        $salvato = $this->save();
+
+        activity(AuditLog::NAME)
+            ->causedBy(auth()->user())
+            ->performedOn($this)
+            ->withProperties([
+                'forced_state_rimosso' => $precedente?->value,
+                'stato_calcolato' => $this->statoSemaforoCalcolato()->value,
+            ])
+            ->log('Forzatura semaforo rimossa');
+
+        return $salvato;
     }
 
     /**

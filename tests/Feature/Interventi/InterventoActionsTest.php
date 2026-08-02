@@ -1,14 +1,12 @@
 <?php
 
 use App\Enums\StatoIntervento;
-use App\Livewire\Strumenti\SchedaStrumento;
 use App\Models\Intervento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 
@@ -27,11 +25,6 @@ beforeEach(function () {
     $this->admin = User::factory()->create(['tenant_id' => $this->ente->id, 'two_factor_confirmed_at' => now()]);
     $this->admin->assignRole('Admin');
 });
-
-function scheda(User $user, Strumento $strumento): Testable
-{
-    return Livewire::actingAs($user)->test(SchedaStrumento::class, ['strumento' => $strumento]);
-}
 
 // --- CRUD felice ---
 

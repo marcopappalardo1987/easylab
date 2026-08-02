@@ -13,6 +13,7 @@
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <h1 class="text-2xl font-bold tracking-tight text-neutral-900">{{ $strumento->nome }}</h1>
                 <x-ui.semaforo :stato="$semaforo" size="md" :label="true" />
+                <x-ui.semaforo-forzato :strumento="$strumento" />
             </div>
             <p class="mt-1 text-sm text-neutral-600">
                 @if ($strumento->modello)<span class="font-medium text-neutral-800">{{ $strumento->modello }}</span> · @endif
@@ -21,6 +22,9 @@
             </p>
         </div>
         <div class="flex items-center gap-2">
+            @can('semaforo.force')
+                <x-ui.button variant="secondary" wire:click="openForza">Forza semaforo</x-ui.button>
+            @endcan
             @can('strumenti.move')
                 <x-ui.button variant="secondary" wire:click="openMove">Sposta</x-ui.button>
             @endcan
@@ -267,6 +271,48 @@
                 <div class="flex justify-end gap-3">
                     <x-ui.button variant="secondary" wire:click="closeMove">Annulla</x-ui.button>
                     <x-ui.button type="submit">Sposta</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
+    @endif
+
+    {{-- Modale forzatura semaforo (S3 punto 5, ADR-005) --}}
+    @if ($showForzaForm)
+        <x-ui.modal title="Forza semaforo" close="closeForza">
+            <form wire:submit="forza" class="space-y-5">
+                <p class="text-sm text-neutral-600">
+                    Lo stato forzato vince su quello calcolato finché non viene rimosso.
+                    Gli interventi restano visibili nel tab: la forzatura non nasconde nulla.
+                </p>
+
+                <div>
+                    <label for="forzaStato" class="block text-sm font-medium text-neutral-800">Stato</label>
+                    {{-- .live: cambiando stato, il campo motivo diventa obbligatorio sul rosso --}}
+                    <select id="forzaStato" wire:model.live="forzaForm.stato"
+                        class="mt-1 block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
+                        <option value="{{ App\Enums\StatoSemaforo::Verde->value }}">● In regola</option>
+                        <option value="{{ App\Enums\StatoSemaforo::Arancione->value }}">◐ Azione richiesta</option>
+                        <option value="{{ App\Enums\StatoSemaforo::Rosso->value }}">■ Non idoneo</option>
+                    </select>
+                    @error('forzaForm.stato') <p class="mt-1 text-sm text-danger-600">{{ $message }}</p> @enderror
+                </div>
+
+                @php $richiedeMotivo = $forzaForm['stato'] === App\Enums\StatoSemaforo::Rosso->value; @endphp
+                <x-ui.textarea name="forzaForm.motivo" wire:model="forzaForm.motivo"
+                    :label="$richiedeMotivo ? 'Motivo (obbligatorio per «non idoneo»)' : 'Motivo (opzionale)'" />
+
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        @if ($strumento->forced_state !== null)
+                            <x-ui.button variant="ghost" wire:click="rimuoviForzatura" wire:loading.attr="disabled">
+                                Rimuovi forzatura
+                            </x-ui.button>
+                        @endif
+                    </div>
+                    <div class="flex gap-3">
+                        <x-ui.button variant="secondary" wire:click="closeForza">Annulla</x-ui.button>
+                        <x-ui.button type="submit" wire:loading.attr="disabled">Forza</x-ui.button>
+                    </div>
                 </div>
             </form>
         </x-ui.modal>

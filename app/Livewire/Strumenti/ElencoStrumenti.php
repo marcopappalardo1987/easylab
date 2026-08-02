@@ -11,6 +11,7 @@ use App\Models\UnitaOrganizzativa;
 use App\Support\Semaforo;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -44,8 +45,8 @@ class ElencoStrumenti extends Component
      * Filtro semaforo (ADR-005): 'verde' | 'arancione'. Lo stato è derivato,
      * non una colonna: il filtro si applica in SQL con una subquery sugli
      * interventi (vedi render), altrimenti filtrare dopo la paginazione darebbe
-     * pagine incomplete. 'rosso' non è selezionabile finché non esiste la
-     * forzatura manuale (punto 5).
+     * pagine incomplete. Include 'rosso', che esiste solo come forzatura
+     * manuale (punto 5).
      */
     #[Url]
     public ?string $stato = null;
@@ -221,11 +222,30 @@ class ElencoStrumenti extends Component
         }
 
         if ($sortBy === 'stato') {
-            // Ordinale del semaforo: 0 = verde, 1 = arancione (2 = rosso col
-            // punto 5). asc → prima i verdi, desc → prima quelli da sistemare.
-            $query->withExists([
-                'interventi as ha_scadenze_rilevanti' => fn ($q) => $q->reorder()->apertiEntroSoglia(),
-            ])->orderBy('ha_scadenze_rilevanti', $sortDir);
+            // Ordinale dello stato EFFETTIVO: 0 = verde, 1 = arancione,
+            // 2 = rosso (solo forzato). Il forzato vince, quindi il CASE guarda
+            // prima `forced_state` e solo se è NULL ricade sugli interventi —
+            // stessa regola di Strumento::statoSemaforoEffettivo().
+            //
+            // L'EXISTS è inlineato dentro il CASE e non estratto come alias:
+            // Postgres non ammette alias di select nelle espressioni dell'ORDER
+            // BY (SQLite sì, quindi divergerebbe solo in CI).
+            $aperti = Intervento::query()->select(DB::raw('1'))
+                ->whereColumn('strumento_id', 'strumenti.id')
+                ->apertiEntroSoglia();
+
+            $query->orderByRaw(
+                'case'
+                .' when strumenti.forced_state = ? then 2'
+                .' when strumenti.forced_state = ? then 1'
+                .' when strumenti.forced_state = ? then 0'
+                .' when exists ('.$aperti->toSql().') then 1'
+                .' else 0 end '.$sortDir,
+                array_merge(
+                    [StatoSemaforo::Rosso->value, StatoSemaforo::Arancione->value, StatoSemaforo::Verde->value],
+                    $aperti->getBindings(),
+                ),
+            );
 
             return;
         }
@@ -256,7 +276,7 @@ class ElencoStrumenti extends Component
         $sortBy = in_array($this->sortBy, self::SORTABLE, true) ? $this->sortBy : 'nome';
         $sortDir = $this->sortDir === 'desc' ? 'desc' : 'asc';
 
-        $query = Strumento::query()->select('strumenti.*')->with('unita');
+        $query = Strumento::query()->select('strumenti.*')->with(['unita', 'forcedBy']);
 
         if (filled($this->search)) {
             $like = '%'.strtolower(trim($this->search)).'%';
@@ -279,12 +299,21 @@ class ElencoStrumenti extends Component
         // entro la soglia (scopeApertiEntroSoglia, forma SQL della regola di
         // Semaforo::calcola). Verde = il complemento. Filtrare qui e non dopo la
         // paginazione è l'unico modo di avere pagine e conteggi corretti.
-        if (in_array($this->stato, [StatoSemaforo::Verde->value, StatoSemaforo::Arancione->value], true)) {
+        if (in_array($this->stato, array_map(fn (StatoSemaforo $c) => $c->value, StatoSemaforo::cases()), true)) {
             $conScadenzeRilevanti = Intervento::query()->apertiEntroSoglia()->select('strumento_id');
 
-            $this->stato === StatoSemaforo::Arancione->value
-                ? $query->whereIn('id', $conScadenzeRilevanti)
-                : $query->whereNotIn('id', $conScadenzeRilevanti);
+            // "Forzato se c'è, altrimenti calcolato" anche in SQL: senza il
+            // ramo su `forced_state` uno strumento forzato comparirebbe sotto
+            // lo stato calcolato, contraddicendo il pallino della sua riga.
+            match ($this->stato) {
+                StatoSemaforo::Rosso->value => $query->where('forced_state', StatoSemaforo::Rosso->value),
+                StatoSemaforo::Arancione->value => $query->where(fn ($q) => $q
+                    ->where('forced_state', StatoSemaforo::Arancione->value)
+                    ->orWhere(fn ($q) => $q->whereNull('forced_state')->whereIn('id', $conScadenzeRilevanti))),
+                StatoSemaforo::Verde->value => $query->where(fn ($q) => $q
+                    ->where('forced_state', StatoSemaforo::Verde->value)
+                    ->orWhere(fn ($q) => $q->whereNull('forced_state')->whereNotIn('id', $conScadenzeRilevanti))),
+            };
         }
 
         $this->applicaOrdinamento($query, $sortBy, $sortDir);
@@ -313,8 +342,10 @@ class ElencoStrumenti extends Component
             ->unique('strumento_id') // ordinati asc → il primo per strumento è il minimo
             ->keyBy('strumento_id');
 
+        // Stato EFFETTIVO: il forzato vince (ADR-005). `forced_state` è già sulla
+        // riga paginata, quindi costo zero — nessuna query in più.
         $semafori = $strumenti->getCollection()->mapWithKeys(fn (Strumento $s) => [
-            $s->id => Semaforo::calcola($prossimi->get($s->id)?->data_scadenza),
+            $s->id => $s->forced_state ?? Semaforo::calcola($prossimi->get($s->id)?->data_scadenza),
         ]);
 
         $tuttiNodi = UnitaOrganizzativa::orderBy('nome')->get();

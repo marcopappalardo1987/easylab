@@ -3,6 +3,7 @@
 namespace App\Livewire\Strumenti;
 
 use App\Enums\StatoIntervento;
+use App\Enums\StatoSemaforo;
 use App\Enums\TipoIntervento;
 use App\Enums\TipoSpostamento;
 use App\Enums\TipoUnitaOrganizzativa;
@@ -69,6 +70,12 @@ class SchedaStrumento extends Component
     public string $dataEsecuzione = '';
 
     public ?int $deletingInterventoId = null; // modale conferma aperta se non null
+
+    // Modale forzatura semaforo (S3 punto 5)
+    public bool $showForzaForm = false;
+
+    /** @var array{stato:string,motivo:string} */
+    public array $forzaForm = ['stato' => '', 'motivo' => ''];
 
     public function mount(Strumento $strumento): void
     {
@@ -268,6 +275,71 @@ class SchedaStrumento extends Component
     {
         $this->reset(['completingInterventoId', 'dataEsecuzione']);
         $this->showCompletaForm = false;
+    }
+
+    // --- Forzatura semaforo (S3 punto 5, ADR-005) ---
+    //
+    // A differenza delle azioni sugli interventi, qui non serve un findOrFail
+    // scopato: si agisce sullo strumento GIÀ bindato dalla rotta, quindi
+    // l'isolamento è il route-model binding (404 fuori Ente/sotto-albero).
+
+    public function openForza(): void
+    {
+        $this->authorize('semaforo.force');
+
+        $this->forzaForm = [
+            // Default Rosso: è il caso d'uso primario dell'ADR ("non idoneo"
+            // dopo verifica). Se già forzato, si riparte da quella scelta.
+            'stato' => $this->strumento->forced_state?->value ?? StatoSemaforo::Rosso->value,
+            'motivo' => $this->strumento->forced_reason ?? '',
+        ];
+        $this->resetValidation();
+        $this->showForzaForm = true;
+    }
+
+    public function forza(): void
+    {
+        $this->authorize('semaforo.force');
+        $this->validate($this->forzaFormRules());
+
+        // Lo stato passa da Rule::in nella validazione; il motivo obbligatorio
+        // sul rosso è comunque riverificato dall'invariante nel model.
+        $this->strumento->forzaSemaforo(
+            StatoSemaforo::from($this->forzaForm['stato']),
+            $this->forzaForm['motivo'] ?: null,
+        );
+
+        $this->closeForza();
+    }
+
+    /**
+     * Rimozione senza conferma, come riapri(): è simmetrica e ripetibile (la
+     * forzatura si ridà in due click), e la conferma resta alle distruttive.
+     */
+    public function rimuoviForzatura(): void
+    {
+        $this->authorize('semaforo.force');
+        $this->strumento->rimuoviForzatura();
+
+        $this->closeForza();
+    }
+
+    public function closeForza(): void
+    {
+        $this->reset(['forzaForm']);
+        $this->resetValidation();
+        $this->showForzaForm = false;
+    }
+
+    /** Il motivo è obbligatorio solo per il rosso (ADR-005 + decisione S3). */
+    protected function forzaFormRules(): array
+    {
+        return [
+            'forzaForm.stato' => ['required', Rule::in(array_map(fn (StatoSemaforo $c) => $c->value, StatoSemaforo::cases()))],
+            'forzaForm.motivo' => $this->forzaForm['stato'] === StatoSemaforo::Rosso->value
+                ? ['required', 'string', 'max:255']
+                : ['nullable', 'string', 'max:255'],
+        ];
     }
 
     /**
