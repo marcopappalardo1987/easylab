@@ -77,6 +77,48 @@ class Strumento extends Model
     }
 
     /**
+     * Garanzie del macchinario (ERD §6.1), la più vicina a scadere in alto.
+     * Solo `soggetto = macchina`: le righe `ricambio` hanno `strumento_id` NULL
+     * e si raggiungeranno via `ricambio_utilizzo` in S4.
+     */
+    public function garanzie(): HasMany
+    {
+        return $this->hasMany(Garanzia::class, 'strumento_id')
+            ->orderBy('data_scadenza_effettiva')
+            ->orderBy('id');
+    }
+
+    /**
+     * Storico letture contaore (append-only), più recente in alto.
+     */
+    public function lettureContaore(): HasMany
+    {
+        return $this->hasMany(LetturaContaore::class, 'strumento_id')
+            ->orderByDesc('data')
+            ->orderByDesc('id');
+    }
+
+    /**
+     * Garanzia con la scadenza effettiva più vicina: il secondo ingresso del
+     * semaforo (ADR-004/005). Speculare a prossimoInterventoAperto().
+     *
+     * Nota privacy per S4: il semaforo è un AGGREGATO e dovrà considerare anche
+     * le garanzie ricambio, bypassando GaranziaRicambioPrivacyScope — il
+     * pallino non rivela la riga. La colonna "Prossima scadenza" dell'elenco è
+     * invece un DETTAGLIO e dovrà restare filtrata per permesso.
+     */
+    public function prossimaGaranzia(): ?Garanzia
+    {
+        if ($this->relationLoaded('garanzie')) {
+            return $this->garanzie
+                ->sortBy([['data_scadenza_effettiva', 'asc'], ['id', 'asc']])
+                ->first();
+        }
+
+        return $this->garanzie()->first(); // la relazione ordina già asc
+    }
+
+    /**
      * Prossimo intervento aperto (non_fatto con scadenza minima): l'unico dato
      * che serve al semaforo e alla colonna "Prossima scadenza".
      *
@@ -101,12 +143,17 @@ class Strumento extends Model
     }
 
     /**
-     * Stato calcolato (ADR-005): derivato, MAI persistito. Le garanzie
-     * (secondo input di Semaforo::calcola) arrivano col punto 7.
+     * Stato calcolato (ADR-005): derivato, MAI persistito. Considera sia gli
+     * interventi aperti sia le garanzie, entrambi ridotti a una data — le
+     * garanzie ci arrivano già normalizzate in `data_scadenza_effettiva`
+     * (ADR-004), quindi il motore non sa nulla di ore né di durate.
      */
     public function statoSemaforoCalcolato(): StatoSemaforo
     {
-        return Semaforo::calcola($this->prossimoInterventoAperto()?->data_scadenza);
+        return Semaforo::calcola(
+            $this->prossimoInterventoAperto()?->data_scadenza,
+            $this->prossimaGaranzia()?->data_scadenza_effettiva,
+        );
     }
 
     /**

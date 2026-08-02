@@ -5,6 +5,7 @@ namespace App\Livewire\Strumenti;
 use App\Enums\StatoIntervento;
 use App\Enums\StatoSemaforo;
 use App\Enums\TipoUnitaOrganizzativa;
+use App\Models\Garanzia;
 use App\Models\Intervento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
@@ -233,6 +234,10 @@ class ElencoStrumenti extends Component
             $aperti = Intervento::query()->select(DB::raw('1'))
                 ->whereColumn('strumento_id', 'strumenti.id')
                 ->apertiEntroSoglia();
+            // Anche una garanzia scaduta o in scadenza accende l'arancione.
+            $garanzie = Garanzia::query()->select(DB::raw('1'))
+                ->whereColumn('strumento_id', 'strumenti.id')
+                ->entroSoglia();
 
             $query->orderByRaw(
                 'case'
@@ -240,10 +245,12 @@ class ElencoStrumenti extends Component
                 .' when strumenti.forced_state = ? then 1'
                 .' when strumenti.forced_state = ? then 0'
                 .' when exists ('.$aperti->toSql().') then 1'
+                .' when exists ('.$garanzie->toSql().') then 1'
                 .' else 0 end '.$sortDir,
                 array_merge(
                     [StatoSemaforo::Rosso->value, StatoSemaforo::Arancione->value, StatoSemaforo::Verde->value],
                     $aperti->getBindings(),
+                    $garanzie->getBindings(),
                 ),
             );
 
@@ -251,18 +258,35 @@ class ElencoStrumenti extends Component
         }
 
         if ($sortBy === 'prossima_scadenza') {
-            $prossima = Intervento::select('data_scadenza')
+            // Il minimo fra due fonti: interventi aperti e garanzie (ADR-004).
+            // Subquery scalari con MIN aggregato: su zero righe danno NULL, che
+            // è esattamente "nessuna scadenza".
+            $minIntervento = Intervento::query()->selectRaw('min(data_scadenza)')
                 ->whereColumn('strumento_id', 'strumenti.id')
-                ->where('stato', StatoIntervento::NonFatto->value)
-                ->orderBy('data_scadenza')->orderBy('id')
-                ->limit(1);
+                ->where('stato', StatoIntervento::NonFatto->value);
+            $minGaranzia = Garanzia::query()->selectRaw('min(data_scadenza_effettiva)')
+                ->whereColumn('strumento_id', 'strumenti.id');
+
+            $i = '('.$minIntervento->toSql().')';
+            $g = '('.$minGaranzia->toSql().')';
+            $bi = $minIntervento->getBindings();
+            $bg = $minGaranzia->getBindings();
+
+            // min(i, g) NULL-safe scritto a mano: LEAST non esiste su SQLite e
+            // su Postgres ignora i NULL in modo diverso da quanto serve qui.
+            // I binding seguono l'ordine TESTUALE dei placeholder.
+            $minExpr = "case when {$i} is null then {$g}"
+                ." when {$g} is null then {$i}"
+                ." when {$i} <= {$g} then {$i}"
+                ." else {$g} end";
+            $minBindings = array_merge($bi, $bg, $bg, $bi, $bi, $bg, $bi, $bg);
 
             // Gli strumenti senza scadenze ("—") vanno SEMPRE in fondo, in
             // entrambe le direzioni: sono assenza di dato, non un valore. Serve
             // anche a non dipendere dal driver, perché SQLite ordina i NULL per
             // primi e Postgres per ultimi.
-            $query->addSelect(['prossima_scadenza' => $prossima])
-                ->orderByRaw('case when ('.$prossima->toSql().') is null then 1 else 0 end', $prossima->getBindings())
+            $query->selectRaw("({$minExpr}) as prossima_scadenza", $minBindings)
+                ->orderByRaw("case when ({$minExpr}) is null then 1 else 0 end", $minBindings)
                 ->orderBy('prossima_scadenza', $sortDir);
 
             return;
@@ -301,18 +325,26 @@ class ElencoStrumenti extends Component
         // paginazione è l'unico modo di avere pagine e conteggi corretti.
         if (in_array($this->stato, array_map(fn (StatoSemaforo $c) => $c->value, StatoSemaforo::cases()), true)) {
             $conScadenzeRilevanti = Intervento::query()->apertiEntroSoglia()->select('strumento_id');
+            $conGaranzieRilevanti = Garanzia::query()->entroSoglia()
+                ->whereNotNull('strumento_id')->select('strumento_id');
 
             // "Forzato se c'è, altrimenti calcolato" anche in SQL: senza il
             // ramo su `forced_state` uno strumento forzato comparirebbe sotto
             // lo stato calcolato, contraddicendo il pallino della sua riga.
+            // L'arancione può venire da un intervento O da una garanzia
+            // (ADR-004/005), quindi il verde è il complemento di ENTRAMBI.
             match ($this->stato) {
                 StatoSemaforo::Rosso->value => $query->where('forced_state', StatoSemaforo::Rosso->value),
                 StatoSemaforo::Arancione->value => $query->where(fn ($q) => $q
                     ->where('forced_state', StatoSemaforo::Arancione->value)
-                    ->orWhere(fn ($q) => $q->whereNull('forced_state')->whereIn('id', $conScadenzeRilevanti))),
+                    ->orWhere(fn ($q) => $q->whereNull('forced_state')
+                        ->where(fn ($q) => $q->whereIn('id', $conScadenzeRilevanti)
+                            ->orWhereIn('id', $conGaranzieRilevanti)))),
                 StatoSemaforo::Verde->value => $query->where(fn ($q) => $q
                     ->where('forced_state', StatoSemaforo::Verde->value)
-                    ->orWhere(fn ($q) => $q->whereNull('forced_state')->whereNotIn('id', $conScadenzeRilevanti))),
+                    ->orWhere(fn ($q) => $q->whereNull('forced_state')
+                        ->whereNotIn('id', $conScadenzeRilevanti)
+                        ->whereNotIn('id', $conGaranzieRilevanti))),
             };
         }
 
@@ -344,8 +376,22 @@ class ElencoStrumenti extends Component
 
         // Stato EFFETTIVO: il forzato vince (ADR-005). `forced_state` è già sulla
         // riga paginata, quindi costo zero — nessuna query in più.
+        // Garanzia più vicina per riga in pagina (ADR-004): seconda query
+        // costante, servita dall'indice (strumento_id, data_scadenza_effettiva).
+        // Due query separate e non una UNION: ognuna cade sul proprio indice e
+        // mantiene i global scope del proprio model (privacy ricambio inclusa).
+        $garanzieMin = Garanzia::query()
+            ->whereIn('strumento_id', $strumenti->getCollection()->modelKeys())
+            ->orderBy('data_scadenza_effettiva')->orderBy('id')
+            ->get(['id', 'strumento_id', 'data_scadenza_effettiva'])
+            ->unique('strumento_id')
+            ->keyBy('strumento_id');
+
         $semafori = $strumenti->getCollection()->mapWithKeys(fn (Strumento $s) => [
-            $s->id => $s->forced_state ?? Semaforo::calcola($prossimi->get($s->id)?->data_scadenza),
+            $s->id => $s->forced_state ?? Semaforo::calcola(
+                $prossimi->get($s->id)?->data_scadenza,
+                $garanzieMin->get($s->id)?->data_scadenza_effettiva,
+            ),
         ]);
 
         $tuttiNodi = UnitaOrganizzativa::orderBy('nome')->get();
@@ -361,6 +407,7 @@ class ElencoStrumenti extends Component
             'strumenti' => $strumenti,
             'semafori' => $semafori,
             'prossimi' => $prossimi,
+            'garanzieMin' => $garanzieMin,
             'enti' => $enti,
             'nodi' => $nodi,
             'percorsi' => $this->percorsi($tuttiNodi),

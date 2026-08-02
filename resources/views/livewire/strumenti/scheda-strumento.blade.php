@@ -52,7 +52,9 @@
                 <span class="cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-neutral-300" title="In arrivo (S3/S4)">{{ $t }}</span>
             @endforeach
             @can('garanzie.macchina.view')
-                <span class="cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-neutral-300" title="In arrivo (S3)">Garanzie</span>
+                <button type="button" x-on:click="tab = 'garanzie'"
+                    :class="tab === 'garanzie' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
+                    class="border-b-2 px-3 py-2 font-medium">Garanzie</button>
             @endcan
         </nav>
     </div>
@@ -135,6 +137,16 @@
     @can('interventi.view')
         <div x-show="tab === 'interventi'" x-cloak class="mt-6">
             @include('livewire.strumenti._interventi')
+        </div>
+    @endcan
+
+    {{-- Tab Garanzie (S3 punti 7-8, ADR-004). Visibile anche a Tenant e Tecnico
+         in sola lettura: hanno `garanzie.macchina.view`. Le righe sui ricambi
+         restano invisibili a chi non ha `garanzie.ricambio.view` — filtro di
+         scope, non di vista. --}}
+    @can('garanzie.macchina.view')
+        <div x-show="tab === 'garanzie'" x-cloak class="mt-6">
+            @include('livewire.strumenti._garanzie')
         </div>
     @endcan
 
@@ -271,6 +283,71 @@
                 <div class="flex justify-end gap-3">
                     <x-ui.button variant="secondary" wire:click="closeMove">Annulla</x-ui.button>
                     <x-ui.button type="submit">Sposta</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
+    @endif
+
+    {{-- Modale garanzia (S3 punti 7-8) --}}
+    @if ($showGaranziaForm)
+        @php $aData = $garanziaForm['tipo_scadenza'] === App\Enums\TipoScadenzaGaranzia::Data->value; @endphp
+        <x-ui.modal :title="$editingGaranziaId ? 'Modifica garanzia' : 'Nuova garanzia'" close="closeGaranziaForm">
+            <form wire:submit="saveGaranzia" class="space-y-5">
+                <div>
+                    <label for="garanziaTipo" class="block text-sm font-medium text-neutral-800">Tipo di scadenza</label>
+                    {{-- .live: i campi sotto cambiano con il tipo scelto --}}
+                    <select id="garanziaTipo" wire:model.live="garanziaForm.tipo_scadenza"
+                        class="mt-1 block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
+                        <option value="{{ App\Enums\TipoScadenzaGaranzia::Data->value }}">A data (durata in mesi)</option>
+                        <option value="{{ App\Enums\TipoScadenzaGaranzia::Ore->value }}">A ore di utilizzo</option>
+                    </select>
+                    @error('garanziaForm.tipo_scadenza') <p class="mt-1 text-sm text-danger-600">{{ $message }}</p> @enderror
+                </div>
+
+                <x-ui.input name="garanziaForm.data_inizio" label="Data inizio" type="date" wire:model="garanziaForm.data_inizio" />
+
+                @if ($aData)
+                    <x-ui.input name="garanziaForm.durata_mesi" label="Durata (mesi)" type="number" min="1" wire:model="garanziaForm.durata_mesi" />
+                    <p class="text-xs text-neutral-400">La scadenza effettiva è calcolata: inizio + durata.</p>
+                @else
+                    <x-ui.input name="garanziaForm.soglia_ore" label="Soglia ore" type="number" min="1" wire:model="garanziaForm.soglia_ore" />
+                    <x-ui.input name="garanziaForm.data_scadenza_prevista" label="Data prevista di raggiungimento" type="date" wire:model="garanziaForm.data_scadenza_prevista" />
+                    <p class="text-xs text-neutral-400">
+                        In V1 la data prevista si inserisce a mano: il motore ragiona solo su date.
+                        Il calcolo automatico dalle letture contaore arriverà in seguito.
+                    </p>
+                @endif
+
+                <div class="flex justify-end gap-3">
+                    <x-ui.button variant="secondary" wire:click="closeGaranziaForm">Annulla</x-ui.button>
+                    <x-ui.button type="submit" wire:loading.attr="disabled">Salva</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
+    @endif
+
+    {{-- Conferma eliminazione garanzia --}}
+    @if ($deletingGaranziaId)
+        <x-ui.modal title="Conferma eliminazione">
+            <p class="text-sm text-neutral-600">Eliminare questa garanzia? L'operazione è reversibile (soft delete).</p>
+            <div class="mt-6 flex justify-end gap-3">
+                <x-ui.button variant="secondary" wire:click="$set('deletingGaranziaId', null)">Annulla</x-ui.button>
+                <x-ui.button variant="danger" wire:click="eliminaGaranzia" wire:loading.attr="disabled">Elimina</x-ui.button>
+            </div>
+        </x-ui.modal>
+    @endif
+
+    {{-- Modale lettura contaore --}}
+    @if ($showLetturaForm)
+        <x-ui.modal title="Registra lettura contaore" close="closeLettura">
+            <form wire:submit="registraLettura" class="space-y-5">
+                <p class="text-sm text-neutral-600">Le letture sono append-only: una lettura errata si corregge registrandone un'altra.</p>
+                <x-ui.input name="letturaForm.data" label="Data" type="date" wire:model="letturaForm.data" />
+                <x-ui.input name="letturaForm.ore" label="Ore" type="number" min="0" wire:model="letturaForm.ore" />
+
+                <div class="flex justify-end gap-3">
+                    <x-ui.button variant="secondary" wire:click="closeLettura">Annulla</x-ui.button>
+                    <x-ui.button type="submit" wire:loading.attr="disabled">Registra</x-ui.button>
                 </div>
             </form>
         </x-ui.modal>

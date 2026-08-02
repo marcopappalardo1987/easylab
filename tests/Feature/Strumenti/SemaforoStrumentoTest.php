@@ -1,7 +1,9 @@
 <?php
 
 use App\Enums\StatoSemaforo;
+use App\Enums\TipoIntervento;
 use App\Livewire\Strumenti\ElencoStrumenti;
+use App\Models\Garanzia;
 use App\Models\Intervento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
@@ -357,4 +359,120 @@ it('sorts across pages, not just within the current one', function () {
     expect($pagina1->count())->toBe(20)
         ->and($pagina1->first()->nome)->toBe('Strumento 1')
         ->and($pagina1->last()->nome)->toBe('Strumento 20');
+});
+
+// --- Garanzie come secondo ingresso del semaforo (ADR-004, punto 7) ---
+
+it('is arancione when interventi are fine but a garanzia is scaduta', function () {
+    // Nessun intervento in scadenza: senza le garanzie sarebbe verde.
+    Intervento::factory()->forStrumento($this->strumento)
+        ->create(['data_scadenza' => today()->addMonths(6)->toDateString()]);
+    Garanzia::factory()->forStrumento($this->strumento)->scaduta()->create();
+
+    expect($this->strumento->statoSemaforoCalcolato())->toBe(StatoSemaforo::Arancione);
+});
+
+it('is arancione when a garanzia falls within the soglia', function () {
+    Garanzia::factory()->forStrumento($this->strumento)
+        ->create(['data_inizio' => today()->subMonths(12)->addDays(5)->toDateString(), 'durata_mesi' => 12]);
+
+    expect($this->strumento->statoSemaforoCalcolato())->toBe(StatoSemaforo::Arancione);
+});
+
+it('stays verde when the garanzia is beyond the soglia', function () {
+    Garanzia::factory()->forStrumento($this->strumento)->attiva()->create();
+
+    expect($this->strumento->statoSemaforoCalcolato())->toBe(StatoSemaforo::Verde);
+});
+
+it('picks the nearest garanzia among several', function () {
+    Garanzia::factory()->forStrumento($this->strumento)->attiva()->create();
+    $vicina = Garanzia::factory()->forStrumento($this->strumento)->scaduta()->create();
+    Garanzia::factory()->forStrumento($this->strumento)
+        ->aOre(today()->addYears(2)->toDateString())->create();
+
+    expect($this->strumento->prossimaGaranzia()->id)->toBe($vicina->id);
+});
+
+it('keeps the elenco aligned with the per-model calculation when garanzie are involved', function () {
+    $this->actingAs($this->admin);
+
+    $soloGaranziaScaduta = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Solo garanzia scaduta']);
+    Garanzia::factory()->forStrumento($soloGaranziaScaduta)->scaduta()->create();
+
+    $garanziaImminente = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Garanzia imminente']);
+    Garanzia::factory()->forStrumento($garanziaImminente)
+        ->create(['data_inizio' => today()->subMonths(12)->addDays(12)->toDateString(), 'durata_mesi' => 12]);
+
+    $garanziaLontana = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Garanzia lontana']);
+    Garanzia::factory()->forStrumento($garanziaLontana)->attiva()->create();
+
+    $entrambi = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Intervento e garanzia']);
+    Intervento::factory()->forStrumento($entrambi)->scaduto()->create();
+    Garanzia::factory()->forStrumento($entrambi)->scaduta()->create();
+
+    $forzatoVerde = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Forzato verde con garanzia scaduta']);
+    Garanzia::factory()->forStrumento($forzatoVerde)->scaduta()->create();
+    $forzatoVerde->forzaSemaforo(StatoSemaforo::Verde);
+
+    // Il bulk dell'elenco deve coincidere col calcolo per-model, riga per riga.
+    $semafori = Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)->viewData('semafori');
+    foreach (Strumento::all() as $s) {
+        expect($semafori[$s->id])->toBe($s->statoSemaforoEffettivo(), "Disallineamento su «{$s->nome}»");
+    }
+
+    // E anche il filtro SQL, sui tre stati.
+    foreach (StatoSemaforo::cases() as $stato) {
+        $filtrati = Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)
+            ->set('stato', $stato->value)->viewData('strumenti')->pluck('id')->all();
+        $attesi = Strumento::all()
+            ->filter(fn (Strumento $s) => $s->statoSemaforoEffettivo() === $stato)
+            ->pluck('id')->all();
+
+        expect($filtrati)->toEqualCanonicalizing($attesi, "Filtro «{$stato->value}» disallineato");
+    }
+
+    expect($semafori[$soloGaranziaScaduta->id])->toBe(StatoSemaforo::Arancione)
+        ->and($semafori[$garanziaImminente->id])->toBe(StatoSemaforo::Arancione)
+        ->and($semafori[$garanziaLontana->id])->toBe(StatoSemaforo::Verde)
+        ->and($semafori[$forzatoVerde->id])->toBe(StatoSemaforo::Verde);
+});
+
+it('shows the garanzia in the prossima scadenza column when it is the nearest', function () {
+    $conGaranzia = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Garanzia vicina']);
+    Garanzia::factory()->forStrumento($conGaranzia)
+        ->create(['data_inizio' => today()->subMonths(12)->addDays(12)->toDateString(), 'durata_mesi' => 12]);
+    Intervento::factory()->forStrumento($conGaranzia)
+        ->create(['data_scadenza' => today()->addMonths(6)->toDateString()]);
+
+    $conIntervento = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Intervento vicino']);
+    Intervento::factory()->forStrumento($conIntervento)
+        ->create(['tipo' => TipoIntervento::Taratura, 'data_scadenza' => today()->addDays(3)->toDateString()]);
+    Garanzia::factory()->forStrumento($conIntervento)->attiva()->create();
+
+    Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)
+        ->assertSee('Garanzia tra 12 gg')   // la garanzia batte l'intervento a 6 mesi
+        ->assertSee('Taratura tra 3 gg');   // qui vince l'intervento
+});
+
+it('sorts prossima scadenza across interventi and garanzie', function () {
+    $garanziaVicina = Strumento::factory()->forNode($this->dept)->create(['nome' => 'A']);
+    Garanzia::factory()->forStrumento($garanziaVicina)
+        ->create(['data_inizio' => today()->subMonths(12)->addDays(2)->toDateString(), 'durata_mesi' => 12]);
+
+    $interventoMedio = Strumento::factory()->forNode($this->dept)->create(['nome' => 'B']);
+    Intervento::factory()->forStrumento($interventoMedio)
+        ->create(['data_scadenza' => today()->addDays(20)->toDateString()]);
+
+    $lontano = Strumento::factory()->forNode($this->dept)->create(['nome' => 'C']);
+    Garanzia::factory()->forStrumento($lontano)
+        ->aOre(today()->addYears(3)->toDateString())->create();
+
+    $ordine = Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)
+        ->set('sortBy', 'prossima_scadenza')->set('sortDir', 'asc')
+        ->viewData('strumenti')->pluck('id')->all();
+
+    // Ordinati sul minimo fra le due fonti; senza scadenze in fondo.
+    expect(array_slice($ordine, 0, 3))->toBe([$garanziaVicina->id, $interventoMedio->id, $lontano->id])
+        ->and(last($ordine))->toBe($this->strumento->id);   // Autoclave: nessuna scadenza
 });
