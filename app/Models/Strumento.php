@@ -77,6 +77,37 @@ class Strumento extends Model
     }
 
     /**
+     * Soglia di obsolescenza del proprio Ente (ADR-014), in anni. Configurabile
+     * per tenant dall'anagrafica; il fallback a 10 copre i contesti in cui il
+     * nodo ente non è leggibile (fixture senza tenant, job non scopati).
+     */
+    public function sogliaObsolescenza(): int
+    {
+        return $this->tenant?->soglia_obsolescenza_anni ?? 10;
+    }
+
+    /**
+     * Obsolescenza (ADR-014): `(oggi − data_installazione) >= soglia`, campo
+     * DERIVATO e mai persistito. Confine INCLUSIVO — installato esattamente N
+     * anni fa oggi è già obsoleto.
+     *
+     * Senza `data_installazione` non è mai obsoleto: manca la base del calcolo,
+     * e dichiararlo tale sarebbe un'affermazione non sostenuta dai dati.
+     *
+     * È SOLO una segnalazione: non blocca la manutenzione e **non tocca il
+     * semaforo** — il badge ⏳ convive col pallino invece di alterarlo
+     * (Design System §4).
+     */
+    public function isObsoleto(): bool
+    {
+        if ($this->data_installazione === null) {
+            return false;
+        }
+
+        return $this->data_installazione->lte(today()->subYears($this->sogliaObsolescenza()));
+    }
+
+    /**
      * Garanzie del macchinario (ERD §6.1), la più vicina a scadere in alto.
      * Solo `soggetto = macchina`: le righe `ricambio` hanno `strumento_id` NULL
      * e si raggiungeranno via `ricambio_utilizzo` in S4.

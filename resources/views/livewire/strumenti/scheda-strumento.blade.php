@@ -18,7 +18,7 @@
             <p class="mt-1 text-sm text-neutral-600">
                 @if ($strumento->modello)<span class="font-medium text-neutral-800">{{ $strumento->modello }}</span> · @endif
                 {{ $percorso }}
-                @if ($strumento->data_installazione) · Installato {{ $strumento->data_installazione->format('m/Y') }} @endif
+                @if ($strumento->data_installazione) · Installato {{ $strumento->data_installazione->format('m/Y') }} <x-ui.obsoleto :strumento="$strumento" /> @endif
             </p>
         </div>
         <div class="flex items-center gap-2">

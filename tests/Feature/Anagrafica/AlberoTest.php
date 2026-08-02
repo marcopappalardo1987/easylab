@@ -189,3 +189,59 @@ it('shows a Responsabile only its assigned subtree', function () {
         ->assertSee('Lab Mio')
         ->assertDontSee('Reparto Altrui');
 });
+
+// --- Soglia di obsolescenza sul nodo Ente (S3 punto 9, ADR-014) ---
+
+it('lets an admin change the obsolescence threshold on the Ente', function () {
+    [$ente, $admin] = enteWithAdmin();
+
+    Livewire::actingAs($admin)->test(Albero::class)
+        ->call('edit', $ente->id)
+        ->assertSet('sogliaObsolescenzaAnni', 10)   // default della colonna
+        ->set('sogliaObsolescenzaAnni', 15)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($ente->fresh()->soglia_obsolescenza_anni)->toBe(15);
+});
+
+it('validates the obsolescence threshold', function () {
+    [$ente, $admin] = enteWithAdmin();
+
+    foreach ([0, 51] as $valore) {
+        Livewire::actingAs($admin)->test(Albero::class)
+            ->call('edit', $ente->id)
+            ->set('sogliaObsolescenzaAnni', $valore)
+            ->call('save')
+            ->assertHasErrors('sogliaObsolescenzaAnni');
+    }
+
+    expect($ente->fresh()->soglia_obsolescenza_anni)->toBe(10);
+});
+
+it('shows the threshold field only when editing the Ente', function () {
+    [$ente, $admin] = enteWithAdmin();
+    $dip = UnitaOrganizzativa::factory()->dipartimento()->under($ente)->create();
+
+    Livewire::actingAs($admin)->test(Albero::class)
+        ->call('edit', $ente->id)
+        ->assertSee('Soglia obsolescenza')
+        ->call('edit', $dip->id)
+        ->assertDontSee('Soglia obsolescenza')
+        ->assertSet('sogliaObsolescenzaAnni', null);
+});
+
+it('never writes the threshold on a node that is not the Ente', function () {
+    // Le proprietà Livewire arrivano dal browser: la guardia deve stare sul
+    // tipo riletto dal DB, non sullo stato del componente.
+    [$ente, $admin] = enteWithAdmin();
+    $dip = UnitaOrganizzativa::factory()->dipartimento()->under($ente)->create();
+
+    Livewire::actingAs($admin)->test(Albero::class)
+        ->call('edit', $dip->id)
+        ->set('sogliaObsolescenzaAnni', 3)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($dip->fresh()->soglia_obsolescenza_anni)->toBe(10);   // default, intatto
+});

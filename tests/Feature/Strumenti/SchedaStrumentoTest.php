@@ -100,3 +100,19 @@ it('shows the semaforo badge in the header', function () {
         ->assertSee('Azione richiesta')
         ->assertDontSee('In regola');
 });
+
+it('shows the obsoleto badge in the header only beyond the soglia', function () {
+    // ADR-014: segnalazione sull'età, accanto al semaforo e indipendente da esso.
+    $vecchio = Strumento::factory()->forNode($this->dept)
+        ->create(['nome' => 'Vecchia', 'data_installazione' => today()->subYears(12)->toDateString()]);
+
+    $this->actingAs($this->admin)->get(route('strumenti.show', $vecchio))
+        ->assertOk()
+        ->assertSee('Obsoleto');
+
+    $nuovo = Strumento::factory()->forNode($this->dept)
+        ->create(['nome' => 'Nuova', 'data_installazione' => today()->subYear()->toDateString()]);
+
+    $this->actingAs($this->admin)->get(route('strumenti.show', $nuovo))
+        ->assertDontSee('Obsoleto');
+});

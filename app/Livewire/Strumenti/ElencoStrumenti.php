@@ -10,6 +10,7 @@ use App\Models\Intervento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Support\Semaforo;
+use App\Support\Tenancy\CurrentTenant;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -52,6 +53,13 @@ class ElencoStrumenti extends Component
     #[Url]
     public ?string $stato = null;
 
+    /**
+     * Filtro obsolescenza (ADR-014): mostra solo gli strumenti oltre la soglia
+     * di età del proprio Ente.
+     */
+    #[Url]
+    public bool $soloObsoleti = false;
+
     #[Url]
     public string $sortBy = 'nome';
 
@@ -93,6 +101,11 @@ class ElencoStrumenti extends Component
     }
 
     public function updatingStato(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingSoloObsoleti(): void
     {
         $this->resetPage();
     }
@@ -300,7 +313,7 @@ class ElencoStrumenti extends Component
         $sortBy = in_array($this->sortBy, self::SORTABLE, true) ? $this->sortBy : 'nome';
         $sortDir = $this->sortDir === 'desc' ? 'desc' : 'asc';
 
-        $query = Strumento::query()->select('strumenti.*')->with(['unita', 'forcedBy']);
+        $query = Strumento::query()->select('strumenti.*')->with(['unita', 'forcedBy', 'tenant']);
 
         if (filled($this->search)) {
             $like = '%'.strtolower(trim($this->search)).'%';
@@ -317,6 +330,19 @@ class ElencoStrumenti extends Component
 
         if ($this->ubicazioneId !== null) {
             $query->whereIn('unita_organizzativa_id', $this->sottoAlbero($this->ubicazioneId));
+        }
+
+        // Filtro obsolescenza (ADR-014). La soglia è una sola per tutte le righe
+        // visibili: oggi ogni utente vede un solo Ente (ADR-018) — da rivedere
+        // quando il filtro Ente diventerà operativo (Rivenditori, V1.1).
+        // Confine `< limite+1` e MAI `<=`: su SQLite le date sono stringhe
+        // (vedi Intervento::scopeApertiEntroSoglia).
+        if ($this->soloObsoleti) {
+            $soglia = (int) (UnitaOrganizzativa::withoutGlobalScopes()
+                ->whereKey(CurrentTenant::id())->value('soglia_obsolescenza_anni') ?? 10);
+
+            $query->whereNotNull('data_installazione')
+                ->where('data_installazione', '<', today()->subYears($soglia)->addDay()->toDateString());
         }
 
         // Filtro semaforo: arancione = ha almeno un intervento aperto scaduto o

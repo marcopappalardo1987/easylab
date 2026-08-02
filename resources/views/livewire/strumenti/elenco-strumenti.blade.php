@@ -87,6 +87,13 @@
                 <option value="verde">● In regola</option>
                 <option value="rosso">■ Non idoneo</option>
             </select>
+
+            {{-- Obsolescenza (ADR-014): segnalazione sull'età, indipendente dal semaforo. --}}
+            <label class="flex items-center gap-2 text-sm whitespace-nowrap text-neutral-600">
+                <input type="checkbox" wire:model.live="soloObsoleti"
+                    class="rounded border-neutral-300 text-primary-600 focus:ring-primary-600">
+                ⏳ Solo obsoleti
+            </label>
         </div>
     </x-ui.card>
 
@@ -142,7 +149,10 @@
                                     —
                                 @endif
                             </td>
-                            <td class="px-4 py-3 text-neutral-600">{{ $s->data_installazione?->format('d/m/Y') ?: '—' }}</td>
+                            <td class="px-4 py-3 whitespace-nowrap text-neutral-600">
+                                {{ $s->data_installazione?->format('d/m/Y') ?: '—' }}
+                                <x-ui.obsoleto :strumento="$s" />
+                            </td>
                             @php
                                 $prossimo = $prossimi[$s->id] ?? null;
                                 $garanzia = $garanzieMin[$s->id] ?? null;
