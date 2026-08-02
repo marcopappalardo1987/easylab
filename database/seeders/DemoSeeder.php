@@ -383,9 +383,15 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * Garanzie macchina su una parte del parco (ERD §6.1 — ADR-004): mix di
-     * tipo `data` e `ore`, con scadenze distribuite fra già finite, in scadenza
-     * e ancora attive, così il semaforo mostra anche l'arancione-da-garanzia.
+     * Garanzia macchina su OGNI strumento (ERD §6.1 — ADR-004): mix di tipo
+     * `data` e `ore`, con scadenze distribuite fra già finite, in scadenza e
+     * ancora attive.
+     *
+     * La distribuzione è pesata verso le garanzie ANCORA ATTIVE (~70%): una
+     * garanzia scaduta o in scadenza accende l'arancione, quindi coprire tutto
+     * il parco con scadenze uniformi renderebbe arancione quasi ogni strumento
+     * e il semaforo smetterebbe di discriminare — un segnale sempre acceso non
+     * è un segnale.
      *
      * insert() a blocchi: gli eventi non scattano, quindi
      * `data_scadenza_effettiva` è precalcolata QUI conforme alla
@@ -397,26 +403,34 @@ class DemoSeeder extends Seeder
         $adesso = now();
 
         foreach ($strumentiIds as $strumentoId) {
-            if (random_int(1, 10) > 4) {
-                continue; // ~40% del parco ha una garanzia registrata
-            }
-
             $aData = random_int(1, 10) <= 6;
 
+            // 70% attiva · 15% in scadenza entro la soglia · 15% già finita.
+            $esito = match (true) {
+                random_int(1, 100) <= 70 => 'attiva',
+                random_int(1, 100) <= 50 => 'imminente',
+                default => 'scaduta',
+            };
+
             if ($aData) {
-                $durata = [12, 24, 36][array_rand([12, 24, 36])];
-                $inizio = today()->subMonths(random_int(1, 60));
-                $effettiva = $inizio->copy()->addMonths($durata);
+                $durata = [12, 24, 36, 60][array_rand([12, 24, 36, 60])];
+                // Si sceglie prima la scadenza voluta, poi si retrodata l'inizio:
+                // così la normalizzazione (inizio + durata) cade dove serve.
+                $effettiva = match ($esito) {
+                    'attiva' => today()->addDays(random_int(31, 1500)),
+                    'imminente' => today()->addDays(random_int(0, 30)),
+                    default => today()->subDays(random_int(1, 1200)),
+                };
+                $inizio = $effettiva->copy()->subMonths($durata);
                 $prevista = null;
                 $soglia = null;
             } else {
                 $durata = null;
                 $inizio = today()->subMonths(random_int(6, 48));
-                // Data prevista distribuita: passato, imminente, futuro.
-                $prevista = match (random_int(1, 3)) {
-                    1 => today()->subDays(random_int(1, 400)),
-                    2 => today()->addDays(random_int(0, 30)),
-                    default => today()->addDays(random_int(31, 900)),
+                $prevista = match ($esito) {
+                    'attiva' => today()->addDays(random_int(31, 1500)),
+                    'imminente' => today()->addDays(random_int(0, 30)),
+                    default => today()->subDays(random_int(1, 1200)),
                 };
                 $effettiva = $prevista;
                 $soglia = [2000, 5000, 10000, 20000][array_rand([2000, 5000, 10000, 20000])];
