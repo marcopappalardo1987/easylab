@@ -51,7 +51,7 @@ it('stamps the current tenant on create', function () {
     $intervento = Intervento::create([
         'strumento_id' => $this->strumentoA->id,
         'descrizione' => 'Taratura annuale',
-        'tipo' => TipoIntervento::Taratura,
+        'tipo' => TipoIntervento::TaraturaECertificazione,
         'data_scadenza' => '2026-12-01',
     ]);
 

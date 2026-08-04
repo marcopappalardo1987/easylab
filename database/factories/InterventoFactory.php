@@ -28,7 +28,7 @@ class InterventoFactory extends Factory
             'strumento_id' => null,
             'tecnico_id' => null,
             'descrizione' => fake()->sentence(),
-            'tipo' => TipoIntervento::Manutenzione,
+            'tipo' => TipoIntervento::ManutenzioneOrdinaria,
             'data_scadenza' => now()->addMonth()->toDateString(),
             'stato' => StatoIntervento::NonFatto,
             'data_esecuzione' => null,

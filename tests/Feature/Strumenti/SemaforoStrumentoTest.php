@@ -447,12 +447,12 @@ it('shows the garanzia in the prossima scadenza column when it is the nearest', 
 
     $conIntervento = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Intervento vicino']);
     Intervento::factory()->forStrumento($conIntervento)
-        ->create(['tipo' => TipoIntervento::Taratura, 'data_scadenza' => today()->addDays(3)->toDateString()]);
+        ->create(['tipo' => TipoIntervento::TaraturaECertificazione, 'data_scadenza' => today()->addDays(3)->toDateString()]);
     Garanzia::factory()->forStrumento($conIntervento)->attiva()->create();
 
     Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)
         ->assertSee('Garanzia tra 12 gg')   // la garanzia batte l'intervento a 6 mesi
-        ->assertSee('Taratura tra 3 gg');   // qui vince l'intervento
+        ->assertSee('Taratura e certificazione tra 3 gg');   // qui vince l'intervento
 });
 
 it('sorts prossima scadenza across interventi and garanzie', function () {

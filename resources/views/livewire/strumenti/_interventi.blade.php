@@ -53,7 +53,7 @@
                                 <span class="block text-xs text-neutral-400">Eseguito il {{ $i->data_esecuzione->format('d/m/Y') }}</span>
                             @endif
                         </td>
-                        <td class="px-4 py-3 text-neutral-600">{{ ucfirst($i->tipo->value) }}</td>
+                        <td class="px-4 py-3 text-neutral-600">{{ $i->tipo->label() }}</td>
                         <td class="px-4 py-3 text-neutral-800">{{ $i->descrizione }}</td>
                         <td class="px-4 py-3 text-neutral-600">{{ $i->tecnicoLabel() }}</td>
                         @if ($mostraAzioni)

@@ -23,7 +23,7 @@ it('defaults a new intervento to non_fatto with no execution date', function () 
         'tenant_id' => $this->ente->id,
         'strumento_id' => $this->strumento->id,
         'descrizione' => 'Manutenzione ordinaria',
-        'tipo' => TipoIntervento::Manutenzione,
+        'tipo' => TipoIntervento::ManutenzioneOrdinaria,
         'data_scadenza' => '2026-09-01',
     ]);
 
@@ -70,11 +70,11 @@ it('clears data_esecuzione when stato is set back to non_fatto directly', functi
 
 it('casts tipo, stato and the dates', function () {
     $intervento = Intervento::factory()->forStrumento($this->strumento)->create([
-        'tipo' => TipoIntervento::Taratura,
+        'tipo' => TipoIntervento::TaraturaECertificazione,
         'data_scadenza' => '2026-12-31',
     ])->fresh();
 
-    expect($intervento->tipo)->toBe(TipoIntervento::Taratura)
+    expect($intervento->tipo)->toBe(TipoIntervento::TaraturaECertificazione)
         ->and($intervento->stato)->toBe(StatoIntervento::NonFatto)
         ->and($intervento->data_scadenza)->toBeInstanceOf(CarbonInterface::class)
         ->and($intervento->data_scadenza->toDateString())->toBe('2026-12-31');

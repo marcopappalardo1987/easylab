@@ -135,18 +135,20 @@ it('shows a Responsabile only its subtree strumenti', function () {
 it('shows the stato and prossima scadenza columns', function () {
     $conScaduta = Strumento::factory()->forNode($this->dip1)->create(['nome' => 'Con taratura scaduta']);
     Intervento::factory()->forStrumento($conScaduta)->scaduto()
-        ->create(['tipo' => TipoIntervento::Taratura]);
+        ->create(['tipo' => TipoIntervento::TaraturaECertificazione]);
 
     $imminente = Strumento::factory()->forNode($this->dip1)->create(['nome' => 'Con manutenzione vicina']);
     Intervento::factory()->forStrumento($imminente)
-        ->create(['tipo' => TipoIntervento::Manutenzione, 'data_scadenza' => today()->addDays(4)->toDateString()]);
+        ->create(['tipo' => TipoIntervento::ManutenzioneFullRisk, 'data_scadenza' => today()->addDays(4)->toDateString()]);
 
     Strumento::factory()->forNode($this->dip1)->create(['nome' => 'Senza interventi']);
 
     Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)
         ->assertSee('Prossima scadenza')
-        ->assertSee('Taratura — scaduta')
-        ->assertSee('Manutenzione tra 4 gg')
+        ->assertSee('Taratura e certificazione — scaduta')
+        // Etichetta da `label()`, non da `ucfirst($value)`: con il valore grezzo
+        // qui si leggerebbe "Manutenzione_full_risk" (ADR-021).
+        ->assertSee('Manutenzione full risk tra 4 gg')
         ->assertSee('Azione richiesta')   // etichetta sr-only del dot
         ->assertSee('In regola');         // gli strumenti senza interventi
 });
@@ -154,13 +156,13 @@ it('shows the stato and prossima scadenza columns', function () {
 it('shows the nearest of several imminent scadenze in the elenco', function () {
     $s = Strumento::factory()->forNode($this->dip1)->create(['nome' => 'Multi scadenze']);
     Intervento::factory()->forStrumento($s)
-        ->create(['tipo' => TipoIntervento::Ispezione, 'data_scadenza' => today()->addDays(20)->toDateString()]);
+        ->create(['tipo' => TipoIntervento::TaraturaECertificazione, 'data_scadenza' => today()->addDays(20)->toDateString()]);
     Intervento::factory()->forStrumento($s)
-        ->create(['tipo' => TipoIntervento::Riparazione, 'data_scadenza' => today()->addDays(2)->toDateString()]);
+        ->create(['tipo' => TipoIntervento::ManutenzioneStraordinaria, 'data_scadenza' => today()->addDays(2)->toDateString()]);
 
     Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)
-        ->assertSee('Riparazione tra 2 gg')
-        ->assertDontSee('Ispezione tra 20 gg');
+        ->assertSee('Manutenzione straordinaria tra 2 gg')
+        ->assertDontSee('Taratura e certificazione tra 20 gg');
 });
 
 it('makes every column sortable, derived ones included', function () {

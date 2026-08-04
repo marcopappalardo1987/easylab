@@ -555,7 +555,7 @@ class SchedaStrumento extends Component
     {
         $this->interventoForm = [
             'descrizione' => '',
-            'tipo' => TipoIntervento::Manutenzione->value,
+            'tipo' => TipoIntervento::ManutenzioneOrdinaria->value,
             'data_scadenza' => today()->toDateString(),
             'tecnico_id' => null,
             'gia_eseguito' => false,

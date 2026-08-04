@@ -19,8 +19,8 @@
     };
 
     $scadenzaLabel = function ($prossimo, $garanzia) use ($etichettaScadenza) {
-        // A parità di data vince l'intervento: porta con sé il tipo (Taratura,
-        // Manutenzione…), più informativo del generico "Garanzia".
+        // A parità di data vince l'intervento: porta con sé il tipo (Taratura e
+        // certificazione, Manutenzione…), più informativo del generico "Garanzia".
         $vinceGaranzia = $garanzia !== null
             && ($prossimo === null || $garanzia->data_scadenza_effettiva->lt($prossimo->data_scadenza));
 
@@ -32,7 +32,7 @@
             return '—';
         }
 
-        return $etichettaScadenza(ucfirst($prossimo->tipo->value), $prossimo->data_scadenza, $prossimo->isScaduto());
+        return $etichettaScadenza($prossimo->tipo->label(), $prossimo->data_scadenza, $prossimo->isScaduto());
     };
 @endphp
 

@@ -94,25 +94,28 @@ class DemoSeeder extends Seeder
     private const COGNOMI = ['Bianchi', 'Rossi', 'Ferrari', 'Esposito', 'Russo', 'Colombo', 'Ricci', 'Marino', 'Greco', 'Bruno', 'Gallo', 'Conti', 'De Luca', 'Mancini', 'Costa', 'Giordano'];
 
     private const DESCRIZIONI = [
-        TipoIntervento::Manutenzione->value => [
+        TipoIntervento::ManutenzioneOrdinaria->value => [
             'Manutenzione ordinaria programmata', 'Sostituzione guarnizioni e filtri',
             'Pulizia circuito idraulico', 'Lubrificazione parti meccaniche',
             'Controllo tenuta e pressione', 'Sostituzione lampada UV',
             'Verifica sistema di raffreddamento', 'Sanificazione camera interna',
-        ],
-        TipoIntervento::Taratura->value => [
-            'Taratura annuale con certificato ACCREDIA', 'Verifica di calibrazione con masse campione',
-            'Taratura sonde di temperatura', 'Calibrazione fotometrica',
-            'Verifica periodica di conformità metrologica',
-        ],
-        TipoIntervento::Ispezione->value => [
             'Ispezione visiva semestrale', 'Controllo sicurezza elettrica',
-            'Verifica allarmi e sistemi di sicurezza', 'Ispezione tenuta cappa aspirante',
         ],
-        TipoIntervento::Riparazione->value => [
+        TipoIntervento::ManutenzioneStraordinaria->value => [
             'Sostituzione scheda di controllo', 'Riparazione compressore',
             'Sostituzione display guasto', 'Ripristino dopo blocco software',
             'Sostituzione motore rotore',
+        ],
+        TipoIntervento::ManutenzioneFullRisk->value => [
+            'Intervento in contratto full risk', 'Sostituzione componente coperto da contratto',
+            'Ripristino funzionale con parti incluse', 'Verifica programmata full risk',
+        ],
+        TipoIntervento::TaraturaECertificazione->value => [
+            'Taratura annuale con certificato ACCREDIA', 'Verifica di calibrazione con masse campione',
+            'Taratura sonde di temperatura', 'Calibrazione fotometrica',
+            'Verifica periodica di conformità metrologica',
+            'Certificazione di conformità CEI 62-5', 'Rinnovo certificazione di sicurezza elettrica',
+            'Certificazione prestazionale cappa aspirante', 'Verifica e certificazione allarmi',
         ],
         TipoIntervento::Altro->value => [
             'Aggiornamento firmware', 'Spostamento e ricollaudo',

@@ -186,7 +186,7 @@
                     <select id="interventoTipo" wire:model="interventoForm.tipo"
                         class="mt-1 block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
                         @foreach (App\Enums\TipoIntervento::cases() as $tipo)
-                            <option value="{{ $tipo->value }}">{{ ucfirst($tipo->value) }}</option>
+                            <option value="{{ $tipo->value }}">{{ $tipo->label() }}</option>
                         @endforeach
                     </select>
                     @error('interventoForm.tipo') <p class="mt-1 text-sm text-danger-600">{{ $message }}</p> @enderror
