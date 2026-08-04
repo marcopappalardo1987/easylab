@@ -16,7 +16,7 @@
 
 - [ ] Abilitare la gestione autonoma per il tracciamento di interventi e manutenzioni.
 - [ ] Strutturare l'anagrafica per la creazione schede macchinari, tracciamento trasferimenti e ricerca incrociata degli strumenti.
-- [ ] Costruire il motore sdoppiato delle garanzie (macchina e singolo ricambio), rendendolo invisibile ai Tenant.
+- [ ] Costruire il motore sdoppiato delle garanzie (macchina e singolo ricambio), rendendolo invisibile ai Tenant. *(Aggiornato dal briefing del 3 Ago 2026: **solo garanzie a data**, la garanzia a ore non esiste — 🔗 ADR-019; le garanzie ricambio **restano invisibili al Tenant ma accendono il suo semaforo** — 🔗 ADR-020.)*
 - [ ] Implementare gli alert automatici per l'obsolescenza dei macchinari che superano i 10 anni.
 - [ ] Creare l'associazione tra fornitori e macchinari, e aggiungere la funzionalità manuale per attivare la "Pallina Rossa" in caso di inidoneità.
 
@@ -33,5 +33,5 @@
 
 - [ ] Ottimizzare l'interfaccia UI in ottica Mobile-First per facilitare il lavoro direttamente nei laboratori.
 - [ ] Integrare la funzionalità di scansione QR Code per accedere immediatamente alla scheda dello strumento (riservata a tecnici/Admin).
-- [ ] Abilitare l'associazione dinamica dei ricambi, permettendo l'inserimento di codice e descrizione del pezzo in fase di intervento.
+- [ ] Abilitare l'associazione dinamica dei ricambi, permettendo l'inserimento del pezzo in fase di intervento. *(Aggiornato dal briefing del 3 Ago 2026 — 🔗 ADR-022: checkbox "Ricambio effettuato" + righe con **nome** e **scadenza garanzia**; il codice costruttore diventa facoltativo.)*
 - [ ] Sviluppare il sistema di spunta "Fatto" per il completamento degli interventi, collegandolo dinamicamente al tab "Ricambi".

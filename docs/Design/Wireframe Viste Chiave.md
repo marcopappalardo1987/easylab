@@ -34,7 +34,7 @@ Vista d'ingresso per Tenant e Admin: stato di salute del parco strumenti a colpo
 │  ┌────────────────────────────────────────────────────────────────────┐  │
 │  │ Stato │ Strumento          │ Ubicazione        │ Prossima scadenza  │  │
 │  ├────────────────────────────────────────────────────────────────────┤  │
-│  │  🔴⚑  │ Autoclave AC-200   │ Lab Microbiologia │ Taratura — scaduta │  │
+│  │  🔴⚑  │ Autoclave AC-200   │ Lab Microbiologia │ Tar./cert. scaduta │  │
 │  │  🟠   │ Centrifuga CF-12   │ Lab Analisi       │ Manut. tra 4 gg    │  │
 │  │  🟠   │ Spettrofotom. S-9  │ Lab Chimica       │ Garanzia tra 12 gg │  │
 │  │  🟢   │ Frigo -80 FR-3     │ Lab Biobanca      │ —                  │  │
@@ -46,11 +46,13 @@ Vista d'ingresso per Tenant e Admin: stato di salute del parco strumenti a colpo
 
 **Note.** Ordinamento default per gravità (🔴→🟠→🟢) e scadenza più vicina. `⚑` indica stato forzato (badge cliccabile → mostra chi/quando/perché, ADR-005). Il Tenant **non** vede colonne/filtri relativi a garanzie ricambio (ADR-004). Responsabile Reparto: stesso layout ma KPI/lista ristretti al sotto-albero. Mobile: KPI in colonna, tabella → lista di card.
 
+> **Colonna "Prossima scadenza" e garanzie ricambio** (🔗 ADR-020). La colonna nomina la fonte ("Taratura e certificazione — scaduta", "Garanzia tra 12 gg"); nei wireframe l'etichetta è abbreviata per stare nella colonna, ma il testo reale è quello di `TipoIntervento::label()`. Quando la scadenza più vicina è la **garanzia di un ricambio** e l'utente non ha `garanzie.ricambio.view`, la cella degrada a una dicitura neutra — **"Garanzia tra N gg"**, senza il nome del pezzo — mentre il **pallino resta arancione per tutti**. Il pallino è un aggregato, la colonna un dettaglio: due regole diverse sulla stessa riga, di proposito.
+
 ---
 
 ## 2. Scheda Strumento (con tab)
 
-Cuore dell'app: tutto ciò che riguarda un singolo strumento, organizzato in 5 tab. 🔗 Funzionalità §2.
+Cuore dell'app: tutto ciò che riguarda un singolo strumento, organizzato in **6 tab** — Panoramica (default, §2.0), Anagrafica, Interventi, Ricambi, Documenti, Garanzie. 🔗 Funzionalità §2, ADR-024.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -60,27 +62,103 @@ Cuore dell'app: tutto ciò che riguarda un singolo strumento, organizzato in 5 t
 │  Cod. STR-0042 · Lab Microbiologia · Installato 03/2015 · ⏳ Obsoleto      │
 │                                            [ 🔳 QR ] [ ✎ Modifica ] [ ⠿ ]  │
 │ ┌────────────────────────────────────────────────────────────────────────┐│
-│ │ Anagrafica │ ▸Interventi◂ │ Ricambi │ Documenti │ Garanzie ‹Admin/EasyLab›││
+│ │ Panoramica │ Anagrafica │ ▸Interventi◂ │ Ricambi │ Documenti │ Garanzie ││
 │ ├────────────────────────────────────────────────────────────────────────┤│
 │ │                                                  [ + Nuovo intervento ]  ││
 │ │  Stato │ Data       │ Tipo         │ Descrizione      │ Tecnico         ││
 │ │  ──────┼────────────┼──────────────┼──────────────────┼──────────────── ││
-│ │  ✓ Fatto│ 12/01/2026 │ Manutenzione │ Sostituz. guarniz│ L. Bianchi     ││
-│ │  ✗ No   │ 28/05/2026 │ Taratura     │ Taratura annuale │ — (scaduta) 🔴 ││
-│ │  ◷ Prog.│ 15/09/2026 │ Manutenzione │ Controllo press. │ G. Verdi       ││
+│ │  ✓ Fatto│ 12/01/2026 │ Manut. ordin.│ Sostituz. guarniz│ L. Bianchi     ││
+│ │  ✗ No   │ 28/05/2026 │ Taratura e c.│ Taratura annuale │ — (scaduta) 🔴 ││
+│ │  ◷ Prog.│ 15/09/2026 │ Manut. full r│ Controllo press. │ G. Verdi       ││
 │ │         │            │              │            [ ✓ Segna come fatto ]  ││
 │ └────────────────────────────────────────────────────────────────────────┘│
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Contenuto dei tab.**
-- **Anagrafica:** modello, parametri tecnici, data installazione, ubicazione corrente, fornitori associati, storico spostamenti (`spostamenti.view`).
-- **Interventi:** lista attività passate (fatto/non fatto) + future pianificate; spunta "Fatto" (`interventi.complete`); fonte di verità del semaforo (ADR-005).
-- **Ricambi:** ricambi montati (catalogo + autocomplete, ADR-008); collega a un intervento; ricerca incrociata "dov'è montato".
-- **Documenti:** allegati su Spaces con URL firmate (ADR-009); upload/download; export PDF.
-- **Garanzie ‹solo Admin/EasyLab›:** garanzia macchina + garanzie ricambio (motore sdoppiato, ADR-004). **Tab nascosto a Tenant e Tecnico.**
+### 2.0 Tab "Panoramica" — perché il semaforo è acceso 🔗 ADR-024
 
-**Note.** Il pulsante "Forza semaforo" compare solo con `semaforo.force`. Il tab "Garanzie" è renderizzato solo se il ruolo ha `garanzie.*` (Tenant/Tecnico non lo vedono — ADR-004). Mobile: i tab diventano un menù `▼` o scroll orizzontale.
+Primo tab e **landing di default** della scheda. Risponde a una domanda sola: *perché questa macchina è arancione?*
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ ▸Panoramica◂ │ Anagrafica │ Interventi │ Ricambi │ Documenti │ Garanzie │
+├────────────────────────────────────────────────────────────────────────┤
+│ ┌──────────────────────────┐  ┌───────────────────────────────────────┐│
+│ │  ● ARANCIONE             │  │ Prossimo intervento                   ││
+│ │  Azione richiesta        │  │ ◷ 15/09/2026 · Manut. full risk       ││
+│ │                          │  │   Controllo pressione · G. Verdi      ││
+│ │ Motivi (3)               │  │───────────────────────────────────────││
+│ │ ✗ Taratura/cert. scaduta │  │ Ultimo eseguito                       ││
+│ │   28/05/2026        [ › ]│  │ ✓ 12/01/2026 · Manut. ordinaria       ││
+│ │ ⏳ Garanzia macchina in   │  │───────────────────────────────────────││
+│ │   scadenza il 20/08/2026 │  │ Garanzia macchina                     ││
+│ │                     [ › ]│  │ ⏳ scade il 20/08/2026 (fra 17 gg)     ││
+│ │ ⏳ Garanzia di un compo-  │  │ Ricambi coperti: 4  ‹aggregato›       ││
+│ │   nente scade 03/02/2027 │  └───────────────────────────────────────┘│
+│ │        ‹testo neutro se  │  ┌───────────────────────────────────────┐│
+│ │   manca garanzie.ricam-  │  │ In sintesi                            ││
+│ │   bio.view›              │  │ Fornitore    MedTech S.r.l.           ││
+│ └──────────────────────────┘  │ Ubicazione   Lab Microbiologia        ││
+│ ┌──────────────────────────┐  │ Installato   03/2015 · ⏳ Obsoleto     ││
+│ │ ⚑ Stato forzato: ROSSO   │  └───────────────────────────────────────┘│
+│ │ M. Rossi · 01/08/2026    │  ┌───────────────────────────────────────┐│
+│ │ "Guasto in verifica"     │  │ Statistiche                           ││
+│ │ Il calcolato resta       │  │ Interventi 12 mesi        7           ││
+│ │ ARANCIONE ↑ per i motivi │  │ Scaduti non fatti         1           ││
+│ │ qui accanto.             │  │ Ricambi montati           4           ││
+│ └──────────────────────────┘  │ Documenti allegati        9           ││
+│                                └───────────────────────────────────────┘│
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+**Note del tab.**
+- **Ogni motivo è cliccabile** `[ › ]` e porta alla riga che lo genera (tab Interventi o Garanzie). La Panoramica è il ponte fra il segnale di sintesi e la fonte di verità (ADR-005), **non** una terza verità: non calcola nulla di suo, riusa le regole già uniche del progetto.
+- **Il blocco "Stato forzato" appare solo se lo stato è forzato**, e mostra *entrambi* gli stati — quello forzato che vince e quello calcolato coi suoi motivi. Una forzatura non nasconde i problemi reali: qui lo si vede, invece di leggerlo in un ADR.
+- **Testo neutro sulle garanzie ricambio**: senza `garanzie.ricambio.view` il motivo dice "Garanzia di un componente…" e **non è cliccabile** — niente nome del pezzo, niente link (🔗 ADR-004/020).
+- **Ogni blocco è gated dal permesso della propria area** (🔗 Schema Ruoli §6): senza `documenti.view` sparisce il contatore documenti, non l'intero pannello.
+- **Empty state esplicito ovunque**: "Nessun intervento pianificato" è un'informazione, non uno spazio bianco.
+- **Mobile**: i blocchi si impilano in colonna, con "Stato e motivi" sempre per primo.
+
+### 2.1 Form "Nuovo intervento" — ricambio effettuato 🔗 ADR-021/022
+
+```
+┌────────────────────────────────────────────────────────────┐
+│ Nuovo intervento — Autoclave AC-200                    [×] │
+├────────────────────────────────────────────────────────────┤
+│ Tipo            ▼ Manutenzione ordinaria                   │
+│                   Manutenzione straordinaria               │
+│                   Manutenzione full risk                   │
+│                   Taratura e certificazione   ‹una voce›   │
+│                   Altro                                    │
+│ Descrizione     [                                        ] │
+│ Data scadenza   [ 15/09/2026 ]   Tecnico ▼ G. Verdi        │
+│ [x] Già eseguito   Data esecuzione [ 03/08/2026 ]          │
+│ ──────────────────────────────────────────────────────────  │
+│ [x] Ricambio effettuato          ‹perm. ricambio_utilizzo.create›│
+│  ┌────────────────────────────────────────────────────────┐│
+│  │ Nome ricambio 🔍 [ Guarnizione portello        ]       ││
+│  │ Scad. garanzia   [ 03/08/2028 ]                  [ ✕ ] ││
+│  ├────────────────────────────────────────────────────────┤│
+│  │ Nome ricambio 🔍 [ Filtro HEPA                  ]      ││
+│  │ Scad. garanzia   [ 03/02/2027 ]                  [ ✕ ] ││
+│  └────────────────────────────────────────────────────────┘│
+│  [ + Aggiungi ricambio ]                                   │
+│ ──────────────────────────────────────────────────────────  │
+│                                    [ Annulla ]  [ Salva ]  │
+└────────────────────────────────────────────────────────────┘
+```
+
+**Note del form.** La checkbox "Ricambio effettuato" **non è un campo persistito**: apre e chiude il repeater; la verità è l'esistenza delle righe. Il campo nome è un **autocomplete sul catalogo** (collega-o-crea, ADR-008/022): il codice costruttore non è richiesto. **La scadenza garanzia è obbligatoria per ogni riga** — è il dato che accende il semaforo (ADR-020). Deselezionare la checkbox in modifica **non cancella** righe già salvate: la rimozione è esplicita, riga per riga (`✕`), perché una spunta tolta per sbaglio non deve distruggere storico. Righe e garanzie si salvano **nella stessa transazione** dell'intervento.
+
+**Contenuto dei tab.**
+- **Panoramica ‹default›:** stato del semaforo **coi motivi**, prossimo/ultimo intervento, garanzie, sintesi anagrafica, statistiche della macchina (§2.0, ADR-024).
+- **Anagrafica:** modello, parametri tecnici, data installazione, ubicazione corrente, **fornitore** (uno, obbligatorio nel form — ADR-023), storico spostamenti (`spostamenti.view`).
+- **Interventi:** lista attività passate (fatto/non fatto) + future pianificate; spunta "Fatto" (`interventi.complete`); fonte di verità del semaforo (ADR-005). Tipologie chiuse da ADR-021.
+- **Ricambi:** ricambi montati (catalogo + autocomplete sul **nome**, ADR-008/022); riga collegata all'intervento che l'ha generata; scadenza garanzia del pezzo ‹solo con `garanzie.ricambio.view`›; ricerca incrociata "dov'è montato".
+- **Documenti:** allegati su Spaces con URL firmate (ADR-009); upload/download; export PDF.
+- **Garanzie ‹solo Admin/EasyLab›:** garanzia macchina + garanzie ricambio (motore sdoppiato, ADR-004). **Tab nascosto a Tenant e Tecnico.** *Rettifica S3: il tab è in realtà visibile in sola lettura anche a Tenant/Tecnico, che hanno `garanzie.macchina.view`; a essere nascoste sono le **righe** `soggetto = ricambio`, per scope.* ~~Sotto-sezione "Letture contaore"~~ — **rimossa** (ADR-019).
+
+**Note.** Il pulsante "Forza semaforo" compare solo con `semaforo.force`. Le righe garanzia-ricambio sono filtrate da `garanzie.ricambio.view` (ADR-004) — ma **contribuiscono comunque al pallino** mostrato in testa alla scheda (ADR-020). Mobile: i tab diventano un menù `▼` o scroll orizzontale.
 
 ---
 
@@ -102,8 +180,8 @@ Interfaccia sul campo, mobile-first: scansiona QR → vedi storico → chiudi in
 │                       │     │  [ ✓ Segna come fatto]│
 │  [ 📷 Scansiona QR ]  │     │  [ + Aggiungi ricambio]│
 │                       │     │  [ 🛈 Storico attività]│
-│ ─ oppure ─            │     │  [ ⏱ Lettura contaore]│
-│  I miei interventi ▾  │     │  [ 📎 Allega foto/doc]│
+│ ─ oppure ─            │     │  [ 📎 Allega foto/doc]│
+│  I miei interventi ▾  │     │                       │
 │  • AC-200 (oggi)      │     │                       │
 │  • CF-12 (dom.)       │     │  Report fine lavoro:  │
 │                       │     │  ┌───────────────────┐│
@@ -114,7 +192,7 @@ Interfaccia sul campo, mobile-first: scansiona QR → vedi storico → chiudi in
    schermata iniziale            dopo scansione/selezione
 ```
 
-**Note.** Accesso post-QR via URL firmata → login se necessario → scheda **solo se autorizzato** (mai dati senza auth, ADR-003). Il tecnico vede solo strumenti in portafoglio ∪ assegnazione (ADR-007); ogni accesso loggato. Niente tab Garanzie, niente garanzie ricambio. Azioni disponibili filtrate per permesso (`interventi.complete`, `ricambio_utilizzo.create`, `letture_contaore.create`, `documenti.upload`).
+**Note.** Accesso post-QR via URL firmata → login se necessario → scheda **solo se autorizzato** (mai dati senza auth, ADR-003). Il tecnico vede solo strumenti in portafoglio ∪ assegnazione (ADR-007); ogni accesso loggato. Niente garanzie ricambio. Azioni disponibili filtrate per permesso (`interventi.complete`, `ricambio_utilizzo.create`, `documenti.upload`). L'azione "⏱ Lettura contaore" è **rimossa** (ADR-019). "+ Aggiungi ricambio" chiede **nome e scadenza garanzia**, come nel form desktop (ADR-022) — con il nodo di permessi di §4.4 dello Schema Ruoli ancora da sciogliere.
 
 ---
 

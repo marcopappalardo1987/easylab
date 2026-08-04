@@ -40,7 +40,7 @@
 Già previste dall'architettura (mappate agli ADR):
 - **Isolamento multi-tenant** row-level + Global Scope, con **suite di test di isolamento** dedicata (🔗 ADR-001) — misura cardine contro fughe di dati tra clienti.
 - **Controllo accessi** RBAC granulare (`Schema Ruoli e Permessi.md`) + set permessi **bloccato** per vincoli privacy (🔗 ADR-016).
-- **Minimizzazione visibilità:** garanzie ricambio non visibili al Tenant (🔗 ADR-004); accesso tecnico limitato a portafoglio ∪ assegnazione (🔗 ADR-007).
+- **Minimizzazione visibilità:** garanzie ricambio non visibili al Tenant (🔗 ADR-004); accesso tecnico limitato a portafoglio ∪ assegnazione (🔗 ADR-007). *Precisazione (🔗 ADR-020): al Tenant resta nascosto il **dato** (righe, nomi dei pezzi, scadenze), non il suo **effetto** sul semaforo del proprio strumento — che è informazione sul suo bene, non sui rapporti commerciali di EasyLab.*
 - **Autenticazione forte:** 2FA obbligatoria per ruoli privilegiati (🔗 ADR-012).
 - **Cifratura:** TLS in transito (SSL Let's Encrypt); storage documenti privato con **URL firmate a scadenza**; segreti fuori dal repo.
 - **Audit/accountability:** activity log su modelli sensibili, impersonation e forzature tracciate.

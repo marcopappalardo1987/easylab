@@ -25,14 +25,18 @@ Un bug qui = fuga di dati, soldi sbagliati o accessi indebiti. Revisione umana p
 - **Billing/Stripe**: webhook, stato abbonamento, **lockout insoluti** — 🔗 ADR-013
 - **Impersonation** e relativo audit — 🔗 ADR-005/007
 - **Migrazioni** che toccano `tenant_id`/`reseller_id` o la forma dei dati (difficili da annullare in produzione)
+- **Ogni `withoutGlobalScope` scritto a mano** — è la disattivazione di una guardia. In V1 ne esistono due legittimi e nessun terzo: le query di piattaforma non-scopate (🔗 ADR-018) e la lettura delle garanzie ricambio dentro il calcolo semaforo (🔗 ADR-020). Ognuno va con un test negativo che verifichi che dal risultato **non trapeli** il dato protetto — a maggior ragione nella Panoramica (🔗 ADR-024), dove il motivo del semaforo è testo in chiaro e non un pallino.
+- **Viste che compongono più aree** (Panoramica, dashboard S6): il permesso va applicato **blocco per blocco**, mai una volta sola in testa alla vista — 🔗 ADR-024.
+- **Migrazioni distruttive** (drop di colonne o tabelle popolate) e i **backfill** che le precedono — 🔗 ADR-019. Un ordine sbagliato fra backfill e drop non è recuperabile.
 
 ### 🟡 Livello 2 — Leggi la forma, fidati dei test sui casi limite
 Logica di business: leggi quanto basta per confermare che corrisponde all'ADR; pretendi test sugli edge case.
 
-- **Calcolo semaforo** (verde/arancione/forzato) — 🔗 ADR-005
-- **Normalizzazione garanzie a ore** in `data_scadenza_effettiva` — 🔗 ADR-004
+- **Calcolo semaforo** (verde/arancione/forzato), incluse le **garanzie dei ricambi montati** e la **diagnosi** che ne espone i motivi — 🔗 ADR-005/020/024
+- **Normalizzazione garanzie** in `data_scadenza_effettiva` — 🔗 ADR-004/019
 - **Obsolescenza** (soglia configurabile da `data_installazione`) — 🔗 ADR-014
-- **Catalogo ricambi** + ricerca incrociata — 🔗 ADR-008
+- **Catalogo ricambi** (collega-o-crea sul nome normalizzato) + ricerca incrociata — 🔗 ADR-008/022
+- **Rimappatura di valori enum** su dati esistenti — 🔗 ADR-021
 - **Scheduler scadenze** / "email del futuro" (no duplicati) — 🔗 ADR-011
 - **Spostamenti** e trasferimento storico tra Enti — 🔗 ADR-015
 

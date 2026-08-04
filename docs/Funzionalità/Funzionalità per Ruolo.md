@@ -23,7 +23,7 @@ Questi sono i clienti che acquistano il SaaS per operare in autonomia sui propri
 
 - **Gestione Autonoma del SaaS:** Completa autonomia nel tracciamento di interventi e manutenzioni per i propri clienti/laboratori.
 - **Anagrafica e Tracciamento:** Creazione delle schede macchinari, registrazione dei trasferimenti fisici tra laboratori e ricerca per singolo strumento nei vari laboratori.
-- **Gestione Garanzie e Ricambi:** Accesso riservato (nascosto ai Tenant) al motore delle garanzie sdoppiato (macchina intera e singolo pezzo di ricambio).
+- **Gestione Garanzie e Ricambi:** Accesso riservato (nascosto ai Tenant) al motore delle garanzie sdoppiato (macchina intera e singolo pezzo di ricambio). *Aggiornamento 3 Ago 2026: garanzie **solo a data**, la garanzia a ore non esiste (ADR-019); la garanzia del ricambio **accende il semaforo** dello strumento anche per il Tenant, che continua a non vederne il dettaglio (ADR-020).*
 - **Valutazione Obsolescenza:** Alert automatico e gestione per le macchine che superano i 10 anni (ricambi non più garantiti per legge).
 - **Gestione Fornitori e Anomalie:** Associazione diretta tra macchinari e fornitori, oltre alla gestione manuale della "Pallina Rossa" (macchinario non idoneo) a seguito di verifiche.
 
@@ -31,7 +31,7 @@ Questi sono i clienti che acquistano il SaaS per operare in autonomia sui propri
 
 Questa è l'interfaccia usata dai dipartimenti o laboratori fisici. Vedono solo i propri strumenti, con isolamento assoluto dei dati da altri clienti.
 
-- **Sistema Visivo "A Semaforo":** Controllo immediato delle proprie macchine (Pallina Verde = in regola; Pallina Arancione = intervento/scadenza garanzia da eseguire; Pallina Rossa = non idoneo).
+- **Sistema Visivo "A Semaforo":** Controllo immediato delle proprie macchine (Pallina Verde = in regola; Pallina Arancione = intervento/scadenza garanzia da eseguire; Pallina Rossa = non idoneo). *Aggiornamento 3 Ago 2026 (ADR-024): la scheda strumento apre su un **tab Panoramica** che elenca i **motivi** dello stato acceso, con link alla riga d'origine; i motivi che nascono da garanzie ricambio sono mostrati al Tenant in forma neutra e non cliccabile.*
 - **Tracciamento Interventi:** Visualizzazione degli interventi con data passata o futura.
 - **Automazioni e "Email del Futuro":** Ricezione delle notifiche programmate tramite cron jobs per l'approssimarsi di scadenze o rinnovi contrattuali.
 - **Gestione Documentale:** Area dedicata per caricare certificati di taratura, scaricare report di fine lavoro ed esportare storici o certificati in PDF.
@@ -43,5 +43,5 @@ L'ambiente operativo dedicato esclusivamente al personale sul campo.
 
 - **Interfaccia UI Mobile-First:** Ottimizzazione per schermi piccoli per inserire report di fine intervento e leggere lo storico direttamente dal laboratorio.
 - **Scansione QR Code Istantanea:** Accesso immediato alla scheda dello strumento inquadrando il QR code, bypassando la ricerca (riservato ai tecnici/Admin).
-- **Associazione Dinamica Ricambi:** Possibilità di inserire il pezzo di ricambio (con codice e descrizione) e associarlo alla macchina in fase di attività (dato che a monte non si sanno tutti i ricambi).
+- **Associazione Dinamica Ricambi:** Possibilità di inserire il pezzo di ricambio e associarlo alla macchina in fase di attività (dato che a monte non si sanno tutti i ricambi). *Aggiornamento 3 Ago 2026 (ADR-022): si inserisce dal form intervento — checkbox "Ricambio effettuato" + righe con **nome** e **scadenza garanzia**; il codice costruttore è facoltativo.*
 - **Completamento Interventi:** Utilizzo della spunta "Fatto" per contrassegnare l'esecuzione di interventi programmati o passati, con conseguente integrazione dell'azione anche nel tab "Ricambi".

@@ -106,7 +106,7 @@ Il QR è quindi una scorciatoia di navigazione (evita la ricerca manuale), non u
 
 **ADR-004 — Garanzie a ore: normalizzazione in "data di scadenza effettiva"**
 
-*Stato: Accettata*
+*Stato: Accettata — **superata in parte da ADR-019** (3 Ago 2026): la garanzia a ore **non esiste**, e con essa spariscono `tipo_scadenza`, `soglia_ore`, `data_scadenza_prevista` e le letture contaore. Restano validi il motore sdoppiato macchina/ricambio, il campo unico `data_scadenza_effettiva` e la privacy delle garanzie ricambio. **Integrata da ADR-020**: la garanzia del ricambio pesa sul semaforo dello strumento.*
 
 **Contesto.** Il Motore Garanzie Sdoppiato prevede garanzie "legate alle ore di utilizzo del macchinario", ma non esisteva un meccanismo per far conoscere al sistema le ore di una macchina. Tracciare le ore in automatico (IoT/telemetria) è fuori scope.
 
@@ -132,7 +132,7 @@ Il QR è quindi una scorciatoia di navigazione (evita la ricerca manuale), non u
 
 **ADR-005 — Semaforo: stato automatico calcolato + forzatura manuale tracciata**
 
-*Stato: Accettata*
+*Stato: Accettata — **estesa da ADR-020** (3 Ago 2026): la fonte "garanzie" del calcolo comprende anche le garanzie dei **ricambi** montati sullo strumento, con la stessa soglia di 30 giorni. **Estesa da ADR-024**: il motore non restituisce più solo uno stato ma una **diagnosi** (stato + motivi), mostrata nel tab Panoramica.*
 
 **Contesto.** Il semaforo (🟢/🟠/🔴) era descritto come "sia automatico che non automatico" per l'arancione e "manuale dopo verifica" per il rosso, senza una regola chiara su come automatico e manuale convivono.
 
@@ -201,7 +201,7 @@ Insieme accessibile del tecnico = *(strumenti con intervento assegnato a lui)* �
 
 **ADR-008 — Ricambi: catalogo incrementale con autocomplete**
 
-*Stato: Accettata*
+*Stato: Accettata — **raffinata da ADR-022** (3 Ago 2026): la chiave di autocomplete passa dal `codice` al **nome** (codice nullable) e il punto d'ingresso è il form intervento (checkbox "Ricambio effettuato" + righe ripetitore con garanzia obbligatoria). Il meccanismo collega-o-crea e la ricerca incrociata restano invariati.*
 
 **Contesto.** Contraddizione tra due requisiti: "inserisci codice e descrizione al volo" (i pezzi non sono noti a monte) e "ricerca incrociata del ricambio su tutte le macchine" (che con testo libero diventa inaffidabile per doppioni/errori di battitura).
 
@@ -225,7 +225,7 @@ Si ottengono insieme la velocità "al volo" e la ricerca incrociata affidabile (
 
 **ADR-009 — Scadenze documenti (taratura): modellate come Attività, non come motore separato**
 
-*Stato: Accettata*
+*Stato: Accettata — l'elenco dei tipi di intervento, qui lasciato aperto ("es. `tipo = taratura`"), è **fissato da ADR-021** (3 Ago 2026). Il valore è oggi `taratura_e_certificazione`: nel linguaggio del cliente taratura e certificazione sono **una voce sola**, con lo stesso trattamento documentale.*
 
 **Contesto.** L'area documentale era pensata come archivio passivo, ma i certificati di taratura hanno una validità legale a tempo: la loro scadenza deve accendere il semaforo e generare notifiche, come qualunque altra scadenza.
 
@@ -366,3 +366,177 @@ Si ottengono insieme la velocità "al volo" e la ricerca incrociata affidabile (
 - Superadmin/Developer richiedono un proprio Ente al setup (provisioning).
 - Le suite di isolamento aggiornano i casi "Developer/Superadmin vedono tutto" → ora scoped; aggiunti casi fail-closed.
 - Le dashboard globali di S6 vanno scritte con query non-scopate esplicite.
+
+---
+
+## Briefing cliente del 3 Agosto 2026 → ADR-019 ÷ ADR-024
+
+*Le sei decisioni che seguono nascono dallo stesso incontro col cliente destinatario della webapp. Sono raggruppate qui perché si leggono insieme: due riguardano le garanzie (una toglie, una estende), una la nomenclatura degli interventi, una il punto d'ingresso dei ricambi, una la forma della relazione coi fornitori e l'ultima una nuova vista di sintesi. Le ultime due sono arrivate a integrazione, poche ore dopo le prime quattro.*
+
+---
+
+**ADR-019 — Garanzie solo a data: la garanzia "a ore" è eliminata**
+
+*Stato: Accettata (3 Ago 2026) — **supera ADR-004** nella parte "garanzie a ore" e ne rimuove l'infrastruttura di supporto.*
+
+**Contesto.** ADR-004 nasce da un requisito raccolto in fase di scoping: "garanzia legata alle ore di utilizzo del macchinario". Il briefing del 3 Agosto 2026 chiarisce che si trattava di un **fraintendimento**: nel dominio del cliente la garanzia a ore **non esiste**. Tutte le garanzie — macchina e ricambio — scadono a data.
+
+**Decisione.**
+- La garanzia ha **una sola forma**: `data_inizio` + `durata_mesi` → `data_scadenza_effettiva`. Sparisce la distinzione `tipo_scadenza`.
+- Si eliminano: enum `TipoScadenzaGaranzia` e colonne `tipo_scadenza`, `soglia_ore`, `data_scadenza_prevista` su `garanzie`.
+- Si elimina **anche il contaore**: tabella `letture_contaore`, modello, UI di registrazione, permessi `letture_contaore.*`. Esisteva unicamente come input alternativo per la data prevista delle garanzie a ore (ADR-004, metodo 2): senza quel consumatore raccoglierebbe un dato che nessun motore legge.
+- Cade con esse la voce V1.1 "estrapolazione automatica del ritmo ore/giorno".
+
+**Cosa di ADR-004 sopravvive.** Il **motore sdoppiato** (garanzia macchina + garanzia ricambio), il campo unico **`data_scadenza_effettiva`** come sola grandezza che pilota semaforo e notifiche, e la **privacy delle garanzie ricambio** verso il Tenant.
+
+**Alternative scartate.**
+- *Tenere il contaore come dato operativo autonomo (usura, pianificazione):* plausibile in astratto, ma il cliente non l'ha chiesto e nessun motore lo consumerebbe. Si reintroduce con un ADR proprio se e quando nascerà il bisogno.
+- *Congelare le colonne invece di rimuoverle (dead code difensivo):* lascia campi che la UI non scrive più e che il prossimo lettore deve interpretare; ricrearli, se mai servisse, è una migration additiva.
+
+**Conseguenze.**
+- `Garanzia::normalizzaScadenza()` si riduce a un ramo solo: sparisce la classe di errore "garanzia a ore salvata senza data prevista".
+- Migration **distruttiva** (drop di 3 colonne + 1 tabella): le righe oggi `tipo_scadenza = ore` hanno `durata_mesi` NULL e vanno **convertite prima** del drop, altrimenti la normalizzazione esplode al primo salvataggio. Ordine obbligato: backfill → drop.
+- **Il backfill sposta qualche scadenza, e va bene così.** Una data arbitraria non è esprimibile come "N mesi esatti da `data_inizio`": si sceglie l'intero N più vicino. L'alternativa — scrivere `durata_mesi` lasciando intatta `data_scadenza_effettiva` — lascerebbe in tabella un valore che il modello non sa più riprodurre e che cambierebbe da solo al primo salvataggio: uno scarto noto e misurato adesso è preferibile a una divergenza silenziosa domani.
+- **`durata_mesi >= 1` va imposta nel model, non solo nel form.** Esistevano garanzie "a ore" la cui data prevista precedeva `data_inizio` (il vecchio modello non legava le due), e la conversione le riduceva a durata 0 — righe che il `min:1` del form non avrebbe mai permesso. Il `min:1` copre l'utente; seeder, import e migration scrivono senza passare di lì.
+- Documenti da allineare: ERD §5.3/§6.1/§12/§13, Schema Ruoli §4.3 + matrice §5, Elenco Funzionalità §3, Wireframe (vista tecnico mobile), Roadmap S3.
+
+---
+
+**ADR-020 — La garanzia del ricambio concorre al semaforo dello strumento su cui è montato**
+
+*Stato: Accettata (3 Ago 2026) — **estende ADR-005**; convive con il vincolo di privacy di ADR-004.*
+
+**Contesto.** ADR-004 modella la garanzia del singolo pezzo (`soggetto = ricambio`, agganciata a `ricambio_utilizzo`) ma non dice se pesa sul semaforo; l'implementazione S3 alimenta il calcolo con le sole garanzie `macchina`. Il briefing del 3 Agosto 2026 lo chiarisce: **anche i ricambi condizionano lo stato dello strumento**, con la stessa scala della garanzia macchina — dentro i termini → verde; scadenza entro un mese → arancione; scaduta → arancione.
+
+**Decisione.**
+- La **fonte garanzie** del calcolo semaforo diventa l'unione di: garanzie `macchina` dello strumento **∪** garanzie `ricambio` dei pezzi montati su quello strumento (doppio salto `garanzie → ricambio_utilizzo → strumento_id`).
+- "Manca 1 mese" ≡ la soglia "imminente" già in uso, **30 giorni** (`config/easylab.php`, `Semaforo::giorniImminente()`). Il cliente non chiede una seconda soglia dedicata ai ricambi.
+- **Il pallino è un aggregato, il dettaglio no.** Il Tenant continua a **non** vedere le righe garanzia-ricambio (ADR-004, set 🔒 `garanzie.ricambio.*`), ma **vede** l'arancione che ne deriva. Ogni etichetta che nomini la fonte — colonna "Prossima scadenza" in testa a tutte — degrada a dicitura neutra per chi non ha `garanzie.ricambio.view`.
+
+**Alternative scartate.**
+- *Nascondere al Tenant anche l'effetto (pallino verde per lui, arancione per EasyLab):* produrrebbe due verità sullo stesso strumento a seconda di chi guarda, minando la fiducia nel semaforo — che è l'oggetto centrale del prodotto. Scartata.
+- *Soglia dedicata ai ricambi:* nessuna evidenza che serva, e una seconda costante è una seconda cosa che può divergere dalla prima.
+
+**Conseguenze.**
+- `GaranziaRicambioPrivacyScope` è un **global scope**: la query che alimenta il semaforo deve leggere le garanzie ricambio **esplicitamente senza quello scope** (stesso idioma delle dashboard globali di ADR-018). Senza questa accortezza, per il Tenant l'arancione da ricambio non si accenderebbe mai — un bug invisibile proprio a chi lo subisce.
+- Il calcolo bulk dell'elenco strumenti (una query per pagina, S3 punto 4) va esteso al doppio salto senza tornare N+1; idem filtro e ordinamento per stato.
+- Salda il debito S3 punto 7 lettera **(c)** (colonna dettaglio filtrata per permesso, pallino no) e impone di sciogliere la lettera **(b)** (livello 2 dello scope sulle righe ricambio, che passa dallo stesso doppio salto).
+- 🧪 Test negativo obbligatorio: *un Tenant vede arancione uno strumento la cui unica scadenza è la garanzia di un ricambio, e non vede da nessuna parte il nome del pezzo.*
+
+---
+
+**ADR-021 — Tipologie di intervento: elenco fissato dal cliente**
+
+*Stato: Accettata (3 Ago 2026) — fissa la lista lasciata "estendibile" da ADR-009 / ERD §5.2.*
+
+**Contesto.** L'enum `TipoIntervento` era stato popolato con voci verosimili (`manutenzione`, `taratura`, `ispezione`, `riparazione`, `altro`) in assenza della nomenclatura reale. Il briefing del 3 Agosto 2026 la fornisce: è organizzata per **regime contrattuale di manutenzione**, non per natura tecnica del lavoro.
+
+**Decisione.** Le tipologie sono:
+
+| Valore | Etichetta UI |
+|---|---|
+| `manutenzione_ordinaria` | Manutenzione ordinaria |
+| `manutenzione_straordinaria` | Manutenzione straordinaria |
+| `manutenzione_full_risk` | Manutenzione full risk |
+| `taratura_e_certificazione` | Taratura e certificazione |
+| `altro` | Altro |
+
+- **Eliminate `ispezione` e `riparazione`**: non esistono nel linguaggio del cliente; il lavoro che vi ricadeva è manutenzione ordinaria o straordinaria.
+- **`manutenzione` generica sparisce**, sostituita dai tre regimi contrattuali.
+- **"Taratura e certificazione" è UNA voce**, non due. ⚠️ La prima stesura di questo ADR l'aveva spezzata in `taratura` + `certificazione`, leggendo la congiunzione dell'elenco come separatore: **errore di lettura**, corretto dal cliente il 4 Ago 2026. Nel suo linguaggio le due cose viaggiano insieme — la taratura si chiude con il certificato. È la voce con valenza documentale di ADR-009: certificato allegato, scadenza che alimenta il semaforo, nessun motore separato.
+- **`altro` resta** come voce di fallback (decisione presa contro l'ipotesi di lista chiusa a quattro): sul campo l'intervento non classificabile deve comunque essere registrabile, e `descrizione` porta il dettaglio.
+
+**Alternative scartate.**
+- *Tabella `tipi_intervento` configurabile per tenant:* la nomenclatura è di dominio, non di cliente; una tabella renderebbe non tipizzabile ciò che oggi è un enum PHP con `match` esaustivi.
+- *Lista chiusa a cinque senza `altro`:* più pulita per le statistiche, ma produce l'intervento non registrabile. Preferita la flessibilità, accettando che `altro` vada sorvegliata (se cresce, manca una voce).
+
+**Conseguenze.**
+- Da aggiornare: enum, seeder demo, test, etichette UI, e una **migration di rimappatura dati** — `manutenzione` e `ispezione` → `manutenzione_ordinaria`, `riparazione` → `manutenzione_straordinaria`, `taratura` → `taratura_e_certificazione`.
+- **Le correzioni di dati vanno sempre in avanti.** La fusione taratura+certificazione è arrivata quando la prima migration era già applicata al DB di sviluppo: si aggiunge una seconda migration, non si riscrive la prima — riscriverla la renderebbe una bugia (girata con un contenuto, versionata con un altro) e imporrebbe un rollback su dati reali.
+- `interventi.tipo` è una `string` senza CHECK (ERD §5.2), quindi la rimappatura è un `UPDATE` — ma va eseguita **prima** che l'enum PHP smetta di conoscere i vecchi valori, o ogni `from()` su una riga storica lancerà `ValueError`.
+- Le etichette non sono più derivabili dal valore (`manutenzione_full_risk` → "Manutenzione full risk"): serve un `label()` sull'enum come **unica** fonte, altrimenti la stessa stringa viene riscritta in ogni vista.
+
+---
+
+**ADR-022 — I ricambi si registrano dall'intervento, con nome libero e garanzia per riga**
+
+*Stato: Accettata (3 Ago 2026) — **raffina ADR-008**: cambia la chiave di ricerca del catalogo e il punto d'ingresso.*
+
+**Contesto.** ADR-008 fissa il catalogo ricambi incrementale con autocomplete **per codice**. Il briefing del 3 Agosto 2026 descrive il gesto reale dell'operatore: nel form di un nuovo intervento c'è una **checkbox "Ricambio effettuato"**; spuntandola compare una **riga ripetitore** dove si scrivono a mano il **nome** del ricambio e la **scadenza della sua garanzia**. Due tensioni con ADR-008: (a) il cliente nomina il pezzo, non lo codifica; (b) l'inserimento parte dall'intervento, non dal tab Ricambi.
+
+**Decisione.**
+- **Punto d'ingresso primario = il form intervento.** Checkbox `ricambio_effettuato` (stato di UI, **non** persistito: la verità è "esistono righe ricambio per questo intervento") → repeater di N righe `{nome, data_scadenza_garanzia}` con aggiungi/rimuovi.
+- Ogni riga, al salvataggio, produce in **una transazione**: la voce di catalogo `ricambi` (collegata se il nome corrisponde a una esistente del tenant, creata al volo altrimenti — è il collega-o-crea di ADR-008, con il **nome** come chiave al posto del codice), una riga `ricambio_utilizzo` (strumento + ricambio + intervento) e una `garanzia` con `soggetto = ricambio` agganciata a quella riga.
+- **`ricambi.codice` diventa nullable**: l'autocomplete lavora sul nome normalizzato; il codice resta per chi lo conosce e per il merge doppioni. La chiave pratica del catalogo passa a `(tenant_id, nome normalizzato)`.
+- **La garanzia della riga è obbligatoria**: è il dato che il cliente ha chiesto e che alimenta il semaforo (ADR-020). Nessun ricambio senza scadenza garanzia.
+- Le righe così create sono **le stesse** che il tab "Ricambi" mostra: il tab resta il luogo di lettura, ricerca incrociata e correzione, non il punto d'ingresso abituale.
+
+**Alternative scartate.**
+- *Tenere il codice obbligatorio come da ADR-008 originale:* fedele all'ADR ma infedele al gesto reale — durante l'intervento il codice spesso non è a portata di mano e si finirebbe per inventarlo, degradando proprio la ricerca incrociata che il codice doveva proteggere.
+- *Testo libero senza catalogo:* form più semplice, ma perde la ricerca incrociata, cioè il requisito che ha generato ADR-008. Scartata.
+- *Registrazione solo dal tab Ricambi:* meno codice, ma spezza in due passaggi un gesto unico.
+
+**Conseguenze.**
+- La **normalizzazione del nome** (trim, spazi multipli, maiuscole) diventa il punto delicato: i near-duplicati da refuso restano possibili, mitigati da autocomplete e merge doppioni (ADR-008, STRETCH S4).
+- ⚠️ **Nodo di permessi da sciogliere in S4.** Il Tecnico ha `ricambio_utilizzo.create` ma **non** `garanzie.ricambio.manage` (set 🔒, ADR-004): compilando la riga scriverebbe comunque una garanzia ricambio. Le tre vie: (a) la creazione contestuale avviene per conto del dominio, in un servizio che non richiede il permesso di gestione; (b) si allarga `garanzie.ricambio.manage` al Tecnico limitatamente alla creazione contestuale; (c) il Tecnico non compila la garanzia e la completa un Admin. **Decisione rimandata a S4, non implicita nel codice.**
+- ADR-008 resta valido nella sostanza (catalogo incrementale, collega-o-crea, ricerca incrociata): cambiano chiave di ricerca e punto d'ingresso.
+
+---
+
+**ADR-023 — Fornitore: uno per macchinario, non molti**
+
+*Stato: Accettata (3 Ago 2026) — **corregge l'ERD §7.3**, che modellava la relazione come pivot molti-a-molti.*
+
+**Contesto.** L'ERD prevedeva `fornitore_strumento`, un pivot N-N scelto in S0 in assenza di indicazioni. Il briefing precisa: **ogni macchinario è associato a un fornitore**, quello da cui è stato acquistato — coerente con l'Elenco Funzionalità §2, che già diceva "l'anagrafica dei fornitori **da cui vengono acquistati**". L'anagrafica è popolata da ciascun Ente e scopata per tenant come ogni altra tabella di business: ognuno vede i propri fornitori.
+
+**Decisione.**
+- Relazione **1-N**: `strumenti.fornitore_id` FK → `fornitori.id`. Il pivot `fornitore_strumento` **non si crea**.
+- **Obbligatorio nel form, nullable nello schema.** La colonna resta nullable perché gli strumenti già a sistema — e gli import CSV futuri — non hanno un fornitore, e una FK NOT NULL li renderebbe non salvabili; l'obbligo vive nella validazione del form. È scritto qui perché è la divergenza che il prossimo lettore scambia per una dimenticanza.
+- `fornitori` è tabella di business a tutti gli effetti: `tenant_id` + `BelongsToTenant`, soft delete, coperta dal meta-test di tenancy (nessuna eccezione, 🔗 ADR-001/018).
+- **Cancellazione protetta.** Un fornitore con strumenti associati non si elimina. E poiché `fornitori` usa soft delete, la scheda strumento deve mostrare il nome di un fornitore cestinato con un badge esplicito, non una cella vuota: un vuoto silenzioso si legge come "dato mai inserito".
+
+**Alternative scartate.**
+- *Mantenere il pivot N-N:* coprirebbe il caso "fornitore d'acquisto + fornitore d'assistenza", che però il cliente non ha posto. Un pivot per un rapporto 1-N costringe ogni lettura a una join e ogni scrittura a decidere quale delle righe sia "quella giusta". Se il caso emergerà, si aggiunge un secondo campo tipizzato (`fornitore_assistenza_id`) o si promuove a pivot con `ruolo`: entrambe migration additive.
+- *`fornitore_id` NOT NULL:* vincolo più forte, ma blocca righe storiche e import — e un vincolo che costringe a inventare un valore non protegge nulla.
+
+**Conseguenze.**
+- ERD §5.1 (colonna + indice), §7.3 riscritta, §2 diagramma; Elenco Funzionalità §2.
+- Il campo entra nel form strumento, nel tab Anagrafica e nel blocco di sintesi della Panoramica (🔗 ADR-024).
+- **Filtro "Fornitore" nell'elenco strumenti**: conseguenza naturale (l'elenco ha già filtri Ente/stato/obsoleti), da valutare in S4.
+- **`fornitori.view` concesso al ruolo Tenant** in sola lettura (approvato 3 Ago 2026): l'anagrafica è dell'Ente, e il cliente sa già da chi ha comprato la propria macchina. Modifica la matrice di S1 → serve un test sul nuovo default del seeder.
+- 🧪 Il test di isolamento vale anche qui: un Ente non deve poter associare uno strumento al fornitore di un altro Ente — la whitelist del select e la validazione al save devono avere **una sola definizione**, come già fatto per l'assegnatario degli interventi.
+
+---
+
+**ADR-024 — Tab Panoramica: il semaforo spiega sé stesso**
+
+*Stato: Accettata (3 Ago 2026) — estende ADR-005; nuova prima scheda della vista strumento.*
+
+**Contesto.** Fra S3 e S4 le cause del semaforo si sono sparpagliate: un arancione può nascere da un intervento scaduto (tab Interventi), da una garanzia macchina (tab Garanzie), dalla garanzia di un ricambio (tab Ricambi + Garanzie, 🔗 ADR-020) o da una forzatura manuale (badge in testa alla scheda). Il cliente chiede di vedere **a colpo d'occhio il motivo del semaforo acceso**, più qualche dato di sintesi utile — "prossimo intervento", qualche statistica.
+
+**Decisione.**
+- Nuovo tab **"Panoramica"**, **primo e di default** della scheda strumento.
+- Il motore semaforo smette di restituire solo uno stato e restituisce una **diagnosi**: stato **+ elenco dei motivi** che lo determinano, ciascuno con la propria scadenza e il collegamento alla riga che lo genera. `Semaforo::calcola()` resta come sottile involucro sopra la diagnosi, così i test puri già scritti restano validi.
+- **La Panoramica non calcola nulla di suo.** Riusa le regole già uniche nel progetto — `Intervento::isScaduto()`/`scopeScadute()`, `Garanzia::scopeEntroSoglia()`, `Strumento::isObsoleto()`. Un pannello che ricalcolasse "scaduto" a modo proprio diventerebbe una **terza verità** dopo il semaforo e la lista attività: esattamente ciò che ADR-005 esiste per evitare.
+- **La forzatura non nasconde.** Con `forced_state` valorizzato la Panoramica mostra **entrambi**: lo stato forzato che vince (con chi/quando/perché) **e** lo stato calcolato coi suoi motivi. È il principio di ADR-005 finalmente reso visibile invece che solo dichiarato.
+- **Privacy** (🔗 ADR-004/020). Un motivo che nasce da una garanzia ricambio si mostra, a chi non ha `garanzie.ricambio.view`, in forma **neutra**: "Garanzia di un componente in scadenza il gg/mm/aaaa", senza nome del pezzo e senza link alla riga. È la stessa regola della colonna "Prossima scadenza", ma qui il testo è molto più esposto — il test negativo è obbligatorio, non consigliato.
+- **Ogni blocco è gated dal proprio permesso.** La Panoramica compone dati di aree diverse e non deve diventare la scorciatoia che aggira i `@can` degli altri tab.
+
+**Contenuto V1**, in ordine di importanza:
+1. **Stato e motivi** — pallino grande; elenco dei motivi con data e link alla riga d'origine.
+2. **Prossimo intervento** — data, tipo, tecnico assegnato. "Nessuno pianificato" è a sua volta un'informazione, e va scritto.
+3. **Ultimo intervento eseguito** — data e tipo.
+4. **Garanzie** — garanzia macchina con scadenza e stato; le garanzie ricambio in **aggregato** ("N pezzi coperti") per chi non ha il permesso di vederle nel dettaglio.
+5. **Sintesi anagrafica** — fornitore (🔗 ADR-023), ubicazione corrente, data installazione, età e stato di obsolescenza.
+6. **Statistiche leggere** — interventi negli ultimi 12 mesi, scaduti-non-fatti aperti, ricambi montati, documenti allegati.
+
+**Alternative scartate.**
+- *Pannello sul pallino invece di un tab:* è il "badge cliccabile" già rimandato in S3. Su mobile un pannello galleggiante con sei blocchi è inservibile, e il cliente ha chiesto esplicitamente un tab.
+- *Persistere stato e motivi in colonna:* renderebbe la Panoramica istantanea, ma introduce un ricalcolo da tenere in sincronia a ogni evento. Rimandato insieme all'ipotesi di materializzazione già annotata come debito in S3 (paginazione a OFFSET): se arriverà, arriverà per la dashboard S6 — non per un tab che carica un solo strumento.
+- *Una sola grande dashboard al posto del tab:* risponde a una domanda diversa ("come stanno le mie macchine") e c'è già in S6. La Panoramica risponde a "perché **questa** macchina è arancione".
+
+**Conseguenze.**
+- Il refactor di `Semaforo` va fatto **prima** di aggiungervi la fonte "garanzie ricambio" (🔗 ADR-020), o la stessa classe viene toccata due volte con due criteri diversi.
+- La Panoramica carica **un solo** strumento: nessun rischio N+1 di lista. Ma i suoi contatori **non vanno riusati in una lista** senza ripensarli — è la trappola classica di questi pannelli, e qui l'elenco strumenti ha già un calcolo bulk fatto apposta.
+- Il tab diventa la landing della scheda: i test che oggi asseriscono il contenuto immediatamente visibile vanno aggiornati **consapevolmente** (la lista interventi non è più il primo pannello).
+- I motivi sono un elenco tipizzato, non stringhe: servono per il testo, per il link e — in S5 — per il corpo dell'"email del futuro", che oggi dovrebbe ricostruirseli da capo.
