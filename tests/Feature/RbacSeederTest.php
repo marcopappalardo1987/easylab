@@ -10,7 +10,7 @@ beforeEach(function () {
 });
 
 it('creates the full catalog and the six roles', function () {
-    expect(Permission::count())->toBe(56);
+    expect(Permission::count())->toBe(54);
     expect(Role::count())->toBe(6);
 
     foreach (['Developer', 'Superadmin', 'Admin', 'Responsabile Reparto', 'Tenant', 'Tecnico'] as $role) {
@@ -19,13 +19,13 @@ it('creates the full catalog and the six roles', function () {
 });
 
 it('gives the Developer every permission', function () {
-    expect(Role::findByName('Developer')->permissions)->toHaveCount(56);
+    expect(Role::findByName('Developer')->permissions)->toHaveCount(54);
 });
 
 it('gives the Superadmin everything except system.logs.view', function () {
     $superadmin = Role::findByName('Superadmin');
 
-    expect($superadmin->permissions)->toHaveCount(55);
+    expect($superadmin->permissions)->toHaveCount(53);
     expect($superadmin->hasPermissionTo('system.logs.view'))->toBeFalse();
     expect($superadmin->hasPermissionTo('roles.manage'))->toBeTrue();
 });

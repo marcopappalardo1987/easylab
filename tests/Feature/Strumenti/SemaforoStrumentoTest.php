@@ -389,7 +389,7 @@ it('picks the nearest garanzia among several', function () {
     Garanzia::factory()->forStrumento($this->strumento)->attiva()->create();
     $vicina = Garanzia::factory()->forStrumento($this->strumento)->scaduta()->create();
     Garanzia::factory()->forStrumento($this->strumento)
-        ->aOre(today()->addYears(2)->toDateString())->create();
+        ->create(['data_inizio' => today()->toDateString(), 'durata_mesi' => 24]);
 
     expect($this->strumento->prossimaGaranzia()->id)->toBe($vicina->id);
 });
@@ -466,7 +466,7 @@ it('sorts prossima scadenza across interventi and garanzie', function () {
 
     $lontano = Strumento::factory()->forNode($this->dept)->create(['nome' => 'C']);
     Garanzia::factory()->forStrumento($lontano)
-        ->aOre(today()->addYears(3)->toDateString())->create();
+        ->create(['data_inizio' => today()->toDateString(), 'durata_mesi' => 36]);
 
     $ordine = Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)
         ->set('sortBy', 'prossima_scadenza')->set('sortDir', 'asc')

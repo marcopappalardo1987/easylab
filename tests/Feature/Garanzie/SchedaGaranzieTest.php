@@ -1,8 +1,6 @@
 <?php
 
-use App\Enums\TipoScadenzaGaranzia;
 use App\Models\Garanzia;
-use App\Models\LetturaContaore;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
@@ -10,7 +8,7 @@ use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 /**
- * Tab Garanzie e letture contaore in scheda (S3 punti 7-8).
+ * Tab Garanzie in scheda (S3 punto 7 — ADR-004/019).
  * Aree rosse: permessi per ruolo e isolamento sulle scritture.
  */
 beforeEach(function () {
@@ -33,10 +31,9 @@ beforeEach(function () {
 
 // --- CRUD felice ---
 
-it('creates a garanzia a data and computes the effective date', function () {
+it('creates a garanzia and computes the effective date', function () {
     scheda($this->admin, $this->strumento)
         ->call('openNuovaGaranzia')
-        ->set('garanziaForm.tipo_scadenza', TipoScadenzaGaranzia::Data->value)
         ->set('garanziaForm.data_inizio', '2026-03-01')
         ->set('garanziaForm.durata_mesi', 36)
         ->call('saveGaranzia')
@@ -50,31 +47,26 @@ it('creates a garanzia a data and computes the effective date', function () {
         ->and($garanzia->tenant_id)->toBe($this->ente->id);
 });
 
-it('creates a garanzia a ore using the manually entered prevista', function () {
+it('requires inizio and durata', function () {
     scheda($this->admin, $this->strumento)
         ->call('openNuovaGaranzia')
-        ->set('garanziaForm.tipo_scadenza', TipoScadenzaGaranzia::Ore->value)
-        ->set('garanziaForm.data_inizio', '2026-01-01')
-        ->set('garanziaForm.soglia_ore', 8000)
-        ->set('garanziaForm.data_scadenza_prevista', '2027-09-30')
+        ->set('garanziaForm.data_inizio', '')
+        ->set('garanziaForm.durata_mesi', null)
         ->call('saveGaranzia')
-        ->assertHasNoErrors();
+        ->assertHasErrors(['garanziaForm.data_inizio', 'garanziaForm.durata_mesi']);
 
-    $garanzia = $this->strumento->garanzie()->sole();
-
-    expect($garanzia->data_scadenza_effettiva->toDateString())->toBe('2027-09-30')
-        ->and($garanzia->soglia_ore)->toBe(8000)
-        ->and($garanzia->durata_mesi)->toBeNull();
+    expect($this->strumento->garanzie()->count())->toBe(0);
 });
 
-it('requires the fields that match the chosen tipo', function () {
+it('rejects a durata below one with a validation error, not an exception', function () {
+    // Il model ha la stessa guardia, ma lì è un'eccezione: l'utente deve vedere
+    // un errore di campo. Senza il `min:1` nel form arriverebbe una pagina rotta
+    // invece di un messaggio — ed è per questo che la regola sta in due posti.
     scheda($this->admin, $this->strumento)
         ->call('openNuovaGaranzia')
-        ->set('garanziaForm.tipo_scadenza', TipoScadenzaGaranzia::Ore->value)
-        ->set('garanziaForm.soglia_ore', null)
-        ->set('garanziaForm.data_scadenza_prevista', '')
+        ->set('garanziaForm.durata_mesi', 0)
         ->call('saveGaranzia')
-        ->assertHasErrors(['garanziaForm.soglia_ore', 'garanziaForm.data_scadenza_prevista']);
+        ->assertHasErrors(['garanziaForm.durata_mesi']);
 
     expect($this->strumento->garanzie()->count())->toBe(0);
 });
@@ -100,31 +92,6 @@ it('edits and deletes a garanzia', function () {
         ->and(Garanzia::withoutGlobalScopes()->withTrashed()->find($garanzia->id)->trashed())->toBeTrue();
 });
 
-it('registers a lettura contaore attributed to the authenticated user', function () {
-    scheda($this->admin, $this->strumento)
-        ->call('openLettura')
-        ->assertSet('letturaForm.data', today()->toDateString())
-        ->set('letturaForm.ore', 4200)
-        ->call('registraLettura')
-        ->assertHasNoErrors();
-
-    $lettura = $this->strumento->lettureContaore()->sole();
-
-    // registrata_da non è una proprietà del form: arriva da auth().
-    expect($lettura->ore)->toBe(4200)
-        ->and($lettura->registrata_da)->toBe($this->admin->id)
-        ->and($lettura->tenant_id)->toBe($this->ente->id);
-});
-
-it('refuses a lettura dated in the future', function () {
-    scheda($this->admin, $this->strumento)
-        ->call('openLettura')
-        ->set('letturaForm.data', today()->addWeek()->toDateString())
-        ->set('letturaForm.ore', 100)
-        ->call('registraLettura')
-        ->assertHasErrors(['letturaForm.data']);
-});
-
 // --- Permessi (🔴) ---
 
 it('shows the tab to a Tenant in read-only, with no actions', function () {
@@ -134,11 +101,10 @@ it('shows the tab to a Tenant in read-only, with no actions', function () {
     scheda($tenant, $this->strumento)
         ->assertSee('Garanzie')
         ->assertSee('Scadenza effettiva')
-        ->assertDontSee('+ Nuova garanzia')
-        ->assertDontSee('Registra lettura');   // il Tenant non ha letture_contaore.create
+        ->assertDontSee('+ Nuova garanzia');
 });
 
-it('forbids a Tenant from every garanzia and lettura action', function () {
+it('forbids a Tenant from every garanzia action', function () {
     $garanzia = Garanzia::factory()->forStrumento($this->strumento)->create();
     $tenant = ($this->conRuolo)('Tenant');
 
@@ -148,8 +114,6 @@ it('forbids a Tenant from every garanzia and lettura action', function () {
         ['saveGaranzia'],
         ['openEliminaGaranzia', $garanzia->id],
         ['eliminaGaranzia'],
-        ['openLettura'],
-        ['registraLettura'],
     ] as $azione) {
         scheda($tenant, $this->strumento)->call(...$azione)->assertForbidden();
     }
@@ -157,16 +121,10 @@ it('forbids a Tenant from every garanzia and lettura action', function () {
     expect($garanzia->fresh())->not->toBeNull();
 });
 
-it('lets a Tecnico register letture but not manage garanzie', function () {
+it('lets a Tecnico read garanzie but never manage them', function () {
     $tecnico = ($this->conRuolo)('Tecnico');
 
-    scheda($tecnico, $this->strumento)
-        ->call('openLettura')
-        ->set('letturaForm.ore', 900)
-        ->call('registraLettura')
-        ->assertHasNoErrors();
-
-    expect($this->strumento->lettureContaore()->count())->toBe(1);
+    scheda($tecnico, $this->strumento)->assertSee('Scadenza effettiva');
 
     foreach ([['openNuovaGaranzia'], ['saveGaranzia']] as $azione) {
         scheda($tecnico, $this->strumento)->call(...$azione)->assertForbidden();
@@ -191,12 +149,4 @@ it('does not resolve a garanzia of another strumento or tenant', function () {
 
     expect(Garanzia::withoutGlobalScopes()->find($altrui->id))->not->toBeNull()
         ->and(Garanzia::withoutGlobalScopes()->find($garanziaB->id))->not->toBeNull();
-});
-
-it('shows the letture storico newest first', function () {
-    LetturaContaore::factory()->forStrumento($this->strumento)->create(['data' => today()->subYear()->toDateString(), 'ore' => 500]);
-    LetturaContaore::factory()->forStrumento($this->strumento)->create(['data' => today()->toDateString(), 'ore' => 3100]);
-
-    scheda($this->admin, $this->strumento)
-        ->assertSeeInOrder(['3.100 h', '500 h']);
 });

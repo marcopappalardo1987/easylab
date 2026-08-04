@@ -10,5 +10,5 @@ it('provisions the developer account with the Developer role', function () {
 
     expect($developer)->not->toBeNull();
     expect($developer->hasRole('Developer'))->toBeTrue();
-    expect($developer->getAllPermissions())->toHaveCount(56);
+    expect($developer->getAllPermissions())->toHaveCount(54);
 });

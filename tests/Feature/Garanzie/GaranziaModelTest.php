@@ -1,14 +1,13 @@
 <?php
 
 use App\Enums\SoggettoGaranzia;
-use App\Enums\TipoScadenzaGaranzia;
 use App\Models\Garanzia;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Support\Semaforo;
 
 /**
- * Normalizzazione e invarianti della garanzia (ERD §6.1 — ADR-004).
+ * Normalizzazione e invarianti della garanzia (ERD §6.1 — ADR-004/019).
  * Fixture in contesto console (nessun actingAs): i global scope non filtrano.
  */
 beforeEach(function () {
@@ -19,23 +18,13 @@ beforeEach(function () {
 
 // --- Normalizzazione: tutto converge in data_scadenza_effettiva ---
 
-it('computes the effective date from inizio plus durata for tipo data', function () {
+it('computes the effective date from inizio plus durata', function () {
     $garanzia = Garanzia::factory()->forStrumento($this->strumento)->create([
-        'tipo_scadenza' => TipoScadenzaGaranzia::Data,
         'data_inizio' => '2026-01-15',
         'durata_mesi' => 24,
     ]);
 
     expect($garanzia->data_scadenza_effettiva->toDateString())->toBe('2028-01-15');
-});
-
-it('uses the manually entered prevista as effective date for tipo ore', function () {
-    // V1: la data prevista è inserita a mano; l'estrapolazione dalle letture è V1.1.
-    $garanzia = Garanzia::factory()->forStrumento($this->strumento)->aOre('2027-06-30', 15000)->create();
-
-    expect($garanzia->data_scadenza_effettiva->toDateString())->toBe('2027-06-30')
-        ->and($garanzia->soglia_ore)->toBe(15000)
-        ->and($garanzia->durata_mesi)->toBeNull();
 });
 
 it('recomputes the effective date on every save', function () {
@@ -65,20 +54,24 @@ it('ignores a forged data_scadenza_effettiva in the payload', function () {
     expect($garanzia->fresh()->data_scadenza_effettiva->toDateString())->toBe('2027-01-01');
 });
 
-it('rejects a garanzia a data without durata_mesi', function () {
+it('rejects a garanzia without durata_mesi', function () {
+    // Unica forma rimasta dopo ADR-019: senza durata non c'è scadenza da
+    // normalizzare, e una garanzia senza scadenza non pilota nulla.
     expect(fn () => Garanzia::factory()->forStrumento($this->strumento)->create([
-        'tipo_scadenza' => TipoScadenzaGaranzia::Data,
         'durata_mesi' => null,
     ]))->toThrow(InvalidArgumentException::class);
 });
 
-it('rejects a garanzia a ore without data prevista', function () {
-    expect(fn () => Garanzia::factory()->forStrumento($this->strumento)->create([
-        'tipo_scadenza' => TipoScadenzaGaranzia::Ore,
-        'durata_mesi' => null,
-        'soglia_ore' => 5000,
-        'data_scadenza_prevista' => null,
-    ]))->toThrow(InvalidArgumentException::class);
+it('rejects a durata_mesi below one, whoever the caller is', function () {
+    // Il `min:1` del form copre l'utente; questa guardia copre seeder, import e
+    // migration di backfill — che è come sono nate 90 righe con durata 0.
+    foreach ([0, -3] as $durata) {
+        expect(fn () => Garanzia::factory()->forStrumento($this->strumento)->create([
+            'durata_mesi' => $durata,
+        ]))->toThrow(InvalidArgumentException::class);
+    }
+
+    expect(Garanzia::withoutGlobalScopes()->count())->toBe(0);
 });
 
 // --- Invariante soggetto/FK (ERD §6.1) ---

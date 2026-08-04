@@ -6,12 +6,10 @@ use App\Enums\SoggettoGaranzia;
 use App\Enums\StatoIntervento;
 use App\Enums\StatoSemaforo;
 use App\Enums\TipoIntervento;
-use App\Enums\TipoScadenzaGaranzia;
 use App\Enums\TipoSpostamento;
 use App\Enums\TipoUnitaOrganizzativa;
 use App\Models\Garanzia;
 use App\Models\Intervento;
-use App\Models\LetturaContaore;
 use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
@@ -176,7 +174,6 @@ class DemoSeeder extends Seeder
         $this->creaInterventi($ente, $strumentiIds, $tecnici);
         $this->creaSpostamenti($ente, $strumentiIds, $nodi, $utenti['admin']);
         $this->creaGaranzie($ente, $strumentiIds);
-        $this->creaLetture($ente, $strumentiIds, $utenti['admin']);
         $this->forzaAlcuniSemafori($ente, $utenti['admin'], $strumentiIds);
     }
 
@@ -406,8 +403,6 @@ class DemoSeeder extends Seeder
         $adesso = now();
 
         foreach ($strumentiIds as $strumentoId) {
-            $aData = random_int(1, 10) <= 6;
-
             // 70% attiva · 15% in scadenza entro la soglia · 15% già finita.
             $esito = match (true) {
                 random_int(1, 100) <= 70 => 'attiva',
@@ -415,40 +410,23 @@ class DemoSeeder extends Seeder
                 default => 'scaduta',
             };
 
-            if ($aData) {
-                $durata = [12, 24, 36, 60][array_rand([12, 24, 36, 60])];
-                // Si sceglie prima la scadenza voluta, poi si retrodata l'inizio:
-                // così la normalizzazione (inizio + durata) cade dove serve.
-                $effettiva = match ($esito) {
-                    'attiva' => today()->addDays(random_int(31, 1500)),
-                    'imminente' => today()->addDays(random_int(0, 30)),
-                    default => today()->subDays(random_int(1, 1200)),
-                };
-                $inizio = $effettiva->copy()->subMonths($durata);
-                $prevista = null;
-                $soglia = null;
-            } else {
-                $durata = null;
-                $inizio = today()->subMonths(random_int(6, 48));
-                $prevista = match ($esito) {
-                    'attiva' => today()->addDays(random_int(31, 1500)),
-                    'imminente' => today()->addDays(random_int(0, 30)),
-                    default => today()->subDays(random_int(1, 1200)),
-                };
-                $effettiva = $prevista;
-                $soglia = [2000, 5000, 10000, 20000][array_rand([2000, 5000, 10000, 20000])];
-            }
+            $durata = [12, 24, 36, 60][array_rand([12, 24, 36, 60])];
+
+            // Si sceglie prima la scadenza voluta, poi si retrodata l'inizio:
+            // così la normalizzazione (inizio + durata) cade dove serve.
+            $effettiva = match ($esito) {
+                'attiva' => today()->addDays(random_int(31, 1500)),
+                'imminente' => today()->addDays(random_int(0, 30)),
+                default => today()->subDays(random_int(1, 1200)),
+            };
 
             $righe[] = [
                 'tenant_id' => $ente->id,
                 'soggetto' => SoggettoGaranzia::Macchina->value,
                 'strumento_id' => $strumentoId,
                 'ricambio_utilizzo_id' => null,
-                'tipo_scadenza' => $aData ? TipoScadenzaGaranzia::Data->value : TipoScadenzaGaranzia::Ore->value,
-                'data_inizio' => $inizio->toDateString(),
+                'data_inizio' => $effettiva->copy()->subMonths($durata)->toDateString(),
                 'durata_mesi' => $durata,
-                'soglia_ore' => $soglia,
-                'data_scadenza_prevista' => $prevista?->toDateString(),
                 'data_scadenza_effettiva' => $effettiva->toDateString(),
                 'created_at' => $adesso,
                 'updated_at' => $adesso,
@@ -460,49 +438,6 @@ class DemoSeeder extends Seeder
         }
 
         $this->command?->info('  garanzie: '.count($righe));
-    }
-
-    /**
-     * Letture contaore per gli strumenti con garanzia a ore: 2-4 letture
-     * crescenti nel tempo, così la V1.1 (estrapolazione del ritmo) troverà
-     * già dati su cui lavorare.
-     */
-    private function creaLetture(UnitaOrganizzativa $ente, array $strumentiIds, User $admin): void
-    {
-        $conGaranziaOre = Garanzia::withoutGlobalScopes()
-            ->where('tenant_id', $ente->id)
-            ->where('tipo_scadenza', TipoScadenzaGaranzia::Ore->value)
-            ->pluck('strumento_id')->all();
-
-        $righe = [];
-        $adesso = now();
-
-        foreach ($conGaranziaOre as $strumentoId) {
-            $ore = random_int(200, 3000);
-            $giorni = random_int(400, 1200);
-
-            foreach (range(1, random_int(2, 4)) as $ignored) {
-                $righe[] = [
-                    'tenant_id' => $ente->id,
-                    'strumento_id' => $strumentoId,
-                    'data' => today()->subDays($giorni)->toDateString(),
-                    'ore' => $ore,
-                    'registrata_da' => $admin->id,
-                    'created_at' => $adesso,
-                    'updated_at' => $adesso,
-                ];
-
-                // Letture successive: più recenti e con più ore.
-                $giorni = max(0, $giorni - random_int(90, 300));
-                $ore += random_int(300, 2500);
-            }
-        }
-
-        foreach (array_chunk($righe, 500) as $blocco) {
-            LetturaContaore::insert($blocco);
-        }
-
-        $this->command?->info('  letture contaore: '.count($righe));
     }
 
     /**
@@ -570,18 +505,14 @@ class DemoSeeder extends Seeder
             ->whereColumn('interventi.tenant_id', '!=', 'strumenti.tenant_id')->count();
 
         // Le garanzie: `data_scadenza_effettiva` deve rispettare la
-        // normalizzazione ADR-004, che gli insert() a blocchi non applicano.
+        // normalizzazione ADR-004/019, che gli insert() a blocchi non applicano.
         $garanzieIncoerenti = Garanzia::withoutGlobalScopes()->get()
-            ->reject(function (Garanzia $g) {
-                $atteso = $g->tipo_scadenza === TipoScadenzaGaranzia::Data
-                    ? $g->data_inizio->copy()->addMonths($g->durata_mesi)
-                    : $g->data_scadenza_prevista;
-
-                return $atteso?->isSameDay($g->data_scadenza_effettiva) ?? false;
-            })->count();
+            ->reject(fn (Garanzia $g) => $g->data_inizio->copy()->addMonths($g->durata_mesi)
+                ->isSameDay($g->data_scadenza_effettiva))
+            ->count();
 
         if ($garanzieIncoerenti > 0) {
-            throw new \RuntimeException("Invarianti violati: {$garanzieIncoerenti} garanzie con data_scadenza_effettiva fuori normalizzazione (ADR-004).");
+            throw new \RuntimeException("Invarianti violati: {$garanzieIncoerenti} garanzie con data_scadenza_effettiva fuori normalizzazione (ADR-019).");
         }
 
         if ($fattiSenzaData || $apertiConData || $tenantDisallineati) {
@@ -604,7 +535,6 @@ class DemoSeeder extends Seeder
                 ['interventi', Intervento::withoutGlobalScopes()->count()],
                 ['spostamenti_strumento', SpostamentoStrumento::withoutGlobalScopes()->count()],
                 ['garanzie', Garanzia::withoutGlobalScopes()->count()],
-                ['letture_contaore', LetturaContaore::withoutGlobalScopes()->count()],
                 ['users', User::count()],
             ]
         );

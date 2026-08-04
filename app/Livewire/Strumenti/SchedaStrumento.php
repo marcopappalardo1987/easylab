@@ -6,7 +6,6 @@ use App\Enums\SoggettoGaranzia;
 use App\Enums\StatoIntervento;
 use App\Enums\StatoSemaforo;
 use App\Enums\TipoIntervento;
-use App\Enums\TipoScadenzaGaranzia;
 use App\Enums\TipoSpostamento;
 use App\Enums\TipoUnitaOrganizzativa;
 use App\Livewire\Concerns\ManagesStrumentoForm;
@@ -73,26 +72,18 @@ class SchedaStrumento extends Component
 
     public ?int $deletingInterventoId = null; // modale conferma aperta se non null
 
-    // Modali garanzie e letture contaore (S3 punti 7-8)
+    // Modale garanzie (S3 punto 7)
     public bool $showGaranziaForm = false;
 
     public ?int $editingGaranziaId = null; // null = nuova
 
-    /** @var array{tipo_scadenza:string,data_inizio:string,durata_mesi:?int,soglia_ore:?int,data_scadenza_prevista:string} */
+    /** @var array{data_inizio:string,durata_mesi:?int} */
     public array $garanziaForm = [
-        'tipo_scadenza' => '',
         'data_inizio' => '',
         'durata_mesi' => null,
-        'soglia_ore' => null,
-        'data_scadenza_prevista' => '',
     ];
 
     public ?int $deletingGaranziaId = null; // modale conferma aperta se non null
-
-    public bool $showLetturaForm = false;
-
-    /** @var array{data:string,ore:?int} */
-    public array $letturaForm = ['data' => '', 'ore' => null];
 
     // Modale forzatura semaforo (S3 punto 5)
     public bool $showForzaForm = false;
@@ -300,7 +291,7 @@ class SchedaStrumento extends Component
         $this->showCompletaForm = false;
     }
 
-    // --- Garanzie e letture contaore (S3 punti 7-8, ADR-004) ---
+    // --- Garanzie (S3 punto 7, ADR-004/019) ---
     //
     // Stesso idioma degli interventi: `$this->strumento->garanzie()
     // ->findOrFail($id)` — la relazione riapplica TenantScope,
@@ -323,11 +314,8 @@ class SchedaStrumento extends Component
 
         $this->resetGaranziaForm();
         $this->garanziaForm = [
-            'tipo_scadenza' => $garanzia->tipo_scadenza->value,
             'data_inizio' => $garanzia->data_inizio->toDateString(),
             'durata_mesi' => $garanzia->durata_mesi,
-            'soglia_ore' => $garanzia->soglia_ore,
-            'data_scadenza_prevista' => $garanzia->data_scadenza_prevista?->toDateString() ?? '',
         ];
         $this->editingGaranziaId = $id;
         $this->showGaranziaForm = true;
@@ -338,16 +326,11 @@ class SchedaStrumento extends Component
         $this->authorize('garanzie.macchina.manage');
         $this->validate($this->garanziaFormRules());
 
-        $aData = $this->garanziaForm['tipo_scadenza'] === TipoScadenzaGaranzia::Data->value;
-
         // `data_scadenza_effettiva` non compare MAI nel payload: la calcola il
         // model a ogni salvataggio (ed è fuori da $fillable).
         $payload = [
-            'tipo_scadenza' => $this->garanziaForm['tipo_scadenza'],
             'data_inizio' => $this->garanziaForm['data_inizio'],
-            'durata_mesi' => $aData ? $this->garanziaForm['durata_mesi'] : null,
-            'soglia_ore' => $aData ? null : $this->garanziaForm['soglia_ore'],
-            'data_scadenza_prevista' => $aData ? null : $this->garanziaForm['data_scadenza_prevista'],
+            'durata_mesi' => $this->garanziaForm['durata_mesi'],
         ];
 
         if ($this->editingGaranziaId === null) {
@@ -385,63 +368,24 @@ class SchedaStrumento extends Component
         $this->deletingGaranziaId = null;
     }
 
-    public function openLettura(): void
-    {
-        $this->authorize('letture_contaore.create');
-        $this->letturaForm = ['data' => today()->toDateString(), 'ore' => null];
-        $this->resetValidation();
-        $this->showLetturaForm = true;
-    }
-
-    public function registraLettura(): void
-    {
-        $this->authorize('letture_contaore.create');
-        $this->validate([
-            'letturaForm.data' => ['required', 'date', 'before_or_equal:today'],
-            'letturaForm.ore' => ['required', 'integer', 'min:0'],
-        ]);
-
-        $this->strumento->lettureContaore()->create([
-            'tenant_id' => $this->strumento->tenant_id,
-            'data' => $this->letturaForm['data'],
-            'ore' => $this->letturaForm['ore'],
-            'registrata_da' => auth()->id(),   // server-side, mai dal payload
-        ]);
-
-        $this->closeLettura();
-    }
-
-    public function closeLettura(): void
-    {
-        $this->reset(['letturaForm']);
-        $this->resetValidation();
-        $this->showLetturaForm = false;
-    }
-
-    /** Campi obbligatori diversi secondo il tipo di scadenza (ADR-004). */
+    /**
+     * Una sola forma di garanzia dopo ADR-019: inizio + durata in mesi.
+     * `data_inizio` nel passato è permessa — registrare una garanzia già finita
+     * è storico legittimo, come per `interventi.data_scadenza`.
+     */
     protected function garanziaFormRules(): array
     {
-        $aData = $this->garanziaForm['tipo_scadenza'] === TipoScadenzaGaranzia::Data->value;
-
         return [
-            'garanziaForm.tipo_scadenza' => ['required', Rule::in(array_map(fn (TipoScadenzaGaranzia $c) => $c->value, TipoScadenzaGaranzia::cases()))],
             'garanziaForm.data_inizio' => ['required', 'date'],
-            'garanziaForm.durata_mesi' => $aData ? ['required', 'integer', 'min:1', 'max:600'] : ['nullable'],
-            'garanziaForm.soglia_ore' => $aData ? ['nullable'] : ['required', 'integer', 'min:1'],
-            // Data prevista anche nel passato: registrare una garanzia già
-            // finita è storico legittimo.
-            'garanziaForm.data_scadenza_prevista' => $aData ? ['nullable'] : ['required', 'date'],
+            'garanziaForm.durata_mesi' => ['required', 'integer', 'min:1', 'max:600'],
         ];
     }
 
     protected function resetGaranziaForm(): void
     {
         $this->garanziaForm = [
-            'tipo_scadenza' => TipoScadenzaGaranzia::Data->value,
             'data_inizio' => today()->toDateString(),
             'durata_mesi' => 24,
-            'soglia_ore' => null,
-            'data_scadenza_prevista' => '',
         ];
         $this->resetValidation();
     }
@@ -609,9 +553,6 @@ class SchedaStrumento extends Component
             // Gated: chi non ha il permesso non paga nemmeno la query.
             'garanzie' => Gate::allows('garanzie.macchina.view')
                 ? $this->strumento->garanzie()->get()
-                : collect(),
-            'letture' => Gate::allows('letture_contaore.view')
-                ? $this->strumento->lettureContaore()->with('registrataBy')->get()
                 : collect(),
             'spostamenti' => $this->strumento->spostamenti()->with(['daNodo', 'aNodo', 'eseguitoBy'])->get(),
             'nodiDestinazione' => $nodiDestinazione,

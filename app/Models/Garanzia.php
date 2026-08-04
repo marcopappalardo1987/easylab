@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use App\Enums\SoggettoGaranzia;
-use App\Enums\TipoScadenzaGaranzia;
 use App\Models\Concerns\BelongsToOrgNodeThroughStrumento;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Scopes\GaranziaRicambioPrivacyScope;
@@ -17,12 +16,17 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use InvalidArgumentException;
 
 /**
- * Garanzia del macchinario o del singolo ricambio montato (ERD §6.1 — ADR-004).
+ * Garanzia del macchinario o del singolo ricambio montato (ERD §6.1 — ADR-004,
+ * ADR-019).
  *
- * Il motore è "sdoppiato" nel soggetto ma UNICO nel calcolo: qualunque sia il
- * tipo di scadenza, tutto si normalizza in `data_scadenza_effettiva`, e da lì
- * in poi semaforo e notifiche ragionano solo su date. Le ore non arrivano mai
- * al motore: servono a stimare quella data.
+ * Il motore è "sdoppiato" nel **soggetto** (macchina / ricambio) ma UNICO nel
+ * calcolo: tutto si normalizza in `data_scadenza_effettiva`, e da lì in poi
+ * semaforo e notifiche ragionano solo su date.
+ *
+ * La garanzia "a ore" di ADR-004 **non esiste** (ADR-019): era un
+ * fraintendimento del briefing di scoping. Resta un'unica forma —
+ * `data_inizio + durata_mesi` — e con essa sono spariti `tipo_scadenza`,
+ * `soglia_ore`, `data_scadenza_prevista` e le letture contaore.
  *
  * Debiti dichiarati, entrambi da sciogliere in S4:
  * - `ricambio_utilizzo_id` non ha vincolo FK finché la tabella non esiste.
@@ -32,6 +36,10 @@ use InvalidArgumentException;
  *   esistono). Servirà il doppio salto garanzie → ricambio_utilizzo → strumenti.
  * - ADR-015: al trasferimento cross-tenant le garanzie devono seguire lo
  *   strumento con un update by-query (BelongsToTenant blocca il cambio sul model).
+ *
+ * ADR-020 (S4): le righe `ricambio` peseranno sul semaforo dello strumento che
+ * monta il pezzo, lette **senza** GaranziaRicambioPrivacyScope — il pallino è
+ * un aggregato dovuto a tutti, il dettaglio no.
  */
 class Garanzia extends Model
 {
@@ -52,20 +60,15 @@ class Garanzia extends Model
         'soggetto',
         'strumento_id',
         'ricambio_utilizzo_id',
-        'tipo_scadenza',
         'data_inizio',
         'durata_mesi',
-        'soglia_ore',
-        'data_scadenza_prevista',
     ];
 
     protected function casts(): array
     {
         return [
             'soggetto' => SoggettoGaranzia::class,
-            'tipo_scadenza' => TipoScadenzaGaranzia::class,
             'data_inizio' => 'date',
-            'data_scadenza_prevista' => 'date',
             'data_scadenza_effettiva' => 'date',
         ];
     }
@@ -100,27 +103,36 @@ class Garanzia extends Model
     }
 
     /**
-     * Normalizzazione ADR-004 — l'unico punto in cui si scrive
+     * Normalizzazione ADR-004/019 — l'unico punto in cui si scrive
      * `data_scadenza_effettiva`, ricalcolata a OGNI salvataggio:
      *
-     *   tipo `data` → data_inizio + durata_mesi
-     *   tipo `ore`  → la data prevista inserita a mano (V1; l'estrapolazione
-     *                 dalle letture contaore è V1.1)
+     *   data_scadenza_effettiva = data_inizio + durata_mesi
+     *
+     * Un ramo solo da quando la garanzia a ore non esiste più (ADR-019): con
+     * essa è sparita anche la classe di errore "garanzia salvata senza la data
+     * prevista che avrebbe dovuto pilotarla".
      *
      * Si assegna un Carbon e non una stringa: su SQLite le colonne `date`
      * diventano 'Y-m-d 00:00:00', lo stesso formato di `interventi.data_scadenza`,
      * e il confronto fra le due colonne nell'ordinamento dell'elenco resta valido.
+     *
+     * **`durata_mesi >= 1` è imposta QUI e non solo dal form.** Il `min:1` della
+     * validazione copre l'utente, non gli altri chiamanti: seeder, import e
+     * migration di backfill scrivono senza passare dal form, ed è esattamente
+     * così che la migration ADR-019 ha prodotto 90 righe con durata 0 — una
+     * garanzia che scade il giorno in cui inizia. Guardia su due livelli, come
+     * per l'invariante `stato = fatto ⇔ data_esecuzione` di Intervento.
      */
     protected function normalizzaScadenza(): void
     {
-        $this->data_scadenza_effettiva = match ($this->tipo_scadenza) {
-            TipoScadenzaGaranzia::Data => $this->data_inizio?->copy()->addMonths(
-                $this->durata_mesi ?? throw new InvalidArgumentException('Garanzia a data: `durata_mesi` è obbligatoria (ADR-004).')
-            ) ?? throw new InvalidArgumentException('Garanzia: `data_inizio` è obbligatoria.'),
+        $durata = $this->durata_mesi ?? throw new InvalidArgumentException('Garanzia: `durata_mesi` è obbligatoria (ADR-019).');
 
-            TipoScadenzaGaranzia::Ore => $this->data_scadenza_prevista
-                ?? throw new InvalidArgumentException('Garanzia a ore: `data_scadenza_prevista` è obbligatoria in V1 (ADR-004).'),
-        };
+        if ($durata < 1) {
+            throw new InvalidArgumentException('Garanzia: `durata_mesi` deve essere almeno 1 — una garanzia che scade il giorno in cui inizia non è una garanzia (ADR-019).');
+        }
+
+        $this->data_scadenza_effettiva = $this->data_inizio?->copy()->addMonths($durata)
+            ?? throw new InvalidArgumentException('Garanzia: `data_inizio` è obbligatoria.');
     }
 
     /**

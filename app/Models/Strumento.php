@@ -120,16 +120,6 @@ class Strumento extends Model
     }
 
     /**
-     * Storico letture contaore (append-only), più recente in alto.
-     */
-    public function lettureContaore(): HasMany
-    {
-        return $this->hasMany(LetturaContaore::class, 'strumento_id')
-            ->orderByDesc('data')
-            ->orderByDesc('id');
-    }
-
-    /**
      * Garanzia con la scadenza effettiva più vicina: il secondo ingresso del
      * semaforo (ADR-004/005). Speculare a prossimoInterventoAperto().
      *
