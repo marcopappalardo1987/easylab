@@ -2,7 +2,7 @@
     $parametri = $strumento->parametri_tecnici ?? [];
 @endphp
 
-<div class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6" x-data="{ tab: 'anagrafica' }">
+<div class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6" x-data="{ tab: 'panoramica' }">
 
     <a href="{{ route('anagrafica.index') }}" wire:navigate class="text-sm text-neutral-500 hover:text-neutral-800">‹ Torna all'anagrafica</a>
 
@@ -40,6 +40,12 @@
     {{-- Tab --}}
     <div class="mt-6 border-b border-neutral-200">
         <nav class="-mb-px flex flex-wrap gap-1 text-sm">
+            {{-- Panoramica primo e di default (ADR-024): non è gated, perché i
+                 suoi blocchi si gateano da soli e chi apre la scheda deve
+                 comunque poter sapere perché il semaforo è acceso. --}}
+            <button type="button" x-on:click="tab = 'panoramica'"
+                :class="tab === 'panoramica' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
+                class="border-b-2 px-3 py-2 font-medium">Panoramica</button>
             <button type="button" x-on:click="tab = 'anagrafica'"
                 :class="tab === 'anagrafica' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
                 class="border-b-2 px-3 py-2 font-medium">Anagrafica</button>
@@ -59,8 +65,16 @@
         </nav>
     </div>
 
-    {{-- Tab Anagrafica --}}
-    <div x-show="tab === 'anagrafica'" class="mt-6">
+    {{-- Tab Panoramica (ADR-024): perché il semaforo è acceso, a colpo d'occhio.
+         SENZA x-cloak, al contrario di tutti gli altri: è il pannello di default
+         e deve restare visibile anche prima che Alpine monti. --}}
+    <div x-show="tab === 'panoramica'" class="mt-6">
+        @include('livewire.strumenti._panoramica')
+    </div>
+
+    {{-- Tab Anagrafica — x-cloak da quando non è più il default (ADR-024):
+         senza, lampeggerebbe sotto la Panoramica fino al boot di Alpine. --}}
+    <div x-show="tab === 'anagrafica'" x-cloak class="mt-6">
         <x-ui.card>
             <dl class="grid gap-x-6 gap-y-4 sm:grid-cols-2">
                 <div>

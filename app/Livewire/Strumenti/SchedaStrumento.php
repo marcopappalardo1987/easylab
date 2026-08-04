@@ -540,11 +540,23 @@ class SchedaStrumento extends Component
             ->orderBy('nome')
             ->get();
 
+        // Una sola volta: la Panoramica ricava prossimo/ultimo/statistiche da
+        // QUESTA collection, senza tornare al DB (ADR-024 — la vista di sintesi
+        // non deve costare query in più del tab che riassume).
+        $interventi = $this->interventiPerUrgenza();
+
         return view('livewire.strumenti.scheda-strumento', [
             'percorso' => $percorso->implode(' › '),
             // Semaforo (ADR-005): sempre lo stato "effettivo" (forzato ?? calcolato).
             'semaforo' => $this->strumento->statoSemaforoEffettivo(),
-            'interventi' => $this->interventiPerUrgenza(),
+            // Diagnosi (ADR-024): stato CALCOLATO + motivi, per il tab Panoramica.
+            // Non è lo stato effettivo di proposito: quando c'è una forzatura la
+            // Panoramica mostra entrambi, e il calcolato è quello da spiegare.
+            'diagnosi' => $this->strumento->diagnosiSemaforo(),
+            'prossimoIntervento' => $this->prossimoInterventoPianificato($interventi),
+            'ultimoIntervento' => $this->ultimoInterventoEseguito($interventi),
+            'statInterventi' => $this->statisticheInterventi($interventi),
+            'interventi' => $interventi,
             // Solo a modale aperta e con permesso: a modale chiusa zero query
             // extra su users (il test N+1 del punto 2 lo congela).
             'assegnatari' => $this->showInterventoForm && Gate::allows('interventi.assign')
@@ -597,5 +609,64 @@ class SchedaStrumento extends Component
             $intervento->stato === StatoIntervento::NonFatto => 1,
             default => 2,
         };
+    }
+
+    // --- Sintesi per la Panoramica (S3-bis punto E, ADR-024) ---
+    //
+    // Tutte e tre lavorano sulla collection già caricata da
+    // interventiPerUrgenza(): zero query aggiuntive, e il gate `interventi.view`
+    // è già applicato là (senza permesso la collection è vuota, quindi qui esce
+    // naturalmente "niente da mostrare" invece di un dato trapelato).
+    // Le regole di dominio NON si riscrivono: `isScaduto()` è l'unica fonte.
+
+    /**
+     * Prossimo intervento **pianificato**: il più vicino fra gli aperti non
+     * ancora scaduti. Gli scaduti non compaiono qui — sono motivi del semaforo,
+     * e mostrarli come "prossimo" farebbe sembrare in programma ciò che è in
+     * ritardo.
+     *
+     * @param  Collection<int, Intervento>  $interventi
+     */
+    private function prossimoInterventoPianificato(Collection $interventi): ?Intervento
+    {
+        return $interventi
+            ->filter(fn (Intervento $i) => $i->stato === StatoIntervento::NonFatto && ! $i->isScaduto())
+            ->sortBy([['data_scadenza', 'asc'], ['id', 'asc']])
+            ->first();
+    }
+
+    /**
+     * Ultimo intervento eseguito, per data di esecuzione.
+     *
+     * @param  Collection<int, Intervento>  $interventi
+     */
+    private function ultimoInterventoEseguito(Collection $interventi): ?Intervento
+    {
+        return $interventi
+            ->filter(fn (Intervento $i) => $i->stato === StatoIntervento::Fatto)
+            ->sortByDesc(fn (Intervento $i) => [$i->data_esecuzione?->getTimestamp() ?? 0, $i->id])
+            ->first();
+    }
+
+    /**
+     * Conteggi leggeri della macchina. "Ultimi 12 mesi" guarda la data di
+     * ESECUZIONE, non la scadenza: la domanda è quanto si è lavorato su questa
+     * macchina, non quanto era in programma.
+     *
+     * @param  Collection<int, Intervento>  $interventi
+     * @return array{dodiciMesi:int, scadutiAperti:int}
+     */
+    private function statisticheInterventi(Collection $interventi): array
+    {
+        $limite = today()->subYear();
+
+        return [
+            'dodiciMesi' => $interventi
+                ->filter(fn (Intervento $i) => $i->stato === StatoIntervento::Fatto
+                    && $i->data_esecuzione !== null
+                    && $i->data_esecuzione->gte($limite))
+                ->count(),
+            'scadutiAperti' => $interventi->filter(fn (Intervento $i) => $i->isScaduto())->count(),
+        ];
     }
 }

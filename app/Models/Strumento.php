@@ -7,8 +7,11 @@ use App\Enums\StatoSemaforo;
 use App\Models\Concerns\BelongsToOrgNode;
 use App\Models\Concerns\BelongsToTenant;
 use App\Support\AuditLog;
+use App\Support\DiagnosiSemaforo;
+use App\Support\MotivoSemaforo;
 use App\Support\Semaforo;
 use Database\Factories\StrumentoFactory;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -140,27 +143,67 @@ class Strumento extends Model
     }
 
     /**
-     * Prossimo intervento aperto (non_fatto con scadenza minima): l'unico dato
-     * che serve al semaforo e alla colonna "Prossima scadenza".
+     * Interventi aperti (non_fatto), scadenza più vicina in cima: la fonte da
+     * cui nascono sia il "prossimo" sia i motivi della diagnosi (ADR-024).
      *
      * Se la relazione è già caricata la riusa (zero query extra); altrimenti
-     * una first() servita dall'indice (strumento_id, stato, data_scadenza).
+     * una get() servita dall'indice (strumento_id, stato, data_scadenza).
      * `reorder()` è OBBLIGATORIO: la relazione ordina per data_scadenza DESC,
-     * quindi senza si otterrebbe la scadenza più LONTANA invece della prossima.
+     * quindi senza si otterrebbe l'ordine rovesciato.
+     *
+     * @return Collection<int, Intervento>
      */
-    public function prossimoInterventoAperto(): ?Intervento
+    public function interventiAperti(): Collection
     {
         if ($this->relationLoaded('interventi')) {
             return $this->interventi
                 ->filter(fn (Intervento $i) => $i->stato === StatoIntervento::NonFatto)
                 ->sortBy([['data_scadenza', 'asc'], ['id', 'asc']])
-                ->first();
+                ->values();
         }
 
         return $this->interventi()->reorder()
             ->where('stato', StatoIntervento::NonFatto->value)
             ->orderBy('data_scadenza')->orderBy('id')
-            ->first();
+            ->get();
+    }
+
+    /**
+     * Prossimo intervento aperto (scadenza minima): serve alla colonna
+     * "Prossima scadenza" e al blocco Panoramica.
+     *
+     * È il primo di `interventiAperti()` e non una query a sé: il filtro
+     * "aperto" e l'ordinamento vivono in un posto solo. Costa una riga in più
+     * letta dal DB rispetto a una LIMIT 1, su un insieme che è quello di un
+     * singolo strumento — il calcolo bulk dell'elenco, che è il path dove i
+     * volumi contano, non passa di qui.
+     */
+    public function prossimoInterventoAperto(): ?Intervento
+    {
+        return $this->interventiAperti()->first();
+    }
+
+    /**
+     * Diagnosi del semaforo (ADR-024): stato **e motivi che lo determinano**.
+     *
+     * Il modello assembla i CANDIDATI dalle proprie fonti — è lui a sapere
+     * quali sono — e il motore decide quali superano la soglia. Nessun
+     * confronto con la soglia qui, nessuna nozione di "fonte" là: le due
+     * responsabilità restano separate, ed è ciò che permetterà a S4 di
+     * aggiungere le garanzie ricambio (ADR-020) toccando solo questo metodo.
+     *
+     * Non sono motivi, di proposito: l'**obsolescenza** (ADR-014 — segnalazione
+     * sull'età, non tocca il semaforo) e la **forzatura** (vince sullo stato ma
+     * non spiega il calcolato: la Panoramica le mostra entrambe, ADR-005).
+     */
+    public function diagnosiSemaforo(): DiagnosiSemaforo
+    {
+        $garanzie = $this->relationLoaded('garanzie') ? $this->garanzie : $this->garanzie()->get();
+
+        return Semaforo::diagnostica(
+            ...$this->interventiAperti()->map(MotivoSemaforo::daIntervento(...)),
+            ...$garanzie->map(MotivoSemaforo::daGaranziaMacchina(...)),
+        );
     }
 
     /**
@@ -168,13 +211,16 @@ class Strumento extends Model
      * interventi aperti sia le garanzie, entrambi ridotti a una data — le
      * garanzie ci arrivano già normalizzate in `data_scadenza_effettiva`
      * (ADR-004), quindi il motore non sa nulla di ore né di durate.
+     *
+     * Delega alla diagnosi (ADR-024) invece di chiamare `Semaforo::calcola()`
+     * sui minimi: header, audit delle forzature e Panoramica condividono così
+     * UNA derivazione e non possono mostrare stati diversi. Equivalente al
+     * calcolo bulk dell'elenco, che resta sui minimi: min(date) <= soglia
+     * ⇔ esiste una data <= soglia (due alignment test lo verificano).
      */
     public function statoSemaforoCalcolato(): StatoSemaforo
     {
-        return Semaforo::calcola(
-            $this->prossimoInterventoAperto()?->data_scadenza,
-            $this->prossimaGaranzia()?->data_scadenza_effettiva,
-        );
+        return $this->diagnosiSemaforo()->stato;
     }
 
     /**
