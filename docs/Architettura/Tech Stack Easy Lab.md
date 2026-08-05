@@ -51,9 +51,11 @@ Evitiamo di reinventare la ruota. Ecco le librerie standard dell'ecosistema Lara
 
 L'ambiente dove "vivrà" l'applicazione, ottimizzato per zero pensieri lato sistemistico.
 
-- **Server Provisioning:** Laravel Forge (Collega il repository e pubblica online in pochi minuti).
-- **Cloud Provider:** DigitalOcean o AWS (EC2 + RDS).
+- **Piattaforma applicativa:** **Laravel Cloud** — deploy da Git, Postgres e Redis/Valkey gestiti, worker di coda e scheduler inclusi (🔗 ADR-025). *Sostituisce l'assunzione iniziale "Laravel Forge su droplet DigitalOcean", che era un default mai eseguito.*
+- **Storage documenti:** **Backblaze B2** (S3-compatible), bucket privato in **regione UE** — Amsterdam `eu-central-003` (🔗 ADR-025/009).
 - **Versionamento:** GitHub o GitLab (Repository privato per il codice sorgente).
+
+> **Sub-responsabili GDPR.** Laravel Cloud e Backblaze trattano entrambi dati dei clienti e vanno nel registro dei trattamenti, con DPA firmati **prima** del go-live (🔗 `Privacy GDPR e Registro Trattamenti.md`). La scelta di B2 al posto dell'object storage incluso in Laravel Cloud aggiunge di proposito un fornitore, in cambio di uno storage circa 3× più economico: il ragionamento completo è in ADR-025.
 
 **Note per lo Sviluppatore:**
 

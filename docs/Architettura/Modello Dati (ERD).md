@@ -353,7 +353,9 @@ Anagrafica dei fornitori **di ciascun Ente**: tabella di business a tutti gli ef
 ## 8. Documenti (ADR-009)
 
 ### 8.1 `documenti`
-Allegato **polimorfico** a Strumento o Intervento. Upload su DigitalOcean Spaces con URL firmate, visibilità privata.
+Allegato **polimorfico** a Strumento o Intervento. Upload su **Backblaze B2** (bucket privato, regione UE — 🔗 ADR-025), accesso solo autenticato.
+
+> **Come si servono i file è ancora da decidere** (S4). ADR-009 dice "URL firmate" senza specificare quale: una URL **pre-firmata S3** è di fatto un bearer token — chi ce l'ha legge il file fino alla scadenza, con la Policy fuori dal giro — mentre una **rotta firmata Laravel che fa da tramite** ricontrolla l'autorizzazione a ogni richiesta ed è indipendente dal provider. La seconda è più coerente con ADR-003 e ADR-018 (🔗 ADR-025).
 
 | Colonna | Tipo | Note |
 |---|---|---|
@@ -363,7 +365,7 @@ Allegato **polimorfico** a Strumento o Intervento. Upload su DigitalOcean Spaces
 | `documentabile_id` | bigint | Id del soggetto (morphTo). |
 | `tipo` | enum: `manuale` \| `conformita` \| `certificato_taratura` \| `report_fine_lavoro` \| `altro` | |
 | `nome` | string | Nome file mostrato. |
-| `path` | string | Percorso su Spaces (`tenant_id` nel prefisso). |
+| `path` | string | Percorso nel bucket (`tenant_id` nel prefisso). |
 | `mime` | string nullable | |
 | `size` | integer nullable | Byte. |
 | `caricato_da` | bigint nullable FK → `users.id` | |

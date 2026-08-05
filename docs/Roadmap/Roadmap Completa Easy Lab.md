@@ -19,7 +19,7 @@
 **Strategia di rilascio.** **MVP fermo a Settembre**; le feature non essenziali slittano in modo pianificato a V1.1 / V1.2. Ogni sprint distingue task **[CORE]** (non negoziabili) da **[STRETCH]** (primi a slittare se si è in ritardo).
 
 **Assunzioni tecniche (default proposti — modificabili):**
-- **Storage documenti:** DigitalOcean Spaces (S3-compatible), percorsi isolati per `tenant_id`. Upload privati con URL firmate a scadenza.
+- **Piattaforma:** **Laravel Cloud** (app, Postgres e Redis gestiti), regione UE. **Storage documenti:** **Backblaze B2** (S3-compatible), bucket privato in UE, percorsi isolati per `tenant_id`. *Aggiornato il 5 Ago 2026 — 🔗 ADR-025: l'assunzione iniziale era Forge + DigitalOcean Spaces, mai provisionata.*
 - **2FA:** abilitata via Jetstream/Fortify; **obbligatoria per Developer/Superadmin/Admin**, opzionale per gli altri.
 - **Testing:** Pest. Suite obbligatoria di **isolamento multi-tenant** + feature test su billing, semaforo, scadenze. CI su GitHub Actions.
 - **Versione Laravel:** in uso Laravel 13, Livewire 4, PHP 8.4 (installati in S1). La scelta di Livewire 4 (anziché 3) è stata fatta in fase di setup essendo il progetto greenfield.
@@ -85,7 +85,7 @@ gantt
 - [x] `[CORE]` **Wireframe** delle viste chiave: dashboard semaforo, scheda strumento (tab Anagrafica/Interventi/Ricambi/Documenti/Garanzie), vista mobile tecnico, dashboard Superadmin, alberatura+lista strumenti — in `../Design/Wireframe Viste Chiave.md`.
 - [x] `[CORE]` Definire il **design system** base (palette, componenti Tailwind, stati semaforo 🟢🟠🔴) e l'impostazione mobile-first — in `../Design/Design System Base.md`.
 - [x] `[CORE]` Predisporre **repository Git** privato, branch strategy, convenzioni di commit. *(Repo privato creato: [marcopappalardo1987/easylab](https://github.com/marcopappalardo1987/easylab); branch/commit convention in `../Architettura/Setup Repository e Ambienti.md`. ⏳ Branch protection su `main` richiede GitHub Pro/Team.)*
-- [ ] `[CORE]` Creare gli **ambienti**: locale (Herd), staging, produzione (Forge + DigitalOcean). Provisioning base server. 🔗 Tech Stack §6 *(Specifica/.env pronti; resta il provisioning Forge/DigitalOcean.)*
+- [ ] `[CORE]` Creare gli **ambienti**: locale (Herd), staging e produzione su **Laravel Cloud** in regione UE. 🔗 Tech Stack §6, ADR-025 *(Specifica/.env pronti; resta il provisioning. Niente più droplet da amministrare: database e Redis sono gestiti dalla piattaforma.)*
 - [x] `[CORE]` Impostare **CI** (GitHub Actions: lint + test) scheletro. *(Scheletro versionato in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml): PostgreSQL+Redis, PHP 8.3, Pint + Pest. Si attiva con l'app in S1.)*
 - [x] `[STRETCH]` Bozza **informativa privacy/GDPR** e registro trattamenti (utile per ADR-013/015) — in `../Architettura/Privacy GDPR e Registro Trattamenti.md`.
 
@@ -105,8 +105,10 @@ gantt
 - [x] `[CORE]` Installare **spatie/laravel-permission**; `RolesAndPermissionsSeeder` con i default da S0 (catalogo + matrice di `../Architettura/Schema Ruoli e Permessi.md`). 🔗 ADR-006/016 *(spatie v8; 56 permessi + 6 ruoli da `config/rbac.php`; Developer assegnato al seed; set bloccato (9) costante; **2FA obbligatorio** per Developer/Superadmin/Admin via middleware. Tecnico=`ricambi.create` only. Solo livello 1: lo scope per-riga è S2. Test Pest verdi.)*
 - [x] `[CORE]` Installare **lab404/laravel-impersonate** (config, ancora senza UI). 🔗 ADR (Superadmin) *(v1.7; trait Impersonate sul `User`, gate `canImpersonate`=`utenti.impersonate`, `canBeImpersonated` esclude Developer/Superadmin; rotte `impersonate`/`impersonate.leave` registrate, nessuna UI. Test Pest verdi. UI 1-click + banner = S6; logging = punto 7.)*
 - [x] `[CORE]` Installare **spatie/laravel-activitylog** (audit log) e abilitarlo sui modelli sensibili. 🔗 ADR-005/007/013 *(activitylog v5; log dedicato `audit` via `AuditLogSubscriber` per impersonation, login/logout/login falliti e 2FA enable/confirm/disable; helper `App\Support\AuditLog`. Le azioni sensibili dei modelli (semaforo.force S3, lockout S5, accessi tecnici S2/3) si agganciano nei rispettivi sprint. Vista Audit = S6. Test Pest verdi.)*
-- [ ] `[CORE]` Configurare **storage** DigitalOcean Spaces (disco S3) con visibilità privata.
-- [ ] `[CORE]` Pipeline **deploy** Forge funzionante (push → staging); migrazioni in deploy.
+- [ ] `[CORE]` Configurare **storage Backblaze B2** (disco `s3` verso l'endpoint B2) con bucket **privato** in regione UE, uno per ambiente; Application Key limitata al singolo bucket. Serve `league/flysystem-aws-s3-v3`, oggi non installato. 🔗 ADR-025
+  - ⚠️ **Non blocca S4**: la feature documenti si sviluppa su disco `local` e il provider si sceglie in `.env` al deploy. I test usano `Storage::fake()` in ogni caso.
+  - ⚠️ **DPA con Backblaze prima dei primi documenti reali** (sub-responsabile art. 28, 🔗 Privacy §1).
+- [ ] `[CORE]` Pipeline **deploy Laravel Cloud** (push su `main` → staging automatico; produzione promossa a mano); migrazioni in deploy. ⚠️ Il progetto ha **migration distruttive** in storia (🔗 ADR-019): backup verificato prima di promuovere in produzione.
 - [x] `[CORE]` Layout applicativo base (shell dashboard responsive, navigazione, gestione sessione). *(Shell `components/layouts/app`: top bar (§5.7) con menù utente/logout + chip ruolo, sidebar desktop + drawer mobile (Alpine), banner impersonation persistente (§5.8); componente `x-app.nav-link`. Contesto Ente = S2; sezioni Strumenti/Interventi placeholder. Pagina di verifica `SystemCheck`/`_tall-check` rimossa. Test Pest verdi.)*
 - ⏭️ `[STRETCH]` ~~Configurare error tracking con **Sentry/Flare** (servizio in abbonamento)~~ — **SALTATO.** Motivo: sono servizi esterni a pagamento (Flare) o con piano free ma **terzi** (Sentry); riceverebbero i nostri errori — che possono contenere dati dei clienti — diventando **sub-responsabili GDPR** (DPA + registro trattamenti). Scelta: costruirlo **in casa** (dati in UE, zero abbonamento). 🔗 ADR-017.
 - [ ] `[STRETCH → pre-deploy]` **Error tracker interno "stile Sentry"** — cattura eccezioni backend, **raggruppamento per fingerprint** in *issue* + *occorrenze*, dashboard `/system/errors` (risolvi/ignora), **alert email**, permesso `system.errors.view`. Da completare **prima del deploy** (assieme ai punti 8/9). 🔗 Piano completo (checklist pre-deploy): [Error Tracker Interno (piano)](../Architettura/Error%20Tracker%20Interno%20%28piano%29.md).
@@ -235,7 +237,8 @@ gantt
   - 🧪 Test di isolamento: un Ente non può associare uno strumento al fornitore di un altro Ente.
   - `fornitori.view` al ruolo **Tenant in sola lettura** (Schema Ruoli nota ⁵, approvato 3 Ago 2026): aggiornare `config/rbac.php` e il seeder, **con un test sul nuovo default** — altrimenti la riga torna indietro da sola al prossimo riseed.
   - `[STRETCH]` Filtro "Fornitore" nell'elenco strumenti, accanto ai filtri Ente/stato/obsoleti già esistenti.
-- [ ] `[CORE]` **Documenti**: upload su Spaces (URL firmate), allegabili a Strumento o Attività; download. 🔗 ADR-009
+- [ ] `[CORE]` **Documenti**: upload su bucket privato B2, allegabili a Strumento o Attività; download **solo autenticato**. 🔗 ADR-009/025
+  - 🔑 **Da decidere qui**: URL pre-firmata S3 (bearer token, Policy fuori dal giro) *oppure* rotta firmata Laravel che fa da tramite (autorizzazione ricontrollata a ogni richiesta, indipendente dal provider). La seconda è coerente con ADR-003/018 — vedi ADR-025.
 - [ ] `[CORE]` Taratura come Attività con certificato allegato che alimenta il semaforo. 🔗 ADR-009
 - [ ] `[CORE]` **Generazione QR Code** univoco per strumento (stampabile). 🔗 Elenco §4
 - [ ] `[CORE]` **Accesso da QR** con **URL firmata** → login se necessario → scheda solo se autorizzato (mai dati senza auth). 🔗 ADR-003

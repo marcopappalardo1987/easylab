@@ -540,3 +540,29 @@ Si ottengono insieme la velocità "al volo" e la ricerca incrociata affidabile (
 - La Panoramica carica **un solo** strumento: nessun rischio N+1 di lista. Ma i suoi contatori **non vanno riusati in una lista** senza ripensarli — è la trappola classica di questi pannelli, e qui l'elenco strumenti ha già un calcolo bulk fatto apposta.
 - Il tab diventa la landing della scheda: i test che oggi asseriscono il contenuto immediatamente visibile vanno aggiornati **consapevolmente** (la lista interventi non è più il primo pannello).
 - I motivi sono un elenco tipizzato, non stringhe: servono per il testo, per il link e — in S5 — per il corpo dell'"email del futuro", che oggi dovrebbe ricostruirseli da capo.
+
+---
+
+**ADR-025 — Infrastruttura: Laravel Cloud per l'applicazione, Backblaze B2 per i documenti**
+
+*Stato: Accettata (5 Ago 2026) — **supera l'assunzione tecnica "Forge + DigitalOcean"** della roadmap §0 e del Tech Stack §6, che era un default proposto e mai eseguito.*
+
+**Contesto.** Roadmap e Tech Stack davano per scontati **Laravel Forge su droplet DigitalOcean** per hosting e **DigitalOcean Spaces** per i documenti. Erano assunzioni del giorno 1, dichiarate "default proposti — modificabili", e il provisioning non è mai stato fatto: nessuna riga di codice usa `Storage`, `FILESYSTEM_DISK` è ancora `local` e il driver S3 non è installato. Quando è arrivato il momento di scegliere davvero, la decisione è cambiata.
+
+**Decisione.**
+- **Applicazione, database e Redis su Laravel Cloud.** Piattaforma gestita: deploy da Git, Postgres e Valkey/Redis gestiti, worker di coda e scheduler inclusi. Sostituisce Forge + droplet.
+- **Documenti su Backblaze B2**, bucket **privato** in **regione UE** (Amsterdam, `eu-central-003`), via il driver S3 standard di Laravel puntato all'endpoint B2.
+- **Credenziali: Application Key limitata al singolo bucket**, mai la master key. Se finisce in un log o in un `.env` sbagliato il danno resta confinato a quel bucket.
+
+**Alternative scartate.**
+- *Laravel Object Storage* (l'object storage incluso in Laravel Cloud, Cloudflare R2 sotto il cofano): sarebbe **zero sub-responsabili nuovi**, perché Cloudflare resterebbe sub-responsabile *di Laravel* e coperto dal loro DPA. Ha però un ricarico di circa 3× sullo storage rispetto a B2 diretto ($0,02 contro ~$0,006 per GB-mese). **Scelta consapevole del prezzo sopra la semplicità contrattuale**, presa dopo aver messo a confronto le due cose: la differenza è nell'ordine di una decina di euro l'anno ai volumi previsti, contro un DPA in più da firmare e una voce in più nel registro.
+- *DigitalOcean Spaces:* aveva senso finché l'hosting era su DigitalOcean — un fornitore già presente. Con Laravel Cloud quell'argomento decade, e restano solo i 5 $/mese di minimo fisso, pagati anche con 1 GB dentro.
+- *Disco locale del server:* costo zero, ma incompatibile con una piattaforma che scala e ricrea i container, e complica i backup.
+
+**Conseguenze.**
+- ⚠️ **Un sub-responsabile in più.** Backblaze entra nel registro dei trattamenti accanto a Laravel Cloud, e serve il **DPA firmato prima che i documenti dei clienti arrivino nel bucket** (art. 28). È il costo accettato di questa scelta e non va scoperto al momento del go-live: un account personale gratuito va bene per provare, non per dati veri.
+- Va installato `league/flysystem-aws-s3-v3` (oggi assente) e configurato il disco `s3` con `AWS_ENDPOINT` verso B2. **Nessuna riga di applicazione cambia**: il provider resta un dettaglio di `.env`.
+- **La reversibilità dipende da come si servono i file**, e la scelta è ancora aperta. ADR-009 dice "URL firmate" senza specificare quale: una **URL pre-firmata S3** è di fatto un bearer token — chi ce l'ha legge il file fino alla scadenza, con la Policy fuori dal giro — mentre una **rotta firmata Laravel che fa da tramite** ricontrolla l'autorizzazione a ogni richiesta e funziona identica su qualunque disco. La seconda è più coerente con ADR-003 ("mai dati senza auth") e ADR-018 (fail-closed), e rende il provider davvero sostituibile. **Da decidere in S4**, quando nasce la feature documenti.
+- L'egress di B2 è gratuito fino a **3× lo storage medio mensile**, poi si paga: ampiamente sufficiente per PDF serviti a utenti autenticati, ma è la clausola da conoscere prima di firmare.
+- Documenti da allineare: Tech Stack §6, `Setup Repository e Ambienti.md` (ambienti, variabili, provisioning, pipeline di deploy), **`Privacy GDPR e Registro Trattamenti.md`** (elenco sub-responsabili — è un documento di compliance, non di sviluppo), ERD §8.1, roadmap §0/S1/S4, wireframe §2.
+- Cambia anche la **storia di backup e restore** (`[CORE]` in S7): il database non è più un Postgres su droplet da gestire a mano ma un servizio gestito, con proprie procedure da verificare.

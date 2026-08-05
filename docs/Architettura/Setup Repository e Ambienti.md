@@ -1,6 +1,6 @@
 🏗️ Setup Repository, Ambienti & CI — Easy Lab
 
-*Convenzioni di repository, strategia di branch/commit, definizione degli ambienti (locale/staging/produzione) e impostazione CI. Copre i task S0.5 (repo + branch + commit), S0.6 (ambienti + provisioning) e S0.7 (CI scheletro) della roadmap. La parte di **provisioning effettivo** (creare il repo privato, i server Forge/DigitalOcean) richiede i tuoi account e va eseguita a parte: qui resta la **specifica** da seguire.*
+*Convenzioni di repository, strategia di branch/commit, definizione degli ambienti (locale/staging/produzione) e impostazione CI. Copre i task S0.5 (repo + branch + commit), S0.6 (ambienti + provisioning) e S0.7 (CI scheletro) della roadmap. La parte di **provisioning effettivo** (repo privato, ambienti Laravel Cloud, bucket Backblaze B2) richiede i tuoi account e va eseguita a parte: qui resta la **specifica** da seguire.*
 
 > **Stato:** bozza di Sprint 0 (task S0.5–S0.7). Convenzioni e scheletro CI pronti; provisioning da eseguire.
 
@@ -43,8 +43,10 @@ Tre ambienti, isolati e con credenziali separate. 🔗 Tech Stack §6.
 | Ambiente | Dove | Scopo | DB / Redis |
 |---|---|---|---|
 | **Locale** | Laravel **Herd** (macOS, già in uso) | sviluppo quotidiano | PostgreSQL + Redis locali |
-| **Staging** | **Forge + DigitalOcean** (droplet) | UAT, test integrazione, demo di sprint | DB/Redis dedicati staging |
-| **Produzione** | **Forge + DigitalOcean** (droplet) | clienti pilota / go-live | DB/Redis dedicati prod, backup attivi |
+| **Staging** | **Laravel Cloud** (ambiente dedicato) | UAT, test integrazione, demo di sprint | Postgres + Redis gestiti, staging |
+| **Produzione** | **Laravel Cloud** (ambiente dedicato) | clienti pilota / go-live | Postgres + Redis gestiti, backup attivi |
+
+> 🔗 **ADR-025** (5 Ago 2026): l'assunzione iniziale era **Forge + droplet DigitalOcean**, mai provisionata. Gli ambienti sono ora **ambienti di Laravel Cloud**, con database e Redis gestiti dalla piattaforma. **La regione va scelta nella UE** per il vincolo GDPR.
 
 ### 2.1 Variabili d'ambiente chiave (`.env.example` da mantenere aggiornato)
 ```
@@ -55,24 +57,29 @@ DB_CONNECTION=pgsql DB_HOST= DB_PORT=5432 DB_DATABASE= DB_USERNAME= DB_PASSWORD=
 REDIS_HOST= REDIS_PASSWORD= REDIS_PORT=6379
 QUEUE_CONNECTION=redis  CACHE_STORE=redis
 MAIL_MAILER=smtp MAIL_HOST= MAIL_PORT= MAIL_USERNAME= MAIL_PASSWORD=   # ADR-011
-FILESYSTEM_DISK=spaces                                                # ADR (storage)
-DO_SPACES_KEY= DO_SPACES_SECRET= DO_SPACES_REGION= DO_SPACES_BUCKET= DO_SPACES_ENDPOINT=
+FILESYSTEM_DISK=s3                                                    # 🔗 ADR-025 (Backblaze B2)
+AWS_ACCESS_KEY_ID= AWS_SECRET_ACCESS_KEY=       # Application Key B2 limitata AL SINGOLO bucket
+AWS_DEFAULT_REGION=eu-central-003               # Amsterdam — regione UE (GDPR)
+AWS_BUCKET= AWS_ENDPOINT=https://s3.eu-central-003.backblazeb2.com
 STRIPE_KEY= STRIPE_SECRET= STRIPE_WEBHOOK_SECRET=                     # S5, Cashier
 ```
-**Segreti:** mai nel repo. In locale `.env`; su Forge → Environment del sito. Stripe/Spaces in **modalità test** su staging, **live** solo in produzione.
+**Segreti:** mai nel repo. In locale `.env`; su Laravel Cloud → variabili d'ambiente dell'ambiente. Stripe in **modalità test** su staging, **live** solo in produzione; **bucket B2 separati** per staging e produzione, così un test non tocca mai i documenti dei clienti.
+
+> Le chiavi B2 usano i nomi `AWS_*` perché è il driver S3 standard di Laravel puntato a un endpoint diverso: non c'è nulla di Amazon coinvolto.
 
 ### 2.2 Provisioning base (da eseguire con i tuoi account)
-- DigitalOcean: 2 droplet (staging, prod) o 1 droplet con due siti per partire (decisione di costo); **DigitalOcean Spaces** (S3) con bucket privato per i documenti (ADR storage), **region UE** per GDPR (§ vedi `Privacy GDPR e Registro Trattamenti.md`).
-- Forge: collega GitHub, crea i due siti, PHP 8.3+, PostgreSQL, Redis; **deploy script** con `composer install`, `php artisan migrate --force`, build asset, cache di config/route.
-- SSL automatico (Let's Encrypt) + dominio.
+- **Laravel Cloud:** collega GitHub, crea gli ambienti staging e produzione in **regione UE**, provisiona Postgres e Redis gestiti, configura worker di coda e scheduler. Deploy da Git, niente server da amministrare.
+- **Backblaze B2:** bucket **privato** in `eu-central-003` (Amsterdam), uno per ambiente; **Application Key limitata al singolo bucket**, mai la master key (🔗 ADR-025).
+- **DPA firmati con entrambi i fornitori prima che arrivino dati reali** — sono sub-responsabili ex art. 28 (🔗 `Privacy GDPR e Registro Trattamenti.md`).
+- SSL e dominio gestiti dalla piattaforma.
 
 ---
 
 ## 3. Pipeline di deploy
 
-- **Staging:** merge su `main` → webhook Forge → deploy automatico (migrazioni incluse). Obiettivo roadmap S1: "push → staging" verde.
-- **Produzione:** deploy **manuale/promosso** (pulsante Forge o tag release) dopo verifica su staging. Migrazioni in deploy con `--force`.
-- **Quick deploy** Forge attivo solo su staging; produzione con conferma esplicita.
+- **Staging:** merge su `main` → deploy automatico di Laravel Cloud (migrazioni incluse). Obiettivo roadmap S1: "push → staging" verde.
+- **Produzione:** deploy **promosso** dopo verifica su staging, mai automatico. Migrazioni in deploy con `--force`.
+- ⚠️ **Migration distruttive:** il progetto ne ha già in storia (drop di colonne e tabelle popolate, 🔗 ADR-019). Su un deploy automatico girano senza che nessuno guardi: **backup del database verificato prima di promuovere in produzione**, e revisione umana della migration secondo la Policy di Code Review (area rossa).
 
 ---
 
@@ -95,7 +102,7 @@ Scheletro reale in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
 | Task | Specifica | Esecuzione |
 |---|---|---|
 | S0.5 Repo + branch + commit | ✅ definita qui | ⬜ creare repo privato su GitHub |
-| S0.6 Ambienti + provisioning | ✅ definita qui (.env, ambienti) | ⬜ provisioning Forge/DigitalOcean + Spaces UE |
+| S0.6 Ambienti + provisioning | ✅ definita qui (.env, ambienti) | ⬜ provisioning Laravel Cloud (regione UE) + bucket B2 privati + DPA |
 | S0.7 CI scheletro | ✅ `.github/workflows/ci.yml` | ⬜ si attiva con l'app in S1 |
 
 **Definition of Done S0** (parte infra): "repo + CI + ambiente staging raggiungibili" → richiede l'esecuzione del provisioning sopra.

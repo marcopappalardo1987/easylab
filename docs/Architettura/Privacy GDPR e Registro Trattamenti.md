@@ -13,9 +13,11 @@
 | **EasyLab** | **Titolare** per i dati dei propri account/clienti diretti e per i dati di fatturazione; **Responsabile** (data processor) per i dati che i clienti SaaS trattano tramite la piattaforma | Duplice ruolo tipico del SaaS. **APERTO:** confermare il confine con un legale. |
 | **Cliente/Ente (Admin/Tenant)** | **Titolare** dei dati operativi del proprio laboratorio | Firma DPA (accordo art. 28) con EasyLab. |
 | **Tecnici/Operatori** | Persone autorizzate al trattamento (art. 29) | Accesso tracciato (ADR-007). |
-| **Sub-responsabili** | DigitalOcean (hosting/Spaces), provider SMTP, **Stripe** (pagamenti) | Serve elenco sub-processor + relativi DPA. |
+| **Sub-responsabili** | **Laravel Cloud** (applicazione, database, Redis), **Backblaze B2** (documenti), provider SMTP, **Stripe** (pagamenti) | Serve elenco sub-processor + relativi DPA (🔗 ADR-025). |
 
-> **Azione:** predisporre **DPA** (EasyLab↔clienti) e raccogliere i DPA dei sub-responsabili. **Residenza dati in UE** (droplet + Spaces region UE) per minimizzare trasferimenti extra-UE.
+> **Azione:** predisporre **DPA** (EasyLab↔clienti) e raccogliere i DPA dei sub-responsabili. **Residenza dati in UE** — ambienti Laravel Cloud in regione UE e bucket B2 ad Amsterdam (`eu-central-003`) — per minimizzare trasferimenti extra-UE.
+
+> ⚠️ **Backblaze è un sub-responsabile aggiunto per scelta** (🔗 ADR-025). L'object storage incluso in Laravel Cloud avrebbe evitato un fornitore e un DPA in più, ma costa circa 3× sullo storage: si è preferito il risparmio, accettando l'onere documentale. La conseguenza pratica è che **il DPA con Backblaze va firmato prima che il primo documento di un cliente entri nel bucket**, non a ridosso del go-live. Un account personale gratuito è adatto solo alle prove tecniche.
 
 ---
 
@@ -25,7 +27,7 @@
 |---|---|---|---|---|---|---|
 | T1 | **Gestione account & auth** | accesso, sicurezza (2FA) | utenti piattaforma | nome, email, hash password, 2FA, log accessi | esecuzione contratto / legittimo interesse (sicurezza) | durata rapporto + retention tecnica |
 | T2 | **Anagrafica strumenti & manutenzioni** | erogazione del servizio (semaforo, scadenze, interventi) | personale dei laboratori | dati strumenti, interventi, tecnico assegnato, note | esecuzione contratto | durata rapporto + storico |
-| T3 | **Documenti & certificati** | archiviazione/allegati (tarature, report) | personale dei laboratori | file su Spaces (URL firmate) | esecuzione contratto | durata rapporto |
+| T3 | **Documenti & certificati** | archiviazione/allegati (tarature, report) | personale dei laboratori | file su **Backblaze B2**, bucket privato in UE, accesso solo autenticato | esecuzione contratto | durata rapporto |
 | T4 | **Notifiche email/in-app** | promemoria scadenze ("email del futuro") | utenti destinatari | email, contenuto notifica | esecuzione contratto / legittimo interesse | log invii a rotazione |
 | T5 | **Fatturazione & abbonamenti** | incassi, obblighi fiscali | clienti paganti | P.IVA, Cod. Fiscale, PEC/SDI, dati pagamento (via Stripe) | obbligo legale / contratto | termini fiscali di legge |
 | T6 | **Audit log** | sicurezza, tracciabilità (impersonation, forzature, accessi tecnici) | utenti piattaforma | chi/cosa/quando, IP | legittimo interesse / obbligo sicurezza | retention definita (APERTO) |
@@ -65,7 +67,7 @@ Già previste dall'architettura (mappate agli ADR):
 ## 5. Documenti da produrre (prima del go-live S7)
 
 - [ ] **Informativa privacy** (clienti e utenti finali) — versione cliente + versione tecnico.
-- [ ] **DPA** EasyLab ↔ clienti (art. 28) + raccolta DPA sub-responsabili (DigitalOcean, SMTP, Stripe).
+- [ ] **DPA** EasyLab ↔ clienti (art. 28) + raccolta DPA sub-responsabili (**Laravel Cloud**, **Backblaze B2**, SMTP, Stripe). ⚠️ Quello con Backblaze serve **prima dei primi documenti reali**, non prima del go-live.
 - [ ] **Registro dei trattamenti** definitivo (da §2, con tempi di conservazione validati).
 - [ ] **Elenco sub-processor** pubblicato/aggiornabile.
 - [ ] **Procedura data breach** (notifica entro 72h) e **procedura richieste interessati**.
