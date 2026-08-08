@@ -3,8 +3,8 @@
 namespace App\Models;
 
 use App\Enums\SoggettoGaranzia;
-use App\Models\Concerns\BelongsToOrgNodeThroughStrumento;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Scopes\GaranziaDepartmentScope;
 use App\Models\Scopes\GaranziaRicambioPrivacyScope;
 use App\Support\Semaforo;
 use Database\Factories\GaranziaFactory;
@@ -28,23 +28,36 @@ use InvalidArgumentException;
  * `data_inizio + durata_mesi` — e con essa sono spariti `tipo_scadenza`,
  * `soglia_ore`, `data_scadenza_prevista` e le letture contaore.
  *
- * Debiti dichiarati, da sciogliere in S4 (il primo è **saldato l'8 Ago 2026**:
- * `ricambio_utilizzo` esiste e la FK su `ricambio_utilizzo_id` è viva):
- * - Il livello 2 dello scope (sotto-albero del Responsabile) passa da
- *   `strumento_id`, che sulle righe `ricambio` è NULL: quelle righe restano
- *   quindi invisibili al Responsabile (fail-closed, accettabile finché non
- *   esistono). Servirà il doppio salto garanzie → ricambio_utilizzo → strumenti.
+ * Dei tre debiti dichiarati in S3, **due sono saldati l'8 Ago 2026**: la FK su
+ * `ricambio_utilizzo_id` è viva, e il livello 2 raggiunge ora anche le righe
+ * `ricambio` col doppio salto garanzie → ricambio_utilizzo → strumenti
+ * (`GaranziaDepartmentScope`, che ha sostituito il trait generico).
+ *
+ * Restano:
  * - ADR-015: al trasferimento cross-tenant le garanzie devono seguire lo
  *   strumento con un update by-query (BelongsToTenant blocca il cambio sul model).
+ * - ADR-020 (S4 blocco 4): le righe `ricambio` devono pesare sul semaforo dello
+ *   strumento che monta il pezzo, lette **senza** GaranziaRicambioPrivacyScope
+ *   — il pallino è un aggregato dovuto a tutti, il dettaglio no. Con esso la
+ *   colonna "Prossima scadenza" degradata a dicitura neutra (debito lettera c).
  *
- * ADR-020 (S4): le righe `ricambio` peseranno sul semaforo dello strumento che
- * monta il pezzo, lette **senza** GaranziaRicambioPrivacyScope — il pallino è
- * un aggregato dovuto a tutti, il dettaglio no.
+ * ⚠️ Il tab Garanzie della scheda **non** mostra le righe ricambio, e non per
+ * via degli scope: a escluderle è la clausola `strumento_id` della relazione
+ * `Strumento::garanzie()`. Compariranno col tab Ricambi (S4 blocco 5), dove
+ * vivono il nome del pezzo e il permesso giusto per le azioni.
  */
 class Garanzia extends Model
 {
-    /** @use HasFactory<GaranziaFactory> */
-    use BelongsToOrgNodeThroughStrumento, BelongsToTenant, HasFactory, SoftDeletes;
+    /**
+     * @use HasFactory<GaranziaFactory>
+     *
+     * Niente `BelongsToOrgNodeThroughStrumento`: il livello 2 vive in
+     * `GaranziaDepartmentScope`, perché qui le strade verso lo strumento sono
+     * due — `strumento_id` sulle righe macchina, il doppio salto via
+     * `ricambio_utilizzo` su quelle ricambio. Il trait generico ne conosce una
+     * sola. Vedi il docblock dello scope.
+     */
+    use BelongsToTenant, HasFactory, SoftDeletes;
 
     protected $table = 'garanzie';
 
@@ -75,6 +88,7 @@ class Garanzia extends Model
 
     protected static function booted(): void
     {
+        static::addGlobalScope(new GaranziaDepartmentScope);
         static::addGlobalScope(new GaranziaRicambioPrivacyScope);
 
         static::saving(function (Garanzia $garanzia): void {

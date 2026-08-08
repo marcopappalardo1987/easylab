@@ -295,9 +295,14 @@ class SchedaStrumento extends Component
     //
     // Stesso idioma degli interventi: `$this->strumento->garanzie()
     // ->findOrFail($id)` — la relazione riapplica TenantScope,
-    // DepartmentThroughStrumentoScope e la privacy sui ricambi, e vincola
-    // strumento_id: un solo idioma copre altro tenant, fuori sotto-albero e
-    // id di un altro strumento.
+    // GaranziaDepartmentScope (dall'8 Ago 2026 al posto del trait generico:
+    // sulle righe ricambio il sotto-albero passa da un doppio salto) e la
+    // privacy sui ricambi, e vincola strumento_id: un solo idioma copre altro
+    // tenant, fuori sotto-albero e id di un altro strumento.
+    //
+    // La relazione porta comunque le sole righe `macchina`, perché filtra su
+    // `strumento_id`: le garanzie dei pezzi montati arrivano col tab Ricambi
+    // (S4 blocco 5), non da qui.
 
     public function openNuovaGaranzia(): void
     {

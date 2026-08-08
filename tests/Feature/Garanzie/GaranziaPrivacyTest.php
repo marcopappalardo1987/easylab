@@ -70,18 +70,21 @@ it('shows ricambio garanzie to an Admin, who holds the permission', function () 
         ->and(Garanzia::pluck('id')->all())->toContain($this->garanziaRicambio->id);
 });
 
-it('still hides ricambio garanzie from a Responsabile, by scope and not by permission (debito S4)', function () {
-    // Il Responsabile HA `garanzie.ricambio.view`, ma il livello 2 del global
-    // scope filtra su `strumento_id`, che sulle righe ricambio è NULL: restano
-    // fuori dal suo sotto-albero. È fail-closed e per ora innocuo (in S3 non
-    // esistono garanzie ricambio reali); in S4, con `ricambio_utilizzo`,
-    // servirà il doppio salto garanzie → ricambio_utilizzo → strumenti.
+// Invertito l'8 Ago 2026 (S4 blocco 2), e il nome portava già il debito che
+// chiude: diceva `still hides ... (debito S4)`. Il Responsabile aveva il
+// permesso ma non vedeva le righe, perché il livello 2 filtrava su
+// `strumento_id`, NULL sulle righe ricambio — `NULL IN (...)` è UNKNOWN. Ora
+// `GaranziaDepartmentScope` fa il doppio salto garanzie → ricambio_utilizzo →
+// strumenti. Modifica consapevole: era un fail-closed accettato per mancanza
+// della tabella, non una regola.
+it('shows a Responsabile the garanzie of parts mounted in their sub-tree', function () {
     $resp = ($this->utente)('Responsabile Reparto');
     $resp->unitaResponsabili()->attach($this->dept->id);
     $this->actingAs($resp);
 
     expect($resp->can('garanzie.ricambio.view'))->toBeTrue()
-        ->and(Garanzia::pluck('id')->all())->toBe([$this->garanziaMacchina->id]);
+        ->and(Garanzia::pluck('id')->all())
+        ->toEqualCanonicalizing([$this->garanziaMacchina->id, $this->garanziaRicambio->id]);
 });
 
 it('is fail-closed for an ad-hoc role without the permission', function () {
