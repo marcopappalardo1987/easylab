@@ -12,6 +12,8 @@
 > 5. **Fornitore uno per macchinario** (ADR-023) → §5.1 (`fornitore_id`) e **§7.3 riscritta**: il pivot `fornitore_strumento` non si crea.
 > 6. **Tab Panoramica** con i motivi del semaforo (ADR-024) → §5.1 campi derivati: il motore restituisce una diagnosi, non solo uno stato. Nessuna tabella nuova.
 >
+> **Revisione del 9 Agosto 2026 (S4 blocco 3 — attuazione di ADR-022).** §6.1 acquista `data_scadenza_dichiarata` e `durata_mesi` torna nullable: la garanzia del pezzo si esprime con la **data** che l'operatore ha davanti, non con una durata in mesi che la sposterebbe. Vincolo «esattamente una delle due», `data_scadenza_effettiva` resta derivata al 100%.
+>
 > **Revisione dell'8 Agosto 2026 (S4 blocco 1 — implementazione di §7.1/§7.2).** Due dettagli di schema corretti scrivendo le migration, entrambi motivati nelle rispettive sezioni: `ricambio_utilizzo` acquista **`deleted_at`** (§7.2) perché la FK di una `garanzie` soft-deleted renderebbe impraticabile la cancellazione fisica; `(tenant_id, nome_normalizzato)` diventa **UNIQUE parziale** (§7.1) perché ADR-022 la chiama "chiave" e una chiave senza vincolo non difende nulla. Nessun ADR nuovo: sono conseguenze di vincoli già decisi.
 
 ---
@@ -279,11 +281,16 @@ Garanzia del macchinario **e** del singolo ricambio, normalizzate in `data_scade
 | `strumento_id` | bigint nullable FK → `strumenti.id` | Valorizzato se `soggetto = macchina`. |
 | `ricambio_utilizzo_id` | bigint nullable FK → `ricambio_utilizzo.id` | Valorizzato se `soggetto = ricambio` (il pezzo specifico montato, non il catalogo — ADR-008). |
 | `data_inizio` | date | |
-| `durata_mesi` | integer | Durata in mesi. **NOT NULL** dopo ADR-019: è l'unica forma di garanzia rimasta. |
-| **`data_scadenza_effettiva`** | date | **Campo guida** di semaforo/notifiche = `data_inizio + durata_mesi`. Derivata: ricalcolata nell'hook `saving`, fuori da `$fillable`. |
+| `durata_mesi` | integer **nullable** | Durata in mesi: la forma di ADR-019, usata dalla garanzia macchina. Nullable dal 9 Ago 2026 perché è **una delle due** forme di input — vedi il vincolo qui sotto. |
+| `data_scadenza_dichiarata` | date **nullable** | La scadenza scritta dall'operatore: la forma di ADR-022, usata dalla garanzia del pezzo montato. Come `data_scadenza_effettiva`, è **fuori da `$fillable`** — si valorizza solo dai metodi di dominio `fissaScadenzaDichiarata()` / `fissaDurata()`, che azzerano sempre l'altro lato. |
+| **`data_scadenza_effettiva`** | date | **Campo guida** di semaforo/notifiche. Derivata al 100%, ricalcolata nell'hook `saving` e fuori da `$fillable`: `durata_mesi !== null ? data_inizio + durata_mesi : data_scadenza_dichiarata`. |
 | timestamps, `deleted_at` | | soft delete. |
 
 > **Solo garanzie a data (ADR-019).** Le colonne `tipo_scadenza`, `soglia_ore` e `data_scadenza_prevista` sono **rimosse**: la garanzia a ore era un fraintendimento del briefing di scoping. Migration distruttiva → prima il backfill di `durata_mesi` sulle righe oggi `tipo_scadenza = ore`, poi il drop.
+>
+> **Due forme di input, una sola di output** (ADR-022, 9 Ago 2026 — *estende* ADR-019, non lo riapre: la garanzia a ore resta morta e la garanzia continua a scadere solo a data). Vincolo: **esattamente uno fra `durata_mesi` e `data_scadenza_dichiarata`**, imposto in `Garanzia::normalizzaScadenza()`. Il NOT NULL su `durata_mesi` non è stato indebolito, è stato **spostato di livello**: dalla colonna alla coppia.
+>
+> **Perché una colonna di input e non `data_scadenza_effettiva` scrivibile.** L'operatore che monta un pezzo conosce la scadenza, non i mesi, e convertirla in interi la sposterebbe di giorni su un dato contrattuale che accende l'arancione a 30 — l'errore già misurato dal backfill di ADR-019, là accettato una volta su righe storiche, qui sistematico su ogni pezzo. Ma il campo guida è inattaccabile per **due** ragioni, non una: è fuori da `$fillable` **e** l'hook lo riscrive incondizionatamente. Leggerlo come input avrebbe distrutto la seconda, e nessun docblock l'avrebbe ricostruita: la falla non si chiude con una guardia, si chiude non aprendola.
 >
 > **Privacy (ADR-004).** Le garanzie con `soggetto = ricambio` sono **visibili solo a EasyLab/Admin**, mai al Tenant. Vincolo applicato via Policy + Global Scope sul ruolo, non via colonna.
 >
@@ -452,7 +459,7 @@ Legenda: ✅ pieno · ⚠️ ristretto (per sotto-albero/portafoglio/proprietà)
 | **ADR-013** Lockout insoluto | `is_locked`/`locked_*` sul nodo ente. |
 | **ADR-014** Obsolescenza | `unita_organizzativa.soglia_obsolescenza_anni` + `strumenti.data_installazione`. |
 | **ADR-015** Spostamenti / trasferimenti | `spostamenti_strumento` (append-only) + update `tenant_id`/ubicazione. |
-| **ADR-019** Garanzie solo a data | `garanzie` perde `tipo_scadenza`/`soglia_ore`/`data_scadenza_prevista`; `durata_mesi` diventa NOT NULL; tabella `letture_contaore` soppressa. |
+| **ADR-019** Garanzie solo a data | `garanzie` perde `tipo_scadenza`/`soglia_ore`/`data_scadenza_prevista`; tabella `letture_contaore` soppressa. `durata_mesi` divenne NOT NULL, ed è tornata nullable con ADR-022 (§6.1): il vincolo è ora sulla coppia. |
 | **ADR-020** Garanzia ricambio nel semaforo | nessuna colonna nuova: cambia la **query** del semaforo (unione col doppio salto `garanzie → ricambio_utilizzo → strumenti`, senza il privacy scope). |
 | **ADR-021** Tipologie di intervento | `interventi.tipo` — nuovo elenco + migration di rimappatura dei valori storici. |
 | **ADR-022** Ricambi dall'intervento | `ricambi.nome`/`nome_normalizzato` (+ `codice` nullable); `ricambio_utilizzo.intervento_id` valorizzato; garanzia `soggetto = ricambio` obbligatoria per riga. |

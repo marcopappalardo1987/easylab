@@ -400,6 +400,32 @@ Si ottengono insieme la velocità "al volo" e la ricerca incrociata affidabile (
 - **`durata_mesi >= 1` va imposta nel model, non solo nel form.** Esistevano garanzie "a ore" la cui data prevista precedeva `data_inizio` (il vecchio modello non legava le due), e la conversione le riduceva a durata 0 — righe che il `min:1` del form non avrebbe mai permesso. Il `min:1` copre l'utente; seeder, import e migration scrivono senza passare di lì.
 - Documenti da allineare: ERD §5.3/§6.1/§12/§13, Schema Ruoli §4.3 + matrice §5, Elenco Funzionalità §3, Wireframe (vista tecnico mobile), Roadmap S3.
 
+**Emendamento del 9 Agosto 2026 (S4 blocco 3, attuando ADR-022): la garanzia si può esprimere anche come DATA.**
+
+⚠️ **Questo emendamento non riapre nulla.** La garanzia *a ore* resta eliminata — `tipo_scadenza`, `soglia_ore`, `data_scadenza_prevista` e le letture contaore restano spariti — e la garanzia continua a scadere **solo a data**. Cambia la *forma di input*, non la sostanza.
+
+**Il problema, emerso implementando.** ADR-022 vuole che nel form intervento l'operatore scriva «scadenza garanzia del pezzo»: una **data**, quella che il fornitore ha fissato. Ma la forma unica di ADR-019 (`data_inizio + durata_mesi`) non sa rappresentare una data arbitraria: convertirla nell'intero di mesi più vicino la sposta di giorni. È lo stesso scarto già **misurato** dal backfill di ADR-019 (3176 righe invariate, 1855 spostate di 1-15 giorni) — là accettato consapevolmente, una volta sola, su righe storiche; qui sarebbe diventato sistematico su ogni pezzo registrato da un tecnico, e su una grandezza che è **contrattuale** e che accende l'arancione a 30 giorni. Uno scarto di 15 giorni è metà della soglia.
+
+**Decisione.** La garanzia ha **due forme di input e una sola di output**:
+
+| Forma | Input | Chi la usa |
+|---|---|---|
+| A durata (ADR-019) | `data_inizio` + `durata_mesi` | garanzia macchina, form garanzia |
+| A data (ADR-022) | `data_inizio` + `data_scadenza_dichiarata` | garanzia del pezzo montato, form intervento |
+
+- Vincolo: **esattamente una delle due**, imposto in `Garanzia::normalizzaScadenza()`. Il NOT NULL su `durata_mesi` non è indebolito, è **spostato di livello** — dalla colonna alla coppia.
+- `data_scadenza_effettiva` resta **derivata al 100%** e resta l'unico campo che pilota semaforo e notifiche: nessun consumatore (semaforo, scadenzario, elenco, scope) sa che le forme sono due.
+
+**Alternative scartate.**
+- *Convertire la data in mesi accettando lo scarto:* falsifica in silenzio un dato che l'utente ha digitato e che il fornitore ha fissato. Sarebbe stato accettabile solo mostrando in UI la data realmente salvata — cioè ammettendo il problema invece di risolverlo.
+- *Rendere `data_scadenza_effettiva` scrivibile:* la strada apparentemente più corta, e la peggiore. Quel campo è inattaccabile per **due** ragioni, non una: è fuori da `$fillable` **e** l'hook lo riscrive incondizionatamente a ogni salvataggio. Un ramo che lo leggesse come input avrebbe distrutto la seconda, e nessun docblock l'avrebbe ricostruita. Con una colonna di input dedicata la falla non si chiude con una guardia: **non si apre**.
+- *Chiedere i mesi anche per il pezzo:* nessuna modifica al dominio, ma infedele al gesto reale — il fornitore dà una data, non una durata.
+
+**Conseguenze.**
+- Migration additiva `add_scadenza_dichiarata_to_garanzie_table`; `durata_mesi` torna nullable. ⚠️ La colonna **non** si chiama `data_scadenza_prevista`: quel nome lo ricrea il `down()` della migration di ADR-019, e un rollback esploderebbe con "column already exists".
+- `data_scadenza_dichiarata` è **fuori da `$fillable`** come l'effettiva: si scrive solo da `fissaScadenzaDichiarata()` / `fissaDurata()`, che azzerano sempre l'altro lato — così il vincolo non è violabile da chi passa dai metodi di dominio, e un payload che portasse entrambe non è nemmeno costruibile.
+- ERD §6.1 e §13 aggiornati. Il form garanzia macchina, `scopeEntroSoglia`, `isScaduta`, `Semaforo` e `GaranziaDepartmentScope` non cambiano di una riga.
+
 ---
 
 **ADR-020 — La garanzia del ricambio concorre al semaforo dello strumento su cui è montato**
@@ -460,7 +486,7 @@ Si ottengono insieme la velocità "al volo" e la ricerca incrociata affidabile (
 
 **ADR-022 — I ricambi si registrano dall'intervento, con nome libero e garanzia per riga**
 
-*Stato: Accettata (3 Ago 2026) — **raffina ADR-008**: cambia la chiave di ricerca del catalogo e il punto d'ingresso.*
+*Stato: Accettata (3 Ago 2026) — **raffina ADR-008**: cambia la chiave di ricerca del catalogo e il punto d'ingresso. **In attuazione da S4 blocco 3** (9 Ago 2026): implementando è emerso che «scadenza garanzia per riga» non era rappresentabile dal dominio di ADR-019 senza spostare la data di giorni → **emendamento ad ADR-019** (due forme di input, una sola di output), scritto in coda a quell'ADR. Il nodo di permessi lasciato aperto qui era già stato sciolto da ADR-027.*
 
 **Contesto.** ADR-008 fissa il catalogo ricambi incrementale con autocomplete **per codice**. Il briefing del 3 Agosto 2026 descrive il gesto reale dell'operatore: nel form di un nuovo intervento c'è una **checkbox "Ricambio effettuato"**; spuntandola compare una **riga ripetitore** dove si scrivono a mano il **nome** del ricambio e la **scadenza della sua garanzia**. Due tensioni con ADR-008: (a) il cliente nomina il pezzo, non lo codifica; (b) l'inserimento parte dall'intervento, non dal tab Ricambi.
 
