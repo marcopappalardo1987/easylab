@@ -2,6 +2,8 @@
 
 use App\Enums\SoggettoGaranzia;
 use App\Models\Garanzia;
+use App\Models\Ricambio;
+use App\Models\RicambioUtilizzo;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Support\Semaforo;
@@ -97,13 +99,14 @@ it('rejects a garanzia ricambio pointing at a strumento', function () {
 });
 
 it('accepts a garanzia ricambio with only the ricambio_utilizzo_id', function () {
-    // La FK vera arriva in S4: oggi la colonna è libera, di proposito.
-    $garanzia = Garanzia::factory()->create([
-        'tenant_id' => $this->ente->id,
-        'soggetto' => SoggettoGaranzia::Ricambio,
-        'strumento_id' => null,
-        'ricambio_utilizzo_id' => 42,
-    ]);
+    // Dall'8 Ago 2026 la FK esiste (S4 blocco 1): serve una riga VERA, un intero
+    // libero viola il vincolo su entrambi i driver.
+    $utilizzo = RicambioUtilizzo::factory()
+        ->forStrumento($this->strumento)
+        ->forRicambio(Ricambio::factory()->forTenant($this->ente)->create())
+        ->create();
+
+    $garanzia = Garanzia::factory()->forRicambio($utilizzo)->create();
 
     expect($garanzia->soggetto)->toBe(SoggettoGaranzia::Ricambio)
         ->and($garanzia->strumento_id)->toBeNull();

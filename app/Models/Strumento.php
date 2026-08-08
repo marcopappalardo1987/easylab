@@ -321,4 +321,20 @@ class Strumento extends Model
             ->orderByDesc('data')
             ->orderByDesc('id');
     }
+
+    /**
+     * Pezzi montati su questa macchina (ERD §7.2 — ADR-008/022), il più recente
+     * in alto: è l'ordine con cui il tab Ricambi li mostrerà.
+     *
+     * Nota per ADR-020: le garanzie di questi pezzi peseranno sul semaforo dello
+     * strumento, ma NON si raggiungono da qui — servirà una relazione dedicata
+     * che bypassi `GaranziaRicambioPrivacyScope`, perché il pallino è un
+     * aggregato dovuto a tutti mentre il dettaglio no.
+     */
+    public function ricambiUtilizzati(): HasMany
+    {
+        return $this->hasMany(RicambioUtilizzo::class, 'strumento_id')
+            ->orderByDesc('data')
+            ->orderByDesc('id');
+    }
 }

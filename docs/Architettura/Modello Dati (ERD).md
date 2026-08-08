@@ -11,6 +11,8 @@
 > 4. **Ricambi registrati dal form intervento**, nome libero e garanzia obbligatoria per riga (ADR-022) → §7.1/§7.2.
 > 5. **Fornitore uno per macchinario** (ADR-023) → §5.1 (`fornitore_id`) e **§7.3 riscritta**: il pivot `fornitore_strumento` non si crea.
 > 6. **Tab Panoramica** con i motivi del semaforo (ADR-024) → §5.1 campi derivati: il motore restituisce una diagnosi, non solo uno stato. Nessuna tabella nuova.
+>
+> **Revisione dell'8 Agosto 2026 (S4 blocco 1 — implementazione di §7.1/§7.2).** Due dettagli di schema corretti scrivendo le migration, entrambi motivati nelle rispettive sezioni: `ricambio_utilizzo` acquista **`deleted_at`** (§7.2) perché la FK di una `garanzie` soft-deleted renderebbe impraticabile la cancellazione fisica; `(tenant_id, nome_normalizzato)` diventa **UNIQUE parziale** (§7.1) perché ADR-022 la chiama "chiave" e una chiave senza vincolo non difende nulla. Nessun ADR nuovo: sono conseguenze di vincoli già decisi.
 
 ---
 
@@ -308,9 +310,11 @@ Voce normalizzata, riutilizzabile e ricercabile; cresce incrementalmente via aut
 | `descrizione` | string nullable | |
 | timestamps, `deleted_at` | | soft delete (per merge doppioni — V1.1). |
 
-**Indici:** `tenant_id`, `(tenant_id, nome_normalizzato)` per autocomplete/ricerca e collega-o-crea, `(tenant_id, codice)` per la ricerca per codice.
+**Indici:** `tenant_id`, `(tenant_id, nome_normalizzato)` **UNIQUE parziale** `WHERE deleted_at IS NULL` per autocomplete/ricerca e collega-o-crea, `(tenant_id, codice)` per la ricerca per codice.
 
 > **Perché una colonna normalizzata e non una funzione in query.** Il collega-o-crea confronta a ogni salvataggio: con un `LOWER(TRIM(...))` in WHERE l'indice non verrebbe usato, e la regola di normalizzazione finirebbe scritta in due posti (PHP e SQL) liberi di divergere.
+>
+> **Perché UNIQUE e non un indice semplice** (deciso in S4 blocco 1, 8 Ago 2026 — questa riga diceva solo "indicizzata"). ADR-022 chiama `(tenant_id, nome normalizzato)` «la chiave pratica del catalogo»: una chiave che nessun vincolo difende è un'affermazione, non una garanzia, e un futuro errore di normalizzazione produrrebbe doppioni **in silenzio** — la degradazione della ricerca incrociata che ADR-008 esiste per impedire. **Parziale** perché una voce cestinata non deve bloccare la ricreazione (il merge doppioni cestina per mestiere), e perché la variante ovvia `unique(tenant_id, nome_normalizzato, deleted_at)` non vincolerebbe nulla fra righe vive: su Postgres come su SQLite due NULL non sono uguali nel confronto di unicità. Va scritto con un `DB::statement` — lo schema builder di Laravel non esprime indici parziali — e la stessa SQL vale su entrambi i driver. ⚠️ Su SQLite il predicato **non sopravvive** a una ricostruzione della tabella (`compileIndexes()` legge solo nome/colonne/unicità da `pragma_index_list`): chi in futuro farà un `Schema::table('ricambi', …)` con `foreign`/`change` si ritroverà un unique totale.
 
 ### 7.2 `ricambio_utilizzo` (associazione macchina↔ricambio↔intervento)
 Registra "questo pezzo è montato su questa macchina". Base della **ricerca incrociata** (dato un `ricambio_id` → tutti gli strumenti/laboratori dove è usato).
@@ -324,9 +328,13 @@ Registra "questo pezzo è montato su questa macchina". Base della **ricerca incr
 | `intervento_id` | bigint nullable FK → `interventi.id` | Intervento in cui è stato montato (visibile anche dal tab "Ricambi"). Valorizzato per le righe create dal form intervento (ADR-022); nullable per gli inserimenti diretti dal tab Ricambi. |
 | `quantita` | integer default 1 | |
 | `data` | date | |
-| timestamps | | |
+| timestamps, `deleted_at` | | soft delete — vedi la nota qui sotto. |
 
 > La garanzia del singolo pezzo (§6) punta a questa riga, non al catalogo generico (ADR-008), ed è **obbligatoria** per le righe create dal form intervento (ADR-022): è il dato che accende il semaforo (ADR-020). L'obbligo è di flusso, non di schema — nello schema resta una relazione 1-0..1, perché una riga può nascere prima della sua garanzia dentro la stessa transazione.
+>
+> **Perché il soft delete** (aggiunto in S4 blocco 1, 8 Ago 2026 — questa tabella aveva i soli `timestamps`). Il motivo è meccanico: `garanzie` ha soft delete e la FK `garanzie.ricambio_utilizzo_id` non ha `onDelete`, quindi una garanzia cestinata resta **fisicamente in tabella** con la propria FK valorizzata, e un DELETE fisico dell'utilizzo violerebbe il vincolo. Senza `deleted_at`, la correzione dal tab Ricambi dovrebbe fare `forceDelete()` della garanzia — cioè buttare via la rete di sicurezza che `garanzie` ha di proposito — e la terza via è chiusa dall'invariante «esattamente uno fra `strumento_id` e `ricambio_utilizzo_id`», che vieta di azzerare la FK.
+>
+> **Conseguenza per chi legge queste righe altrove:** una riga cestinata non esiste per nessuna lettura di dominio, **semaforo compreso** — un pezzo smontato per errore non deve accendere l'arancione. In particolare la subquery del doppio salto (ADR-020) gira con `withoutGlobalScopes()`, che rimuove anche `SoftDeletingScope`: deve quindi portarsi un `deleted_at is null` esplicito.
 **Indici:** `tenant_id`, `strumento_id`, `ricambio_id`, `intervento_id`.
 
 ### 7.3 `fornitori` (Funzionalità §2 — ADR-023)
@@ -418,7 +426,7 @@ Legenda: ✅ pieno · ⚠️ ristretto (per sotto-albero/portafoglio/proprietà)
 - **Scoping:** indice su `tenant_id` in **tutte** le tabelle di business; `reseller_id` dove utile alle query reseller (V1.1).
 - **Albero:** `unita_organizzativa(parent_id)` e `(tenant_id)` per le query di sotto-albero ricorsive.
 - **Semaforo/notifiche:** `interventi(strumento_id, stato, data_scadenza)`; `garanzie(data_scadenza_effettiva)`; per il doppio salto delle garanzie ricambio (ADR-020) servono `garanzie(ricambio_utilizzo_id)` e `ricambio_utilizzo(strumento_id)` — entrambi già previsti, ma qui diventano **caldi**: li attraversa una query per pagina dell'elenco strumenti.
-- **Autocomplete ricambi:** `ricambi(tenant_id, nome_normalizzato)` (chiave del collega-o-crea, ADR-022) e `ricambi(tenant_id, codice)`.
+- **Autocomplete ricambi:** `ricambi(tenant_id, nome_normalizzato)` — **UNIQUE parziale** `where deleted_at is null`, quindi è insieme il vincolo della chiave del collega-o-crea (ADR-022) e l'indice che ne serve la lettura: il `deleted_at is null` emesso da `SoftDeletes` è esattamente il predicato dell'indice, e un secondo indice non-unique sarebbe ridondante. Più `ricambi(tenant_id, codice)`.
 - **Ricerca incrociata:** `ricambio_utilizzo(ricambio_id)`, `ricambio_utilizzo(strumento_id)`.
 - **QR:** `strumenti(qr_token)` unique.
 - **Documenti morph:** `documenti(documentabile_type, documentabile_id)`.

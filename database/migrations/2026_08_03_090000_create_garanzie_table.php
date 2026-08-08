@@ -12,9 +12,10 @@ return new class extends Migration
      * `data_scadenza_effettiva`, l'unico campo che pilota semaforo e notifiche.
      * Le ore non arrivano mai al motore: servono solo a stimare quella data.
      *
-     * `ricambio_utilizzo_id` NON ha vincolo di FK: la tabella `ricambio_utilizzo`
-     * nasce in S4 (ADR-008). La FK va aggiunta con una migration additiva
-     * contestuale alla creazione di quella tabella.
+     * `ricambio_utilizzo_id` nasce QUI senza vincolo di FK, perché la tabella
+     * `ricambio_utilizzo` non esiste ancora (nasce in S4 — ADR-008). Debito
+     * saldato l'8 Ago 2026 dalla migration additiva
+     * `2026_08_08_090200_add_ricambio_utilizzo_fk_to_garanzie_table`.
      *
      * Il vincolo "esattamente uno fra strumento_id e ricambio_utilizzo_id,
      * coerente col soggetto" vive nel model (hook `saving`) e non come CHECK:

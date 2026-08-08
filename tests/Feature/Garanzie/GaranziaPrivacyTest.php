@@ -1,7 +1,8 @@
 <?php
 
-use App\Enums\SoggettoGaranzia;
 use App\Models\Garanzia;
+use App\Models\Ricambio;
+use App\Models\RicambioUtilizzo;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
@@ -12,9 +13,10 @@ use Spatie\Permission\Models\Role;
  * Privacy delle garanzie sui ricambi (ADR-004, Definition of Done S3: «il
  * tenant non vede le garanzie ricambi»). Area rossa: test NEGATIVI.
  *
- * Le righe `ricambio` si creano con la factory in contesto console — dove i
- * global scope non filtrano — perché la FK verso `ricambio_utilizzo` non
- * esiste ancora (arriva in S4): l'id è quindi un intero libero.
+ * Le fixture si creano in contesto console, dove i global scope non filtrano.
+ * Dall'8 Ago 2026 (S4 blocco 1) la riga `ricambio` poggia su un
+ * `ricambio_utilizzo` VERO: la FK esiste, e l'intero libero che stava qui
+ * prima ora violerebbe il vincolo su entrambi i driver.
  */
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
@@ -23,13 +25,13 @@ beforeEach(function () {
     $this->dept = UnitaOrganizzativa::factory()->dipartimento()->under($this->ente)->create();
     $this->strumento = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Autoclave']);
 
+    $this->utilizzo = RicambioUtilizzo::factory()
+        ->forStrumento($this->strumento)
+        ->forRicambio(Ricambio::factory()->forTenant($this->ente)->create(['nome' => 'Guarnizione O-Ring']))
+        ->create();
+
     $this->garanziaMacchina = Garanzia::factory()->forStrumento($this->strumento)->create();
-    $this->garanziaRicambio = Garanzia::factory()->create([
-        'tenant_id' => $this->ente->id,
-        'soggetto' => SoggettoGaranzia::Ricambio,
-        'strumento_id' => null,
-        'ricambio_utilizzo_id' => 42,
-    ]);
+    $this->garanziaRicambio = Garanzia::factory()->forRicambio($this->utilizzo)->create();
 
     $this->utente = function (string $ruolo): User {
         $u = User::factory()->create(['tenant_id' => $this->ente->id, 'two_factor_confirmed_at' => now()]);

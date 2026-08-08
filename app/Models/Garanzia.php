@@ -28,8 +28,8 @@ use InvalidArgumentException;
  * `data_inizio + durata_mesi` — e con essa sono spariti `tipo_scadenza`,
  * `soglia_ore`, `data_scadenza_prevista` e le letture contaore.
  *
- * Debiti dichiarati, entrambi da sciogliere in S4:
- * - `ricambio_utilizzo_id` non ha vincolo FK finché la tabella non esiste.
+ * Debiti dichiarati, da sciogliere in S4 (il primo è **saldato l'8 Ago 2026**:
+ * `ricambio_utilizzo` esiste e la FK su `ricambio_utilizzo_id` è viva):
  * - Il livello 2 dello scope (sotto-albero del Responsabile) passa da
  *   `strumento_id`, che sulle righe `ricambio` è NULL: quelle righe restano
  *   quindi invisibili al Responsabile (fail-closed, accettabile finché non
@@ -164,5 +164,15 @@ class Garanzia extends Model
     public function strumento(): BelongsTo
     {
         return $this->belongsTo(Strumento::class, 'strumento_id');
+    }
+
+    /**
+     * Riga di montaggio a cui la garanzia si riferisce, valorizzata sse
+     * `soggetto = ricambio` (ERD §6.1). Primo anello del doppio salto
+     * `garanzie → ricambio_utilizzo → strumenti` di ADR-020.
+     */
+    public function ricambioUtilizzo(): BelongsTo
+    {
+        return $this->belongsTo(RicambioUtilizzo::class, 'ricambio_utilizzo_id');
     }
 }
