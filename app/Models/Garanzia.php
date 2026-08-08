@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\SoggettoGaranzia;
+use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Scopes\GaranziaDepartmentScope;
 use App\Models\Scopes\GaranziaRicambioPrivacyScope;
@@ -59,7 +60,7 @@ class Garanzia extends Model
      * `ricambio_utilizzo` su quelle ricambio. Il trait generico ne conosce una
      * sola. Vedi il docblock dello scope.
      */
-    use BelongsToTenant, HasFactory, SoftDeletes;
+    use AuditsDomainWrites, BelongsToTenant, HasFactory, SoftDeletes;
 
     protected $table = 'garanzie';
 
@@ -85,6 +86,16 @@ class Garanzia extends Model
         'data_inizio',
         'durata_mesi',
     ];
+
+    /**
+     * `data_scadenza_effettiva` è il campo che pilota il semaforo, e
+     * `data_scadenza_dichiarata` è l'input che lo determina nel ramo ADR-022:
+     * senza queste due, l'audit registrerebbe la durata e non l'effetto.
+     */
+    protected function attributiDerivatiTracciati(): array
+    {
+        return ['data_scadenza_dichiarata', 'data_scadenza_effettiva'];
+    }
 
     protected function casts(): array
     {

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Concerns\BelongsToTenant;
 use Database\Factories\RicambioFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -28,7 +29,7 @@ use InvalidArgumentException;
 class Ricambio extends Model
 {
     /** @use HasFactory<RicambioFactory> */
-    use BelongsToTenant, HasFactory, SoftDeletes;
+    use AuditsDomainWrites, BelongsToTenant, HasFactory, SoftDeletes;
 
     /** Eloquent indovinerebbe `ricambios`. */
     protected $table = 'ricambi';
@@ -173,6 +174,12 @@ class Ricambio extends Model
             // inventa una riga).
             return $trova() ?? throw $e;
         }
+    }
+
+    /** Chiave del collega-o-crea: senza, l'audit registrerebbe il nome grezzo e non l'effetto. */
+    protected function attributiDerivatiTracciati(): array
+    {
+        return ['nome_normalizzato'];
     }
 
     /** Righe di montaggio che citano questa voce: base della ricerca incrociata. */

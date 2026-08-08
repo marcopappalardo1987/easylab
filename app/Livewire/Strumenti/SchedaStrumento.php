@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Strumenti;
 
+use App\Actions\Ricambi\RegistraRicambiIntervento;
 use App\Enums\SoggettoGaranzia;
 use App\Enums\StatoIntervento;
 use App\Enums\StatoSemaforo;
@@ -10,10 +11,12 @@ use App\Enums\TipoSpostamento;
 use App\Enums\TipoUnitaOrganizzativa;
 use App\Livewire\Concerns\ManagesStrumentoForm;
 use App\Models\Intervento;
+use App\Models\Ricambio;
 use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
+use App\Rules\NomeRicambio;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -63,6 +66,21 @@ class SchedaStrumento extends Component
         'gia_eseguito' => false,
         'data_esecuzione' => '',
     ];
+
+    // Ricambi dal form intervento (S4 — ADR-022, wireframe §2.1)
+    /** Stato di UI, NON persistito: la verità è l'esistenza di righe ricambio_utilizzo. */
+    public bool $ricambiEffettuati = false;
+
+    /** @var list<array{nome:string,scadenza_garanzia:string}> */
+    public array $ricambiNuovi = [];
+
+    /** @var list<int> Rimozioni ESPLICITE, riga per riga: mai dedotte da un delta. */
+    public array $ricambiRimossi = [];
+
+    /** @var list<array{nome:string}> Suggerimenti del combobox per la riga attiva. */
+    public array $suggerimenti = [];
+
+    public ?int $ricambioAttivo = null;
 
     public bool $showCompletaForm = false;
 
@@ -218,6 +236,34 @@ class SchedaStrumento extends Component
         $this->authorize($this->editingInterventoId === null ? 'interventi.create' : 'interventi.update');
         $this->validate($this->interventoFormRules());
 
+        // ⚠️ Tutto ciò che può fermare il salvataggio — authorize, addError,
+        // early-return — sta QUI, prima della transazione: un `return` dentro
+        // la closure di DB::transaction chiuderebbe solo la closure e la
+        // transazione verrebbe COMMITTATA lo stesso.
+
+        $righeNuove = $this->ricambiEffettuati ? $this->righeRicambiPulite() : [];
+
+        if ($righeNuove !== [] && ! $this->ricambiSenzaDoppioni($righeNuove)) {
+            return;
+        }
+
+        // A differenza di tecnico_id — metadato che si può scartare in silenzio —
+        // qui scartare significherebbe «salvato» con i pezzi svaniti: la risposta
+        // onesta a un payload forgiato è 403. Tre permessi perché la riga scrive
+        // tre tabelle; `ricambi.create` sempre e non "solo se la voce è nuova",
+        // perché un permesso che dipende dal contenuto del catalogo è
+        // impossibile da spiegare all'utente.
+        if ($righeNuove !== []) {
+            $this->authorize('ricambio_utilizzo.create');
+            $this->authorize('ricambi.create');
+            $this->authorize('garanzie.ricambio.manage'); // ogni riga scrive SEMPRE una garanzia (ADR-022)
+        }
+
+        if ($this->ricambiRimossi !== []) {
+            $this->authorize('ricambio_utilizzo.delete');
+            $this->authorize('garanzie.ricambio.manage'); // si cestina anche la garanzia
+        }
+
         $payload = [
             'descrizione' => $this->interventoForm['descrizione'],
             'tipo' => $this->interventoForm['tipo'],
@@ -237,22 +283,187 @@ class SchedaStrumento extends Component
             $payload['tecnico_id'] = $tecnicoId;
         }
 
-        if ($this->editingInterventoId === null) {
-            $intervento = new Intervento($payload + [
-                'tenant_id' => $this->strumento->tenant_id, // invariante interventi.tenant_id == strumenti.tenant_id
-                'strumento_id' => $this->strumento->id,     // reseller_id resta NULL (ADR-002)
-            ]);
-            if ($this->interventoForm['gia_eseguito']) {
-                // Inserimento storico in un passo: l'hook `saving` regge l'invariante.
-                $intervento->stato = StatoIntervento::Fatto;
-                $intervento->data_esecuzione = $this->interventoForm['data_esecuzione'];
+        // Intervento e righe ricambio atomici (ADR-022). Il servizio apre a sua
+        // volta una transazione propria: annidata → savepoint, costo nullo.
+        DB::transaction(function () use ($payload, $righeNuove) {
+            if ($this->editingInterventoId === null) {
+                $intervento = new Intervento($payload + [
+                    'tenant_id' => $this->strumento->tenant_id, // invariante interventi.tenant_id == strumenti.tenant_id
+                    'strumento_id' => $this->strumento->id,     // reseller_id resta NULL (ADR-002)
+                ]);
+                if ($this->interventoForm['gia_eseguito']) {
+                    // Inserimento storico in un passo: l'hook `saving` regge l'invariante.
+                    $intervento->stato = StatoIntervento::Fatto;
+                    $intervento->data_esecuzione = $this->interventoForm['data_esecuzione'];
+                }
+                $intervento->save();
+            } else {
+                $intervento = $this->strumento->interventi()->findOrFail($this->editingInterventoId);
+                $intervento->update($payload);
             }
-            $intervento->save();
-        } else {
-            $this->strumento->interventi()->findOrFail($this->editingInterventoId)->update($payload);
-        }
+
+            if ($righeNuove !== [] || $this->ricambiRimossi !== []) {
+                app(RegistraRicambiIntervento::class)
+                    ->esegui($intervento, $righeNuove, array_map(intval(...), $this->ricambiRimossi));
+            }
+        });
 
         $this->closeInterventoForm();
+    }
+
+    // --- Repeater ricambi (ADR-022) — stesso pattern del repeater `parametri` ---
+
+    public function addRicambio(): void
+    {
+        $this->ricambiNuovi[] = ['nome' => '', 'scadenza_garanzia' => ''];
+    }
+
+    public function removeRicambio(int $index): void
+    {
+        unset($this->ricambiNuovi[$index]);
+        // array_values è OBBLIGATORIO: i wire:key sono per indice, e senza
+        // ricompattare il patch DOM confonderebbe le righe (come per `parametri`).
+        $this->ricambiNuovi = array_values($this->ricambiNuovi);
+        $this->suggerimenti = [];
+        $this->ricambioAttivo = null;
+    }
+
+    /** Segna una riga SALVATA per la rimozione: effettiva solo al salvataggio. */
+    public function segnaRicambioRimosso(int $id): void
+    {
+        $this->strumento->ricambiUtilizzati()->findOrFail($id); // 404 fuori scope
+
+        if (! in_array($id, array_map(intval(...), $this->ricambiRimossi), true)) {
+            $this->ricambiRimossi[] = $id;
+        }
+    }
+
+    public function annullaRimozioneRicambio(int $id): void
+    {
+        $this->ricambiRimossi = array_values(
+            array_filter($this->ricambiRimossi, fn ($r) => (int) $r !== $id)
+        );
+    }
+
+    /** Selezione dal combobox: è il percorso che anche Invio esegue (via click). */
+    public function scegliRicambio(int $index, string $nome): void
+    {
+        if (isset($this->ricambiNuovi[$index])) {
+            $this->ricambiNuovi[$index]['nome'] = $nome;
+        }
+        $this->suggerimenti = [];
+        $this->ricambioAttivo = null;
+    }
+
+    /**
+     * Ricerca del combobox, agganciata al wire:model.live della riga attiva:
+     * nessun round-trip in più rispetto a quello che il binding già fa.
+     */
+    public function updated(string $property, mixed $value): void
+    {
+        if (! preg_match('/^ricambiNuovi\.(\d+)\.nome$/', $property, $m)) {
+            return;
+        }
+
+        $this->ricambioAttivo = (int) $m[1];
+        $this->suggerimenti = $this->cercaRicambi((string) $value);
+    }
+
+    /**
+     * Suggerimenti dal catalogo dell'Ente (ADR-022): prefisso sul nome
+     * normalizzato — MAI `%...%`, che non userebbe l'indice unique parziale
+     * (il cui predicato `deleted_at is null` è lo stesso che SoftDeletes emette).
+     *
+     * ⚠️ `like` è case-insensitive su SQLite (ASCII) e case-SENSITIVE su
+     * Postgres: qui è innocuo perché confronta due valori già passati da
+     * normalizzaNome() (entrambi minuscoli), ma chi sostituisse la colonna con
+     * `nome` avrebbe un autocomplete che funziona in locale e non in produzione.
+     *
+     * ⚠️ Il `where('tenant_id')` esplicito **oggi è ridondante** — il
+     * TenantScope filtra già, perché qui si arriva solo da utente autenticato —
+     * e infatti la mutazione che lo toglie non fa cadere nessun test. Non è
+     * però la stessa ridondanza di `collegaOCrea` (che gira anche in console):
+     * qui filtra sul tenant **dello strumento**, non su quello dell'utente, ed
+     * è ciò che servirà al Tecnico di ADR-007 (S4 blocco 10), che ha
+     * `tenant_id` NULL e lavora cross-tenant: per lui il TenantScope è
+     * fail-closed e restituirebbe un catalogo vuoto. Consegna a quel blocco:
+     * quando l'accesso del Tecnico esiste, questo filtro diventa falsificabile
+     * e va coperto da un test.
+     *
+     * @return list<array{nome:string}>
+     */
+    private function cercaRicambi(string $digitato): array
+    {
+        // "Sto ancora digitando" non è un errore: il guard evita che un input di
+        // soli spazi/NBSP finisca in normalizzaNome(), che lancerebbe.
+        if (trim((string) preg_replace('/[\p{Z}\s]+/u', ' ', $digitato)) === '' || mb_strlen(trim($digitato)) < 2) {
+            return [];
+        }
+
+        $prefisso = Ricambio::normalizzaNome($digitato);
+
+        return Ricambio::query()
+            ->where('tenant_id', $this->strumento->tenant_id)
+            ->where('nome_normalizzato', 'like', $prefisso.'%')
+            ->orderBy('nome_normalizzato')
+            ->limit(8)
+            ->get(['id', 'nome'])
+            ->map(fn (Ricambio $r) => ['nome' => $r->nome])
+            ->all();
+    }
+
+    /**
+     * Righe compilate del repeater. Le righe interamente vuote si scartano
+     * (come per `parametri`): una riga aggiunta e mai toccata non è un errore.
+     *
+     * @return list<array{nome:string,scadenza_garanzia:string}>
+     */
+    private function righeRicambiPulite(): array
+    {
+        return array_values(array_filter(
+            $this->ricambiNuovi,
+            fn (array $riga) => trim((string) preg_replace('/[\p{Z}\s]+/u', ' ', $riga['nome'] ?? '')) !== ''
+                || trim($riga['scadenza_garanzia'] ?? '') !== ''
+        ));
+    }
+
+    /**
+     * Due righe che normalizzano uguale sono un refuso, non due pezzi: il form
+     * non ha il campo quantità (wireframe §2.1), e "due guarnizioni" si
+     * registra dal tab Ricambi con quantita = 2. `distinct:ignore_case` non
+     * basterebbe: confronta i grezzi, e `Filtro HEPA` / `filtro  hepa`
+     * passerebbero.
+     *
+     * @param  list<array{nome:string,scadenza_garanzia:string}>  $righe
+     */
+    private function ricambiSenzaDoppioni(array $righe): bool
+    {
+        $visti = [];
+
+        foreach ($righe as $i => $riga) {
+            $chiave = Ricambio::normalizzaNome($riga['nome']);
+            if (isset($visti[$chiave])) {
+                $this->addError("ricambiNuovi.{$i}.nome", 'Ricambio già presente in un\'altra riga: per più pezzi uguali usare il tab Ricambi.');
+
+                return false;
+            }
+            $visti[$chiave] = true;
+        }
+
+        return true;
+    }
+
+    /**
+     * Unica definizione, come `assegnabili()`: la usa il render (checkbox
+     * visibile) e la usa il save (authorize). Il set completo dei tre permessi
+     * è più stretto del solo `ricambio_utilizzo.create` del wireframe, ed è più
+     * onesto: mostrare la checkbox a chi poi prende 403 è peggio che nasconderla.
+     */
+    private function puoRegistrareRicambi(): bool
+    {
+        return Gate::allows('ricambio_utilizzo.create')
+            && Gate::allows('ricambi.create')
+            && Gate::allows('garanzie.ricambio.manage');
     }
 
     public function closeInterventoForm(): void
@@ -497,6 +708,44 @@ class SchedaStrumento extends Component
             'interventoForm.data_esecuzione' => $this->interventoForm['gia_eseguito']
                 ? ['required', 'date', 'before_or_equal:today']
                 : ['nullable'],
+
+            // Ricambi (ADR-022): stesso pattern condizionale di `gia_eseguito` —
+            // la checkbox è wire:model.live, quindi le regole si ricalcolano a
+            // ogni spunta e il repeater chiuso non blocca il salvataggio.
+            'ricambiEffettuati' => ['boolean'],
+            'ricambiNuovi' => ['array', 'max:20'],
+            'ricambiNuovi.*.nome' => $this->ricambiEffettuati
+                ? ['required', 'string', 'max:255', new NomeRicambio]
+                : ['nullable'],
+            // `after:` la data di MONTAGGIO e non `after:today`: con today un
+            // inserimento storico (intervento eseguito a gennaio, garanzia fino
+            // a febbraio) passerebbe la validazione e verrebbe rifiutato dal
+            // model con un'eccezione. Guardia su due livelli sì, ma il livello
+            // utente deve parlare la stessa lingua di quello di dominio.
+            'ricambiNuovi.*.scadenza_garanzia' => $this->ricambiEffettuati
+                ? ['required', 'date', 'after:'.$this->dataMontaggio()]
+                : ['nullable'],
+            'ricambiRimossi' => ['array'],
+            'ricambiRimossi.*' => ['integer'],
+        ];
+    }
+
+    /** La data che il servizio userà come montaggio e come `data_inizio` della garanzia. */
+    private function dataMontaggio(): string
+    {
+        return ($this->interventoForm['gia_eseguito'] ? $this->interventoForm['data_esecuzione'] : null)
+            ?: today()->toDateString();
+    }
+
+    /**
+     * Senza questi, Laravel scrive «Il campo ricambi nuovi.0.nome è
+     * obbligatorio»: un messaggio che espone la struttura interna del form.
+     */
+    protected function validationAttributes(): array
+    {
+        return [
+            'ricambiNuovi.*.nome' => 'nome del ricambio',
+            'ricambiNuovi.*.scadenza_garanzia' => 'scadenza garanzia',
         ];
     }
 
@@ -510,6 +759,11 @@ class SchedaStrumento extends Component
             'gia_eseguito' => false,
             'data_esecuzione' => today()->toDateString(),
         ];
+        $this->ricambiEffettuati = false;
+        $this->ricambiNuovi = [];
+        $this->ricambiRimossi = [];
+        $this->suggerimenti = [];
+        $this->ricambioAttivo = null;
         $this->resetValidation();
     }
 
@@ -570,6 +824,15 @@ class SchedaStrumento extends Component
             // Gated: chi non ha il permesso non paga nemmeno la query.
             'garanzie' => Gate::allows('garanzie.macchina.view')
                 ? $this->strumento->garanzie()->get()
+                : collect(),
+            // ADR-022: la checkbox "Ricambio effettuato" e il repeater.
+            'puoRegistrareRicambi' => $this->puoRegistrareRicambi(),
+            // Righe già salvate su QUESTO intervento: sola lettura + ✕ (la
+            // correzione è del tab Ricambi, S4 blocco 5). Solo a modale aperta
+            // in modifica: a modale chiusa zero query in più.
+            'ricambiSalvati' => $this->showInterventoForm && $this->editingInterventoId !== null
+                ? $this->strumento->interventi()->findOrFail($this->editingInterventoId)
+                    ->ricambiUtilizzi()->with('ricambio')->get()
                 : collect(),
             'spostamenti' => $this->strumento->spostamenti()->with(['daNodo', 'aNodo', 'eseguitoBy'])->get(),
             'nodiDestinazione' => $nodiDestinazione,

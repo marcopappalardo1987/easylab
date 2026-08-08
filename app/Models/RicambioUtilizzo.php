@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Concerns\BelongsToOrgNodeThroughStrumento;
 use App\Models\Concerns\BelongsToTenant;
 use Database\Factories\RicambioUtilizzoFactory;
@@ -41,7 +42,7 @@ use InvalidArgumentException;
 class RicambioUtilizzo extends Model
 {
     /** @use HasFactory<RicambioUtilizzoFactory> */
-    use BelongsToOrgNodeThroughStrumento, BelongsToTenant, HasFactory, SoftDeletes;
+    use AuditsDomainWrites, BelongsToOrgNodeThroughStrumento, BelongsToTenant, HasFactory, SoftDeletes;
 
     protected $table = 'ricambio_utilizzo';
 

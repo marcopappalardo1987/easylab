@@ -133,6 +133,14 @@ Barra orizzontale, tab attivo `border-b-2 border-primary-600 text-primary-700`, 
 ### 5.6 Form & input
 `rounded-md border-neutral-200 focus:border-primary-600 focus:ring-primary-600`. Label `text-sm font-medium text-neutral-800`. Errori `text-danger-600 text-sm`. Autocomplete ricambi (ADR-008/022) come combobox con creazione "al volo", su **nome** del pezzo. Le **righe ripetitore** del form intervento (wireframe §2.1) riusano lo stesso combobox: ogni riga è `nome` + `data`, con `[ ✕ ]` per rimuoverla e `[ + Aggiungi ricambio ]` in coda.
 
+> **`x-ui.combobox`, realizzato in S4 blocco 3.** Due scelte da conoscere prima di riusarlo.
+>
+> **Alpine non scrive mai il valore.** Il dropdown è renderizzato dal server e ogni suggerimento è un `<button wire:click>` vero; Alpine apre/chiude, evidenzia, e su Invio *clicca* il bottone già evidenziato. Esiste quindi un solo percorso di selezione — testabile con Livewire — invece di una seconda implementazione in JS che nessun test vedrebbe; e senza JavaScript il campo resta usabile a click. Chi lo riuserà (tab Ricambi, vista mobile) erediti questa forma: è ciò che rende il componente verificabile.
+>
+> **Primi `aria-*` del progetto**, ed è una scelta: `role="combobox"`/`listbox`/`option`, `aria-expanded`, `aria-controls`, `aria-activedescendant`. Il DS finora non li menzionava (c'erano solo `role="dialog"` nella modale e gli `sr-only` dei glifi), ma un combobox senza di essi è, per uno screen reader, una casella di testo con del rumore accanto. Lo stato «＋ Nuovo ricambio: verrà creato» / «🔗 Collegato» segue la regola §1/§4: glifo + testo, mai solo colore.
+>
+> ⚠️ **Ciò che vive in Alpine non è coperto dai test** (i test Livewire non lo eseguono): tastiera, click-outside, aria dinamici, 44px reali, sopravvivenza dello stato al morph. Sono elencati per nome nel docblock di `ComboboxRicambiTest` e si verificano a mano; il browser test è un debito dichiarato. Il fallback a click rende **silenzioso** ogni fallimento JS: è il motivo per cui la verifica manuale non è facoltativa.
+
 ### 5.7 Navigazione
 - **Top bar:** logo, contesto (Ente/ruolo), 🔔 notifiche, menù utente `▼`. Altezza `h-14`.
 - **Albero** (vista §5): nodi espandibili `▾/▸`, nodo attivo `bg-primary-50 text-primary-700`. Su mobile in **drawer** `☰`.

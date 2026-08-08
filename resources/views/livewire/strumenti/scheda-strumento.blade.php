@@ -235,6 +235,78 @@
                     @endif
                 @endif
 
+                {{-- Ricambio effettuato (ADR-022, wireframe §2.1). FUORI dal wrapper
+                     "solo in create": vale anche in modifica. La checkbox NON è un
+                     campo persistito — apre e chiude il repeater, la verità è
+                     l'esistenza delle righe. --}}
+                @if ($puoRegistrareRicambi)
+                    <div class="border-t border-neutral-200 pt-5">
+                        <label class="flex items-center gap-2 text-sm text-neutral-800">
+                            <input type="checkbox" wire:model.live="ricambiEffettuati"
+                                class="rounded border-neutral-300 text-primary-600 focus:ring-primary-600">
+                            Ricambio effettuato
+                        </label>
+
+                        @if ($ricambiEffettuati)
+                            {{-- Righe già salvate: sola lettura + ✕. La correzione di
+                                 nome/scadenza è del tab Ricambi (S4 blocco 5); qui una
+                                 spunta tolta per sbaglio non deve distruggere storico,
+                                 quindi la rimozione è esplicita e reversibile fino al
+                                 salvataggio. --}}
+                            @foreach ($ricambiSalvati as $salvato)
+                                @php $inRimozione = in_array($salvato->id, array_map('intval', $ricambiRimossi), true); @endphp
+                                <div class="mt-3 flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm {{ $inRimozione ? 'opacity-50' : '' }}"
+                                    wire:key="ricambio-salvato-{{ $salvato->id }}">
+                                    <span class="flex-1 {{ $inRimozione ? 'line-through' : '' }}">
+                                        {{ $salvato->ricambio?->nome ?? '—' }}
+                                        <span class="text-neutral-500">· montato il {{ $salvato->data->format('d/m/Y') }}</span>
+                                    </span>
+                                    @if ($inRimozione)
+                                        <button type="button" wire:click="annullaRimozioneRicambio({{ $salvato->id }})"
+                                            class="flex h-11 items-center rounded px-2 text-sm text-primary-700 hover:bg-primary-50">Annulla</button>
+                                    @else
+                                        <button type="button" wire:click="segnaRicambioRimosso({{ $salvato->id }})"
+                                            aria-label="Rimuovi il ricambio {{ $salvato->ricambio?->nome }}"
+                                            class="flex h-11 w-11 shrink-0 items-center justify-center rounded text-danger-500 hover:bg-danger-100">✕</button>
+                                    @endif
+                                </div>
+                            @endforeach
+
+                            @foreach ($ricambiNuovi as $i => $riga)
+                                <div class="mt-3 rounded-md border border-neutral-200 p-3" wire:key="ricambio-nuovo-{{ $i }}">
+                                    <x-ui.combobox
+                                        name="ricambiNuovi.{{ $i }}.nome"
+                                        label="Nome ricambio"
+                                        placeholder="es. Guarnizione portello"
+                                        wire:model.live.debounce.300ms="ricambiNuovi.{{ $i }}.nome"
+                                        :index="$i"
+                                        on-select="scegliRicambio"
+                                        :suggerimenti="$ricambioAttivo === $i ? $suggerimenti : []"
+                                        :stato="$ricambioAttivo === $i && filled($riga['nome']) ? (count($suggerimenti) > 0 ? 'collegato' : 'nuovo') : null" />
+
+                                    <div class="mt-2 flex items-end gap-2">
+                                        <div class="flex-1">
+                                            <x-ui.input name="ricambiNuovi.{{ $i }}.scadenza_garanzia" label="Scad. garanzia"
+                                                type="date" wire:model="ricambiNuovi.{{ $i }}.scadenza_garanzia" />
+                                        </div>
+                                        <button type="button" wire:click="removeRicambio({{ $i }})"
+                                            aria-label="Rimuovi questa riga" title="Rimuovi"
+                                            class="flex h-11 w-11 shrink-0 items-center justify-center rounded text-danger-500 hover:bg-danger-100">✕</button>
+                                    </div>
+                                </div>
+                            @endforeach
+
+                            <x-ui.button variant="ghost" wire:click="addRicambio" class="mt-3 !px-2 !py-1 text-sm">
+                                + Aggiungi ricambio
+                            </x-ui.button>
+
+                            @if (count($ricambiNuovi) === 0 && $ricambiSalvati->isEmpty())
+                                <p class="mt-1 text-sm text-neutral-400">Nessun ricambio. La scadenza della garanzia è obbligatoria per ogni pezzo.</p>
+                            @endif
+                        @endif
+                    </div>
+                @endif
+
                 <div class="flex justify-end gap-3">
                     <x-ui.button variant="secondary" wire:click="closeInterventoForm">Annulla</x-ui.button>
                     <x-ui.button type="submit" wire:loading.attr="disabled">Salva</x-ui.button>
