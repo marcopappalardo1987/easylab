@@ -32,10 +32,9 @@ return [
         'interventi.complete', 'interventi.assign',
         'semaforo.force',
 
-        // 4.3 Garanzie & contaore
+        // 4.3 Garanzie
         'garanzie.macchina.view', 'garanzie.macchina.manage',
         'garanzie.ricambio.view', 'garanzie.ricambio.manage',
-        'letture_contaore.view', 'letture_contaore.create',
 
         // 4.4 Ricambi & fornitori
         'ricambi.view', 'ricambi.create', 'ricambi.update', 'ricambi.delete', 'ricambi.merge',
@@ -85,7 +84,6 @@ return [
             'semaforo.force',
             'garanzie.macchina.view', 'garanzie.macchina.manage',
             'garanzie.ricambio.view', 'garanzie.ricambio.manage',
-            'letture_contaore.view', 'letture_contaore.create',
             'ricambi.view', 'ricambi.create', 'ricambi.update', 'ricambi.delete',
             'ricambio_utilizzo.view', 'ricambio_utilizzo.create', 'ricambio_utilizzo.update', 'ricambio_utilizzo.delete',
             'fornitori.view',
@@ -98,7 +96,6 @@ return [
             'strumenti.view',
             'interventi.view',
             'garanzie.macchina.view',
-            'letture_contaore.view',
             'ricambi.view',
             'ricambio_utilizzo.view',
             'documenti.view', 'documenti.upload', 'documenti.download', 'documenti.export_pdf',
@@ -110,7 +107,6 @@ return [
             'strumenti.view',
             'interventi.view', 'interventi.complete',
             'garanzie.macchina.view',
-            'letture_contaore.view', 'letture_contaore.create',
             'ricambi.view', 'ricambi.create',
             'ricambio_utilizzo.view', 'ricambio_utilizzo.create', 'ricambio_utilizzo.update', 'ricambio_utilizzo.delete',
             'documenti.view', 'documenti.upload', 'documenti.download',

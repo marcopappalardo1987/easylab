@@ -42,6 +42,9 @@ class Albero extends Component
 
     public ?string $note = null;
 
+    /** Soglia obsolescenza in anni: campo del solo nodo Ente (ADR-014). */
+    public ?int $sogliaObsolescenzaAnni = null;
+
     // Conferma eliminazione nodo
     public ?int $deletingId = null;
 
@@ -130,23 +133,42 @@ class Albero extends Component
         $this->tipo = $node->tipo->value;
         $this->nome = $node->nome;
         $this->note = $node->note;
+        $this->sogliaObsolescenzaAnni = $node->tipo === TipoUnitaOrganizzativa::Ente
+            ? $node->soglia_obsolescenza_anni
+            : null;
         $this->showForm = true;
     }
 
     public function save(): void
     {
         if ($this->editingId !== null) {
-            // In modifica si cambiano solo nome/note (il tipo non si tocca:
-            // validarlo escluderebbe l'Ente).
+            // In modifica si cambiano nome/note e, sul solo nodo Ente, la soglia
+            // di obsolescenza (il tipo non si tocca: validarlo escluderebbe
+            // l'Ente).
             $this->authorize('unita_organizzativa.update');
 
-            $validated = $this->validate([
+            // Il nodo si rilegge PRIMA di validare: se è un Ente lo decide il
+            // DB, non lo stato del client — le proprietà Livewire arrivano dal
+            // browser e sono manipolabili.
+            $node = UnitaOrganizzativa::findOrFail($this->editingId);
+            $isEnte = $node->tipo === TipoUnitaOrganizzativa::Ente;
+
+            $regole = [
                 'nome' => ['required', 'string', 'max:255'],
                 'note' => ['nullable', 'string', 'max:1000'],
-            ]);
+            ];
+            if ($isEnte) {
+                $regole['sogliaObsolescenzaAnni'] = ['required', 'integer', 'between:1,50'];
+            }
 
-            $node = UnitaOrganizzativa::findOrFail($this->editingId);
-            $node->update(['nome' => $validated['nome'], 'note' => $validated['note']]);
+            $validated = $this->validate($regole);
+
+            $payload = ['nome' => $validated['nome'], 'note' => $validated['note']];
+            if ($isEnte) {
+                $payload['soglia_obsolescenza_anni'] = $validated['sogliaObsolescenzaAnni'];
+            }
+
+            $node->update($payload);
         } else {
             $this->authorize('unita_organizzativa.create');
 
@@ -215,7 +237,7 @@ class Albero extends Component
 
     protected function resetForm(): void
     {
-        $this->reset(['editingId', 'parentId', 'tipo', 'nome', 'note']);
+        $this->reset(['editingId', 'parentId', 'tipo', 'nome', 'note', 'sogliaObsolescenzaAnni']);
         $this->resetValidation();
     }
 

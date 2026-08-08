@@ -34,12 +34,15 @@ class UnitaOrganizzativa extends Model
         'tipo',
         'nome',
         'note',
+        'soglia_obsolescenza_anni',
     ];
 
     protected function casts(): array
     {
         return [
             'tipo' => TipoUnitaOrganizzativa::class,
+            // Solo sul nodo ente (ADR-014); sugli altri resta al default e non si legge.
+            'soglia_obsolescenza_anni' => 'integer',
         ];
     }
 

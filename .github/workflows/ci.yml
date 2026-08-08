@@ -54,10 +54,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PHP 8.3
+      # PHP 8.4: il composer.lock è risolto con Symfony 8.x, che richiede >= 8.4.1.
+      # Deve restare allineato al vincolo `php` di composer.json e al server Forge.
+      - name: Setup PHP 8.4
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: pdo_pgsql, redis, mbstring, bcmath
           coverage: none
 
@@ -72,6 +74,21 @@ jobs:
 
       - name: Lint (Pint)
         run: ./vendor/bin/pint --test
+
+      # Il layout applicativo chiama @vite(): senza manifest ogni test che
+      # renderizza una pagina fallisce con "Vite manifest not found". Rispecchia
+      # il "build asset" del deploy script (Setup Repository §2.2) e verifica di
+      # riflesso che il frontend compili.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Build assets
+        run: |
+          npm ci
+          npm run build
 
       - name: Run migrations
         run: php artisan migrate --force

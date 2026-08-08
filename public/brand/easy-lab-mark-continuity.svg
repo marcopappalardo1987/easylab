@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 56" role="img" aria-labelledby="title description">
+  <title id="title">Easy Lab</title>
+  <desc id="description">Monogramma Easy Lab, proposta Continuità</desc>
+  <g fill="none" stroke="#0F766E" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 8V48H56"/>
+    <path d="M8 8H32"/>
+    <path d="M8 28H27"/>
+    <path d="M42 16V48"/>
+  </g>
+</svg>

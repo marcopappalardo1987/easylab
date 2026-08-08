@@ -142,6 +142,18 @@
                 <x-ui.input name="nome" label="Nome" wire:model="nome" placeholder="Es. Reparto di Cardiologia" autofocus />
                 <x-ui.textarea name="note" label="Note (opzionale)" wire:model="note" />
 
+                {{-- Soglia obsolescenza: campo del solo nodo Ente (ADR-014). --}}
+                @if ($editingId !== null && $tipo === App\Enums\TipoUnitaOrganizzativa::Ente->value)
+                    <div>
+                        <x-ui.input name="sogliaObsolescenzaAnni" label="Soglia obsolescenza (anni)"
+                            type="number" min="1" max="50" wire:model="sogliaObsolescenzaAnni" />
+                        <p class="mt-1 text-xs text-neutral-400">
+                            Oltre questa età uno strumento è segnalato ⏳ Obsoleto.
+                            È solo una segnalazione: non blocca la manutenzione.
+                        </p>
+                    </div>
+                @endif
+
                 <div class="flex justify-end gap-3">
                     <x-ui.button variant="secondary" wire:click="closeForm">Annulla</x-ui.button>
                     <x-ui.button type="submit">Salva</x-ui.button>

@@ -67,16 +67,18 @@ Risorse derivate dall'ERD §3–§9. Questo è l'elenco canonico che il seeder S
 - `interventi.assign` — assegna il tecnico (`interventi.tecnico_id`, 🔗 ADR-007).
 - `semaforo.force` — forzatura manuale stato semaforo, tracciata (🔗 ADR-005).
 
-### 4.3 Garanzie & contaore
+### 4.3 Garanzie
 - `garanzie.macchina.view` · `garanzie.macchina.manage` — garanzia macchina (visibile anche al Tenant).
-- `garanzie.ricambio.view` · `garanzie.ricambio.manage` — garanzia pezzo: **mai al Tenant né al Tecnico** (🔗 ADR-004).
-- `letture_contaore.view` · `.create` — letture manuali contaore (🔗 ADR-004).
+- `garanzie.ricambio.view` · `garanzie.ricambio.manage` — garanzia pezzo: **mai al Tenant** (🔗 ADR-004). Il divieto riguarda **le righe**, non l'arancione che ne deriva: il semaforo le conta comunque (🔗 ADR-020).
+  > **Il Tecnico le gestisce** (🔗 ADR-027, 8 Ago 2026): è chi monta fisicamente il pezzo, quindi la fonte del dato. Fino ad allora il divieto si estendeva anche a lui citando ADR-004, che però nomina solo il Tenant. Ogni modifica è tracciata sul canale `audit`.
+- ~~`letture_contaore.view` · `.create`~~ — **permessi rimossi** (🔗 ADR-019): eliminata la garanzia a ore, il contaore non esiste più. Vanno tolti da `config/rbac.php` e dal seeder.
 
 ### 4.4 Ricambi & fornitori
-- `ricambi.view` · `.create` · `.update` · `.delete` — catalogo (🔗 ADR-008).
+- `ricambi.view` · `.create` · `.update` · `.delete` — catalogo (🔗 ADR-008/022).
 - `ricambi.merge` — unione doppioni catalogo *(STRETCH S4)*.
 - `ricambio_utilizzo.view` · `.create` · `.update` · `.delete` — associazione macchina↔ricambio↔intervento.
-- `fornitori.view` · `.create` · `.update` · `.delete`
+  > ✅ **Nodo sciolto** (🔗 ADR-027, 8 Ago 2026). Registrando un ricambio dal form intervento si crea anche la sua garanzia `soggetto = ricambio`: il **Tecnico** ha ora sia `ricambio_utilizzo.create` sia `garanzie.ricambio.manage`, e ogni scrittura è tracciata. Nessuna delle tre soluzioni di ripiego ipotizzate in ADR-022 serve più — il vincolo che le rendeva necessarie non era mai stato deciso.
+- `fornitori.view` · `.create` · `.update` · `.delete` — anagrafica fornitori **per Ente**, scopata per `tenant_id` come ogni tabella di business (🔗 ADR-023). Ogni Ente popola e vede solo i propri.
 
 ### 4.5 Documenti & QR
 - `documenti.view` · `documenti.upload` · `documenti.download` · `documenti.delete` (🔗 ADR-009).
@@ -119,17 +121,17 @@ Risorse derivate dall'ERD §3–§9. Questo è l'elenco canonico che il seeder S
 | `semaforo.force` | ✅ | ✅ | ✅ | ✅ ¹ | ❌ | ❌ |
 | `garanzie.macchina.view` | ✅ | ✅ | ✅ | ✅ ¹ | ✅ | ✅ ² |
 | `garanzie.macchina.manage` | ✅ | ✅ | ✅ | ✅ ¹ | ❌ | ❌ |
-| `garanzie.ricambio.view` 🔒 | ✅ | ✅ | ✅ | ✅ ¹ | ❌ **mai** | ❌ **mai** |
-| `garanzie.ricambio.manage` 🔒 | ✅ | ✅ | ✅ | ✅ ¹ | ❌ **mai** | ❌ **mai** |
-| `letture_contaore.view` | ✅ | ✅ | ✅ | ✅ ¹ | ✅ | ✅ ² |
-| `letture_contaore.create` | ✅ | ✅ | ✅ | ✅ ¹ | ❌ | ✅ ² |
+| `garanzie.ricambio.view` 🔒 | ✅ | ✅ | ✅ | ✅ ¹ | ❌ **mai** | ✅ ² ⁶ |
+| `garanzie.ricambio.manage` 🔒 | ✅ | ✅ | ✅ | ✅ ¹ | ❌ **mai** | ✅ ² ⁶ |
+| ~~`letture_contaore.view`~~ | — | — | — | — | — | — |
+| ~~`letture_contaore.create`~~ | — | — | — | — | — | — |
 | `ricambi.view` | ✅ | ✅ | ✅ | ✅ ¹ | ✅ ³ | ✅ ² |
 | `ricambi.create` | ✅ | ✅ | ✅ | ✅ ¹ | ❌ | ✅ ² ⁴ |
 | `ricambi.update/delete` | ✅ | ✅ | ✅ | ✅ ¹ | ❌ | ❌ ⁴ |
 | `ricambi.merge` *(STRETCH)* | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `ricambio_utilizzo.view` | ✅ | ✅ | ✅ | ✅ ¹ | ✅ ³ | ✅ ² |
 | `ricambio_utilizzo.create/update/delete` | ✅ | ✅ | ✅ | ✅ ¹ | ❌ | ✅ ² |
-| `fornitori.view` | ✅ | ✅ | ✅ | ✅ ¹ | ❌ | ❌ |
+| `fornitori.view` | ✅ | ✅ | ✅ | ✅ ¹ | ✅ ⁵ | ❌ |
 | `fornitori.create/update/delete` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `documenti.view` | ✅ | ✅ | ✅ | ✅ ¹ | ✅ | ✅ ² |
 | `documenti.upload` | ✅ | ✅ | ✅ | ✅ ¹ | ✅ | ✅ ² |
@@ -152,8 +154,10 @@ Risorse derivate dall'ERD §3–§9. Questo è l'elenco canonico che il seeder S
 **Note di scope (livello "su quali righe", vedi ERD §10):**
 - ¹ **Responsabile Reparto / Admin:** limitato al proprio Ente; il Responsabile è ulteriormente ristretto al **sotto-albero** assegnato (`responsabile_unita`, 🔗 ADR-006). `Admin.utenti.*` e `audit.view` valgono solo per il proprio Ente.
 - ² **Tecnico:** solo strumenti in **portafoglio ∪ assegnazione** (🔗 ADR-007); ogni accesso loggato (cross-tenant).
-- ³ **Tenant:** vede ricambi/utilizzi montati sulle proprie macchine, **ma non** la garanzia del pezzo (`garanzie.ricambio.*` = ❌, 🔗 ADR-004).
-- ⁴ **Tecnico:** ha **solo `ricambi.create`** — può creare voci di catalogo "al volo" durante l'intervento (autocomplete, 🔗 ADR-008); **aggiornare/cancellare il catalogo resta operazione di Admin** (`ricambi.update/delete` = ❌). Risolto in S1 a favore di questa nota (seeder coerente).
+- ³ **Tenant:** vede ricambi/utilizzi montati sulle proprie macchine, **ma non** la garanzia del pezzo (`garanzie.ricambio.*` = ❌, 🔗 ADR-004). Vede però il **pallino arancione** che quella garanzia accende (🔗 ADR-020): il divieto è sul dato, non sul suo effetto.
+- ⁶ **Tecnico — modifica approvata l'8 Ago 2026** (🔗 ADR-027). Gestisce le garanzie dei ricambi che monta: è la fonte del dato, e negargliela costringeva a farla compilare a chi il pezzo non l'ha visto. Il controllo non è il divieto ma la **traccia**: ogni scrittura finisce nel canale `audit` con chi/cosa/quando. ⚠️ Cambia un default del seeder S1 e **richiede di riscrivere il test** `never grants spare-part warranties to Tenant or Tecnico`, che congelava la regola sbagliata.
+- ⁵ **Tenant — modifica approvata il 3 Ago 2026** (🔗 ADR-023). `fornitori.view` passa da ❌ a ✅ **in sola lettura**: il fornitore è ora un campo della scheda strumento e della Panoramica, e l'anagrafica è popolata *dall'Ente stesso* — nascondere al cliente da chi ha comprato la propria macchina non protegge nulla e lascerebbe un campo vuoto inspiegabile. Creazione/modifica restano all'Admin. ⚠ **Cambia un default del seeder S1** (`config/rbac.php`), quindi va con un test che asserisca il nuovo default: è l'unico modo perché una riga di matrice non torni indietro da sola al prossimo riseed.
+- ⁴ **Tecnico:** ha **solo `ricambi.create`** — può creare voci di catalogo "al volo" durante l'intervento (autocomplete, 🔗 ADR-008/022); **aggiornare/cancellare il catalogo resta operazione di Admin** (`ricambi.update/delete` = ❌). Risolto in S1 a favore di questa nota (seeder coerente).
 
 ---
 
@@ -161,10 +165,12 @@ Risorse derivate dall'ERD §3–§9. Questo è l'elenco canonico che il seeder S
 
 Questi vincoli non si esauriscono in un permesso sì/no e vanno implementati in **Policy + Global Scope** (non solo in spatie):
 
-- **Privacy garanzie ricambio** (🔗 ADR-004): `garanzie.ricambio.*` mai a `Tenant` né a `Tecnico`. Applicato via Policy + Global Scope sul ruolo, non via colonna.
+- **Privacy garanzie ricambio** (🔗 ADR-004/027): `garanzie.ricambio.*` mai al `Tenant`. Applicato via Policy + Global Scope sul ruolo, non via colonna. Il **Tecnico le gestisce**, con ogni scrittura tracciata.
+  - **Eccezione esplicita e unica** (🔗 ADR-020): la query che calcola il semaforo legge le garanzie ricambio **senza** il privacy scope, perché il pallino è un aggregato dovuto a tutti. È l'unico punto del codice autorizzato a fare `withoutGlobalScope(GaranziaRicambioPrivacyScope::class)`, e va accompagnato da un test negativo che verifichi che dal risultato **non trapeli** il nome del pezzo.
 - **Scope Responsabile Reparto** (🔗 ADR-006): filtro applicativo sul sotto-albero dei nodi in `responsabile_unita`, in aggiunta al Global Scope per `tenant_id`.
 - **Accesso Tecnico** (🔗 ADR-007): insieme visibile = `strumento.tenant_id ∈ portafoglio` **OR** `strumento.id ∈ strumenti con intervento assegnato`. Ogni accesso a scheda strumento → log in `activity_log`.
 - **Forzatura semaforo** (🔗 ADR-005): chi ha `semaforo.force` traccia `forced_by` / `forced_at` / `forced_reason`; lo stato forzato vince sul calcolato.
+- **Viste di sintesi** (🔗 ADR-024): una schermata che compone dati di aree diverse — la Panoramica, domani la dashboard S6 — applica il permesso **di ciascuna area, blocco per blocco**. Un solo `@can` in testa alla vista è l'errore da non fare: mostrerebbe a chi entra tutto ciò che la vista sa, aggirando i controlli delle aree d'origine.
 - **Impersonation** (🔗 Tech Stack, lab404): chi ha `utenti.impersonate` agisce con banner persistente di ripristino; ogni impersonation loggata.
 - **Lockout insoluto** (🔗 ADR-013): chi ha `billing.lockout` blocca totalmente il tenant; i dati restano consultabili solo lato Superadmin.
 
@@ -213,7 +219,7 @@ Indicazioni operative per il task S1 "definire ruoli/permessi base da S0" — il
 | **ADR-001** Multi-tenancy | Scope `tenant_id` su tutti i permessi tenant-bound (livello 2). |
 | **ADR-002** Rivenditori/billing | `billing.manage_global`, `tenants.provision`. |
 | **ADR-003** QR firmato | `strumenti.qr_generate`, `qr.scan`. |
-| **ADR-004** Garanzie sdoppiate | `garanzie.macchina.*`, `garanzie.ricambio.*` (mai Tenant/Tecnico), `letture_contaore.*`. |
+| **ADR-004** Garanzie sdoppiate | `garanzie.macchina.*`, `garanzie.ricambio.*` (mai al Tenant). |
 | **ADR-005** Semaforo | `interventi.complete`, `semaforo.force` (+ tracciamento). |
 | **ADR-006** Tenant=Ente / scope reparto | Ruoli tenant-bound; nota scope ¹; `responsabile_unita`. |
 | **ADR-007** Accesso Tecnici | Ruolo `Tecnico`, `interventi.assign`, nota scope ²; log accessi. |
@@ -222,3 +228,9 @@ Indicazioni operative per il task S1 "definire ruoli/permessi base da S0" — il
 | **ADR-012** Onboarding doppio | `tenants.provision`, `utenti.create`. |
 | **ADR-013** Lockout insoluto | `billing.lockout`. |
 | **ADR-016** Permessi configurabili a runtime | `roles.manage`; set bloccato 🔒; default seeder vs DB (§7). |
+| **ADR-019** Garanzie solo a data | **Rimozione** di `letture_contaore.view` / `.create` da catalogo, matrice e seeder. |
+| **ADR-020** Garanzia ricambio nel semaforo | Nessun permesso nuovo: eccezione documentata al privacy scope (§6), con test negativo. |
+| **ADR-022** Ricambi dall'intervento | Nodo sciolto da ADR-027: il Tecnico ha entrambi i permessi. |
+| **ADR-027** Tracciabilità | `garanzie.ricambio.*` al Tecnico; il set bloccato torna a significare "mai al Tenant". Ogni scrittura di dominio tracciata su `audit`. |
+| **ADR-023** Fornitore 1-N | `fornitori.*` scopati per tenant; `fornitori.view` **concesso al Tenant** in lettura (nota ⁵, approvato 3 Ago 2026) — cambia un default del seeder S1. |
+| **ADR-024** Tab Panoramica | Nessun permesso nuovo: **ogni blocco resta gated dal permesso della propria area**. La vista di sintesi non deve diventare la scorciatoia che aggira i `@can` degli altri tab — vale come regola di §6. |

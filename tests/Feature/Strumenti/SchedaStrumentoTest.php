@@ -1,6 +1,7 @@
 <?php
 
 use App\Livewire\Strumenti\SchedaStrumento;
+use App\Models\Intervento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
@@ -84,4 +85,34 @@ it('lets a Responsabile edit a strumento in its subtree but 404 outside', functi
     $strFuori = Strumento::factory()->forNode($altro)->create();
 
     $this->actingAs($resp)->get(route('strumenti.show', $strFuori))->assertNotFound();
+});
+
+it('shows the semaforo badge in the header', function () {
+    // Senza interventi: in regola.
+    $this->actingAs($this->admin)->get(route('strumenti.show', $this->strumento))
+        ->assertOk()
+        ->assertSee('In regola');
+
+    // Con un intervento scaduto-non-fatto: arancione automatico (DoD S3).
+    Intervento::factory()->forStrumento($this->strumento)->scaduto()->create();
+
+    $this->actingAs($this->admin)->get(route('strumenti.show', $this->strumento))
+        ->assertSee('Azione richiesta')
+        ->assertDontSee('In regola');
+});
+
+it('shows the obsoleto badge in the header only beyond the soglia', function () {
+    // ADR-014: segnalazione sull'età, accanto al semaforo e indipendente da esso.
+    $vecchio = Strumento::factory()->forNode($this->dept)
+        ->create(['nome' => 'Vecchia', 'data_installazione' => today()->subYears(12)->toDateString()]);
+
+    $this->actingAs($this->admin)->get(route('strumenti.show', $vecchio))
+        ->assertOk()
+        ->assertSee('Obsoleto');
+
+    $nuovo = Strumento::factory()->forNode($this->dept)
+        ->create(['nome' => 'Nuova', 'data_installazione' => today()->subYear()->toDateString()]);
+
+    $this->actingAs($this->admin)->get(route('strumenti.show', $nuovo))
+        ->assertDontSee('Obsoleto');
 });

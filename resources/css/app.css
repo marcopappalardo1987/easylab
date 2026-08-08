@@ -50,3 +50,19 @@
     --color-obsolete-500: #7c3aed;
     --color-locked-500: #64748b;
 }
+
+/* Dot semaforo (Design System §4): sm in tabella, md in card/header scheda.
+   Il glifo porta la forma (● ◐ ■), il colore arriva dalle utility text-*.
+   NB: la misura del DS (8px in tabella, 12px in card) è il DIAMETRO del pallino,
+   non la font-size: il glifo ● occupa circa metà del suo em, quindi la
+   font-size va circa raddoppiata perché il cerchio risulti della taglia giusta
+   ed effettivamente visibile. */
+@utility dot-sm {
+    font-size: 18px;
+    line-height: 1;
+}
+
+@utility dot-md {
+    font-size: 24px;
+    line-height: 1;
+}

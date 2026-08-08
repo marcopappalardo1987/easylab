@@ -1,6 +1,10 @@
 <?php
 
+use App\Livewire\Strumenti\SchedaStrumento;
+use App\Models\Strumento;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Features\SupportTesting\Testable;
 use Tests\TestCase;
 
 /*
@@ -44,7 +48,11 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Monta la scheda strumento come utente dato. Vive qui e non in un singolo file
+ * di test perché la usano più suite (azioni interventi, forzatura semaforo).
+ */
+function scheda(User $user, Strumento $strumento): Testable
 {
-    // ..
+    return Livewire\Livewire::actingAs($user)->test(SchedaStrumento::class, ['strumento' => $strumento]);
 }

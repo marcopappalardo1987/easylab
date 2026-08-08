@@ -106,7 +106,7 @@ Il QR è quindi una scorciatoia di navigazione (evita la ricerca manuale), non u
 
 **ADR-004 — Garanzie a ore: normalizzazione in "data di scadenza effettiva"**
 
-*Stato: Accettata*
+*Stato: Accettata — **superata in parte da ADR-019** (3 Ago 2026): la garanzia a ore **non esiste**, e con essa spariscono `tipo_scadenza`, `soglia_ore`, `data_scadenza_prevista` e le letture contaore. Restano validi il motore sdoppiato macchina/ricambio, il campo unico `data_scadenza_effettiva` e la privacy delle garanzie ricambio. **Integrata da ADR-020**: la garanzia del ricambio pesa sul semaforo dello strumento.*
 
 **Contesto.** Il Motore Garanzie Sdoppiato prevede garanzie "legate alle ore di utilizzo del macchinario", ma non esisteva un meccanismo per far conoscere al sistema le ore di una macchina. Tracciare le ore in automatico (IoT/telemetria) è fuori scope.
 
@@ -132,7 +132,7 @@ Il QR è quindi una scorciatoia di navigazione (evita la ricerca manuale), non u
 
 **ADR-005 — Semaforo: stato automatico calcolato + forzatura manuale tracciata**
 
-*Stato: Accettata*
+*Stato: Accettata — **estesa da ADR-020** (3 Ago 2026): la fonte "garanzie" del calcolo comprende anche le garanzie dei **ricambi** montati sullo strumento, con la stessa soglia di 30 giorni. **Estesa da ADR-024**: il motore non restituisce più solo uno stato ma una **diagnosi** (stato + motivi), mostrata nel tab Panoramica.*
 
 **Contesto.** Il semaforo (🟢/🟠/🔴) era descritto come "sia automatico che non automatico" per l'arancione e "manuale dopo verifica" per il rosso, senza una regola chiara su come automatico e manuale convivono.
 
@@ -201,7 +201,7 @@ Insieme accessibile del tecnico = *(strumenti con intervento assegnato a lui)* �
 
 **ADR-008 — Ricambi: catalogo incrementale con autocomplete**
 
-*Stato: Accettata*
+*Stato: Accettata — **raffinata da ADR-022** (3 Ago 2026): la chiave di autocomplete passa dal `codice` al **nome** (codice nullable) e il punto d'ingresso è il form intervento (checkbox "Ricambio effettuato" + righe ripetitore con garanzia obbligatoria). Il meccanismo collega-o-crea e la ricerca incrociata restano invariati.*
 
 **Contesto.** Contraddizione tra due requisiti: "inserisci codice e descrizione al volo" (i pezzi non sono noti a monte) e "ricerca incrociata del ricambio su tutte le macchine" (che con testo libero diventa inaffidabile per doppioni/errori di battitura).
 
@@ -225,7 +225,7 @@ Si ottengono insieme la velocità "al volo" e la ricerca incrociata affidabile (
 
 **ADR-009 — Scadenze documenti (taratura): modellate come Attività, non come motore separato**
 
-*Stato: Accettata*
+*Stato: Accettata — l'elenco dei tipi di intervento, qui lasciato aperto ("es. `tipo = taratura`"), è **fissato da ADR-021** (3 Ago 2026). Il valore è oggi `taratura_e_certificazione`: nel linguaggio del cliente taratura e certificazione sono **una voce sola**, con lo stesso trattamento documentale.*
 
 **Contesto.** L'area documentale era pensata come archivio passivo, ma i certificati di taratura hanno una validità legale a tempo: la loro scadenza deve accendere il semaforo e generare notifiche, come qualunque altra scadenza.
 
@@ -328,7 +328,7 @@ Si ottengono insieme la velocità "al volo" e la ricerca incrociata affidabile (
 - **Ambito globale, editor solo Superadmin/Developer.** I ruoli sono **globali** (un'unica matrice valida per tutta la piattaforma, niente modalità "teams" di spatie in V1). La modifica avviene da una UI nella Dashboard Superadmin (permesso `roles.manage`). La personalizzazione per-Ente da parte dell'Admin è rimandata a V1.1.
 - **Default da seeder.** Il `RolesAndPermissionsSeeder` (S1) imposta i default della matrice §5; da quel momento la **fonte di verità è il DB** (la UI può divergere dal seeder, che resta solo bootstrap/reset).
 - **Set "bloccato" protetto.** Un sottoinsieme di permessi è **non modificabile dalla UI** perché vincolato da privacy/legge/sicurezza o strutturale. La UI li mostra in sola lettura. Elenco bloccato (V1):
-  - `garanzie.ricambio.view` / `garanzie.ricambio.manage` → **mai** concedibili a `Tenant` o `Tecnico` (🔗 ADR-004).
+  - `garanzie.ricambio.view` / `garanzie.ricambio.manage` → **mai** concedibili al `Tenant` (🔗 ADR-004). *Corretto l'8 Ago 2026 da ADR-027: questa riga diceva «a `Tenant` o `Tecnico`», ma ADR-004 nomina solo il Tenant — e il Tecnico è personale EasyLab. Il divieto al Tecnico era un'estensione mai decisa, poi congelata da un test.*
   - `utenti.impersonate` → solo `Developer`/`Superadmin`.
   - `system.logs.view` → solo `Developer`.
   - `billing.manage_global`, `billing.lockout`, `tenants.view_all`, `tenants.provision` → solo `Developer`/`Superadmin`.
@@ -366,3 +366,266 @@ Si ottengono insieme la velocità "al volo" e la ricerca incrociata affidabile (
 - Superadmin/Developer richiedono un proprio Ente al setup (provisioning).
 - Le suite di isolamento aggiornano i casi "Developer/Superadmin vedono tutto" → ora scoped; aggiunti casi fail-closed.
 - Le dashboard globali di S6 vanno scritte con query non-scopate esplicite.
+
+---
+
+## Briefing cliente del 3 Agosto 2026 → ADR-019 ÷ ADR-024
+
+*Le sei decisioni che seguono nascono dallo stesso incontro col cliente destinatario della webapp. Sono raggruppate qui perché si leggono insieme: due riguardano le garanzie (una toglie, una estende), una la nomenclatura degli interventi, una il punto d'ingresso dei ricambi, una la forma della relazione coi fornitori e l'ultima una nuova vista di sintesi. Le ultime due sono arrivate a integrazione, poche ore dopo le prime quattro.*
+
+---
+
+**ADR-019 — Garanzie solo a data: la garanzia "a ore" è eliminata**
+
+*Stato: Accettata (3 Ago 2026) — **supera ADR-004** nella parte "garanzie a ore" e ne rimuove l'infrastruttura di supporto.*
+
+**Contesto.** ADR-004 nasce da un requisito raccolto in fase di scoping: "garanzia legata alle ore di utilizzo del macchinario". Il briefing del 3 Agosto 2026 chiarisce che si trattava di un **fraintendimento**: nel dominio del cliente la garanzia a ore **non esiste**. Tutte le garanzie — macchina e ricambio — scadono a data.
+
+**Decisione.**
+- La garanzia ha **una sola forma**: `data_inizio` + `durata_mesi` → `data_scadenza_effettiva`. Sparisce la distinzione `tipo_scadenza`.
+- Si eliminano: enum `TipoScadenzaGaranzia` e colonne `tipo_scadenza`, `soglia_ore`, `data_scadenza_prevista` su `garanzie`.
+- Si elimina **anche il contaore**: tabella `letture_contaore`, modello, UI di registrazione, permessi `letture_contaore.*`. Esisteva unicamente come input alternativo per la data prevista delle garanzie a ore (ADR-004, metodo 2): senza quel consumatore raccoglierebbe un dato che nessun motore legge.
+- Cade con esse la voce V1.1 "estrapolazione automatica del ritmo ore/giorno".
+
+**Cosa di ADR-004 sopravvive.** Il **motore sdoppiato** (garanzia macchina + garanzia ricambio), il campo unico **`data_scadenza_effettiva`** come sola grandezza che pilota semaforo e notifiche, e la **privacy delle garanzie ricambio** verso il Tenant.
+
+**Alternative scartate.**
+- *Tenere il contaore come dato operativo autonomo (usura, pianificazione):* plausibile in astratto, ma il cliente non l'ha chiesto e nessun motore lo consumerebbe. Si reintroduce con un ADR proprio se e quando nascerà il bisogno.
+- *Congelare le colonne invece di rimuoverle (dead code difensivo):* lascia campi che la UI non scrive più e che il prossimo lettore deve interpretare; ricrearli, se mai servisse, è una migration additiva.
+
+**Conseguenze.**
+- `Garanzia::normalizzaScadenza()` si riduce a un ramo solo: sparisce la classe di errore "garanzia a ore salvata senza data prevista".
+- Migration **distruttiva** (drop di 3 colonne + 1 tabella): le righe oggi `tipo_scadenza = ore` hanno `durata_mesi` NULL e vanno **convertite prima** del drop, altrimenti la normalizzazione esplode al primo salvataggio. Ordine obbligato: backfill → drop.
+- **Il backfill sposta qualche scadenza, e va bene così.** Una data arbitraria non è esprimibile come "N mesi esatti da `data_inizio`": si sceglie l'intero N più vicino. L'alternativa — scrivere `durata_mesi` lasciando intatta `data_scadenza_effettiva` — lascerebbe in tabella un valore che il modello non sa più riprodurre e che cambierebbe da solo al primo salvataggio: uno scarto noto e misurato adesso è preferibile a una divergenza silenziosa domani.
+- **`durata_mesi >= 1` va imposta nel model, non solo nel form.** Esistevano garanzie "a ore" la cui data prevista precedeva `data_inizio` (il vecchio modello non legava le due), e la conversione le riduceva a durata 0 — righe che il `min:1` del form non avrebbe mai permesso. Il `min:1` copre l'utente; seeder, import e migration scrivono senza passare di lì.
+- Documenti da allineare: ERD §5.3/§6.1/§12/§13, Schema Ruoli §4.3 + matrice §5, Elenco Funzionalità §3, Wireframe (vista tecnico mobile), Roadmap S3.
+
+---
+
+**ADR-020 — La garanzia del ricambio concorre al semaforo dello strumento su cui è montato**
+
+*Stato: Accettata (3 Ago 2026) — **estende ADR-005**; convive con il vincolo di privacy di ADR-004.*
+
+**Contesto.** ADR-004 modella la garanzia del singolo pezzo (`soggetto = ricambio`, agganciata a `ricambio_utilizzo`) ma non dice se pesa sul semaforo; l'implementazione S3 alimenta il calcolo con le sole garanzie `macchina`. Il briefing del 3 Agosto 2026 lo chiarisce: **anche i ricambi condizionano lo stato dello strumento**, con la stessa scala della garanzia macchina — dentro i termini → verde; scadenza entro un mese → arancione; scaduta → arancione.
+
+**Decisione.**
+- La **fonte garanzie** del calcolo semaforo diventa l'unione di: garanzie `macchina` dello strumento **∪** garanzie `ricambio` dei pezzi montati su quello strumento (doppio salto `garanzie → ricambio_utilizzo → strumento_id`).
+- "Manca 1 mese" ≡ la soglia "imminente" già in uso, **30 giorni** (`config/easylab.php`, `Semaforo::giorniImminente()`). Il cliente non chiede una seconda soglia dedicata ai ricambi.
+- **Il pallino è un aggregato, il dettaglio no.** Il Tenant continua a **non** vedere le righe garanzia-ricambio (ADR-004, set 🔒 `garanzie.ricambio.*`), ma **vede** l'arancione che ne deriva. Ogni etichetta che nomini la fonte — colonna "Prossima scadenza" in testa a tutte — degrada a dicitura neutra per chi non ha `garanzie.ricambio.view`.
+
+**Alternative scartate.**
+- *Nascondere al Tenant anche l'effetto (pallino verde per lui, arancione per EasyLab):* produrrebbe due verità sullo stesso strumento a seconda di chi guarda, minando la fiducia nel semaforo — che è l'oggetto centrale del prodotto. Scartata.
+- *Soglia dedicata ai ricambi:* nessuna evidenza che serva, e una seconda costante è una seconda cosa che può divergere dalla prima.
+
+**Conseguenze.**
+- `GaranziaRicambioPrivacyScope` è un **global scope**: la query che alimenta il semaforo deve leggere le garanzie ricambio **esplicitamente senza quello scope** (stesso idioma delle dashboard globali di ADR-018). Senza questa accortezza, per il Tenant l'arancione da ricambio non si accenderebbe mai — un bug invisibile proprio a chi lo subisce.
+- Il calcolo bulk dell'elenco strumenti (una query per pagina, S3 punto 4) va esteso al doppio salto senza tornare N+1; idem filtro e ordinamento per stato.
+- Salda il debito S3 punto 7 lettera **(c)** (colonna dettaglio filtrata per permesso, pallino no) e impone di sciogliere la lettera **(b)** (livello 2 dello scope sulle righe ricambio, che passa dallo stesso doppio salto).
+- 🧪 Test negativo obbligatorio: *un Tenant vede arancione uno strumento la cui unica scadenza è la garanzia di un ricambio, e non vede da nessuna parte il nome del pezzo.*
+
+---
+
+**ADR-021 — Tipologie di intervento: elenco fissato dal cliente**
+
+*Stato: Accettata (3 Ago 2026) — fissa la lista lasciata "estendibile" da ADR-009 / ERD §5.2.*
+
+**Contesto.** L'enum `TipoIntervento` era stato popolato con voci verosimili (`manutenzione`, `taratura`, `ispezione`, `riparazione`, `altro`) in assenza della nomenclatura reale. Il briefing del 3 Agosto 2026 la fornisce: è organizzata per **regime contrattuale di manutenzione**, non per natura tecnica del lavoro.
+
+**Decisione.** Le tipologie sono:
+
+| Valore | Etichetta UI |
+|---|---|
+| `manutenzione_ordinaria` | Manutenzione ordinaria |
+| `manutenzione_straordinaria` | Manutenzione straordinaria |
+| `manutenzione_full_risk` | Manutenzione full risk |
+| `taratura_e_certificazione` | Taratura e certificazione |
+| `altro` | Altro |
+
+- **Eliminate `ispezione` e `riparazione`**: non esistono nel linguaggio del cliente; il lavoro che vi ricadeva è manutenzione ordinaria o straordinaria.
+- **`manutenzione` generica sparisce**, sostituita dai tre regimi contrattuali.
+- **"Taratura e certificazione" è UNA voce**, non due. ⚠️ La prima stesura di questo ADR l'aveva spezzata in `taratura` + `certificazione`, leggendo la congiunzione dell'elenco come separatore: **errore di lettura**, corretto dal cliente il 4 Ago 2026. Nel suo linguaggio le due cose viaggiano insieme — la taratura si chiude con il certificato. È la voce con valenza documentale di ADR-009: certificato allegato, scadenza che alimenta il semaforo, nessun motore separato.
+- **`altro` resta** come voce di fallback (decisione presa contro l'ipotesi di lista chiusa a quattro): sul campo l'intervento non classificabile deve comunque essere registrabile, e `descrizione` porta il dettaglio.
+
+**Alternative scartate.**
+- *Tabella `tipi_intervento` configurabile per tenant:* la nomenclatura è di dominio, non di cliente; una tabella renderebbe non tipizzabile ciò che oggi è un enum PHP con `match` esaustivi.
+- *Lista chiusa a cinque senza `altro`:* più pulita per le statistiche, ma produce l'intervento non registrabile. Preferita la flessibilità, accettando che `altro` vada sorvegliata (se cresce, manca una voce).
+
+**Conseguenze.**
+- Da aggiornare: enum, seeder demo, test, etichette UI, e una **migration di rimappatura dati** — `manutenzione` e `ispezione` → `manutenzione_ordinaria`, `riparazione` → `manutenzione_straordinaria`, `taratura` → `taratura_e_certificazione`.
+- **Le correzioni di dati vanno sempre in avanti.** La fusione taratura+certificazione è arrivata quando la prima migration era già applicata al DB di sviluppo: si aggiunge una seconda migration, non si riscrive la prima — riscriverla la renderebbe una bugia (girata con un contenuto, versionata con un altro) e imporrebbe un rollback su dati reali.
+- `interventi.tipo` è una `string` senza CHECK (ERD §5.2), quindi la rimappatura è un `UPDATE` — ma va eseguita **prima** che l'enum PHP smetta di conoscere i vecchi valori, o ogni `from()` su una riga storica lancerà `ValueError`.
+- Le etichette non sono più derivabili dal valore (`manutenzione_full_risk` → "Manutenzione full risk"): serve un `label()` sull'enum come **unica** fonte, altrimenti la stessa stringa viene riscritta in ogni vista.
+
+---
+
+**ADR-022 — I ricambi si registrano dall'intervento, con nome libero e garanzia per riga**
+
+*Stato: Accettata (3 Ago 2026) — **raffina ADR-008**: cambia la chiave di ricerca del catalogo e il punto d'ingresso.*
+
+**Contesto.** ADR-008 fissa il catalogo ricambi incrementale con autocomplete **per codice**. Il briefing del 3 Agosto 2026 descrive il gesto reale dell'operatore: nel form di un nuovo intervento c'è una **checkbox "Ricambio effettuato"**; spuntandola compare una **riga ripetitore** dove si scrivono a mano il **nome** del ricambio e la **scadenza della sua garanzia**. Due tensioni con ADR-008: (a) il cliente nomina il pezzo, non lo codifica; (b) l'inserimento parte dall'intervento, non dal tab Ricambi.
+
+**Decisione.**
+- **Punto d'ingresso primario = il form intervento.** Checkbox `ricambio_effettuato` (stato di UI, **non** persistito: la verità è "esistono righe ricambio per questo intervento") → repeater di N righe `{nome, data_scadenza_garanzia}` con aggiungi/rimuovi.
+- Ogni riga, al salvataggio, produce in **una transazione**: la voce di catalogo `ricambi` (collegata se il nome corrisponde a una esistente del tenant, creata al volo altrimenti — è il collega-o-crea di ADR-008, con il **nome** come chiave al posto del codice), una riga `ricambio_utilizzo` (strumento + ricambio + intervento) e una `garanzia` con `soggetto = ricambio` agganciata a quella riga.
+- **`ricambi.codice` diventa nullable**: l'autocomplete lavora sul nome normalizzato; il codice resta per chi lo conosce e per il merge doppioni. La chiave pratica del catalogo passa a `(tenant_id, nome normalizzato)`.
+- **La garanzia della riga è obbligatoria**: è il dato che il cliente ha chiesto e che alimenta il semaforo (ADR-020). Nessun ricambio senza scadenza garanzia.
+- Le righe così create sono **le stesse** che il tab "Ricambi" mostra: il tab resta il luogo di lettura, ricerca incrociata e correzione, non il punto d'ingresso abituale.
+
+**Alternative scartate.**
+- *Tenere il codice obbligatorio come da ADR-008 originale:* fedele all'ADR ma infedele al gesto reale — durante l'intervento il codice spesso non è a portata di mano e si finirebbe per inventarlo, degradando proprio la ricerca incrociata che il codice doveva proteggere.
+- *Testo libero senza catalogo:* form più semplice, ma perde la ricerca incrociata, cioè il requisito che ha generato ADR-008. Scartata.
+- *Registrazione solo dal tab Ricambi:* meno codice, ma spezza in due passaggi un gesto unico.
+
+**Conseguenze.**
+- La **normalizzazione del nome** (trim, spazi multipli, maiuscole) diventa il punto delicato: i near-duplicati da refuso restano possibili, mitigati da autocomplete e merge doppioni (ADR-008, STRETCH S4).
+- ⚠️ **Nodo di permessi da sciogliere in S4.** Il Tecnico ha `ricambio_utilizzo.create` ma **non** `garanzie.ricambio.manage` (set 🔒, ADR-004): compilando la riga scriverebbe comunque una garanzia ricambio. Le tre vie: (a) la creazione contestuale avviene per conto del dominio, in un servizio che non richiede il permesso di gestione; (b) si allarga `garanzie.ricambio.manage` al Tecnico limitatamente alla creazione contestuale; (c) il Tecnico non compila la garanzia e la completa un Admin. **Decisione rimandata a S4, non implicita nel codice.**
+- ADR-008 resta valido nella sostanza (catalogo incrementale, collega-o-crea, ricerca incrociata): cambiano chiave di ricerca e punto d'ingresso.
+
+---
+
+**ADR-023 — Fornitore: uno per macchinario, non molti**
+
+*Stato: Accettata (3 Ago 2026) — **corregge l'ERD §7.3**, che modellava la relazione come pivot molti-a-molti.*
+
+**Contesto.** L'ERD prevedeva `fornitore_strumento`, un pivot N-N scelto in S0 in assenza di indicazioni. Il briefing precisa: **ogni macchinario è associato a un fornitore**, quello da cui è stato acquistato — coerente con l'Elenco Funzionalità §2, che già diceva "l'anagrafica dei fornitori **da cui vengono acquistati**". L'anagrafica è popolata da ciascun Ente e scopata per tenant come ogni altra tabella di business: ognuno vede i propri fornitori.
+
+**Decisione.**
+- Relazione **1-N**: `strumenti.fornitore_id` FK → `fornitori.id`. Il pivot `fornitore_strumento` **non si crea**.
+- **Obbligatorio nel form, nullable nello schema.** La colonna resta nullable perché gli strumenti già a sistema — e gli import CSV futuri — non hanno un fornitore, e una FK NOT NULL li renderebbe non salvabili; l'obbligo vive nella validazione del form. È scritto qui perché è la divergenza che il prossimo lettore scambia per una dimenticanza.
+- `fornitori` è tabella di business a tutti gli effetti: `tenant_id` + `BelongsToTenant`, soft delete, coperta dal meta-test di tenancy (nessuna eccezione, 🔗 ADR-001/018).
+- **Cancellazione protetta.** Un fornitore con strumenti associati non si elimina. E poiché `fornitori` usa soft delete, la scheda strumento deve mostrare il nome di un fornitore cestinato con un badge esplicito, non una cella vuota: un vuoto silenzioso si legge come "dato mai inserito".
+
+**Alternative scartate.**
+- *Mantenere il pivot N-N:* coprirebbe il caso "fornitore d'acquisto + fornitore d'assistenza", che però il cliente non ha posto. Un pivot per un rapporto 1-N costringe ogni lettura a una join e ogni scrittura a decidere quale delle righe sia "quella giusta". Se il caso emergerà, si aggiunge un secondo campo tipizzato (`fornitore_assistenza_id`) o si promuove a pivot con `ruolo`: entrambe migration additive.
+- *`fornitore_id` NOT NULL:* vincolo più forte, ma blocca righe storiche e import — e un vincolo che costringe a inventare un valore non protegge nulla.
+
+**Conseguenze.**
+- ERD §5.1 (colonna + indice), §7.3 riscritta, §2 diagramma; Elenco Funzionalità §2.
+- Il campo entra nel form strumento, nel tab Anagrafica e nel blocco di sintesi della Panoramica (🔗 ADR-024).
+- **Filtro "Fornitore" nell'elenco strumenti**: conseguenza naturale (l'elenco ha già filtri Ente/stato/obsoleti), da valutare in S4.
+- **`fornitori.view` concesso al ruolo Tenant** in sola lettura (approvato 3 Ago 2026): l'anagrafica è dell'Ente, e il cliente sa già da chi ha comprato la propria macchina. Modifica la matrice di S1 → serve un test sul nuovo default del seeder.
+- 🧪 Il test di isolamento vale anche qui: un Ente non deve poter associare uno strumento al fornitore di un altro Ente — la whitelist del select e la validazione al save devono avere **una sola definizione**, come già fatto per l'assegnatario degli interventi.
+
+---
+
+**ADR-024 — Tab Panoramica: il semaforo spiega sé stesso**
+
+*Stato: Accettata (3 Ago 2026) — estende ADR-005; nuova prima scheda della vista strumento.*
+
+**Contesto.** Fra S3 e S4 le cause del semaforo si sono sparpagliate: un arancione può nascere da un intervento scaduto (tab Interventi), da una garanzia macchina (tab Garanzie), dalla garanzia di un ricambio (tab Ricambi + Garanzie, 🔗 ADR-020) o da una forzatura manuale (badge in testa alla scheda). Il cliente chiede di vedere **a colpo d'occhio il motivo del semaforo acceso**, più qualche dato di sintesi utile — "prossimo intervento", qualche statistica.
+
+**Decisione.**
+- Nuovo tab **"Panoramica"**, **primo e di default** della scheda strumento.
+- Il motore semaforo smette di restituire solo uno stato e restituisce una **diagnosi**: stato **+ elenco dei motivi** che lo determinano, ciascuno con la propria scadenza e il collegamento alla riga che lo genera. `Semaforo::calcola()` resta come sottile involucro sopra la diagnosi, così i test puri già scritti restano validi.
+- **La Panoramica non calcola nulla di suo.** Riusa le regole già uniche nel progetto — `Intervento::isScaduto()`/`scopeScadute()`, `Garanzia::scopeEntroSoglia()`, `Strumento::isObsoleto()`. Un pannello che ricalcolasse "scaduto" a modo proprio diventerebbe una **terza verità** dopo il semaforo e la lista attività: esattamente ciò che ADR-005 esiste per evitare.
+- **La forzatura non nasconde.** Con `forced_state` valorizzato la Panoramica mostra **entrambi**: lo stato forzato che vince (con chi/quando/perché) **e** lo stato calcolato coi suoi motivi. È il principio di ADR-005 finalmente reso visibile invece che solo dichiarato.
+- **Privacy** (🔗 ADR-004/020). Un motivo che nasce da una garanzia ricambio si mostra, a chi non ha `garanzie.ricambio.view`, in forma **neutra**: "Garanzia di un componente in scadenza il gg/mm/aaaa", senza nome del pezzo e senza link alla riga. È la stessa regola della colonna "Prossima scadenza", ma qui il testo è molto più esposto — il test negativo è obbligatorio, non consigliato.
+- **Ogni blocco è gated dal proprio permesso.** La Panoramica compone dati di aree diverse e non deve diventare la scorciatoia che aggira i `@can` degli altri tab.
+
+**Contenuto V1**, in ordine di importanza:
+1. **Stato e motivi** — pallino grande; elenco dei motivi con data e link alla riga d'origine.
+2. **Prossimo intervento** — data, tipo, tecnico assegnato. "Nessuno pianificato" è a sua volta un'informazione, e va scritto.
+3. **Ultimo intervento eseguito** — data e tipo.
+4. **Garanzie** — garanzia macchina con scadenza e stato; le garanzie ricambio in **aggregato** ("N pezzi coperti") per chi non ha il permesso di vederle nel dettaglio.
+5. **Sintesi anagrafica** — fornitore (🔗 ADR-023), ubicazione corrente, data installazione, età e stato di obsolescenza.
+6. **Statistiche leggere** — interventi negli ultimi 12 mesi, scaduti-non-fatti aperti, ricambi montati, documenti allegati.
+
+**Alternative scartate.**
+- *Pannello sul pallino invece di un tab:* è il "badge cliccabile" già rimandato in S3. Su mobile un pannello galleggiante con sei blocchi è inservibile, e il cliente ha chiesto esplicitamente un tab.
+- *Persistere stato e motivi in colonna:* renderebbe la Panoramica istantanea, ma introduce un ricalcolo da tenere in sincronia a ogni evento. Rimandato insieme all'ipotesi di materializzazione già annotata come debito in S3 (paginazione a OFFSET): se arriverà, arriverà per la dashboard S6 — non per un tab che carica un solo strumento.
+- *Una sola grande dashboard al posto del tab:* risponde a una domanda diversa ("come stanno le mie macchine") e c'è già in S6. La Panoramica risponde a "perché **questa** macchina è arancione".
+
+**Conseguenze.**
+- Il refactor di `Semaforo` va fatto **prima** di aggiungervi la fonte "garanzie ricambio" (🔗 ADR-020), o la stessa classe viene toccata due volte con due criteri diversi.
+- La Panoramica carica **un solo** strumento: nessun rischio N+1 di lista. Ma i suoi contatori **non vanno riusati in una lista** senza ripensarli — è la trappola classica di questi pannelli, e qui l'elenco strumenti ha già un calcolo bulk fatto apposta.
+- Il tab diventa la landing della scheda: i test che oggi asseriscono il contenuto immediatamente visibile vanno aggiornati **consapevolmente** (la lista interventi non è più il primo pannello).
+- I motivi sono un elenco tipizzato, non stringhe: servono per il testo, per il link e — in S5 — per il corpo dell'"email del futuro", che oggi dovrebbe ricostruirseli da capo.
+
+---
+
+**ADR-025 — Infrastruttura: Laravel Cloud per l'applicazione, Backblaze B2 per i documenti**
+
+*Stato: Accettata (5 Ago 2026) — **supera l'assunzione tecnica "Forge + DigitalOcean"** della roadmap §0 e del Tech Stack §6, che era un default proposto e mai eseguito.*
+
+**Contesto.** Roadmap e Tech Stack davano per scontati **Laravel Forge su droplet DigitalOcean** per hosting e **DigitalOcean Spaces** per i documenti. Erano assunzioni del giorno 1, dichiarate "default proposti — modificabili", e il provisioning non è mai stato fatto: nessuna riga di codice usa `Storage`, `FILESYSTEM_DISK` è ancora `local` e il driver S3 non è installato. Quando è arrivato il momento di scegliere davvero, la decisione è cambiata.
+
+**Decisione.**
+- **Applicazione, database e Redis su Laravel Cloud.** Piattaforma gestita: deploy da Git, Postgres e Valkey/Redis gestiti, worker di coda e scheduler inclusi. Sostituisce Forge + droplet.
+- **Documenti su Backblaze B2**, bucket **privato** in **regione UE** (Amsterdam, `eu-central-003`), via il driver S3 standard di Laravel puntato all'endpoint B2.
+- **Credenziali: Application Key limitata al singolo bucket**, mai la master key. Se finisce in un log o in un `.env` sbagliato il danno resta confinato a quel bucket.
+
+**Alternative scartate.**
+- *Laravel Object Storage* (l'object storage incluso in Laravel Cloud, Cloudflare R2 sotto il cofano): sarebbe **zero sub-responsabili nuovi**, perché Cloudflare resterebbe sub-responsabile *di Laravel* e coperto dal loro DPA. Ha però un ricarico di circa 3× sullo storage rispetto a B2 diretto ($0,02 contro ~$0,006 per GB-mese). **Scelta consapevole del prezzo sopra la semplicità contrattuale**, presa dopo aver messo a confronto le due cose: la differenza è nell'ordine di una decina di euro l'anno ai volumi previsti, contro un DPA in più da firmare e una voce in più nel registro.
+- *DigitalOcean Spaces:* aveva senso finché l'hosting era su DigitalOcean — un fornitore già presente. Con Laravel Cloud quell'argomento decade, e restano solo i 5 $/mese di minimo fisso, pagati anche con 1 GB dentro.
+- *Disco locale del server:* costo zero, ma incompatibile con una piattaforma che scala e ricrea i container, e complica i backup.
+
+**Conseguenze.**
+- ⚠️ **Un sub-responsabile in più.** Backblaze entra nel registro dei trattamenti accanto a Laravel Cloud, e serve il **DPA firmato prima che i documenti dei clienti arrivino nel bucket** (art. 28). È il costo accettato di questa scelta e non va scoperto al momento del go-live: un account personale gratuito va bene per provare, non per dati veri.
+- Va installato `league/flysystem-aws-s3-v3` (oggi assente) e configurato il disco `s3` con `AWS_ENDPOINT` verso B2. **Nessuna riga di applicazione cambia**: il provider resta un dettaglio di `.env`.
+- **La reversibilità dipende da come si servono i file**, e la scelta è ancora aperta. ADR-009 dice "URL firmate" senza specificare quale: una **URL pre-firmata S3** è di fatto un bearer token — chi ce l'ha legge il file fino alla scadenza, con la Policy fuori dal giro — mentre una **rotta firmata Laravel che fa da tramite** ricontrolla l'autorizzazione a ogni richiesta e funziona identica su qualunque disco. La seconda è più coerente con ADR-003 ("mai dati senza auth") e ADR-018 (fail-closed), e rende il provider davvero sostituibile. **Da decidere in S4**, quando nasce la feature documenti.
+- L'egress di B2 è gratuito fino a **3× lo storage medio mensile**, poi si paga: ampiamente sufficiente per PDF serviti a utenti autenticati, ma è la clausola da conoscere prima di firmare.
+- Documenti da allineare: Tech Stack §6, `Setup Repository e Ambienti.md` (ambienti, variabili, provisioning, pipeline di deploy), **`Privacy GDPR e Registro Trattamenti.md`** (elenco sub-responsabili — è un documento di compliance, non di sviluppo), ERD §8.1, roadmap §0/S1/S4, wireframe §2.
+- Cambia anche la **storia di backup e restore** (`[CORE]` in S7): il database non è più un Postgres su droplet da gestire a mano ma un servizio gestito, con proprie procedure da verificare.
+
+**Nota operativa — setup B2 verificato l'8 Ago 2026.** Connessione provata con successo su percorsi della forma reale dell'ERD §8.1 (`3/documenti/…`, `17/documenti/…`: scrittura, esistenza, rilettura, dimensione, elenco, cancellazione, e cartelle per tenant indipendenti). Le tre cose su cui si perde tempo, in ordine di quanto sono costate:
+
+1. **Il prefisso della chiave.** Creando una Application Key, Backblaze offre un campo *"file name prefix"* che limita la chiave ai file il cui nome inizia con quella stringa. Va lasciato **vuoto**: i percorsi dell'applicazione iniziano con il `tenant_id`, quindi qualunque prefisso li blocca tutti. La restrizione utile è quella **al bucket**, che va invece tenuta.
+2. **Prefisso e restrizione vivono sulla chiave, non sul bucket.** Ricreare il bucket non le tocca — e una chiave vincolata al bucket vecchio risponde `AccessDenied — not entitled` su quello nuovo.
+3. **`AccessDenied — not entitled` è un messaggio unico per violazioni diverse**: capability mancante, percorso fuori prefisso, bucket non autorizzato. Non distingue, quindi da solo porta fuori strada. Peggio: lo strato S3 di B2 **non applica le restrizioni in modo uniforme** — `PutObject` e `GetObject` fuori prefisso possono passare mentre `HeadObject` e `ListObjectsV2` falliscono, così una chiave troppo stretta sembra funzionare finché non si tocca `exists()` o `size()`.
+
+Dettagli di configurazione: `AWS_ENDPOINT` vuole lo schema **`https://`** (il pannello mostra l'host nudo, e l'SDK rifiuta l'URI senza schema); il keyID è di **25 caratteri** e il secret di **31** — lunghezze diverse significano incollatura troncata; `AWS_USE_PATH_STYLE_ENDPOINT=false`. Le API native di Backblaze rispondono su realm diversi per regione e **non** sono utilizzabili come diagnostica generica: conviene verificare direttamente con l'API S3.
+
+---
+
+**ADR-026 — Download dei documenti: rotta firmata Laravel, non URL pre-firmata dell'object store**
+
+*Stato: Accettata (8 Ago 2026) — scioglie il "da decidere in S4" lasciato aperto da ADR-025 e precisa cosa significa "URL firmate" in ADR-009.*
+
+**Contesto.** ADR-009 dice che i documenti si scaricano con "URL firmate", senza specificare quale delle due cose molto diverse che quella espressione può indicare. La domanda è diventata concreta con ADR-025, perché la risposta decide anche quanto siamo legati al provider di storage.
+
+**Le due strade.**
+1. **URL pre-firmata S3** (`Storage::temporaryUrl()`): il browser scarica direttamente da B2. Nessuna banda a carico dell'app. Ma quell'URL è di fatto un **bearer token**: chiunque l'abbia legge il file fino alla scadenza, e dopo l'emissione la Policy è fuori dal giro — non c'è modo di revocarla né di sapere chi l'ha usata.
+2. **Rotta firmata Laravel che fa da tramite**: `signed` middleware + Policy, il file viene servito in streaming dall'applicazione.
+
+**Decisione: la seconda.**
+- L'**autorizzazione viene ricontrollata a ogni richiesta**, contro Policy, tenancy e sotto-albero del Responsabile. È l'unico modo perché ADR-003 ("mai dati senza auth") e ADR-018 (scoping fail-closed) valgano anche per i file, e non solo per le schermate che li elencano.
+- **Funziona identica su qualunque disco**, `local` compreso: lo sviluppo non richiede credenziali B2 e il provider resta sostituibile con una riga di `.env`. Senza questo, la scelta di ADR-025 sarebbe un vincolo e non una preferenza.
+- Rende possibile **tracciare i download** come qualunque altra azione sensibile (🔗 ADR-027), cosa che con una URL pre-firmata non è tecnicamente possibile.
+
+**Alternative scartate.**
+- *URL pre-firmata:* più veloce e a costo zero di banda, ma consegna un permesso che non si può più governare. Ha senso per contenuti pubblici ad alto traffico; qui i file sono certificati di taratura e report d'intervento, serviti a poche decine di utenti autenticati.
+- *Ibrido (pre-firmata solo per i file "non sensibili"):* richiederebbe di stabilire e mantenere quale documento è sensibile — la stessa classificazione che ADR-003 ha già scartato per il QR pubblico.
+
+**Conseguenze.**
+- Il download costa banda dell'applicazione. Per PDF di manuali e certificati è irrilevante; se un domani ci finissero video o allegati molto pesanti, la decisione va rivista con numeri alla mano.
+- Serve una rotta dedicata con `signed` + Policy sul modello `Documento`, e i test negativi delle aree rosse: utente di altro tenant → 404, Responsabile fuori sotto-albero → 404, URL scaduta → 403.
+- `Storage::disk()` va indirizzato **esplicitamente**: `FILESYSTEM_DISK` resta `local` come default applicativo, così nessuna altra parte del sistema finisce sull'object store per errore.
+
+---
+
+**ADR-027 — Tracciabilità delle scritture di dominio: la traccia sostituisce il divieto**
+
+*Stato: Accettata (8 Ago 2026) — **corregge ADR-016** su `garanzie.ricambio.*` e scioglie il nodo aperto di ADR-022.*
+
+**Contesto.** ADR-022 aveva lasciato un nodo scomodo: il Tecnico registra il ricambio dal form intervento, ma quel gesto crea anche la garanzia del pezzo, e `garanzie.ricambio.manage` gli era negato dal set bloccato. Le tre vie d'uscita ipotizzate erano tutte aggiramenti.
+
+**Il divieto non era mai stato deciso.** ADR-004 dice: «Le garanzie sui ricambi restano visibili solo a EasyLab/Admin, **mai al Tenant**». Nomina il Tenant, e il Tecnico *è* personale EasyLab. Il divieto al Tecnico compare per la prima volta nello Schema Ruoli §4.3 e in ADR-016, entrambi citando ADR-004 come fonte — ma quella fonte non lo dice. La citazione si è allargata oltre il suo contenuto, è entrata in `config/rbac.php` e nella matrice, e infine è stata congelata da un test. **Una volta che un test la difende, una svista è indistinguibile da una decisione**: è il motivo per cui vale la pena rileggere la fonte quando un vincolo costringe a contorsioni.
+
+**Decisione.**
+1. **Il Tecnico ottiene `garanzie.ricambio.view` e `.manage`.** È la persona che monta fisicamente il pezzo, quindi la fonte del dato sulla garanzia. Il set bloccato resta, ma il suo significato torna quello di ADR-004: **mai al Tenant**.
+2. **Ogni scrittura di dominio è tracciata** — chi, cosa, quando — sul canale `audit` già esistente. Dove il rischio è che qualcuno faccia una modifica sbagliata o inopportuna, **la risposta è la traccia, non il divieto**: negare il permesso a chi deve fare il lavoro sposta il problema su un'altra persona senza eliminarlo, e produce dati inseriti da chi non li conosce.
+3. **Attuazione per sprint**, non tutta insieme: garanzie (S4, sblocca ADR-022) → interventi e ricambi (S4) → spostamenti e installazione (S4/S5) → il resto quando serve. Il principio è deciso una volta; la copertura cresce a tappe.
+
+**Perimetro.** La traccia riguarda le **scritture** (creazione, modifica, cancellazione) delle entità di dominio, non le letture. Fa eccezione l'accesso cross-tenant del Tecnico, già tracciato per conto suo (🔗 ADR-007), e il download dei documenti, che ADR-026 rende tracciabile.
+
+**Alternative scartate.**
+- *Lasciare il divieto e far completare la garanzia a un Admin:* due passaggi per un gesto unico, e il dato lo inserisce chi non ha visto il pezzo. È esattamente ciò che ADR-022 voleva evitare.
+- *Permesso allargato solo alla "creazione contestuale":* una regola che vale in un punto dello schermo e non in un altro è difficile da spiegare e facile da aggirare.
+- *Tracciare tutto e subito con `LogsActivity` su ogni modello:* copertura immediata, ma rende urgente la questione retention prima di averla decisa col legale, e allarga S4 senza necessità.
+
+**Conseguenze.**
+- Da aggiornare: `config/rbac.php` (Tecnico), matrice Schema Ruoli §5, ERD §10, la nota §4.3, l'elenco del set bloccato in ADR-016, e **il test `never grants spare-part warranties to Tenant or Tecnico`**, che va riscritto per il solo Tenant. È una modifica di test **consapevole**, non un adeguamento: congelava una regola sbagliata.
+- ⚠️ **La retention dell'audit diventa più urgente.** Il registro dei trattamenti segna T6 con "retention definita (APERTO)". Tracciare ogni scrittura significa più dati personali **sui dipendenti**, conservati più a lungo: la decisione col legale va presa prima che il volume renda scomodo cambiare idea.
+- **"Tracciato" non significa ancora "visibile".** La vista Audit è in S6: fino ad allora i dati si accumulano e si leggono solo dal database. Va detto a chi si aspetta di vederli subito.
+- Il volume di `activity_log` cresce in modo non banale: va tenuto d'occhio e si intreccia con la retention sopra.
+- **Come tracciare**, da decidere in implementazione: oggi lo stile del progetto sono chiamate `activity()` esplicite dentro i metodi di dominio (`forzaSemaforo` lo fa così, perché ogni chiamante resti tracciato); il trait `LogsActivity` è più sostenibile su larga scala ma più rumoroso e con meno controllo sul messaggio. Probabilmente serviranno entrambi: il trait per la copertura, le chiamate esplicite dove il messaggio conta.

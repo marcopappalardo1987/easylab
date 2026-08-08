@@ -13,9 +13,11 @@
 | **EasyLab** | **Titolare** per i dati dei propri account/clienti diretti e per i dati di fatturazione; **Responsabile** (data processor) per i dati che i clienti SaaS trattano tramite la piattaforma | Duplice ruolo tipico del SaaS. **APERTO:** confermare il confine con un legale. |
 | **Cliente/Ente (Admin/Tenant)** | **Titolare** dei dati operativi del proprio laboratorio | Firma DPA (accordo art. 28) con EasyLab. |
 | **Tecnici/Operatori** | Persone autorizzate al trattamento (art. 29) | Accesso tracciato (ADR-007). |
-| **Sub-responsabili** | DigitalOcean (hosting/Spaces), provider SMTP, **Stripe** (pagamenti) | Serve elenco sub-processor + relativi DPA. |
+| **Sub-responsabili** | **Laravel Cloud** (applicazione, database, Redis), **Backblaze B2** (documenti), provider SMTP, **Stripe** (pagamenti) | Serve elenco sub-processor + relativi DPA (🔗 ADR-025). |
 
-> **Azione:** predisporre **DPA** (EasyLab↔clienti) e raccogliere i DPA dei sub-responsabili. **Residenza dati in UE** (droplet + Spaces region UE) per minimizzare trasferimenti extra-UE.
+> **Azione:** predisporre **DPA** (EasyLab↔clienti) e raccogliere i DPA dei sub-responsabili. **Residenza dati in UE** — ambienti Laravel Cloud in regione UE e bucket B2 ad Amsterdam (`eu-central-003`) — per minimizzare trasferimenti extra-UE.
+
+> ⚠️ **Backblaze è un sub-responsabile aggiunto per scelta** (🔗 ADR-025). L'object storage incluso in Laravel Cloud avrebbe evitato un fornitore e un DPA in più, ma costa circa 3× sullo storage: si è preferito il risparmio, accettando l'onere documentale. La conseguenza pratica è che **il DPA con Backblaze va firmato prima che il primo documento di un cliente entri nel bucket**, non a ridosso del go-live. Un account personale gratuito è adatto solo alle prove tecniche.
 
 ---
 
@@ -25,13 +27,15 @@
 |---|---|---|---|---|---|---|
 | T1 | **Gestione account & auth** | accesso, sicurezza (2FA) | utenti piattaforma | nome, email, hash password, 2FA, log accessi | esecuzione contratto / legittimo interesse (sicurezza) | durata rapporto + retention tecnica |
 | T2 | **Anagrafica strumenti & manutenzioni** | erogazione del servizio (semaforo, scadenze, interventi) | personale dei laboratori | dati strumenti, interventi, tecnico assegnato, note | esecuzione contratto | durata rapporto + storico |
-| T3 | **Documenti & certificati** | archiviazione/allegati (tarature, report) | personale dei laboratori | file su Spaces (URL firmate) | esecuzione contratto | durata rapporto |
+| T3 | **Documenti & certificati** | archiviazione/allegati (tarature, report) | personale dei laboratori | file su **Backblaze B2**, bucket privato in UE, accesso solo autenticato | esecuzione contratto | durata rapporto |
 | T4 | **Notifiche email/in-app** | promemoria scadenze ("email del futuro") | utenti destinatari | email, contenuto notifica | esecuzione contratto / legittimo interesse | log invii a rotazione |
 | T5 | **Fatturazione & abbonamenti** | incassi, obblighi fiscali | clienti paganti | P.IVA, Cod. Fiscale, PEC/SDI, dati pagamento (via Stripe) | obbligo legale / contratto | termini fiscali di legge |
-| T6 | **Audit log** | sicurezza, tracciabilità (impersonation, forzature, accessi tecnici) | utenti piattaforma | chi/cosa/quando, IP | legittimo interesse / obbligo sicurezza | retention definita (APERTO) |
+| T6 | **Audit log** | sicurezza, tracciabilità (impersonation, forzature, accessi tecnici, **scritture di dominio** — 🔗 ADR-027) | utenti piattaforma, **in prevalenza dipendenti e tecnici** | chi/cosa/quando, IP | legittimo interesse / obbligo sicurezza | retention definita (**APERTO — più urgente**) |
 | T7 | **Accesso tecnici cross-tenant** | manutenzione su clienti in portafoglio/assegnati | personale laboratori terzi | accessi loggati a schede strumento | esecuzione contratto (ADR-007) | come audit log |
 
 > **APERTO:** definire i **tempi di conservazione** puntuali per ciascun trattamento (T1, T4, T6) con il legale.
+>
+> ⚠️ **T6 è diventato più pesante** (🔗 ADR-027, 8 Ago 2026): la tracciabilità passa da poche azioni sensibili a **ogni scrittura di dominio**. Sono dati personali riferiti soprattutto ai **dipendenti** (chi ha modificato cosa e quando), quindi il trattamento sfiora il controllo a distanza dell'attività lavorativa: va inquadrato con attenzione, la finalità dichiarata resta la sicurezza e la ricostruzione degli eventi, e i tempi di conservazione vanno fissati **prima** che il volume renda scomodo cambiare idea. Non è un adempimento rinviabile al go-live.
 
 ---
 
@@ -40,10 +44,11 @@
 Già previste dall'architettura (mappate agli ADR):
 - **Isolamento multi-tenant** row-level + Global Scope, con **suite di test di isolamento** dedicata (🔗 ADR-001) — misura cardine contro fughe di dati tra clienti.
 - **Controllo accessi** RBAC granulare (`Schema Ruoli e Permessi.md`) + set permessi **bloccato** per vincoli privacy (🔗 ADR-016).
-- **Minimizzazione visibilità:** garanzie ricambio non visibili al Tenant (🔗 ADR-004); accesso tecnico limitato a portafoglio ∪ assegnazione (🔗 ADR-007).
+- **Minimizzazione visibilità:** garanzie ricambio non visibili al Tenant (🔗 ADR-004); accesso tecnico limitato a portafoglio ∪ assegnazione (🔗 ADR-007). *Precisazione (🔗 ADR-020): al Tenant resta nascosto il **dato** (righe, nomi dei pezzi, scadenze), non il suo **effetto** sul semaforo del proprio strumento — che è informazione sul suo bene, non sui rapporti commerciali di EasyLab.*
 - **Autenticazione forte:** 2FA obbligatoria per ruoli privilegiati (🔗 ADR-012).
-- **Cifratura:** TLS in transito (SSL Let's Encrypt); storage documenti privato con **URL firmate a scadenza**; segreti fuori dal repo.
-- **Audit/accountability:** activity log su modelli sensibili, impersonation e forzature tracciate.
+- **Cifratura:** TLS in transito (gestito da Laravel Cloud); **cifratura a riposo dei documenti** attiva sul bucket (SSE-B2, `AES256`, chiavi gestite da Backblaze — misura ex art. 32); storage su **bucket privato**, mai esposto direttamente — il download passa da una **rotta firmata dell'applicazione** che ricontrolla l'autorizzazione a ogni richiesta (🔗 ADR-026), quindi l'accesso è revocabile e tracciabile; segreti fuori dal repo.
+  > La cifratura è **per bucket** e va riattivata su ogni bucket nuovo, produzione compresa: non si eredita. Essendo SSE-B2 (chiavi di Backblaze) è **trasparente al codice** e non impedisce snapshot, versioning e regole di lifecycle. Sarebbe invece SSE-C — chiavi nostre, inviate a ogni richiesta — a bloccare le funzioni che leggono i file lato server, oltre a complicare ogni `put`/`get`.
+- **Audit/accountability:** activity log su impersonation, autenticazione, forzature del semaforo e — dal 8 Ago 2026 — **ogni scrittura di dominio** (🔗 ADR-027). È la misura che consente di concedere permessi operativi a chi fa il lavoro senza rinunciare alla ricostruzione degli eventi: **la traccia sostituisce il divieto**.
 - **Backup & restore** testati (S7) + procedura di ripristino.
 - **Residenza UE** di hosting e storage.
 
@@ -65,7 +70,7 @@ Già previste dall'architettura (mappate agli ADR):
 ## 5. Documenti da produrre (prima del go-live S7)
 
 - [ ] **Informativa privacy** (clienti e utenti finali) — versione cliente + versione tecnico.
-- [ ] **DPA** EasyLab ↔ clienti (art. 28) + raccolta DPA sub-responsabili (DigitalOcean, SMTP, Stripe).
+- [ ] **DPA** EasyLab ↔ clienti (art. 28) + raccolta DPA sub-responsabili (**Laravel Cloud**, **Backblaze B2**, SMTP, Stripe). ⚠️ Quello con Backblaze serve **prima dei primi documenti reali**, non prima del go-live.
 - [ ] **Registro dei trattamenti** definitivo (da §2, con tempi di conservazione validati).
 - [ ] **Elenco sub-processor** pubblicato/aggiornabile.
 - [ ] **Procedura data breach** (notifica entro 72h) e **procedura richieste interessati**.

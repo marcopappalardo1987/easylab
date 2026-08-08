@@ -1,8 +1,16 @@
 🗄️ Modello Dati (ERD) — Easy Lab
 
-*Schema dati di riferimento per la V1 (MVP). Traduce in entità, relazioni e colonne le 15 decisioni architetturali (`Decisioni Architetturali.md`, ADR-001 → ADR-015) e l'`Elenco Funzionalità Easy Lab.md`. Questo documento è il **contratto** per le migrazioni Laravel degli Sprint 1–2: ogni tabella di business qui descritta diventa una migration. In caso di conflitto fra questo file e un ADR, vince l'ADR (e questo file va corretto).*
+*Schema dati di riferimento per la V1 (MVP). Traduce in entità, relazioni e colonne le decisioni architetturali (`Decisioni Architetturali.md`, ADR-001 → ADR-027) e l'`Elenco Funzionalità Easy Lab.md`. Questo documento è il **contratto** per le migrazioni Laravel degli Sprint 1–2: ogni tabella di business qui descritta diventa una migration. In caso di conflitto fra questo file e un ADR, vince l'ADR (e questo file va corretto).*
 
 > **Stato:** bozza di Sprint 0 (task S0.1). Da approvare prima di scrivere le migrazioni.
+>
+> **Revisione del 3 Agosto 2026 (briefing cliente — ADR-019 ÷ ADR-024).** Sei modifiche al contratto, tutte già riflesse nelle sezioni che seguono:
+> 1. **Garanzia a ore eliminata** (ADR-019) → §6.1 perde `tipo_scadenza`, `soglia_ore`, `data_scadenza_prevista`; **§5.3 `letture_contaore` è soppressa**.
+> 2. **La garanzia del ricambio pesa sul semaforo** dello strumento su cui è montata (ADR-020) → §5.1 campi derivati, §10 matrice, §11 indici.
+> 3. **Tipologie di intervento fissate dal cliente** (ADR-021) → §5.2, con migration di rimappatura dei dati esistenti.
+> 4. **Ricambi registrati dal form intervento**, nome libero e garanzia obbligatoria per riga (ADR-022) → §7.1/§7.2.
+> 5. **Fornitore uno per macchinario** (ADR-023) → §5.1 (`fornitore_id`) e **§7.3 riscritta**: il pivot `fornitore_strumento` non si crea.
+> 6. **Tab Panoramica** con i motivi del semaforo (ADR-024) → §5.1 campi derivati: il motore restituisce una diagnosi, non solo uno stato. Nessuna tabella nuova.
 
 ---
 
@@ -57,10 +65,8 @@ erDiagram
     RESELLERS ||--o{ UNITA_ORGANIZZATIVA : "reseller_id (V1.1)"
 
     STRUMENTI ||--o{ INTERVENTI : "ha attività"
-    STRUMENTI ||--o{ LETTURE_CONTAORE : "ha letture"
     STRUMENTI ||--o{ RICAMBIO_UTILIZZO : "monta ricambi"
     STRUMENTI ||--o{ SPOSTAMENTI_STRUMENTO : "storico spostamenti"
-    STRUMENTI ||--o{ FORNITORE_STRUMENTO : "fornitori"
     STRUMENTI ||--o{ GARANZIE : "garanzia macchina"
     STRUMENTI ||--o{ DOCUMENTI : "allegati (morph)"
 
@@ -71,7 +77,7 @@ erDiagram
     RICAMBI ||--o{ RICAMBIO_UTILIZZO : "voce di catalogo"
     RICAMBIO_UTILIZZO ||--o| GARANZIE : "garanzia pezzo"
 
-    FORNITORI ||--o{ FORNITORE_STRUMENTO : "macchinari"
+    FORNITORI ||--o{ STRUMENTI : "fornitore_id (1-N, ADR-023)"
 
     USERS ||--o{ SPOSTAMENTI_STRUMENTO : "eseguito_da"
     UNITA_ORGANIZZATIVA ||--o{ SPOSTAMENTI_STRUMENTO : "da/a nodo"
@@ -190,6 +196,7 @@ L'azienda "similare a EasyLab" che ripropone la piattaforma ai propri clienti. V
 | `tenant_id` | bigint FK (scoping) | |
 | `reseller_id` | bigint nullable (scoping) | |
 | `unita_organizzativa_id` | bigint FK → `unita_organizzativa.id` | **Ubicazione corrente** (nodo sottolab/dipartimento). Aggiornata dagli spostamenti (§5.4). |
+| `fornitore_id` | bigint **nullable** FK → `fornitori.id` | Fornitore da cui la macchina è stata acquistata (ADR-023). **Nullable nello schema, obbligatorio nel form**: le righe storiche e gli import non ne hanno uno, e una FK NOT NULL li renderebbe non salvabili. |
 | `nome` | string | |
 | `modello` | string nullable | |
 | `matricola` | string nullable | Seriale costruttore. |
@@ -205,13 +212,15 @@ L'azienda "similare a EasyLab" che ripropone la piattaforma ai propri clienti. V
 
 **Campi derivati (NON persistiti):**
 - `stato_semaforo_calcolato` — funzione pura su `interventi` + `garanzie` (ADR-005): 🟢 nessuna attività scaduta-non-fatta né scadenza imminente; 🟠 ≥1 attività scaduta-non-fatta o scadenza/garanzia imminente. 🔴 solo via `forced_state`.
+  > **La fonte "garanzie" comprende due insiemi** (ADR-020): le garanzie `macchina` dello strumento **∪** le garanzie `ricambio` dei pezzi montati sullo strumento (`garanzie → ricambio_utilizzo → strumento_id`). Le seconde vanno lette **senza** `GaranziaRicambioPrivacyScope`: il pallino è un aggregato dovuto a tutti, il dettaglio no.
 - `stato_semaforo_effettivo` = `forced_state` se presente, altrimenti `stato_semaforo_calcolato`.
 - `obsoleta` = `(oggi − data_installazione) ≥ soglia_obsolescenza_anni` del tenant (ADR-014).
+- **`diagnosi_semaforo`** (ADR-024) — non solo lo stato ma i **motivi** che lo determinano: elenco tipizzato `{tipo, scadenza, riferimento}` da cui il tab Panoramica costruisce testo e link. Alimenta anche l'"email del futuro" (S5), che altrimenti ricostruirebbe le stesse ragioni per conto proprio. Derivato come gli altri: **mai persistito**.
 
-**Indici:** `tenant_id`, `unita_organizzativa_id`, `qr_token`.
+**Indici:** `tenant_id`, `unita_organizzativa_id`, `qr_token`, `fornitore_id`.
 
-### 5.2 `interventi` (Attività — fonte di verità del semaforo, ADR-005/007/009)
-Cuore manutentivo. Le **tarature** sono interventi `tipo = taratura` con certificato allegato (ADR-009): nessun motore di scadenze separato.
+### 5.2 `interventi` (Attività — fonte di verità del semaforo, ADR-005/007/009/021)
+Cuore manutentivo. Le **tarature e certificazioni** sono interventi `tipo = taratura_e_certificazione` con certificato allegato (ADR-009): nessun motore di scadenze separato.
 
 | Colonna | Tipo | Note |
 |---|---|---|
@@ -220,7 +229,7 @@ Cuore manutentivo. Le **tarature** sono interventi `tipo = taratura` con certifi
 | `strumento_id` | bigint FK → `strumenti.id` | |
 | `tecnico_id` | bigint nullable FK → `users.id` | Assegnatario (grant puntuale al tecnico — ADR-007). |
 | `descrizione` | text | |
-| `tipo` | enum: `manutenzione` \| `taratura` \| `ispezione` \| `riparazione` \| `altro` | Estendibile. |
+| `tipo` | enum: `manutenzione_ordinaria` \| `manutenzione_straordinaria` \| `manutenzione_full_risk` \| `taratura_e_certificazione` \| `altro` | Elenco fissato dal cliente (ADR-021). "Taratura e certificazione" è **una voce sola**. Colonna `string` senza CHECK: il vincolo vive nell'enum PHP. |
 | `data_scadenza` | date | Passata (storico) o futura (pianificata). Alimenta il semaforo e l'"email del futuro". |
 | `stato` | enum: `non_fatto` \| `fatto` | Spunta "Fatto". |
 | `data_esecuzione` | date nullable | Valorizzata quando `stato = fatto`. |
@@ -229,20 +238,13 @@ Cuore manutentivo. Le **tarature** sono interventi `tipo = taratura` con certifi
 **Visibilità:** gli interventi sono **visibili anche al Tenant** (Funzionalità §2). Lo storico segue lo strumento anche dopo trasferimento cross-tenant (ADR-015).
 **Indici:** `tenant_id`, `strumento_id`, `tecnico_id`, `data_scadenza`, `stato`.
 
-### 5.3 `letture_contaore` (ADR-004)
-Storico letture manuali del contaore (input alternativo per garanzie "a ore").
+> **Ricambi registrati dall'intervento** (ADR-022). Il form intervento porta una checkbox "Ricambio effettuato" e N righe `{nome, scadenza garanzia}`. La checkbox **non è una colonna**: la verità è l'esistenza di righe `ricambio_utilizzo` con quell'`intervento_id` (§7.2). Ogni riga salva, nella stessa transazione, catalogo + utilizzo + garanzia `soggetto = ricambio`.
 
-| Colonna | Tipo | Note |
-|---|---|---|
-| `id` | bigint PK | |
-| `tenant_id` / `reseller_id` | scoping | |
-| `strumento_id` | bigint FK | |
-| `data` | date | |
-| `ore` | integer | Lettura registrata. |
-| `registrata_da` | bigint nullable FK → `users.id` | |
-| timestamps | | append-only (no soft delete). |
+### 5.3 ~~`letture_contaore`~~ — **soppressa (ADR-019)**
 
-> V1: lo storico è solo registrato. L'estrapolazione automatica del ritmo (≥2 letture → ore/giorno) è V1.1 (ADR-004).
+> Tabella **eliminata** il 3 Agosto 2026. Esisteva come input alternativo per la data prevista delle garanzie "a ore" (ADR-004, metodo 2); eliminata la garanzia a ore, raccoglierebbe un dato che nessun motore legge. Spariscono con essa il modello `LetturaContaore`, la UI di registrazione, i permessi `letture_contaore.*` e la voce V1.1 "estrapolazione del ritmo ore/giorno".
+>
+> La numerazione delle sezioni è lasciata invariata di proposito: rinumerare romperebbe i riferimenti "ERD §5.4" già citati nei docblock del codice e negli altri documenti.
 
 ### 5.4 `spostamenti_strumento` (log append-only — ADR-015)
 
@@ -262,7 +264,7 @@ Storico letture manuali del contaore (input alternativo per garanzie "a ore").
 
 ---
 
-## 6. Garanzie e contaore (motore sdoppiato — ADR-004)
+## 6. Garanzie (motore sdoppiato — ADR-004/019/020)
 
 ### 6.1 `garanzie`
 Garanzia del macchinario **e** del singolo ricambio, normalizzate in `data_scadenza_effettiva` (unico campo che pilota semaforo/notifiche).
@@ -274,35 +276,41 @@ Garanzia del macchinario **e** del singolo ricambio, normalizzate in `data_scade
 | `soggetto` | enum: `macchina` \| `ricambio` | |
 | `strumento_id` | bigint nullable FK → `strumenti.id` | Valorizzato se `soggetto = macchina`. |
 | `ricambio_utilizzo_id` | bigint nullable FK → `ricambio_utilizzo.id` | Valorizzato se `soggetto = ricambio` (il pezzo specifico montato, non il catalogo — ADR-008). |
-| `tipo_scadenza` | enum: `data` \| `ore` | |
 | `data_inizio` | date | |
-| `durata_mesi` | integer nullable | Se `tipo_scadenza = data`. |
-| `soglia_ore` | integer nullable | Se `tipo_scadenza = ore`. |
-| `data_scadenza_prevista` | date nullable | Stima (per le garanzie a ore, inserita a mano in V1). |
-| **`data_scadenza_effettiva`** | date | **Campo guida** di semaforo/notifiche. |
+| `durata_mesi` | integer | Durata in mesi. **NOT NULL** dopo ADR-019: è l'unica forma di garanzia rimasta. |
+| **`data_scadenza_effettiva`** | date | **Campo guida** di semaforo/notifiche = `data_inizio + durata_mesi`. Derivata: ricalcolata nell'hook `saving`, fuori da `$fillable`. |
 | timestamps, `deleted_at` | | soft delete. |
 
+> **Solo garanzie a data (ADR-019).** Le colonne `tipo_scadenza`, `soglia_ore` e `data_scadenza_prevista` sono **rimosse**: la garanzia a ore era un fraintendimento del briefing di scoping. Migration distruttiva → prima il backfill di `durata_mesi` sulle righe oggi `tipo_scadenza = ore`, poi il drop.
+>
 > **Privacy (ADR-004).** Le garanzie con `soggetto = ricambio` sono **visibili solo a EasyLab/Admin**, mai al Tenant. Vincolo applicato via Policy + Global Scope sul ruolo, non via colonna.
+>
+> **Ma il semaforo le conta comunque (ADR-020).** Una garanzia ricambio scaduta o in scadenza entro 30 giorni accende l'arancione **sullo strumento che monta il pezzo**, anche per il Tenant che non può vederne il dettaglio. La query del semaforo legge quindi le righe `ricambio` con `withoutGlobalScope(GaranziaRicambioPrivacyScope::class)`; le etichette che nominano la fonte restano filtrate per permesso.
+>
 > **Vincolo logico:** esattamente uno tra `strumento_id` e `ricambio_utilizzo_id` valorizzato, coerente con `soggetto`.
 
 **Indici:** `tenant_id`, `strumento_id`, `ricambio_utilizzo_id`, `data_scadenza_effettiva`.
 
 ---
 
-## 7. Ricambi e fornitori (catalogo incrementale — ADR-008)
+## 7. Ricambi e fornitori (catalogo incrementale — ADR-008/022)
 
 ### 7.1 `ricambi` (catalogo)
-Voce normalizzata, riutilizzabile e ricercabile; cresce incrementalmente via autocomplete sul `codice`.
+Voce normalizzata, riutilizzabile e ricercabile; cresce incrementalmente via autocomplete sul **nome** (ADR-022: il cliente nomina il pezzo, non lo codifica).
 
 | Colonna | Tipo | Note |
 |---|---|---|
 | `id` | bigint PK | |
 | `tenant_id` / `reseller_id` | scoping | |
-| `codice` | string | Chiave di ricerca/autocomplete (normalizzata). Indicizzata. |
-| `descrizione` | string | |
+| `nome` | string | **Chiave di ricerca/autocomplete.** Come lo scrive l'operatore. |
+| `nome_normalizzato` | string | Forma canonica di `nome` (trim, spazi multipli collassati, case-folding) — è su questa che si fa il collega-o-crea, mai sul testo grezzo. Indicizzata. |
+| `codice` | string **nullable** | Era la chiave in ADR-008; resta per chi conosce il codice costruttore e per il merge doppioni. |
+| `descrizione` | string nullable | |
 | timestamps, `deleted_at` | | soft delete (per merge doppioni — V1.1). |
 
-**Indici:** `tenant_id`, `(tenant_id, codice)` per autocomplete/ricerca.
+**Indici:** `tenant_id`, `(tenant_id, nome_normalizzato)` per autocomplete/ricerca e collega-o-crea, `(tenant_id, codice)` per la ricerca per codice.
+
+> **Perché una colonna normalizzata e non una funzione in query.** Il collega-o-crea confronta a ogni salvataggio: con un `LOWER(TRIM(...))` in WHERE l'indice non verrebbe usato, e la regola di normalizzazione finirebbe scritta in due posti (PHP e SQL) liberi di divergere.
 
 ### 7.2 `ricambio_utilizzo` (associazione macchina↔ricambio↔intervento)
 Registra "questo pezzo è montato su questa macchina". Base della **ricerca incrociata** (dato un `ricambio_id` → tutti gli strumenti/laboratori dove è usato).
@@ -313,24 +321,41 @@ Registra "questo pezzo è montato su questa macchina". Base della **ricerca incr
 | `tenant_id` / `reseller_id` | scoping | |
 | `strumento_id` | bigint FK → `strumenti.id` | |
 | `ricambio_id` | bigint FK → `ricambi.id` | Voce di catalogo. |
-| `intervento_id` | bigint nullable FK → `interventi.id` | Intervento in cui è stato montato (visibile anche dal tab "Ricambi"). |
+| `intervento_id` | bigint nullable FK → `interventi.id` | Intervento in cui è stato montato (visibile anche dal tab "Ricambi"). Valorizzato per le righe create dal form intervento (ADR-022); nullable per gli inserimenti diretti dal tab Ricambi. |
 | `quantita` | integer default 1 | |
 | `data` | date | |
 | timestamps | | |
 
-> La garanzia del singolo pezzo (§6) punta a questa riga, non al catalogo generico (ADR-008).
+> La garanzia del singolo pezzo (§6) punta a questa riga, non al catalogo generico (ADR-008), ed è **obbligatoria** per le righe create dal form intervento (ADR-022): è il dato che accende il semaforo (ADR-020). L'obbligo è di flusso, non di schema — nello schema resta una relazione 1-0..1, perché una riga può nascere prima della sua garanzia dentro la stessa transazione.
 **Indici:** `tenant_id`, `strumento_id`, `ricambio_id`, `intervento_id`.
 
-### 7.3 `fornitori` + `fornitore_strumento` (Funzionalità §2)
-`fornitori`: `id`, `tenant_id`/`reseller_id`, `ragione_sociale`, `contatti` (email/telefono/note), timestamps, `deleted_at`.
-`fornitore_strumento` (pivot): `id`, `fornitore_id` FK, `strumento_id` FK, timestamps. *Unique* `(fornitore_id, strumento_id)`.
+### 7.3 `fornitori` (Funzionalità §2 — ADR-023)
+Anagrafica dei fornitori **di ciascun Ente**: tabella di business a tutti gli effetti, quindi `tenant_id` + `BelongsToTenant` + meta-test di tenancy. Ogni Ente popola e vede solo i propri.
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `id` | bigint PK | |
+| `tenant_id` / `reseller_id` | scoping | |
+| `ragione_sociale` | string | |
+| `contatti` | email / telefono / note | Campi separati o `json`, a scelta in implementazione. |
+| timestamps, `deleted_at` | | soft delete. |
+
+> **Relazione 1-N, non pivot (ADR-023).** Il pivot `fornitore_strumento` previsto dalla prima stesura **non si crea**: ogni macchinario ha *un* fornitore, quello d'acquisto → `strumenti.fornitore_id` (§5.1). Se un giorno servisse distinguere fornitore d'acquisto e d'assistenza, si aggiunge un secondo campo tipizzato o si promuove a pivot con `ruolo` — entrambe migration additive.
+>
+> **Cancellazione protetta.** Un fornitore con strumenti associati non si elimina. Poiché la tabella usa soft delete, uno strumento può puntare a un fornitore cestinato: la scheda mostra il nome con un badge esplicito, **mai** una cella vuota (che si legge come "dato mai inserito").
+>
+> 🧪 **Test di isolamento specifico:** un Ente non deve poter associare uno strumento al fornitore di un altro Ente. Whitelist del select e validazione al save devono avere **una sola definizione**, come già fatto per l'assegnatario degli interventi.
+
+**Indici:** `tenant_id`, `(tenant_id, ragione_sociale)` per ricerca/autocomplete.
 
 ---
 
 ## 8. Documenti (ADR-009)
 
 ### 8.1 `documenti`
-Allegato **polimorfico** a Strumento o Intervento. Upload su DigitalOcean Spaces con URL firmate, visibilità privata.
+Allegato **polimorfico** a Strumento o Intervento. Upload su **Backblaze B2** (bucket privato, regione UE — 🔗 ADR-025), accesso solo autenticato.
+
+> **Come si servono i file è ancora da decidere** (S4). ADR-009 dice "URL firmate" senza specificare quale: una URL **pre-firmata S3** è di fatto un bearer token — chi ce l'ha legge il file fino alla scadenza, con la Policy fuori dal giro — mentre una **rotta firmata Laravel che fa da tramite** ricontrolla l'autorizzazione a ogni richiesta ed è indipendente dal provider. La seconda è più coerente con ADR-003 e ADR-018 (🔗 ADR-025).
 
 | Colonna | Tipo | Note |
 |---|---|---|
@@ -340,7 +365,7 @@ Allegato **polimorfico** a Strumento o Intervento. Upload su DigitalOcean Spaces
 | `documentabile_id` | bigint | Id del soggetto (morphTo). |
 | `tipo` | enum: `manuale` \| `conformita` \| `certificato_taratura` \| `report_fine_lavoro` \| `altro` | |
 | `nome` | string | Nome file mostrato. |
-| `path` | string | Percorso su Spaces (`tenant_id` nel prefisso). |
+| `path` | string | Percorso nel bucket (`tenant_id` nel prefisso). |
 | `mime` | string nullable | |
 | `size` | integer nullable | Byte. |
 | `caricato_da` | bigint nullable FK → `users.id` | |
@@ -372,7 +397,7 @@ Non ridisegnate: gestite dalle librerie standard, citate per completezza.
 | Unità org. del proprio Ente | ✅ | ✅ | ✅ (tutto l'albero) | ⚠️ solo sotto-albero assegnato | ✅ (lettura) | ⚠️ solo dove ha accesso |
 | Strumenti / Interventi | ✅ | ✅ | ✅ proprio Ente | ⚠️ sotto-albero | ✅ propri | ⚠️ portafoglio ∪ assegnati |
 | Garanzie **macchina** | ✅ | ✅ | ✅ | ⚠️ sotto-albero | ✅ | ⚠️ |
-| Garanzie **ricambio** | ✅ | ✅ | ✅ | ⚠️ sotto-albero | ❌ **mai** | ❌ |
+| Garanzie **ricambio** | ✅ | ✅ | ✅ | ⚠️ sotto-albero | ❌ **mai** | ⚠️ portafoglio ∪ assegnati |
 | Ricambi / utilizzi | ✅ | ✅ | ✅ | ⚠️ sotto-albero | ⚠️ (visibile, garanzia pezzo no) | ⚠️ inserimento su assegnati |
 | Documenti | ✅ | ✅ | ✅ | ⚠️ sotto-albero | ✅ propri | ⚠️ su strumenti accessibili |
 | Spostamenti (log completo) | ✅ | ✅ | ⚠️ interni proprio Ente | ⚠️ sotto-albero | ❌ | ❌ |
@@ -382,14 +407,18 @@ Non ridisegnate: gestite dalle librerie standard, citate per completezza.
 Legenda: ✅ pieno · ⚠️ ristretto (per sotto-albero/portafoglio/proprietà) · ❌ nessun accesso.
 **Tecnico** (ADR-007): strumenti visibili se `strumento.tenant_id ∈ portafoglio` **OR** `strumento.id ∈ strumenti con intervento assegnato`. Ogni accesso loggato (cross-tenant).
 
+> **Il Tecnico gestisce le garanzie ricambio** (🔗 ADR-027, 8 Ago 2026): è chi monta il pezzo, quindi la fonte del dato, e ogni sua scrittura è tracciata sul canale `audit`. Resta ristretto agli strumenti che già vede (portafoglio ∪ assegnazione, ADR-007).
+>
+> **La riga "Garanzie ricambio" vale per i dati, non per i loro effetti** (ADR-020). Chi ha ❌ non legge mai una riga garanzia-ricambio — né nel tab, né in una colonna, né in un'etichetta — ma **vede il pallino arancione** che quella garanzia produce sullo strumento. È una scelta consapevole: un semaforo che dice cose diverse a seconda di chi guarda non sarebbe più un semaforo.
+
 ---
 
 ## 11. Note di indicizzazione
 
 - **Scoping:** indice su `tenant_id` in **tutte** le tabelle di business; `reseller_id` dove utile alle query reseller (V1.1).
 - **Albero:** `unita_organizzativa(parent_id)` e `(tenant_id)` per le query di sotto-albero ricorsive.
-- **Semaforo/notifiche:** `interventi(strumento_id, stato, data_scadenza)`; `garanzie(data_scadenza_effettiva)`.
-- **Autocomplete ricambi:** `ricambi(tenant_id, codice)`.
+- **Semaforo/notifiche:** `interventi(strumento_id, stato, data_scadenza)`; `garanzie(data_scadenza_effettiva)`; per il doppio salto delle garanzie ricambio (ADR-020) servono `garanzie(ricambio_utilizzo_id)` e `ricambio_utilizzo(strumento_id)` — entrambi già previsti, ma qui diventano **caldi**: li attraversa una query per pagina dell'elenco strumenti.
+- **Autocomplete ricambi:** `ricambi(tenant_id, nome_normalizzato)` (chiave del collega-o-crea, ADR-022) e `ricambi(tenant_id, codice)`.
 - **Ricerca incrociata:** `ricambio_utilizzo(ricambio_id)`, `ricambio_utilizzo(strumento_id)`.
 - **QR:** `strumenti(qr_token)` unique.
 - **Documenti morph:** `documenti(documentabile_type, documentabile_id)`.
@@ -403,7 +432,7 @@ Legenda: ✅ pieno · ⚠️ ristretto (per sotto-albero/portafoglio/proprietà)
 | **ADR-001** Multi-tenancy row-level | `tenant_id` + Global Scope su tutte le tabelle di business. |
 | **ADR-002** Rivenditori → V1.1 + modello incasso | `reseller_id` nullable ovunque (NULL in V1); tabella `resellers` (§4.2) con Connect Standard per il rapporto C. |
 | **ADR-003** QR firmato | `strumenti.qr_token` + rotte signed (no tabella nuova). |
-| **ADR-004** Garanzie a ore | `garanzie` (con `data_scadenza_effettiva`) + `letture_contaore`. |
+| **ADR-004** Garanzie sdoppiate | `garanzie` (con `data_scadenza_effettiva`). La parte "a ore" e `letture_contaore` sono state rimosse da ADR-019. |
 | **ADR-005** Semaforo calcolato + forzato | campi override su `strumenti`; `interventi` come fonte di verità. |
 | **ADR-006** Tenant = Ente; scope reparto | `unita_organizzativa` (tenant = nodo ente) + pivot `responsabile_unita`. |
 | **ADR-007** Accesso Tecnici | pivot `tecnico_cliente` + `interventi.tecnico_id`. |
@@ -415,13 +444,19 @@ Legenda: ✅ pieno · ⚠️ ristretto (per sotto-albero/portafoglio/proprietà)
 | **ADR-013** Lockout insoluto | `is_locked`/`locked_*` sul nodo ente. |
 | **ADR-014** Obsolescenza | `unita_organizzativa.soglia_obsolescenza_anni` + `strumenti.data_installazione`. |
 | **ADR-015** Spostamenti / trasferimenti | `spostamenti_strumento` (append-only) + update `tenant_id`/ubicazione. |
+| **ADR-019** Garanzie solo a data | `garanzie` perde `tipo_scadenza`/`soglia_ore`/`data_scadenza_prevista`; `durata_mesi` diventa NOT NULL; tabella `letture_contaore` soppressa. |
+| **ADR-020** Garanzia ricambio nel semaforo | nessuna colonna nuova: cambia la **query** del semaforo (unione col doppio salto `garanzie → ricambio_utilizzo → strumenti`, senza il privacy scope). |
+| **ADR-021** Tipologie di intervento | `interventi.tipo` — nuovo elenco + migration di rimappatura dei valori storici. |
+| **ADR-022** Ricambi dall'intervento | `ricambi.nome`/`nome_normalizzato` (+ `codice` nullable); `ricambio_utilizzo.intervento_id` valorizzato; garanzia `soggetto = ricambio` obbligatoria per riga. |
+| **ADR-023** Fornitore 1-N | `strumenti.fornitore_id` (+ indice); `fornitori` con `tenant_id`; pivot `fornitore_strumento` **non creato**. |
+| **ADR-024** Tab Panoramica | Nessuna tabella: il campo derivato `diagnosi_semaforo` (§5.1) sostituisce il solo stato. |
 
 ---
 
 ## 13. Note V1 vs V1.1
 
 - **V1.1 — Rivenditori:** valorizzazione `reseller_id`, scope reseller, attivazione tabella `resellers` (§4.2). Billing: **B** quota fissa Rivenditore→EasyLab via Cashier; **C** Rivenditore→propri Enti via Stripe Connect Standard + direct charges (ADR-002, aggiornamento 14 Giu 2026). Nessuna migrazione distruttiva: `reseller_id` e `resellers` sono già previsti.
-- **V1.1 — Estrapolazione ore:** calcolo automatico `data_scadenza_prevista` da `letture_contaore` (≥2 letture). Lo storico letture è già in V1.
-- **V1.1 — Merge doppioni ricambi:** tool admin che fonde voci di `ricambi` (soft delete già previsto).
+- ~~**V1.1 — Estrapolazione ore**~~ — **cancellata** (ADR-019): non esistendo la garanzia a ore, non c'è nulla da estrapolare.
+- **V1.1 — Merge doppioni ricambi:** tool admin che fonde voci di `ricambi` (soft delete già previsto). Con l'autocomplete spostato sul nome libero (ADR-022) questa voce **pesa di più**: i refusi su un nome sono più probabili che su un codice.
 - **Futuro — E-invoicing SDI:** flusso Stripe → XML → SDI; i dati fiscali sono già raccolti.
 - **Futuro — Anonimizzazione storico trasferimenti** (ADR-015, fallback privacy).
