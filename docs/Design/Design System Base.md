@@ -128,7 +128,7 @@ Header `bg-neutral-50 text-neutral-600 text-sm`, righe con `divide-y divide-neut
 `inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium`. Colori dai token semantici (semaforo §4, stato cliente, piano, 🔒 lockout/bloccato).
 
 ### 5.5 Tab (scheda strumento)
-Barra orizzontale, tab attivo `border-b-2 border-primary-600 text-primary-700`, inattivo `text-neutral-600`. Tab nascosti per permesso (es. **Garanzie** assente per Tenant/Tecnico — ADR-004). **Mobile:** scroll orizzontale o `select ▼`.
+Barra orizzontale, tab attivo `border-b-2 border-primary-600 text-primary-700`, inattivo `text-neutral-600`. Tab nascosti per permesso (es. **Ricambi** assente per chi non ha `ricambi.view`). *Corretto l'8 Ago 2026: l'esempio diceva «**Garanzie** assente per Tenant/Tecnico — ADR-004», ed era sbagliato due volte. Il tab Garanzie è visibile in sola lettura anche a Tenant e Tecnico, che hanno `garanzie.macchina.view` (già così da S3); e il vincolo di ADR-004 riguarda le **righe** `soggetto = ricambio`, applicato per scope, mai il tab — per il solo Tenant dopo ADR-027. Un tab nascosto e una riga filtrata sono due meccanismi diversi: confonderli è ciò che ha prodotto l'errore corretto da ADR-027.* **Mobile:** scroll orizzontale o `select ▼`.
 
 ### 5.6 Form & input
 `rounded-md border-neutral-200 focus:border-primary-600 focus:ring-primary-600`. Label `text-sm font-medium text-neutral-800`. Errori `text-danger-600 text-sm`. Autocomplete ricambi (ADR-008/022) come combobox con creazione "al volo", su **nome** del pezzo. Le **righe ripetitore** del form intervento (wireframe §2.1) riusano lo stesso combobox: ogni riga è `nome` + `data`, con `[ ✕ ]` per rimuoverla e `[ + Aggiungi ricambio ]` in coda.

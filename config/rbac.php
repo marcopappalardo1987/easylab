@@ -19,7 +19,10 @@
 
 return [
 
-    // Catalogo canonico (§4) — 56 permessi.
+    // Catalogo canonico (§4) — 54 permessi. Erano 56 fino a S3-bis: ADR-019 ha
+    // eliminato `letture_contaore.view`/`.create` insieme al contaore. Il numero
+    // è ripetuto nei test (RbacSeederTest, DatabaseSeederTest): se cambia qui
+    // deve cambiare anche là, o uno dei due sta mentendo.
     'permissions' => [
         // 4.1 Anagrafica & asset
         'unita_organizzativa.view', 'unita_organizzativa.create', 'unita_organizzativa.update', 'unita_organizzativa.delete',
@@ -102,11 +105,22 @@ return [
         ]],
 
         // Tecnico: catalogo ricambi solo 'create' (nota ⁴ del doc), niente update/delete.
+        //
+        // `garanzie.ricambio.*` è suo dall'8 Ago 2026 (ADR-027): è la persona che
+        // monta fisicamente il pezzo, quindi la fonte del dato sulla garanzia, e
+        // ogni sua scrittura è tracciata sul canale `audit`. Il divieto che c'era
+        // qui prima non era mai stato deciso — ADR-004 dice «mai al Tenant» e
+        // nomina il solo Tenant; il Tecnico è personale EasyLab. La citazione si
+        // era allargata oltre la fonte passando per Schema Ruoli §4.3 e ADR-016,
+        // ed era finita difesa da un test: da lì in poi la svista era
+        // indistinguibile da una decisione. Resta ristretto agli strumenti che
+        // già vede (portafoglio ∪ assegnazione, ADR-007) — quello è livello 2.
         'Tecnico' => ['only' => [
             'unita_organizzativa.view',
             'strumenti.view',
             'interventi.view', 'interventi.complete',
             'garanzie.macchina.view',
+            'garanzie.ricambio.view', 'garanzie.ricambio.manage',
             'ricambi.view', 'ricambi.create',
             'ricambio_utilizzo.view', 'ricambio_utilizzo.create', 'ricambio_utilizzo.update', 'ricambio_utilizzo.delete',
             'documenti.view', 'documenti.upload', 'documenti.download',
@@ -115,6 +129,10 @@ return [
     ],
 
     // Set bloccato 🔒 (§7) — non modificabile dalla UI Superadmin.
+    //
+    // "Bloccato" dice che la UI non può ridistribuirlo, NON a chi è negato: le
+    // due cose si erano confuse proprio su `garanzie.ricambio.*` (ADR-027). Il
+    // vincolo di ADR-004 su quelle due voci è e resta uno solo — mai al Tenant.
     'locked' => [
         'garanzie.ricambio.view', 'garanzie.ricambio.manage',
         'utenti.impersonate',

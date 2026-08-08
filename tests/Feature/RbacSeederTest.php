@@ -45,12 +45,30 @@ it('withholds platform-level permissions from the Admin', function () {
     expect($admin->hasPermissionTo('billing.manage_own'))->toBeTrue();
 });
 
-it('never grants spare-part warranties to Tenant or Tecnico', function () {
-    foreach (['Tenant', 'Tecnico'] as $role) {
-        $r = Role::findByName($role);
-        expect($r->hasPermissionTo('garanzie.ricambio.view'))->toBeFalse();
-        expect($r->hasPermissionTo('garanzie.ricambio.manage'))->toBeFalse();
-    }
+// Riscritto l'8 Ago 2026 (ADR-027). Diceva «to Tenant or Tecnico» e congelava
+// una svista: ADR-004 — la fonte che sia Schema Ruoli §4.3 sia ADR-016 citavano —
+// nomina il SOLO Tenant, e il Tecnico è personale EasyLab. Il divieto al Tecnico
+// non era mai stato deciso da nessuno, ma difeso da questo test era diventato
+// indistinguibile da una decisione. Modifica consapevole, non adeguamento.
+it('never grants spare-part warranties to the Tenant', function () {
+    $tenant = Role::findByName('Tenant');
+
+    expect($tenant->hasPermissionTo('garanzie.ricambio.view'))->toBeFalse();
+    expect($tenant->hasPermissionTo('garanzie.ricambio.manage'))->toBeFalse();
+
+    // contrappeso: il divieto riguarda i ricambi, non le garanzie in sé
+    expect($tenant->hasPermissionTo('garanzie.macchina.view'))->toBeTrue();
+});
+
+// ADR-027: è il Tecnico a montare il pezzo, quindi è la fonte del dato sulla sua
+// garanzia. `.manage` e non solo `.view`, perché il form intervento (ADR-022) la
+// CREA contestualmente alla riga di ricambio: con la sola lettura resterebbe il
+// gesto spezzato in due che ADR-022 esisteva per evitare.
+it('grants spare-part warranties to the Tecnico, who mounts the part', function () {
+    $tecnico = Role::findByName('Tecnico');
+
+    expect($tecnico->hasPermissionTo('garanzie.ricambio.view'))->toBeTrue();
+    expect($tecnico->hasPermissionTo('garanzie.ricambio.manage'))->toBeTrue();
 });
 
 it('lets the Tecnico create catalog entries but not update or delete them', function () {

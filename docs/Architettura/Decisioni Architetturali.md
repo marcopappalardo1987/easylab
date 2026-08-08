@@ -478,7 +478,7 @@ Si ottengono insieme la velocità "al volo" e la ricerca incrociata affidabile (
 
 **Conseguenze.**
 - La **normalizzazione del nome** (trim, spazi multipli, maiuscole) diventa il punto delicato: i near-duplicati da refuso restano possibili, mitigati da autocomplete e merge doppioni (ADR-008, STRETCH S4).
-- ⚠️ **Nodo di permessi da sciogliere in S4.** Il Tecnico ha `ricambio_utilizzo.create` ma **non** `garanzie.ricambio.manage` (set 🔒, ADR-004): compilando la riga scriverebbe comunque una garanzia ricambio. Le tre vie: (a) la creazione contestuale avviene per conto del dominio, in un servizio che non richiede il permesso di gestione; (b) si allarga `garanzie.ricambio.manage` al Tecnico limitatamente alla creazione contestuale; (c) il Tecnico non compila la garanzia e la completa un Admin. **Decisione rimandata a S4, non implicita nel codice.**
+- ✅ ~~⚠️ **Nodo di permessi da sciogliere in S4.**~~ **Sciolto da ADR-027** (8 Ago 2026, implementato l'8 Ago in S4 blocco 0). Il nodo era: il Tecnico ha `ricambio_utilizzo.create` ma **non** `garanzie.ricambio.manage` (set 🔒), quindi compilando la riga scriverebbe comunque una garanzia ricambio. Le tre vie ipotizzate — (a) creazione contestuale per conto del dominio, in un servizio che non richiede il permesso; (b) permesso allargato alla sola creazione contestuale; (c) garanzia completata da un Admin — **erano tutte aggiramenti di un divieto che non era mai stato deciso**: ADR-004 nomina il solo Tenant. Nessuna serve più; il Tecnico ha `garanzie.ricambio.view` e `.manage`, e ogni sua scrittura è tracciata (🔗 ADR-027).
 - ADR-008 resta valido nella sostanza (catalogo incrementale, collega-o-crea, ricerca incrociata): cambiano chiave di ricerca e punto d'ingresso.
 
 ---

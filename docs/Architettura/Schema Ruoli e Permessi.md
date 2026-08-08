@@ -2,7 +2,7 @@
 
 *Definisce i 6 ruoli applicativi e la **matrice permessi per risorsa** che li governa. Traduce in permessi nominati (stile `spatie/laravel-permission`) le decisioni di accesso degli ADR-006/007 e i vincoli di privacy/tracciamento di ADR-004/005/013. Questo documento è il **contratto** per il seeder ruoli/permessi dello Sprint 1 (task "Installare spatie/laravel-permission; definire ruoli/permessi base da S0"). In caso di conflitto fra questo file e un ADR, vince l'ADR (e questo file va corretto).*
 
-> **Stato:** implementato in Sprint 1 · punto 5 — `config/rbac.php` + `RolesAndPermissionsSeeder` (56 permessi, 6 ruoli, set bloccato). Dopo il seeding la fonte di verità è il DB (ADR-016 §7).
+> **Stato:** implementato in Sprint 1 · punto 5 — `config/rbac.php` + `RolesAndPermissionsSeeder` (**54** permessi, 6 ruoli, set bloccato di 9). Erano 56 fino a S3-bis: ADR-019 ha rimosso `letture_contaore.*`. Dopo il seeding la fonte di verità è il DB (ADR-016 §7) — quindi **una modifica a `config/rbac.php` non arriva da sola sui database già seminati**: va riseminata, e nessun test se ne accorge (la suite ricrea il DB dalla config).
 
 ---
 
@@ -71,7 +71,7 @@ Risorse derivate dall'ERD §3–§9. Questo è l'elenco canonico che il seeder S
 - `garanzie.macchina.view` · `garanzie.macchina.manage` — garanzia macchina (visibile anche al Tenant).
 - `garanzie.ricambio.view` · `garanzie.ricambio.manage` — garanzia pezzo: **mai al Tenant** (🔗 ADR-004). Il divieto riguarda **le righe**, non l'arancione che ne deriva: il semaforo le conta comunque (🔗 ADR-020).
   > **Il Tecnico le gestisce** (🔗 ADR-027, 8 Ago 2026): è chi monta fisicamente il pezzo, quindi la fonte del dato. Fino ad allora il divieto si estendeva anche a lui citando ADR-004, che però nomina solo il Tenant. Ogni modifica è tracciata sul canale `audit`.
-- ~~`letture_contaore.view` · `.create`~~ — **permessi rimossi** (🔗 ADR-019): eliminata la garanzia a ore, il contaore non esiste più. Vanno tolti da `config/rbac.php` e dal seeder.
+- ~~`letture_contaore.view` · `.create`~~ — **permessi rimossi** (🔗 ADR-019): eliminata la garanzia a ore, il contaore non esiste più. Tolti da `config/rbac.php` in S3-bis; **dai database già seminati solo l'8 Ago 2026** (blocco 0 di S4), perché la config è bootstrap e il seeder non cancella le righe che non conosce più.
 
 ### 4.4 Ricambi & fornitori
 - `ricambi.view` · `.create` · `.update` · `.delete` — catalogo (🔗 ADR-008/022).
@@ -191,7 +191,7 @@ I permessi della matrice §5 sono dei **default**, non una configurazione fissa:
 **Regole della UI** (Dashboard Superadmin, S6):
 - **Ambito globale:** un'unica matrice per tutta la piattaforma (no modalità "teams" in V1; personalizzazione per-Ente → V1.1).
 - **Accesso:** solo chi ha `roles.manage` (Developer/Superadmin) — esso stesso bloccato per evitare auto-delega.
-- **Set bloccato (V1):** `garanzie.ricambio.*` (mai a Tenant/Tecnico — ADR-004), `utenti.impersonate`, `system.logs.view`, `billing.manage_global`, `billing.lockout`, `tenants.view_all`, `tenants.provision`, `roles.manage`. Le righe 🔒 della matrice §5.
+- **Set bloccato (V1):** `garanzie.ricambio.*` (mai al **Tenant** — ADR-004; *corretto l'8 Ago 2026 da ADR-027: qui c'era scritto «mai a Tenant/Tecnico», ed è la stessa citazione allargata oltre la fonte che §4.3 portava. Il Tecnico le gestisce*), `utenti.impersonate`, `system.logs.view`, `billing.manage_global`, `billing.lockout`, `tenants.view_all`, `tenants.provision`, `roles.manage`. Le righe 🔒 della matrice §5.
 - **Confine invariabile:** la UI modifica solo il *cosa* (permesso), **mai** il *su quali righe* (scope). Isolamento `tenant_id`, sotto-albero Responsabile e unione Tecnico restano nel codice (Global Scope/Policy) e non sono configurabili (🔗 ADR-001/006/007).
 - **Audit:** ogni modifica alla matrice è loggata in `activity_log` (chi/cosa/quando).
 - **Fonte di verità:** dopo il seeding è il DB; il seeder resta solo bootstrap/reset.

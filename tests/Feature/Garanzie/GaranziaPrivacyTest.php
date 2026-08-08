@@ -47,10 +47,17 @@ it('hides ricambio garanzie from the Tenant', function () {
         ->and(Garanzia::where('id', $this->garanziaRicambio->id)->exists())->toBeFalse();
 });
 
-it('hides ricambio garanzie from the Tecnico', function () {
-    $this->actingAs(($this->utente)('Tecnico'));
+// Invertito l'8 Ago 2026 (ADR-027): diceva `hides ... from the Tecnico`. Il
+// divieto non veniva da ADR-004 — che nomina il solo Tenant — ma da una citazione
+// allargata oltre la fonte, poi difesa da questo test. Il Tecnico monta il pezzo,
+// quindi è chi conosce la garanzia; il controllo su di lui è la traccia (canale
+// `audit`) e il livello 2 di ADR-007, non la cecità.
+it('shows ricambio garanzie to the Tecnico, who mounts the part', function () {
+    $tecnico = ($this->utente)('Tecnico');
+    $this->actingAs($tecnico);
 
-    expect(Garanzia::pluck('id')->all())->not->toContain($this->garanziaRicambio->id);
+    expect($tecnico->can('garanzie.ricambio.view'))->toBeTrue()
+        ->and(Garanzia::pluck('id')->all())->toContain($this->garanziaRicambio->id);
 });
 
 it('shows ricambio garanzie to an Admin, who holds the permission', function () {
