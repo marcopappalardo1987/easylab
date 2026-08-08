@@ -567,6 +567,14 @@ Si ottengono insieme la velocità "al volo" e la ricerca incrociata affidabile (
 - Documenti da allineare: Tech Stack §6, `Setup Repository e Ambienti.md` (ambienti, variabili, provisioning, pipeline di deploy), **`Privacy GDPR e Registro Trattamenti.md`** (elenco sub-responsabili — è un documento di compliance, non di sviluppo), ERD §8.1, roadmap §0/S1/S4, wireframe §2.
 - Cambia anche la **storia di backup e restore** (`[CORE]` in S7): il database non è più un Postgres su droplet da gestire a mano ma un servizio gestito, con proprie procedure da verificare.
 
+**Nota operativa — setup B2 verificato l'8 Ago 2026.** Connessione provata con successo su percorsi della forma reale dell'ERD §8.1 (`3/documenti/…`, `17/documenti/…`: scrittura, esistenza, rilettura, dimensione, elenco, cancellazione, e cartelle per tenant indipendenti). Le tre cose su cui si perde tempo, in ordine di quanto sono costate:
+
+1. **Il prefisso della chiave.** Creando una Application Key, Backblaze offre un campo *"file name prefix"* che limita la chiave ai file il cui nome inizia con quella stringa. Va lasciato **vuoto**: i percorsi dell'applicazione iniziano con il `tenant_id`, quindi qualunque prefisso li blocca tutti. La restrizione utile è quella **al bucket**, che va invece tenuta.
+2. **Prefisso e restrizione vivono sulla chiave, non sul bucket.** Ricreare il bucket non le tocca — e una chiave vincolata al bucket vecchio risponde `AccessDenied — not entitled` su quello nuovo.
+3. **`AccessDenied — not entitled` è un messaggio unico per violazioni diverse**: capability mancante, percorso fuori prefisso, bucket non autorizzato. Non distingue, quindi da solo porta fuori strada. Peggio: lo strato S3 di B2 **non applica le restrizioni in modo uniforme** — `PutObject` e `GetObject` fuori prefisso possono passare mentre `HeadObject` e `ListObjectsV2` falliscono, così una chiave troppo stretta sembra funzionare finché non si tocca `exists()` o `size()`.
+
+Dettagli di configurazione: `AWS_ENDPOINT` vuole lo schema **`https://`** (il pannello mostra l'host nudo, e l'SDK rifiuta l'URI senza schema); il keyID è di **25 caratteri** e il secret di **31** — lunghezze diverse significano incollatura troncata; `AWS_USE_PATH_STYLE_ENDPOINT=false`. Le API native di Backblaze rispondono su realm diversi per regione e **non** sono utilizzabili come diagnostica generica: conviene verificare direttamente con l'API S3.
+
 ---
 
 **ADR-026 — Download dei documenti: rotta firmata Laravel, non URL pre-firmata dell'object store**

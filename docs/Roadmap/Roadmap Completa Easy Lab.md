@@ -244,6 +244,7 @@ gantt
 - [ ] `[CORE]` **Documenti**: upload su bucket privato B2, allegabili a Strumento o Attività; download **solo autenticato**. 🔗 ADR-009/025
   - ✅ **Deciso** (🔗 ADR-026, 8 Ago 2026): **rotta firmata Laravel che fa da tramite**, con Policy ricontrollata a ogni richiesta. Niente URL pre-firmate: sarebbero bearer token non revocabili e non tracciabili. Funziona identica su disco `local`, quindi lo sviluppo non richiede credenziali B2 e il provider resta sostituibile.
   - 🧪 Test negativi obbligatori (area rossa): altro tenant → 404, Responsabile fuori sotto-albero → 404, URL scaduta → 403.
+  - ⚠️ **Tranello da conoscere prima di scrivere l'upload:** il disco `s3` è configurato con `'throw' => false` (default Laravel), quindi **un caricamento fallito restituisce `false` in silenzio** invece di sollevare un'eccezione. In sessione ha già ingannato una verifica: sembrava scritto, non era arrivato nulla. Senza controllare il valore di ritorno — o mettere `'throw' => true` sul disco — l'utente vedrebbe "salvato" con il file mai caricato. Vale per `put`/`putFile`/`putFileAs`; `get`, `exists` e `size` invece sollevano.
 - [ ] `[CORE]` Taratura come Attività con certificato allegato che alimenta il semaforo. 🔗 ADR-009
 - [ ] `[CORE]` **Generazione QR Code** univoco per strumento (stampabile). 🔗 Elenco §4
 - [ ] `[CORE]` **Accesso da QR** con **URL firmata** → login se necessario → scheda solo se autorizzato (mai dati senza auth). 🔗 ADR-003
