@@ -68,6 +68,69 @@ it('recreates an entry whose twin is soft-deleted', function () {
         ->and($nuovo->trashed())->toBeFalse();
 });
 
+it('does not abort the surrounding transaction when the insert fails', function () {
+    // ⚠️ Il test che discrimina la correzione del savepoint, e vale SOLO su
+    // Postgres: lì una violazione di vincolo aborta l'intera transazione
+    // (25P02) e ogni query successiva fallisce, ri-SELECT di recupero comprese.
+    // Su SQLite il rollback è per statement, quindi senza savepoint il codice
+    // passerebbe comunque — è la ragione per cui questo test esiste e per cui
+    // la relativa mutazione cade su un driver solo.
+    //
+    // Si usa una violazione di FK sul tenant e non una corsa sull'unique:
+    // è deterministica e non richiede due connessioni.
+    $errore = null;
+
+    DB::transaction(function () use (&$errore) {
+        try {
+            Ricambio::collegaOCrea('Filtro HEPA', tenantId: 999_999);
+        } catch (QueryException $e) {
+            $errore = $e;
+        }
+
+        // Senza il savepoint questa query fallirebbe con 25P02, portandosi via
+        // anche il rollback di RefreshDatabase: il bug si presenterebbe come
+        // "suite impazzita", non come un test rosso.
+        expect(DB::table('ricambi')->count())->toBe(0);
+    });
+
+    // 23503 = foreign_key_violation. Senza la correzione affiorerebbe invece
+    // l'eccezione della ri-SELECT dentro il catch, cioè 25P02.
+    expect($errore?->getCode())->toBe('23503');
+})->skip(
+    fn () => DB::connection()->getDriverName() !== 'pgsql',
+    'Vale solo su Postgres: SQLite fa rollback per statement e non aborta la transazione.'
+);
+
+it('recovers the entry created by a concurrent writer', function () {
+    // La corsa si simula con `beforeStartingTransaction`, che gira PRIMA che il
+    // savepoint venga creato: così la riga del concorrente sopravvive al
+    // ROLLBACK TO SAVEPOINT. Un listener su `Ricambio::creating` finirebbe
+    // invece DENTRO il savepoint e verrebbe annullato con esso — è la trappola
+    // in cui si cade scrivendo questo test.
+    $gia = false;
+    $enteId = $this->enteA->id;
+
+    DB::connection()->beforeStartingTransaction(function ($connection) use (&$gia, $enteId) {
+        if ($gia || $connection->transactionLevel() < 1) {
+            return; // solo la transazione annidata di collegaOCrea
+        }
+        $gia = true;
+
+        DB::table('ricambi')->insert([
+            'tenant_id' => $enteId,
+            'nome' => 'Filtro HEPA',
+            'nome_normalizzato' => 'filtro hepa',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    });
+
+    $ricambio = DB::transaction(fn () => Ricambio::collegaOCrea('Filtro HEPA', $enteId));
+
+    expect($ricambio->nome_normalizzato)->toBe('filtro hepa')
+        ->and(Ricambio::where('tenant_id', $enteId)->count())->toBe(1);
+});
+
 it('rejects a duplicate normalised name at database level', function () {
     // Insert diretto: salta il model, quindi prova che il vincolo vive nel DB e
     // non solo nell'hook. Senza, un bug futuro di normalizzazione produrrebbe

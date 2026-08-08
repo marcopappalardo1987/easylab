@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -186,5 +187,21 @@ class Intervento extends Model
     public function tecnico(): BelongsTo
     {
         return $this->belongsTo(User::class, 'tecnico_id');
+    }
+
+    /**
+     * Pezzi montati durante questo intervento (ERD §7.2 — ADR-022), il più
+     * recente in alto.
+     *
+     * È anche l'idioma con cui si risolve una riga da rimuovere:
+     * `$intervento->ricambiUtilizzi()->findOrFail($id)` riapplica TenantScope e
+     * il livello 2 e vincola `intervento_id`, quindi copre in un colpo altro
+     * tenant, fuori sotto-albero e id appartenente a un altro intervento.
+     */
+    public function ricambiUtilizzi(): HasMany
+    {
+        return $this->hasMany(RicambioUtilizzo::class, 'intervento_id')
+            ->orderByDesc('data')
+            ->orderByDesc('id');
     }
 }

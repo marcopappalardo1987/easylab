@@ -138,13 +138,39 @@ class Ricambio extends Model
         }
 
         try {
-            return self::create(['tenant_id' => $tenantId, 'nome' => $nome, 'codice' => $codice]);
+            // ⚠️ La transazione ANNIDATA non è decorativa, ed è la correzione di
+            // un bug che su SQLite non si vede. Su Postgres una violazione di
+            // vincolo mette l'INTERA transazione in stato aborted (25P02): ogni
+            // query successiva fallisce, e la ri-SELECT qui sotto tornerebbe
+            // «current transaction is aborted» invece della voce vinta dalla
+            // corsa. Su SQLite il rollback è per statement, quindi il codice
+            // senza savepoint passa in locale e rompe in CI/produzione — la
+            // stessa classe di errore delle date lessicografiche.
+            //
+            // Laravel compila una transaction annidata come SAVEPOINT su
+            // entrambi i driver, quindi al throw si torna al savepoint e la
+            // transazione del chiamante — quella che ADR-022 esige attorno a
+            // intervento + righe — resta viva.
+            //
+            // `getConnection()` e non `DB::`: il savepoint deve stare sulla
+            // connessione su cui gira l'INSERT, non sulla default. Fuori da una
+            // transazione esterna diventa un BEGIN/COMMIT attorno a un solo
+            // INSERT: un round-trip in più su un'operazione rara, in cambio di
+            // un ramo in meno da testare.
+            return (new self)->getConnection()->transaction(
+                fn (): self => self::create(['tenant_id' => $tenantId, 'nome' => $nome, 'codice' => $codice])
+            );
         } catch (QueryException $e) {
             // Corsa persa (doppio submit): l'unique ha fatto il suo lavoro e la
             // voce ora esiste. Si ri-cerca invece di ispezionare lo SQLSTATE,
             // che differisce fra i driver (23505 su Postgres, "UNIQUE constraint
             // failed" su SQLite). Se la ri-ricerca non trova nulla, l'errore non
             // era una collisione e va rilanciato.
+            //
+            // Nota: se il concorrente ha già committato, `$trova()` lo vede; se
+            // è ancora dentro la propria transazione no, e l'eccezione originale
+            // riparte — che è il comportamento giusto (il chiamante ritenta, non
+            // inventa una riga).
             return $trova() ?? throw $e;
         }
     }

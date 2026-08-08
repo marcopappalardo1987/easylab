@@ -59,6 +59,17 @@ class GaranziaFactory extends Factory
         ]);
     }
 
+    /**
+     * Forma "a data" di ADR-022: la scadenza è dichiarata, non derivata dai
+     * mesi. Passa dal metodo di dominio perché `data_scadenza_dichiarata` è
+     * fuori da `$fillable` — e perché è quello ad azzerare `durata_mesi`,
+     * senza cui l'XOR di `normalizzaScadenza()` fallirebbe.
+     */
+    public function scadenzaDichiarata(string $data): static
+    {
+        return $this->afterMaking(fn (Garanzia $garanzia) => $garanzia->fissaScadenzaDichiarata($data));
+    }
+
     /** Già finita: pesa sul semaforo come uno scaduto-non-fatto. */
     public function scaduta(): static
     {

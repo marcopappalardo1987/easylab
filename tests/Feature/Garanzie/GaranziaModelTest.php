@@ -56,9 +56,13 @@ it('ignores a forged data_scadenza_effettiva in the payload', function () {
     expect($garanzia->fresh()->data_scadenza_effettiva->toDateString())->toBe('2027-01-01');
 });
 
-it('rejects a garanzia without durata_mesi', function () {
-    // Unica forma rimasta dopo ADR-019: senza durata non c'è scadenza da
-    // normalizzare, e una garanzia senza scadenza non pilota nulla.
+// Riscritto il 9 Ago 2026 (ADR-022): si chiamava `rejects a garanzia without
+// durata_mesi` e congelava «la durata è obbligatoria». Dopo l'estensione del
+// dominio le forme sono due — durata oppure scadenza dichiarata — e ciò che va
+// congelato è l'XOR: senza nessuna delle due non c'è scadenza da normalizzare,
+// e una garanzia senza scadenza non pilota nulla. Il caso "entrambe" sta in
+// GaranziaScadenzaEsplicitaTest, insieme al resto del ramo nuovo.
+it('rejects a garanzia with neither durata_mesi nor a declared scadenza', function () {
     expect(fn () => Garanzia::factory()->forStrumento($this->strumento)->create([
         'durata_mesi' => null,
     ]))->toThrow(InvalidArgumentException::class);

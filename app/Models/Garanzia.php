@@ -7,6 +7,8 @@ use App\Models\Concerns\BelongsToTenant;
 use App\Models\Scopes\GaranziaDepartmentScope;
 use App\Models\Scopes\GaranziaRicambioPrivacyScope;
 use App\Support\Semaforo;
+use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Database\Factories\GaranziaFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -66,6 +68,13 @@ class Garanzia extends Model
      * ricalcolato a ogni salvataggio dall'hook `saving`. Fuori da qui, nessun
      * payload (form, import, API future) può falsificare il campo che pilota
      * il semaforo. Stesso principio delle colonne `forced_*` di Strumento.
+     *
+     * **Anche `data_scadenza_dichiarata` è esclusa**, per una ragione diversa e
+     * altrettanto concreta: se fosse assegnabile, un payload potrebbe portare
+     * insieme `durata_mesi` e scadenza e andrebbe a sbattere sull'XOR con
+     * un'eccezione invece che con un errore di validazione. Fuori di qui, la
+     * coppia si tocca solo da `fissaScadenzaDichiarata()`/`fissaDurata()`, che
+     * azzerano sempre l'altro lato.
      */
     protected $fillable = [
         'tenant_id',
@@ -82,6 +91,7 @@ class Garanzia extends Model
         return [
             'soggetto' => SoggettoGaranzia::class,
             'data_inizio' => 'date',
+            'data_scadenza_dichiarata' => 'date',
             'data_scadenza_effettiva' => 'date',
         ];
     }
@@ -117,36 +127,92 @@ class Garanzia extends Model
     }
 
     /**
-     * Normalizzazione ADR-004/019 — l'unico punto in cui si scrive
-     * `data_scadenza_effettiva`, ricalcolata a OGNI salvataggio:
+     * Normalizzazione ADR-004/019, estesa da ADR-022 — l'unico punto in cui si
+     * scrive `data_scadenza_effettiva`, ricalcolata a OGNI salvataggio:
      *
-     *   data_scadenza_effettiva = data_inizio + durata_mesi
+     *   durata_mesi valorizzata  →  data_inizio + durata_mesi   (ADR-019)
+     *   scadenza dichiarata      →  la data dichiarata          (ADR-022)
      *
-     * Un ramo solo da quando la garanzia a ore non esiste più (ADR-019): con
-     * essa è sparita anche la classe di errore "garanzia salvata senza la data
-     * prevista che avrebbe dovuto pilotarla".
+     * **`data_scadenza_effettiva` resta derivata al 100%.** La forma "a data" di
+     * ADR-022 non l'ha resa un input: ha aggiunto una colonna di INPUT propria
+     * (`data_scadenza_dichiarata`). La differenza non è di stile — oggi quel
+     * campo è inattaccabile per due ragioni, essere fuori da `$fillable` **e**
+     * essere riscritto incondizionatamente da qui; un ramo che lo leggesse come
+     * input distruggerebbe la seconda, e nessun docblock la ricostruirebbe. La
+     * falla non si chiude con una guardia: si chiude non aprendola.
+     *
+     * **XOR e non due `if` indipendenti**: entrambe valorizzate significherebbe
+     * due verità sulla stessa scadenza, entrambe nulle una garanzia che non
+     * scade mai. Nessuna delle due è rappresentabile.
      *
      * Si assegna un Carbon e non una stringa: su SQLite le colonne `date`
      * diventano 'Y-m-d 00:00:00', lo stesso formato di `interventi.data_scadenza`,
      * e il confronto fra le due colonne nell'ordinamento dell'elenco resta valido.
      *
-     * **`durata_mesi >= 1` è imposta QUI e non solo dal form.** Il `min:1` della
-     * validazione copre l'utente, non gli altri chiamanti: seeder, import e
-     * migration di backfill scrivono senza passare dal form, ed è esattamente
-     * così che la migration ADR-019 ha prodotto 90 righe con durata 0 — una
-     * garanzia che scade il giorno in cui inizia. Guardia su due livelli, come
-     * per l'invariante `stato = fatto ⇔ data_esecuzione` di Intervento.
+     * **I confini sono imposti QUI e non solo dal form.** Il `min:1` e l'`after:`
+     * della validazione coprono l'utente, non gli altri chiamanti: seeder,
+     * import e migration di backfill scrivono senza passare dal form, ed è
+     * esattamente così che la migration ADR-019 ha prodotto 90 righe con durata
+     * 0 — una garanzia che scade il giorno in cui inizia. Guardia su due
+     * livelli, come per l'invariante `stato = fatto ⇔ data_esecuzione`.
      */
     protected function normalizzaScadenza(): void
     {
-        $durata = $this->durata_mesi ?? throw new InvalidArgumentException('Garanzia: `durata_mesi` è obbligatoria (ADR-019).');
+        $inizio = $this->data_inizio ?? throw new InvalidArgumentException('Garanzia: `data_inizio` è obbligatoria.');
 
-        if ($durata < 1) {
-            throw new InvalidArgumentException('Garanzia: `durata_mesi` deve essere almeno 1 — una garanzia che scade il giorno in cui inizia non è una garanzia (ADR-019).');
+        if (($this->durata_mesi === null) === ($this->data_scadenza_dichiarata === null)) {
+            throw new InvalidArgumentException(
+                'Garanzia: va valorizzato esattamente uno fra `durata_mesi` e `data_scadenza_dichiarata` (ADR-019 + ADR-022).'
+            );
         }
 
-        $this->data_scadenza_effettiva = $this->data_inizio?->copy()->addMonths($durata)
-            ?? throw new InvalidArgumentException('Garanzia: `data_inizio` è obbligatoria.');
+        if ($this->durata_mesi !== null) {
+            if ($this->durata_mesi < 1) {
+                throw new InvalidArgumentException('Garanzia: `durata_mesi` deve essere almeno 1 — una garanzia che scade il giorno in cui inizia non è una garanzia (ADR-019).');
+            }
+
+            $this->data_scadenza_effettiva = $inizio->copy()->addMonths($this->durata_mesi);
+
+            return;
+        }
+
+        // Stessa soglia del ramo durata, espressa in date.
+        if ($this->data_scadenza_dichiarata->lte($inizio)) {
+            throw new InvalidArgumentException('Garanzia: la scadenza dichiarata deve essere successiva a `data_inizio` (ADR-022).');
+        }
+
+        $this->data_scadenza_effettiva = $this->data_scadenza_dichiarata->copy();
+    }
+
+    /**
+     * Fissa la fine della garanzia come DATA dichiarata dall'operatore (ADR-022):
+     * è ciò che si scrive nel form intervento per il pezzo montato, dove i mesi
+     * non si conoscono e convertirli sposterebbe la scadenza.
+     *
+     * Non salva, ed è una scelta: questa garanzia nasce dentro la transazione
+     * del form, agganciata a una riga `ricambio_utilizzo` che deve esistere
+     * prima — un save qui dentro costringerebbe a due scritture.
+     *
+     * Azzera `durata_mesi`, perché le due forme sono alternative: insieme ai
+     * gemello `fissaDurata()` è il motivo per cui l'XOR non è violabile da chi
+     * passa dai metodi di dominio. `data_scadenza_dichiarata` è fuori da
+     * `$fillable` proprio perché questa sia l'unica via.
+     */
+    public function fissaScadenzaDichiarata(CarbonInterface|string $scadenza): static
+    {
+        $this->data_scadenza_dichiarata = Carbon::parse($scadenza)->startOfDay();
+        $this->durata_mesi = null;
+
+        return $this;
+    }
+
+    /** Simmetrico: la forma "inizio + durata" di ADR-019, usata dalla garanzia macchina. */
+    public function fissaDurata(int $mesi): static
+    {
+        $this->durata_mesi = $mesi;
+        $this->data_scadenza_dichiarata = null;
+
+        return $this;
     }
 
     /**
