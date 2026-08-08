@@ -1,6 +1,6 @@
 🗄️ Modello Dati (ERD) — Easy Lab
 
-*Schema dati di riferimento per la V1 (MVP). Traduce in entità, relazioni e colonne le decisioni architetturali (`Decisioni Architetturali.md`, ADR-001 → ADR-024) e l'`Elenco Funzionalità Easy Lab.md`. Questo documento è il **contratto** per le migrazioni Laravel degli Sprint 1–2: ogni tabella di business qui descritta diventa una migration. In caso di conflitto fra questo file e un ADR, vince l'ADR (e questo file va corretto).*
+*Schema dati di riferimento per la V1 (MVP). Traduce in entità, relazioni e colonne le decisioni architetturali (`Decisioni Architetturali.md`, ADR-001 → ADR-027) e l'`Elenco Funzionalità Easy Lab.md`. Questo documento è il **contratto** per le migrazioni Laravel degli Sprint 1–2: ogni tabella di business qui descritta diventa una migration. In caso di conflitto fra questo file e un ADR, vince l'ADR (e questo file va corretto).*
 
 > **Stato:** bozza di Sprint 0 (task S0.1). Da approvare prima di scrivere le migrazioni.
 >
@@ -397,7 +397,7 @@ Non ridisegnate: gestite dalle librerie standard, citate per completezza.
 | Unità org. del proprio Ente | ✅ | ✅ | ✅ (tutto l'albero) | ⚠️ solo sotto-albero assegnato | ✅ (lettura) | ⚠️ solo dove ha accesso |
 | Strumenti / Interventi | ✅ | ✅ | ✅ proprio Ente | ⚠️ sotto-albero | ✅ propri | ⚠️ portafoglio ∪ assegnati |
 | Garanzie **macchina** | ✅ | ✅ | ✅ | ⚠️ sotto-albero | ✅ | ⚠️ |
-| Garanzie **ricambio** | ✅ | ✅ | ✅ | ⚠️ sotto-albero | ❌ **mai** | ❌ |
+| Garanzie **ricambio** | ✅ | ✅ | ✅ | ⚠️ sotto-albero | ❌ **mai** | ⚠️ portafoglio ∪ assegnati |
 | Ricambi / utilizzi | ✅ | ✅ | ✅ | ⚠️ sotto-albero | ⚠️ (visibile, garanzia pezzo no) | ⚠️ inserimento su assegnati |
 | Documenti | ✅ | ✅ | ✅ | ⚠️ sotto-albero | ✅ propri | ⚠️ su strumenti accessibili |
 | Spostamenti (log completo) | ✅ | ✅ | ⚠️ interni proprio Ente | ⚠️ sotto-albero | ❌ | ❌ |
@@ -407,6 +407,8 @@ Non ridisegnate: gestite dalle librerie standard, citate per completezza.
 Legenda: ✅ pieno · ⚠️ ristretto (per sotto-albero/portafoglio/proprietà) · ❌ nessun accesso.
 **Tecnico** (ADR-007): strumenti visibili se `strumento.tenant_id ∈ portafoglio` **OR** `strumento.id ∈ strumenti con intervento assegnato`. Ogni accesso loggato (cross-tenant).
 
+> **Il Tecnico gestisce le garanzie ricambio** (🔗 ADR-027, 8 Ago 2026): è chi monta il pezzo, quindi la fonte del dato, e ogni sua scrittura è tracciata sul canale `audit`. Resta ristretto agli strumenti che già vede (portafoglio ∪ assegnazione, ADR-007).
+>
 > **La riga "Garanzie ricambio" vale per i dati, non per i loro effetti** (ADR-020). Chi ha ❌ non legge mai una riga garanzia-ricambio — né nel tab, né in una colonna, né in un'etichetta — ma **vede il pallino arancione** che quella garanzia produce sullo strumento. È una scelta consapevole: un semaforo che dice cose diverse a seconda di chi guarda non sarebbe più un semaforo.
 
 ---

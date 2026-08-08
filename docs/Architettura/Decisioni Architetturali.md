@@ -328,7 +328,7 @@ Si ottengono insieme la velocità "al volo" e la ricerca incrociata affidabile (
 - **Ambito globale, editor solo Superadmin/Developer.** I ruoli sono **globali** (un'unica matrice valida per tutta la piattaforma, niente modalità "teams" di spatie in V1). La modifica avviene da una UI nella Dashboard Superadmin (permesso `roles.manage`). La personalizzazione per-Ente da parte dell'Admin è rimandata a V1.1.
 - **Default da seeder.** Il `RolesAndPermissionsSeeder` (S1) imposta i default della matrice §5; da quel momento la **fonte di verità è il DB** (la UI può divergere dal seeder, che resta solo bootstrap/reset).
 - **Set "bloccato" protetto.** Un sottoinsieme di permessi è **non modificabile dalla UI** perché vincolato da privacy/legge/sicurezza o strutturale. La UI li mostra in sola lettura. Elenco bloccato (V1):
-  - `garanzie.ricambio.view` / `garanzie.ricambio.manage` → **mai** concedibili a `Tenant` o `Tecnico` (🔗 ADR-004).
+  - `garanzie.ricambio.view` / `garanzie.ricambio.manage` → **mai** concedibili al `Tenant` (🔗 ADR-004). *Corretto l'8 Ago 2026 da ADR-027: questa riga diceva «a `Tenant` o `Tecnico`», ma ADR-004 nomina solo il Tenant — e il Tecnico è personale EasyLab. Il divieto al Tecnico era un'estensione mai decisa, poi congelata da un test.*
   - `utenti.impersonate` → solo `Developer`/`Superadmin`.
   - `system.logs.view` → solo `Developer`.
   - `billing.manage_global`, `billing.lockout`, `tenants.view_all`, `tenants.provision` → solo `Developer`/`Superadmin`.
@@ -566,3 +566,58 @@ Si ottengono insieme la velocità "al volo" e la ricerca incrociata affidabile (
 - L'egress di B2 è gratuito fino a **3× lo storage medio mensile**, poi si paga: ampiamente sufficiente per PDF serviti a utenti autenticati, ma è la clausola da conoscere prima di firmare.
 - Documenti da allineare: Tech Stack §6, `Setup Repository e Ambienti.md` (ambienti, variabili, provisioning, pipeline di deploy), **`Privacy GDPR e Registro Trattamenti.md`** (elenco sub-responsabili — è un documento di compliance, non di sviluppo), ERD §8.1, roadmap §0/S1/S4, wireframe §2.
 - Cambia anche la **storia di backup e restore** (`[CORE]` in S7): il database non è più un Postgres su droplet da gestire a mano ma un servizio gestito, con proprie procedure da verificare.
+
+---
+
+**ADR-026 — Download dei documenti: rotta firmata Laravel, non URL pre-firmata dell'object store**
+
+*Stato: Accettata (8 Ago 2026) — scioglie il "da decidere in S4" lasciato aperto da ADR-025 e precisa cosa significa "URL firmate" in ADR-009.*
+
+**Contesto.** ADR-009 dice che i documenti si scaricano con "URL firmate", senza specificare quale delle due cose molto diverse che quella espressione può indicare. La domanda è diventata concreta con ADR-025, perché la risposta decide anche quanto siamo legati al provider di storage.
+
+**Le due strade.**
+1. **URL pre-firmata S3** (`Storage::temporaryUrl()`): il browser scarica direttamente da B2. Nessuna banda a carico dell'app. Ma quell'URL è di fatto un **bearer token**: chiunque l'abbia legge il file fino alla scadenza, e dopo l'emissione la Policy è fuori dal giro — non c'è modo di revocarla né di sapere chi l'ha usata.
+2. **Rotta firmata Laravel che fa da tramite**: `signed` middleware + Policy, il file viene servito in streaming dall'applicazione.
+
+**Decisione: la seconda.**
+- L'**autorizzazione viene ricontrollata a ogni richiesta**, contro Policy, tenancy e sotto-albero del Responsabile. È l'unico modo perché ADR-003 ("mai dati senza auth") e ADR-018 (scoping fail-closed) valgano anche per i file, e non solo per le schermate che li elencano.
+- **Funziona identica su qualunque disco**, `local` compreso: lo sviluppo non richiede credenziali B2 e il provider resta sostituibile con una riga di `.env`. Senza questo, la scelta di ADR-025 sarebbe un vincolo e non una preferenza.
+- Rende possibile **tracciare i download** come qualunque altra azione sensibile (🔗 ADR-027), cosa che con una URL pre-firmata non è tecnicamente possibile.
+
+**Alternative scartate.**
+- *URL pre-firmata:* più veloce e a costo zero di banda, ma consegna un permesso che non si può più governare. Ha senso per contenuti pubblici ad alto traffico; qui i file sono certificati di taratura e report d'intervento, serviti a poche decine di utenti autenticati.
+- *Ibrido (pre-firmata solo per i file "non sensibili"):* richiederebbe di stabilire e mantenere quale documento è sensibile — la stessa classificazione che ADR-003 ha già scartato per il QR pubblico.
+
+**Conseguenze.**
+- Il download costa banda dell'applicazione. Per PDF di manuali e certificati è irrilevante; se un domani ci finissero video o allegati molto pesanti, la decisione va rivista con numeri alla mano.
+- Serve una rotta dedicata con `signed` + Policy sul modello `Documento`, e i test negativi delle aree rosse: utente di altro tenant → 404, Responsabile fuori sotto-albero → 404, URL scaduta → 403.
+- `Storage::disk()` va indirizzato **esplicitamente**: `FILESYSTEM_DISK` resta `local` come default applicativo, così nessuna altra parte del sistema finisce sull'object store per errore.
+
+---
+
+**ADR-027 — Tracciabilità delle scritture di dominio: la traccia sostituisce il divieto**
+
+*Stato: Accettata (8 Ago 2026) — **corregge ADR-016** su `garanzie.ricambio.*` e scioglie il nodo aperto di ADR-022.*
+
+**Contesto.** ADR-022 aveva lasciato un nodo scomodo: il Tecnico registra il ricambio dal form intervento, ma quel gesto crea anche la garanzia del pezzo, e `garanzie.ricambio.manage` gli era negato dal set bloccato. Le tre vie d'uscita ipotizzate erano tutte aggiramenti.
+
+**Il divieto non era mai stato deciso.** ADR-004 dice: «Le garanzie sui ricambi restano visibili solo a EasyLab/Admin, **mai al Tenant**». Nomina il Tenant, e il Tecnico *è* personale EasyLab. Il divieto al Tecnico compare per la prima volta nello Schema Ruoli §4.3 e in ADR-016, entrambi citando ADR-004 come fonte — ma quella fonte non lo dice. La citazione si è allargata oltre il suo contenuto, è entrata in `config/rbac.php` e nella matrice, e infine è stata congelata da un test. **Una volta che un test la difende, una svista è indistinguibile da una decisione**: è il motivo per cui vale la pena rileggere la fonte quando un vincolo costringe a contorsioni.
+
+**Decisione.**
+1. **Il Tecnico ottiene `garanzie.ricambio.view` e `.manage`.** È la persona che monta fisicamente il pezzo, quindi la fonte del dato sulla garanzia. Il set bloccato resta, ma il suo significato torna quello di ADR-004: **mai al Tenant**.
+2. **Ogni scrittura di dominio è tracciata** — chi, cosa, quando — sul canale `audit` già esistente. Dove il rischio è che qualcuno faccia una modifica sbagliata o inopportuna, **la risposta è la traccia, non il divieto**: negare il permesso a chi deve fare il lavoro sposta il problema su un'altra persona senza eliminarlo, e produce dati inseriti da chi non li conosce.
+3. **Attuazione per sprint**, non tutta insieme: garanzie (S4, sblocca ADR-022) → interventi e ricambi (S4) → spostamenti e installazione (S4/S5) → il resto quando serve. Il principio è deciso una volta; la copertura cresce a tappe.
+
+**Perimetro.** La traccia riguarda le **scritture** (creazione, modifica, cancellazione) delle entità di dominio, non le letture. Fa eccezione l'accesso cross-tenant del Tecnico, già tracciato per conto suo (🔗 ADR-007), e il download dei documenti, che ADR-026 rende tracciabile.
+
+**Alternative scartate.**
+- *Lasciare il divieto e far completare la garanzia a un Admin:* due passaggi per un gesto unico, e il dato lo inserisce chi non ha visto il pezzo. È esattamente ciò che ADR-022 voleva evitare.
+- *Permesso allargato solo alla "creazione contestuale":* una regola che vale in un punto dello schermo e non in un altro è difficile da spiegare e facile da aggirare.
+- *Tracciare tutto e subito con `LogsActivity` su ogni modello:* copertura immediata, ma rende urgente la questione retention prima di averla decisa col legale, e allarga S4 senza necessità.
+
+**Conseguenze.**
+- Da aggiornare: `config/rbac.php` (Tecnico), matrice Schema Ruoli §5, ERD §10, la nota §4.3, l'elenco del set bloccato in ADR-016, e **il test `never grants spare-part warranties to Tenant or Tecnico`**, che va riscritto per il solo Tenant. È una modifica di test **consapevole**, non un adeguamento: congelava una regola sbagliata.
+- ⚠️ **La retention dell'audit diventa più urgente.** Il registro dei trattamenti segna T6 con "retention definita (APERTO)". Tracciare ogni scrittura significa più dati personali **sui dipendenti**, conservati più a lungo: la decisione col legale va presa prima che il volume renda scomodo cambiare idea.
+- **"Tracciato" non significa ancora "visibile".** La vista Audit è in S6: fino ad allora i dati si accumulano e si leggono solo dal database. Va detto a chi si aspetta di vederli subito.
+- Il volume di `activity_log` cresce in modo non banale: va tenuto d'occhio e si intreccia con la retention sopra.
+- **Come tracciare**, da decidere in implementazione: oggi lo stile del progetto sono chiamate `activity()` esplicite dentro i metodi di dominio (`forzaSemaforo` lo fa così, perché ogni chiamante resti tracciato); il trait `LogsActivity` è più sostenibile su larga scala ma più rumoroso e con meno controllo sul messaggio. Probabilmente serviranno entrambi: il trait per la copertura, le chiamate esplicite dove il messaggio conta.

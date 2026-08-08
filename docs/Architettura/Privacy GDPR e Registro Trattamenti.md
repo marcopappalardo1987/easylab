@@ -30,10 +30,12 @@
 | T3 | **Documenti & certificati** | archiviazione/allegati (tarature, report) | personale dei laboratori | file su **Backblaze B2**, bucket privato in UE, accesso solo autenticato | esecuzione contratto | durata rapporto |
 | T4 | **Notifiche email/in-app** | promemoria scadenze ("email del futuro") | utenti destinatari | email, contenuto notifica | esecuzione contratto / legittimo interesse | log invii a rotazione |
 | T5 | **Fatturazione & abbonamenti** | incassi, obblighi fiscali | clienti paganti | P.IVA, Cod. Fiscale, PEC/SDI, dati pagamento (via Stripe) | obbligo legale / contratto | termini fiscali di legge |
-| T6 | **Audit log** | sicurezza, tracciabilità (impersonation, forzature, accessi tecnici) | utenti piattaforma | chi/cosa/quando, IP | legittimo interesse / obbligo sicurezza | retention definita (APERTO) |
+| T6 | **Audit log** | sicurezza, tracciabilità (impersonation, forzature, accessi tecnici, **scritture di dominio** — 🔗 ADR-027) | utenti piattaforma, **in prevalenza dipendenti e tecnici** | chi/cosa/quando, IP | legittimo interesse / obbligo sicurezza | retention definita (**APERTO — più urgente**) |
 | T7 | **Accesso tecnici cross-tenant** | manutenzione su clienti in portafoglio/assegnati | personale laboratori terzi | accessi loggati a schede strumento | esecuzione contratto (ADR-007) | come audit log |
 
 > **APERTO:** definire i **tempi di conservazione** puntuali per ciascun trattamento (T1, T4, T6) con il legale.
+>
+> ⚠️ **T6 è diventato più pesante** (🔗 ADR-027, 8 Ago 2026): la tracciabilità passa da poche azioni sensibili a **ogni scrittura di dominio**. Sono dati personali riferiti soprattutto ai **dipendenti** (chi ha modificato cosa e quando), quindi il trattamento sfiora il controllo a distanza dell'attività lavorativa: va inquadrato con attenzione, la finalità dichiarata resta la sicurezza e la ricostruzione degli eventi, e i tempi di conservazione vanno fissati **prima** che il volume renda scomodo cambiare idea. Non è un adempimento rinviabile al go-live.
 
 ---
 
@@ -44,8 +46,8 @@ Già previste dall'architettura (mappate agli ADR):
 - **Controllo accessi** RBAC granulare (`Schema Ruoli e Permessi.md`) + set permessi **bloccato** per vincoli privacy (🔗 ADR-016).
 - **Minimizzazione visibilità:** garanzie ricambio non visibili al Tenant (🔗 ADR-004); accesso tecnico limitato a portafoglio ∪ assegnazione (🔗 ADR-007). *Precisazione (🔗 ADR-020): al Tenant resta nascosto il **dato** (righe, nomi dei pezzi, scadenze), non il suo **effetto** sul semaforo del proprio strumento — che è informazione sul suo bene, non sui rapporti commerciali di EasyLab.*
 - **Autenticazione forte:** 2FA obbligatoria per ruoli privilegiati (🔗 ADR-012).
-- **Cifratura:** TLS in transito (SSL Let's Encrypt); storage documenti privato con **URL firmate a scadenza**; segreti fuori dal repo.
-- **Audit/accountability:** activity log su modelli sensibili, impersonation e forzature tracciate.
+- **Cifratura:** TLS in transito (gestito da Laravel Cloud); storage documenti su **bucket privato**, mai esposto direttamente — il download passa da una **rotta firmata dell'applicazione** che ricontrolla l'autorizzazione a ogni richiesta (🔗 ADR-026), quindi l'accesso è revocabile e tracciabile; segreti fuori dal repo.
+- **Audit/accountability:** activity log su impersonation, autenticazione, forzature del semaforo e — dal 8 Ago 2026 — **ogni scrittura di dominio** (🔗 ADR-027). È la misura che consente di concedere permessi operativi a chi fa il lavoro senza rinunciare alla ricostruzione degli eventi: **la traccia sostituisce il divieto**.
 - **Backup & restore** testati (S7) + procedura di ripristino.
 - **Residenza UE** di hosting e storage.
 

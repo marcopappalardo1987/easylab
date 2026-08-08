@@ -1,6 +1,6 @@
 🗺️ Roadmap Completa — Easy Lab
 
-*Piano cronologico di progetto: fasi progettuali + sprint datati fino al rilascio della V1 (MVP) e backlog delle versioni successive. Questo documento è il **master roadmap**: incorpora e supera i due ToDo originali (`Fase 1 - ToDo List Installazione Stack.md` e `Fase 2 - ToDo List.md`), che restano come materiale di origine. Tutte le scelte qui riflesse sono tracciate in `../Architettura/Decisioni Architetturali.md` (ADR-001 → ADR-024).*
+*Piano cronologico di progetto: fasi progettuali + sprint datati fino al rilascio della V1 (MVP) e backlog delle versioni successive. Questo documento è il **master roadmap**: incorpora e supera i due ToDo originali (`Fase 1 - ToDo List Installazione Stack.md` e `Fase 2 - ToDo List.md`), che restano come materiale di origine. Tutte le scelte qui riflesse sono tracciate in `../Architettura/Decisioni Architetturali.md` (ADR-001 → ADR-027).*
 
 > **Revisione del 3 Agosto 2026 — briefing col cliente destinatario** (🔗 ADR-019 ÷ ADR-024). Sei chiarimenti di dominio, di cui uno **revoca** lavoro già consegnato in S3. Le date restano invariate: il rientro è contenuto (vedi **Sprint 3-bis**) e cade dentro la coda di S3 (3–7 Ago), mentre le voci nuove sono assorbite da S4, che già prevedeva ricambi, garanzia pezzo e fornitori. L'unica aggiunta di sostanza è il **tab Panoramica** (ADR-024), messo in S3-bis di proposito: tocca `Semaforo`, la stessa classe che S4 dovrà estendere, e farlo prima evita di rimetterci mano due volte con criteri diversi.
 
@@ -223,11 +223,15 @@ gantt
 - [ ] `[CORE]` **Catalogo Ricambi** incrementale + **autocomplete sul nome** (collega esistente / crea al volo); `codice` **nullable**, `nome_normalizzato` indicizzato come chiave del collega-o-crea. 🔗 ADR-008/022
 - [ ] `[CORE]` **RicambioUtilizzo**: associazione strumento↔ricambio↔intervento (quantità, data); aggancio garanzia pezzo (`soggetto = ricambio`). Chiude i debiti S3: FK `garanzie.ricambio_utilizzo_id` finalmente creabile. 🔗 ADR-004/008
 - [ ] `[CORE]` **Form intervento — "Ricambio effettuato"**: checkbox + righe ripetitore `{nome, scadenza garanzia}`; ogni riga salva catalogo + utilizzo + garanzia **in una transazione**; garanzia **obbligatoria** per riga; deselezionare la checkbox non cancella righe salvate. 🔗 ADR-022, wireframe §2.1
-  - ⚠ **Nodo di permessi da decidere prima di scrivere il codice** (Schema Ruoli §4.4): il Tecnico ha `ricambio_utilizzo.create` ma non `garanzie.ricambio.manage`. Tre opzioni sul tavolo, nessuna implicita.
+  - ✅ **Nodo sciolto** (🔗 ADR-027, 8 Ago 2026): il Tecnico ha **anche** `garanzie.ricambio.manage` — è chi monta il pezzo, quindi la fonte del dato — e ogni scrittura è tracciata. Nessuna delle tre soluzioni di ripiego serve più: il divieto che le rendeva necessarie non era mai stato deciso (ADR-004 nomina solo il Tenant).
+  - 🧪 Da aggiornare **consapevolmente**: `config/rbac.php`, seeder, e il test `never grants spare-part warranties to Tenant or Tecnico`, che congelava la regola sbagliata → deve valere per il solo Tenant.
 - [ ] `[CORE]` **Garanzia ricambio nel semaforo** (era S3-bis punto C): fonte garanzie = macchina **∪** ricambi montati, doppio salto `garanzie → ricambio_utilizzo → strumenti`, letto **senza** `GaranziaRicambioPrivacyScope`; estendere bulk/filtro/ordinamento dell'elenco senza tornare N+1; colonna "Prossima scadenza" degradata a dicitura neutra per chi non ha `garanzie.ricambio.view`. 🔗 ADR-020
   - 🧪 Test negativo obbligatorio: *un Tenant vede arancione uno strumento la cui unica scadenza è la garanzia di un ricambio, e da nessuna parte compare il nome del pezzo.*
   - Salda i debiti dichiarati in S3 punto 7: **(b)** livello 2 dello scope sulle righe ricambio (stesso doppio salto) e **(c)** colonna dettaglio filtrata per permesso.
 - [ ] `[CORE]` Tab **"Ricambi"** sulla scheda macchina: lettura, correzione e riga collegata all'intervento che l'ha generata (il punto d'ingresso abituale è il form intervento, non questo tab). 🔗 Elenco §2, ADR-022
+- [ ] `[CORE]` **Tracciabilità delle scritture di dominio** (🔗 ADR-027): garanzie, interventi e ricambi registrano chi/cosa/quando sul canale `audit`. Principio deciso una volta, copertura a tappe — spostamenti e installazione in S4/S5.
+  - ⚠️ La **vista** Audit è in S6: fino ad allora i dati si accumulano e si leggono solo da database. "Tracciato" non significa ancora "visibile".
+  - ⚠️ Rende **più urgente** la retention di T6 col legale (🔗 Privacy §2): più dati personali sui dipendenti, conservati più a lungo.
 - [ ] `[CORE]` **Ricerca incrociata** ricambio → tutte le macchine/laboratori dove è montato. 🔗 ADR-008
 - [ ] `[CORE]` **Completamento del tab Panoramica** con le fonti che nascono in questo sprint: motivi da **garanzia ricambio** (in forma neutra e non cliccabile senza `garanzie.ricambio.view`), conteggi **ricambi montati** e **documenti**, **fornitore** nel blocco di sintesi. 🔗 ADR-023/024
   - 🧪 Test negativo: *un Tenant legge nella Panoramica il motivo "Garanzia di un componente…" senza nome del pezzo e senza link.*
@@ -238,7 +242,8 @@ gantt
   - `fornitori.view` al ruolo **Tenant in sola lettura** (Schema Ruoli nota ⁵, approvato 3 Ago 2026): aggiornare `config/rbac.php` e il seeder, **con un test sul nuovo default** — altrimenti la riga torna indietro da sola al prossimo riseed.
   - `[STRETCH]` Filtro "Fornitore" nell'elenco strumenti, accanto ai filtri Ente/stato/obsoleti già esistenti.
 - [ ] `[CORE]` **Documenti**: upload su bucket privato B2, allegabili a Strumento o Attività; download **solo autenticato**. 🔗 ADR-009/025
-  - 🔑 **Da decidere qui**: URL pre-firmata S3 (bearer token, Policy fuori dal giro) *oppure* rotta firmata Laravel che fa da tramite (autorizzazione ricontrollata a ogni richiesta, indipendente dal provider). La seconda è coerente con ADR-003/018 — vedi ADR-025.
+  - ✅ **Deciso** (🔗 ADR-026, 8 Ago 2026): **rotta firmata Laravel che fa da tramite**, con Policy ricontrollata a ogni richiesta. Niente URL pre-firmate: sarebbero bearer token non revocabili e non tracciabili. Funziona identica su disco `local`, quindi lo sviluppo non richiede credenziali B2 e il provider resta sostituibile.
+  - 🧪 Test negativi obbligatori (area rossa): altro tenant → 404, Responsabile fuori sotto-albero → 404, URL scaduta → 403.
 - [ ] `[CORE]` Taratura come Attività con certificato allegato che alimenta il semaforo. 🔗 ADR-009
 - [ ] `[CORE]` **Generazione QR Code** univoco per strumento (stampabile). 🔗 Elenco §4
 - [ ] `[CORE]` **Accesso da QR** con **URL firmata** → login se necessario → scheda solo se autorizzato (mai dati senza auth). 🔗 ADR-003
