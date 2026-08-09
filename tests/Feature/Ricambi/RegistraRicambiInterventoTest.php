@@ -87,7 +87,7 @@ it('moves the mounting date to the execution date when the intervento is closed'
     // «Segnaposto finché l'intervento è aperto» con un assert su `today()`:
     // congelava il difetto invece di chiuderlo. Su un intervento pianificato il
     // pezzo NON è montato, quindi non c'è nessuna data — e la scheda lo dice
-    // («da montare alla chiusura») invece di inventarne una.
+    // («montaggio ancora non effettuato») invece di inventarne una.
     expect(RicambioUtilizzo::firstOrFail()->data)->toBeNull();
 
     $pianificato->segnaFatto(today()->addDays(2));

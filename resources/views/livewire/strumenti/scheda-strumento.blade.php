@@ -273,7 +273,7 @@
                                             @if ($salvato->data)
                                                 · montato il {{ $salvato->data->format('d/m/Y') }}
                                             @else
-                                                · da montare alla chiusura dell'intervento
+                                                · montaggio ancora non effettuato
                                             @endif
                                         </span>
                                     </span>
