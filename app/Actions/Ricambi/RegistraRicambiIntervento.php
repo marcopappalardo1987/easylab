@@ -51,10 +51,19 @@ class RegistraRicambiIntervento
         // savepoint): così l'atomicità delle righe è una proprietà DEL SERVIZIO
         // e resta vera per i chiamanti futuri, non una gentilezza di questo.
         return DB::transaction(function () use ($intervento, $nuove, $rimosse) {
-            // Data di montaggio, e con essa `data_inizio` della garanzia: su un
-            // intervento pianificato il pezzo è comunque montato oggi — farla
-            // decorrere dalla scadenza pianificata darebbe una garanzia che
-            // inizia nel futuro.
+            // Data di montaggio, e con essa `data_inizio` della garanzia.
+            //
+            // Su un intervento già eseguito è la sua data di esecuzione. Su uno
+            // PIANIFICATO qui non si può saperla — il pezzo non è ancora stato
+            // montato — quindi si scrive oggi come segnaposto e la si corregge
+            // alla chiusura: `Intervento::segnaFatto()` riallinea le righe e le
+            // garanzie alla data di esecuzione vera.
+            //
+            // ⚠️ La prima stesura si fermava qui, e il segnaposto restava:
+            // registrando un ricambio su un intervento pianificato fra due
+            // giorni, la scheda diceva «montato il <oggi>» per un pezzo che
+            // nessuno aveva toccato. Non toccava il semaforo — la scadenza è
+            // dichiarata e non derivata — ma era un dato falso a schermo.
             $data = $intervento->data_esecuzione ?? today();
 
             foreach ($rimosse as $id) {

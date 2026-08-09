@@ -6,6 +6,7 @@ use App\Enums\StatoIntervento;
 use App\Enums\TipoIntervento;
 use App\Models\Concerns\BelongsToOrgNodeThroughStrumento;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Scopes\GaranziaRicambioPrivacyScope;
 use App\Support\Semaforo;
 use Carbon\CarbonInterface;
 use Database\Factories\InterventoFactory;
@@ -15,6 +16,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Attività/intervento su uno strumento (ERD §5.2 — ADR-005/007/009): la fonte
@@ -85,13 +87,78 @@ class Intervento extends Model
     /**
      * Spunta "Fatto" (permesso `interventi.complete`). Senza data esplicita
      * l'esecuzione è oggi.
+     *
+     * Allinea anche la data di montaggio dei ricambi registrati su questo
+     * intervento: vedi `allineaRicambiAllaEsecuzione()`.
      */
     public function segnaFatto(?CarbonInterface $data = null): bool
     {
         $this->stato = StatoIntervento::Fatto;
         $this->data_esecuzione = $data;
 
-        return $this->save();
+        return DB::transaction(function (): bool {
+            $salvato = $this->save();
+            $this->allineaRicambiAllaEsecuzione();
+
+            return $salvato;
+        });
+    }
+
+    /**
+     * Un pezzo è montato quando l'intervento viene ESEGUITO, non quando lo si
+     * registra (ADR-022).
+     *
+     * Il servizio che crea le righe non può saperlo: su un intervento
+     * pianificato `data_esecuzione` è NULL e ripiega su oggi, così un ricambio
+     * annotato in anticipo risultava «montato» giorni prima che qualcuno lo
+     * toccasse. La data vera si conosce solo qui, alla chiusura — quindi è qui
+     * che si scrive.
+     *
+     * Sta nel model e non nel componente perché `segnaFatto()` è **l'unica
+     * via** per chiudere un intervento (mai update by-query, vedi il docblock
+     * della classe): ogni chiamante presente e futuro — la scheda oggi, la
+     * vista mobile del tecnico domani — eredita l'allineamento senza doverlo
+     * ricordare.
+     *
+     * ⚠️ La `data_inizio` della garanzia segue il montaggio, ma **solo se
+     * resta prima della scadenza dichiarata**: il model esige quel confine, e
+     * spostare l'inizio oltre una scadenza ravvicinata farebbe esplodere la
+     * chiusura di un intervento per colpa di un refuso in una riga ricambio.
+     * In quel caso la garanzia si lascia com'è: un dato informativo incoerente
+     * è meno grave di un'operazione che non si può più completare. La scadenza
+     * — l'unica grandezza che pilota il semaforo — non è toccata in nessun caso.
+     *
+     * `riapri()` NON riporta indietro le date: un pezzo montato resta montato,
+     * e riaprire un intervento significa "c'è ancora da fare", non "non è mai
+     * successo".
+     */
+    protected function allineaRicambiAllaEsecuzione(): void
+    {
+        $esecuzione = $this->data_esecuzione;
+
+        if ($esecuzione === null) {
+            return;
+        }
+
+        foreach ($this->ricambiUtilizzi()->get() as $utilizzo) {
+            $utilizzo->data = $esecuzione;
+            $utilizzo->save();
+
+            // SENZA il privacy scope, come nella rimozione dal form: la
+            // relazione passa da GaranziaRicambioPrivacyScope e per un causer
+            // senza `garanzie.ricambio.view` tornerebbe NULL — la garanzia
+            // resterebbe con una data d'inizio che il permesso di chi ha
+            // chiuso l'intervento ha reso invisibile. Il permesso governa il
+            // dettaglio mostrato, non l'integrità del dato.
+            $garanzia = $utilizzo->garanzia()
+                ->withoutGlobalScope(GaranziaRicambioPrivacyScope::class)
+                ->first();
+
+            if ($garanzia?->data_scadenza_dichiarata?->gt($esecuzione)) {
+                $garanzia->data_inizio = $esecuzione;
+                $garanzia->save();
+            }
+        }
     }
 
     /**

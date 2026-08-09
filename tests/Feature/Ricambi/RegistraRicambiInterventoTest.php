@@ -72,6 +72,73 @@ it('mounts the part on the intervento strumento and date', function () {
         ->and($utilizzo->garanzia->data_inizio->toDateString())->toBe('2026-03-04');
 });
 
+it('moves the mounting date to the execution date when the intervento is closed', function () {
+    // Rientro dall'uso reale (9 Ago 2026): un pezzo registrato su un intervento
+    // PIANIFICATO risultava «montato» oggi, giorni prima che qualcuno lo
+    // toccasse. La data vera si conosce solo alla chiusura, quindi è lì che si
+    // scrive — e sta in `segnaFatto()` perché è l'unica via per chiudere un
+    // intervento, quindi ogni chiamante la eredita.
+    $pianificato = Intervento::factory()->forStrumento($this->strumento)
+        ->pianificato()->create(['data_scadenza' => today()->addDays(2)->toDateString()]);
+
+    $this->servizio->esegui($pianificato, [($this->riga)('Cinghia', '2030-01-01')]);
+
+    // Segnaposto finché l'intervento è aperto.
+    expect(RicambioUtilizzo::firstOrFail()->data->toDateString())->toBe(today()->toDateString());
+
+    $pianificato->segnaFatto(today()->addDays(2));
+
+    expect(RicambioUtilizzo::firstOrFail()->data->toDateString())
+        ->toBe(today()->addDays(2)->toDateString())
+        // La garanzia decorre dal montaggio vero.
+        ->and(Garanzia::firstOrFail()->data_inizio->toDateString())
+        ->toBe(today()->addDays(2)->toDateString())
+        // La scadenza dichiarata NON si tocca: è ciò che pilota il semaforo.
+        ->and(Garanzia::firstOrFail()->data_scadenza_effettiva->toDateString())->toBe('2030-01-01');
+});
+
+it('does not break the closure when moving the start would pass the declared expiry', function () {
+    // Caso limite del confine `scadenza > data_inizio`: con una scadenza
+    // ravvicinata (un refuso, tipicamente) spostare l'inizio in avanti farebbe
+    // esplodere la CHIUSURA dell'intervento. Si preferisce lasciare la garanzia
+    // com'è: un dato informativo incoerente è meno grave di un'operazione che
+    // non si può più completare.
+    $pianificato = Intervento::factory()->forStrumento($this->strumento)
+        ->pianificato()->create(['data_scadenza' => today()->addDays(10)->toDateString()]);
+
+    $this->servizio->esegui($pianificato, [
+        ($this->riga)('Cinghia', today()->addDays(3)->toDateString()),
+    ]);
+
+    $pianificato->segnaFatto(today()->addDays(10));
+
+    expect(fn () => $pianificato->fresh())->not->toThrow(Exception::class)
+        // Il montaggio si sposta comunque…
+        ->and(RicambioUtilizzo::firstOrFail()->data->toDateString())
+        ->toBe(today()->addDays(10)->toDateString())
+        // …ma l'inizio della garanzia resta indietro, senza rompere nulla.
+        ->and(Garanzia::firstOrFail()->data_inizio->toDateString())->toBe(today()->toDateString())
+        ->and(Garanzia::firstOrFail()->data_scadenza_effettiva->toDateString())
+        ->toBe(today()->addDays(3)->toDateString());
+});
+
+it('aligns the warranty even for a causer who cannot see ricambio rows', function () {
+    // Stesso principio della rimozione: la relazione passa dal privacy scope, e
+    // senza il bypass la garanzia resterebbe con una data d'inizio decisa dai
+    // permessi di chi ha chiuso l'intervento.
+    $pianificato = Intervento::factory()->forStrumento($this->strumento)->pianificato()->create();
+    $this->servizio->esegui($pianificato, [($this->riga)('Cinghia', '2030-01-01')]);
+
+    $tenant = User::factory()->create(['tenant_id' => $this->ente->id]);
+    $tenant->assignRole('Tenant');
+    $this->actingAs($tenant);
+
+    $pianificato->segnaFatto(today()->addDay());
+
+    expect(Garanzia::withoutGlobalScopes()->firstOrFail()->data_inizio->toDateString())
+        ->toBe(today()->addDay()->toDateString());
+});
+
 it('removes a line together with its warranty', function () {
     $this->servizio->esegui($this->intervento, [($this->riga)('Cinghia')]);
     $utilizzo = RicambioUtilizzo::firstOrFail();
