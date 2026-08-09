@@ -152,6 +152,35 @@ it('ignores a spare part that has been unmounted (soft-deleted utilizzo)', funct
             ->viewData('semafori')[$this->strumento->id])->toBe(StatoSemaforo::Verde);
 });
 
+/**
+ * ADR-020 dice «pezzi **montati**», e dal 9 Ago 2026 `ricambio_utilizzo.data`
+ * distingue davvero: NULL = registrato ma non ancora installato, perché la data
+ * di montaggio segue la chiusura dell'intervento. Un pezzo che non è sulla
+ * macchina non ne descrive lo stato.
+ *
+ * Non è un caso di laboratorio: è **esattamente** ciò che il form produce
+ * registrando un ricambio su un intervento pianificato, ed è stato scoperto
+ * provandolo in browser — un intervento datato 2027 accendeva l'arancione oggi.
+ */
+it('ignores a spare part registered but not yet mounted, and counts it once it is', function () {
+    $this->utilizzo->update(['data' => null]); // intervento ancora aperto
+    Garanzia::factory()->forRicambio($this->utilizzo)->scaduta()->create();
+
+    $this->actingAs($this->admin);
+
+    expect($this->strumento->statoSemaforoCalcolato())->toBe(StatoSemaforo::Verde)
+        ->and($this->strumento->scadenzeGaranzieRicambi())->toBeEmpty()
+        ->and(Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)
+            ->viewData('semafori')[$this->strumento->id])->toBe(StatoSemaforo::Verde);
+
+    // Chiuso l'intervento il pezzo è montato, e da quel momento pesa.
+    $this->utilizzo->update(['data' => today()->toDateString()]);
+
+    expect($this->strumento->fresh()->statoSemaforoCalcolato())->toBe(StatoSemaforo::Arancione)
+        ->and(Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)
+            ->viewData('semafori')[$this->strumento->id])->toBe(StatoSemaforo::Arancione);
+});
+
 it('ignores a soft-deleted garanzia', function () {
     $garanzia = Garanzia::factory()->forRicambio($this->utilizzo)->scaduta()->create();
 

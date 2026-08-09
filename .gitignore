@@ -32,6 +32,10 @@ _ide_helper.php
 .phpunit.result.cache
 /auth.json
 
+# Playwright MCP (snapshot e screenshot di sessione: materiale di verifica,
+# non di progetto). La configurazione del server sta invece in `.mcp.json`.
+/.playwright-mcp
+
 # Misc
 Homestead.json
 Homestead.yaml
@@ -39,3 +43,6 @@ Thumbs.db
 
 # Log
 *.log
+
+# Config MCP locale (Playwright): strumento di sviluppo, non di progetto
+.mcp.json

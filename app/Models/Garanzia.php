@@ -283,6 +283,17 @@ class Garanzia extends Model
      * lettura di dominio, semaforo compreso». Un pezzo smontato per errore non
      * deve accendere l'arancione.
      *
+     * **«Montati» è preso alla lettera, ed è `data` a dirlo.** Una riga con
+     * `data` NULL è un pezzo registrato ma non ancora installato — «montaggio
+     * ancora non effettuato», perché la data di montaggio segue la CHIUSURA
+     * dell'intervento — e un pezzo che non è sulla macchina non ne descrive lo
+     * stato: la sua garanzia non deve accendere il semaforo finché il lavoro
+     * non è fatto. Il filtro non era nel testo di ADR-020, che definiva la
+     * fonte col solo doppio salto: allora `data` era NOT NULL e la distinzione
+     * non esisteva: è nata il 9 Ago 2026 rendendola nullable, e la si è vista
+     * solo provando il flusso vero in browser — un intervento pianificato per
+     * il 2027 accendeva l'arancione oggi.
+     *
      * Nessun filtro su `soggetto`: la FK `ricambio_utilizzo_id` è valorizzata
      * sse il soggetto è `ricambio` (invariante di `verificaSoggetto()`), quindi
      * la join lo impone già — e un secondo controllo sarebbe una seconda regola
@@ -294,7 +305,8 @@ class Garanzia extends Model
     {
         $query->withoutGlobalScope(GaranziaRicambioPrivacyScope::class)
             ->join('ricambio_utilizzo', 'ricambio_utilizzo.id', '=', 'garanzie.ricambio_utilizzo_id')
-            ->whereNull('ricambio_utilizzo.deleted_at');
+            ->whereNull('ricambio_utilizzo.deleted_at')
+            ->whereNotNull('ricambio_utilizzo.data');
     }
 
     /** True se la garanzia è già finita. */

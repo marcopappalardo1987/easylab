@@ -449,6 +449,8 @@ Si ottengono insieme la velocità "al volo" e la ricerca incrociata affidabile (
 - Salda il debito S3 punto 7 lettera **(c)** (colonna dettaglio filtrata per permesso, pallino no) e impone di sciogliere la lettera **(b)** (livello 2 dello scope sulle righe ricambio, che passa dallo stesso doppio salto).
 - 🧪 Test negativo obbligatorio: *un Tenant vede arancione uno strumento la cui unica scadenza è la garanzia di un ricambio, e non vede da nessuna parte il nome del pezzo.*
 
+**Precisazione del 9 Ago 2026 (in fase di attuazione): «montati» si legge alla lettera, e a dirlo è `ricambio_utilizzo.data`.** Quando questo ADR è stato scritto la colonna era NOT NULL e la fonte si poteva definire col solo doppio salto; renderla nullable lo stesso giorno (la data di montaggio segue la **chiusura** dell'intervento) ha creato una terza categoria che prima non esisteva — il pezzo **registrato ma non ancora installato**. La sua garanzia **non** concorre al semaforo: un pezzo che non è sulla macchina non ne descrive lo stato, e senza il filtro un intervento pianificato per l'anno prossimo accenderebbe l'arancione oggi. Emersa provando il flusso reale in browser, non dai test: la fonte era fedele alla lettera dell'ADR di allora.
+
 ---
 
 **ADR-021 — Tipologie di intervento: elenco fissato dal cliente**
