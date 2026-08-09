@@ -334,6 +334,11 @@ class Strumento extends Model
     public function ricambiUtilizzati(): HasMany
     {
         return $this->hasMany(RicambioUtilizzo::class, 'strumento_id')
+            // ⚠️ NULL = «non ancora montato», e va IN CIMA: è la riga che
+            // aspetta qualcosa, non la più vecchia. Il CASE è esplicito perché
+            // SQLite ordina i NULL per primi e Postgres per ultimi — senza,
+            // l'ordine cambierebbe fra locale e produzione (trappola nota).
+            ->orderByRaw('case when data is null then 0 else 1 end')
             ->orderByDesc('data')
             ->orderByDesc('id');
     }

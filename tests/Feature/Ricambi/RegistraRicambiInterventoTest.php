@@ -83,8 +83,12 @@ it('moves the mounting date to the execution date when the intervento is closed'
 
     $this->servizio->esegui($pianificato, [($this->riga)('Cinghia', '2030-01-01')]);
 
-    // Segnaposto finché l'intervento è aperto.
-    expect(RicambioUtilizzo::firstOrFail()->data->toDateString())->toBe(today()->toDateString());
+    // ⚠️ Aggiornato consapevolmente il 9 Ago 2026. Qui c'era
+    // «Segnaposto finché l'intervento è aperto» con un assert su `today()`:
+    // congelava il difetto invece di chiuderlo. Su un intervento pianificato il
+    // pezzo NON è montato, quindi non c'è nessuna data — e la scheda lo dice
+    // («da montare alla chiusura») invece di inventarne una.
+    expect(RicambioUtilizzo::firstOrFail()->data)->toBeNull();
 
     $pianificato->segnaFatto(today()->addDays(2));
 
@@ -95,6 +99,35 @@ it('moves the mounting date to the execution date when the intervento is closed'
         ->toBe(today()->addDays(2)->toDateString())
         // La scadenza dichiarata NON si tocca: è ciò che pilota il semaforo.
         ->and(Garanzia::firstOrFail()->data_scadenza_effettiva->toDateString())->toBe('2030-01-01');
+});
+
+it('shows no mounting date while the intervento is still planned', function () {
+    // Il difetto visto a schermo: «montato il <oggi>» per un pezzo che nessuno
+    // aveva toccato. Correggere il dato alla chiusura non bastava — fino ad
+    // allora la riga restava falsa, e sarebbe comparsa in qualunque ricerca per
+    // periodo. Ora non c'è data finché non c'è montaggio.
+    $pianificato = Intervento::factory()->forStrumento($this->strumento)->pianificato()->create();
+
+    $this->servizio->esegui($pianificato, [($this->riga)('Guarnizione', '2030-01-01')]);
+
+    expect(RicambioUtilizzo::firstOrFail()->data)->toBeNull()
+        // La garanzia invece un inizio lo vuole sempre: asimmetria voluta,
+        // «non montato» è rappresentabile, «garanzia senza inizio» no.
+        ->and(Garanzia::firstOrFail()->data_inizio->toDateString())->toBe(today()->toDateString());
+});
+
+it('puts the parts still to be mounted at the top of the list', function () {
+    // NULL = «aspetta qualcosa», quindi in cima. L'ordinamento è esplicito
+    // perché SQLite mette i NULL per primi e Postgres per ultimi: senza il
+    // CASE, l'ordine cambierebbe fra locale e produzione.
+    $eseguito = Intervento::factory()->forStrumento($this->strumento)->fatto('2026-01-10')->create();
+    $pianificato = Intervento::factory()->forStrumento($this->strumento)->pianificato()->create();
+
+    $this->servizio->esegui($eseguito, [($this->riga)('Montato', '2030-01-01')]);
+    $this->servizio->esegui($pianificato, [($this->riga)('Da montare', '2030-01-01')]);
+
+    expect($this->strumento->ricambiUtilizzati()->with('ricambio')->get()->pluck('ricambio.nome')->all())
+        ->toBe(['Da montare', 'Montato']);
 });
 
 it('does not break the closure when moving the start would pass the declared expiry', function () {

@@ -51,34 +51,40 @@ class RegistraRicambiIntervento
         // savepoint): così l'atomicità delle righe è una proprietà DEL SERVIZIO
         // e resta vera per i chiamanti futuri, non una gentilezza di questo.
         return DB::transaction(function () use ($intervento, $nuove, $rimosse) {
-            // Data di montaggio, e con essa `data_inizio` della garanzia.
+            // Data di MONTAGGIO: la data di esecuzione dell'intervento, oppure
+            // **NULL** se l'intervento è ancora pianificato — perché in quel
+            // caso il pezzo non è stato montato, e una data qualsiasi sarebbe
+            // un'affermazione falsa. `Intervento::segnaFatto()` la riempie alla
+            // chiusura.
             //
-            // Su un intervento già eseguito è la sua data di esecuzione. Su uno
-            // PIANIFICATO qui non si può saperla — il pezzo non è ancora stato
-            // montato — quindi si scrive oggi come segnaposto e la si corregge
-            // alla chiusura: `Intervento::segnaFatto()` riallinea le righe e le
-            // garanzie alla data di esecuzione vera.
-            //
-            // ⚠️ La prima stesura si fermava qui, e il segnaposto restava:
-            // registrando un ricambio su un intervento pianificato fra due
-            // giorni, la scheda diceva «montato il <oggi>» per un pezzo che
-            // nessuno aveva toccato. Non toccava il semaforo — la scadenza è
-            // dichiarata e non derivata — ma era un dato falso a schermo.
-            $data = $intervento->data_esecuzione ?? today();
+            // ⚠️ Qui c'era `?? today()` come segnaposto, e non bastava
+            // correggerlo alla chiusura: fino ad allora la scheda diceva
+            // «montato il <oggi>» per un pezzo che nessuno aveva toccato, e la
+            // riga sarebbe comparsa in qualunque ricerca per periodo.
+            // Correggere a valle un valore inventato a monte non lo rende vero.
+            $montaggio = $intervento->data_esecuzione;
+
+            // La garanzia invece una data d'inizio la vuole sempre (colonna NOT
+            // NULL, e `normalizzaScadenza()` la esige): su un intervento
+            // pianificato si usa oggi come inizio provvisorio, riallineato
+            // anch'esso alla chiusura. L'asimmetria è voluta — «non montato» è
+            // rappresentabile, «garanzia senza inizio» no — e non tocca il
+            // semaforo, perché la scadenza è dichiarata e non derivata.
+            $inizioGaranzia = $intervento->data_esecuzione ?? today();
 
             foreach ($rimosse as $id) {
                 $this->rimuovi($intervento, (int) $id);
             }
 
             $creati = collect($nuove)->map(
-                fn (array $riga) => $this->registra($intervento, $riga, $data)
+                fn (array $riga) => $this->registra($intervento, $riga, $montaggio, $inizioGaranzia)
             );
 
             return ['creati' => $creati, 'rimossi' => count($rimosse)];
         });
     }
 
-    private function registra(Intervento $intervento, array $riga, mixed $data): RicambioUtilizzo
+    private function registra(Intervento $intervento, array $riga, mixed $montaggio, mixed $inizioGaranzia): RicambioUtilizzo
     {
         $ricambio = Ricambio::collegaOCrea($riga['nome'], $intervento->tenant_id);
 
@@ -91,14 +97,14 @@ class RegistraRicambiIntervento
             // sullo stesso intervento sono un refuso, e il caso vero
             // ("due guarnizioni") si registra dal tab Ricambi.
             'quantita' => 1,
-            'data' => $data,
+            'data' => $montaggio, // NULL finché l'intervento non è chiuso
         ]);
 
         $garanzia = new Garanzia([
             'tenant_id' => $intervento->tenant_id,
             'soggetto' => SoggettoGaranzia::Ricambio,
             'ricambio_utilizzo_id' => $utilizzo->id,
-            'data_inizio' => $data,
+            'data_inizio' => $inizioGaranzia,
         ]);
 
         // ADR-022: la garanzia è obbligatoria per riga, ed è una DATA dichiarata.

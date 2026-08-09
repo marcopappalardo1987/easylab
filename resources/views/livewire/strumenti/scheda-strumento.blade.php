@@ -266,7 +266,16 @@
                                     wire:key="ricambio-salvato-{{ $salvato->id }}">
                                     <span class="flex-1 {{ $inRimozione ? 'line-through' : '' }}">
                                         {{ $salvato->ricambio?->nome ?? '—' }}
-                                        <span class="text-neutral-500">· montato il {{ $salvato->data->format('d/m/Y') }}</span>
+                                        {{-- Senza data il pezzo non è ancora montato: si dice quello,
+                                             non una data inventata. Si monterà alla chiusura
+                                             dell'intervento, che è quando la data diventa vera. --}}
+                                        <span class="text-neutral-500">
+                                            @if ($salvato->data)
+                                                · montato il {{ $salvato->data->format('d/m/Y') }}
+                                            @else
+                                                · da montare alla chiusura dell'intervento
+                                            @endif
+                                        </span>
                                     </span>
                                     @if ($inRimozione)
                                         <button type="button" wire:click="annullaRimozioneRicambio({{ $salvato->id }})"
