@@ -106,7 +106,7 @@ Il QR è quindi una scorciatoia di navigazione (evita la ricerca manuale), non u
 
 **ADR-004 — Garanzie a ore: normalizzazione in "data di scadenza effettiva"**
 
-*Stato: Accettata — **superata in parte da ADR-019** (3 Ago 2026): la garanzia a ore **non esiste**, e con essa spariscono `tipo_scadenza`, `soglia_ore`, `data_scadenza_prevista` e le letture contaore. Restano validi il motore sdoppiato macchina/ricambio, il campo unico `data_scadenza_effettiva` e la privacy delle garanzie ricambio. **Integrata da ADR-020**: la garanzia del ricambio pesa sul semaforo dello strumento.*
+*Stato: Accettata — **superata in parte da ADR-019** (3 Ago 2026) e, sulla privacy, da **ADR-029** (9 Ago 2026, non ancora attuata: la visibilità al Tenant diventa un'impostazione dell'Ente col default «modifica»). La garanzia a ore **non esiste**, e con essa spariscono `tipo_scadenza`, `soglia_ore`, `data_scadenza_prevista` e le letture contaore. Restano validi il motore sdoppiato macchina/ricambio, il campo unico `data_scadenza_effettiva` e la privacy delle garanzie ricambio. **Integrata da ADR-020**: la garanzia del ricambio pesa sul semaforo dello strumento.*
 
 **Contesto.** Il Motore Garanzie Sdoppiato prevede garanzie "legate alle ore di utilizzo del macchinario", ma non esisteva un meccanismo per far conoscere al sistema le ore di una macchina. Tracciare le ore in automatico (IoT/telemetria) è fuori scope.
 
@@ -687,3 +687,32 @@ Dettagli di configurazione: `AWS_ENDPOINT` vuole lo schema **`https://`** (il pa
 - ⚠️ **Accoppiamento fra permessi da sorvegliare**: un ruolo con `interventi.create` ma senza `interventi.assign` creerebbe interventi non assegnati, aggirando la regola senza toccare il form. Oggi non esiste — un **meta-test in `RbacSeederTest`** congela l'accoppiamento, così una modifica alla matrice se ne accorge lì e non da interventi senza padrone comparsi in produzione.
 - Il segnaposto del select è `disabled`: serve ancora, perché aprendo una riga storica il campo deve poter mostrare «non ancora scelto» invece del primo tecnico dell'elenco — che sarebbe un'assegnazione fatta di fatto da un default.
 - Rafforza ADR-007: se ogni intervento ha un assegnatario, il grant puntuale del Tecnico smette di essere un'eccezione e diventa il caso normale.
+
+---
+
+**ADR-029 — La visibilità delle garanzie ricambio al Tenant è un'impostazione dell'Ente, non un divieto**
+
+*Stato: Accettata (9 Ago 2026) — **supera il vincolo di privacy di ADR-004** (e con esso la voce corrispondente del set 🔒 di ADR-016); **non ancora attuata**, vedi «Conseguenze».*
+
+**Contesto.** Dal documento di Fase 2 in poi il progetto ha portato una regola sola: «le garanzie sui ricambi restano visibili solo a EasyLab/Admin, mai al Tenant». ADR-004 la ratifica dichiarandola «vincolo di privacy **già previsto**» — cioè la eredita senza motivarla —, lo Schema Ruoli la irrigidisce mettendo `garanzie.ricambio.*` nel set 🔒, il registro GDPR la giustifica a posteriori come minimizzazione, e ADR-020 ci costruisce sopra la distinzione fra aggregato (il pallino, dovuto a tutti) e dettaglio (la riga, negata al Tenant).
+
+Verificando ADR-020 sui dati veri, il 9 Ago 2026, è emerso che la regola poggia su una **premessa mai scritta**: che i ricambi li fornisca EasyLab, e che la loro copertura sia quindi un dato del suo rapporto commerciale. La premessa non regge al modello di prodotto: il Tenant è **l'intestatario dell'abbonamento** e il pezzo è montato su una macchina sua, spesso pagata da lui. Nascondergli quel dato per difetto significa nascondergli i propri dati.
+
+Ma il caso opposto esiste davvero — un Ente servito da EasyLab in full service, dove la copertura dei pezzi è informazione del fornitore — e una regola unica non può essere giusta per entrambi.
+
+**Decisione.**
+- La visibilità delle garanzie ricambio al ruolo `Tenant` diventa un'**impostazione per-Ente**, governata dal Superadmin (EasyLab): sola lettura, oppure modifica.
+- **Il default alla creazione dell'Ente è «modifica»**: chi paga l'abbonamento possiede i propri dati, e l'eccezione va giustificata da chi la impone — non il contrario. È l'inversione esatta della postura precedente.
+- `garanzie.ricambio.*` **esce dal set 🔒**: smette di essere «mai concedibile» e diventa concedibile *per Ente*. Non diventa però un permesso come gli altri — resta governato dal Superadmin, non dall'Admin dell'Ente, perché è una clausola del rapporto commerciale e non una preferenza interna.
+
+**Alternative scartate.**
+- *Concederlo a tutti i Tenant senza impostazione:* semplice, ma toglie a EasyLab la possibilità di servire in full service un cliente a cui la copertura dei pezzi non va mostrata. Il caso che ha originato la regola sparirebbe invece di essere gestito.
+- *Lasciare il divieto e concedere caso per caso via RBAC:* il set 🔒 è nato apposta perché quei permessi **non** fossero ridistribuibili dalla UI; usarlo al contrario ne svuoterebbe il senso, e un'eccezione concessa a mano non lascia traccia di *chi* l'ha decisa.
+- *Impostazione a livello di utente:* è una clausola contrattuale, e vale per l'Ente. Per-utente moltiplicherebbe gli stati senza rispondere a nessuna domanda reale.
+
+**Conseguenze.**
+- ⚠️ **Decisa ma NON attuata.** Finché non lo è, vale ADR-004: il codice odierno nega le righe al Tenant. Da fare, in un blocco dedicato: colonna sull'Ente, UI Superadmin, `GaranziaRicambioPrivacyScope` che smette di guardare il solo permesso, uscita dal set 🔒 in `config/rbac.php` **con riseeding sui DB già seminati**, e riscrittura dei test negativi che oggi congelano il divieto.
+- **Il lavoro di ADR-020 non si butta e non cambia:** l'aggregato resta dovuto a tutti e il dettaglio resta condizionato: cambia solo *da cosa* dipende il permesso. Il degrado dell'etichetta serve ancora, per gli Enti in cui l'impostazione è sola lettura o per i ruoli che il permesso non l'hanno.
+- **Va fatta prima del tab Ricambi** (S4 blocco 5), che è la schermata in cui quelle righe si leggono e si correggono: scriverlo con la regola vecchia significherebbe rifarlo.
+- Da aggiornare quando si attua: ADR-004 (che qui viene superato), Schema Ruoli §4/§6 e il set 🔒 di ADR-016, il registro GDPR — dove la minimizzazione va riformulata: il dato non è più negato per difetto, è configurabile.
+- 🔗 Si incrocia con la questione aperta **«un utente, N Enti»** (vedi roadmap S5): se l'abbonamento arriverà a coprire più Enti, questa impostazione resta per-Ente ma il suo intestatario sarà l'account, non il singolo Ente.
