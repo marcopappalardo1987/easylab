@@ -114,7 +114,7 @@ it('does not touch saved lines when the checkbox is unticked', function () {
         ->and(Garanzia::count())->toBe(1);
 });
 
-it('defaults the description to «Ricambio effettuato» when parts are registered', function () {
+it('defaults the description to «Sostituzione ricambio» when parts are registered', function () {
     scheda($this->admin, $this->strumento)
         ->call('openNuovoIntervento')
         ->set('interventoForm.tipo', 'manutenzione_straordinaria')
@@ -127,12 +127,12 @@ it('defaults the description to «Ricambio effettuato» when parts are registere
         ->call('saveIntervento')
         ->assertHasNoErrors();
 
-    expect(Intervento::first()->descrizione)->toBe('Ricambio effettuato');
+    expect(Intervento::first()->descrizione)->toBe('Sostituzione ricambio');
 });
 
 it('still requires a description when there are no parts', function () {
     // Il default vale SOLO con dei ricambi: un intervento senza pezzi descritto
-    // come «Ricambio effettuato» sarebbe una bugia in tabella e in Panoramica.
+    // come «Sostituzione ricambio» sarebbe una bugia in tabella e in Panoramica.
     ($this->compila)(scheda($this->admin, $this->strumento)->call('openNuovoIntervento'))
         ->set('interventoForm.descrizione', '')
         ->call('saveIntervento')

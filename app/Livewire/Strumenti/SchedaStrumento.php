@@ -280,7 +280,7 @@ class SchedaStrumento extends Component
             // in tabella e virgolette spaiate «» nelle modali di conferma.
             'descrizione' => filled($this->interventoForm['descrizione'])
                 ? $this->interventoForm['descrizione']
-                : 'Ricambio effettuato',
+                : 'Sostituzione ricambio',
             'tipo' => $this->interventoForm['tipo'],
             'data_scadenza' => $this->interventoForm['data_scadenza'],
         ];

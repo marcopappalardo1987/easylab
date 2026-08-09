@@ -282,7 +282,7 @@
                                         :index="$i"
                                         on-select="scegliRicambio"
                                         :suggerimenti="$ricambioAttivo === $i ? $suggerimenti : []"
-                                        :stato="$ricambioAttivo === $i && filled($riga['nome']) ? (count($suggerimenti) > 0 ? 'collegato' : 'nuovo') : null" />
+                                        :stato="$ricambioAttivo === $i && filled($riga['nome']) && count($suggerimenti) === 0 ? 'nuovo' : null" />
 
                                     <div class="mt-2 flex items-end gap-2">
                                         <div class="flex-1">

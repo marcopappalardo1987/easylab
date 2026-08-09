@@ -106,9 +106,32 @@ it('renders the combobox aria contract', function () {
         ->assertSeeHtml('aria-controls="ricambiNuovi.0.nome-lista"');
 });
 
-it('tells the operator whether the part will be linked or created', function () {
-    // Collegare e creare sono due gesti diversi, e chi scrive deve saperlo
-    // prima di salvare. Glifo + testo, mai solo colore (DS §1/§4).
-    ($this->digita)('Guarn')->assertSee('Collegato a una voce già a catalogo');
+it('renders the matching options, so the dropdown has something to show', function () {
+    // ⚠️ Rientro dall'uso reale (9 Ago 2026): i suggerimenti c'erano ma il
+    // dropdown non compariva mai. La visibilità dipendeva da uno stato Alpine
+    // `aperto`, e a ogni render di Livewire dopo il debounce il nodo veniva
+    // rimpiazzato e `x-data` si reinizializzava → il flag tornava false. Ora la
+    // lista esiste **se e solo se** il server ha dei suggerimenti, e Alpine può
+    // solo nasconderla (Esc, click fuori).
+    //
+    // Questo test copre ciò che è verificabile senza browser: che le opzioni
+    // siano davvero nel markup, cliccabili, con il `wire:click` giusto. Che poi
+    // siano VISIBILI resta CSS, e sta nella checklist manuale.
+    ($this->digita)('Guarn')
+        ->assertSee('Guarnizione O-Ring')
+        ->assertSee('Guarnizione portello')
+        ->assertSeeHtml('scegliRicambio(0');
+});
+
+it('renders no list at all when nothing matches', function () {
+    ($this->digita)('Pezzo mai visto')->assertDontSeeHtml('role="listbox"');
+});
+
+it('says only what the list cannot say: that the part will be created', function () {
+    // Il messaggio «Collegato a una voce già a catalogo» è stato TOLTO: col
+    // dropdown visibile ripeteva ciò che le opzioni mostrano già, e finché il
+    // dropdown non si vedeva era pure l'unico segno di vita — quindi
+    // fuorviante. Resta il caso che la lista non può comunicare.
     ($this->digita)('Pezzo mai visto')->assertSee('Nuovo ricambio: verrà creato a catalogo');
+    ($this->digita)('Guarn')->assertDontSee('Nuovo ricambio: verrà creato a catalogo');
 });
