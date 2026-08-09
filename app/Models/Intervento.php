@@ -131,6 +131,17 @@ class Intervento extends Model
      * `riapri()` NON riporta indietro le date: un pezzo montato resta montato,
      * e riaprire un intervento significa "c'è ancora da fare", non "non è mai
      * successo".
+     *
+     * 📥 **Da rivedere quando la data di montaggio diventerà editabile** (tab
+     * Ricambi, S4 blocco 5 — richiesto il 9 Ago 2026). Questo metodo
+     * **sovrascrive** `data` a ogni chiusura: se un utente la corregge a mano e
+     * poi qualcuno riapre e richiude l'intervento, la correzione sparisce senza
+     * dire niente. Va deciso allora — non scoperto — se distinguere una data
+     * impostata da una persona da una automatica (e non toccare mai la prima),
+     * se allineare solo quando `data` è NULL, o se lasciare che l'automatismo
+     * vinca dichiarandolo nella UI. Le tre uscite e i loro costi sono in
+     * roadmap, sotto la voce del tab Ricambi; qualunque si scelga, questo
+     * docblock va aggiornato insieme al codice.
      */
     protected function allineaRicambiAllaEsecuzione(): void
     {
