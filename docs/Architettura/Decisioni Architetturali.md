@@ -430,7 +430,7 @@ Si ottengono insieme la velocità "al volo" e la ricerca incrociata affidabile (
 
 **ADR-020 — La garanzia del ricambio concorre al semaforo dello strumento su cui è montato**
 
-*Stato: Accettata (3 Ago 2026) — **estende ADR-005**; convive con il vincolo di privacy di ADR-004.*
+*Stato: Accettata (3 Ago 2026) — **estende ADR-005**; convive con il vincolo di privacy di ADR-004. **Attuata il 9 Ago 2026** (S4 blocco 4). Il bypass del privacy scope è scritto in UN punto solo, `Garanzia::scopeDeiPezziMontati()`; a non far trapelare il dettaglio non è una guardia ma la **forma della query** — i chiamanti selezionano id e scadenza, e il nome del pezzo non entra nel result set. La resa neutra delle etichette è andata oltre la lettera di questo ADR: oltre alla colonna "Prossima scadenza" riguarda anche il motivo del tab Panoramica (🔗 ADR-024), che nel frattempo era nato.*
 
 **Contesto.** ADR-004 modella la garanzia del singolo pezzo (`soggetto = ricambio`, agganciata a `ricambio_utilizzo`) ma non dice se pesa sul semaforo; l'implementazione S3 alimenta il calcolo con le sole garanzie `macchina`. Il briefing del 3 Agosto 2026 lo chiarisce: **anche i ricambi condizionano lo stato dello strumento**, con la stessa scala della garanzia macchina — dentro i termini → verde; scadenza entro un mese → arancione; scaduta → arancione.
 

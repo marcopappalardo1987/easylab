@@ -20,20 +20,25 @@ use InvalidArgumentException;
  *
  * È anche il ponte del **doppio salto** `garanzie → ricambio_utilizzo →
  * strumenti` con cui ADR-020 fa pesare la garanzia del pezzo sul semaforo dello
- * strumento. Da qui discendono tre consegne per i blocchi successivi di S4, che
- * si scrivono qui perché è il posto in cui verranno cercate:
+ * strumento. Da qui discendevano tre consegne per i blocchi successivi di S4,
+ * scritte qui perché è il posto in cui sarebbero state cercate. Le prime due
+ * sono **saldate** (blocchi 2 e 4), e restano scritte perché il motivo per cui
+ * valgono non è cambiato:
  *
  * 1. **Una riga cestinata non esiste per nessuna lettura di dominio, semaforo
  *    compreso.** Un pezzo smontato per errore non deve accendere l'arancione.
- * 2. Il livello 2 sulle righe `garanzie` di soggetto `ricambio` ricalcherà
+ *    Vale in due punti, entrambi con un test: `GaranziaDepartmentScope` e
+ *    `Garanzia::scopeDeiPezziMontati()`.
+ * 2. Il livello 2 sulle righe `garanzie` di soggetto `ricambio` ricalca
  *    `DepartmentThroughStrumentoScope`, che gira la propria subquery con
  *    `withoutGlobalScopes()` per rompere la ricorsione col futuro scope Tecnico
  *    (ADR-007) — **e `withoutGlobalScopes()` rimuove anche `SoftDeletingScope`**.
- *    Quella subquery deve quindi portarsi un `whereNull('ricambio_utilizzo.deleted_at')`
- *    esplicito, o le righe cestinate torneranno a contare.
- * 3. La cancellazione "di dominio" dal tab Ricambi dovrà cestinare in
- *    transazione **sia** l'utilizzo **sia** la sua garanzia, o nel tab Garanzie
- *    resterebbe una riga che non punta a nulla di visibile.
+ *    Quella subquery si porta quindi un `whereNull('ricambio_utilizzo.deleted_at')`
+ *    esplicito, o le righe cestinate tornerebbero a contare. Stessa ragione per
+ *    cui il `join` del semaforo, che non passa dal model, lo scrive a mano.
+ * 3. **Aperta**: la cancellazione "di dominio" dal tab Ricambi (blocco 5) dovrà
+ *    cestinare in transazione **sia** l'utilizzo **sia** la sua garanzia, o nel
+ *    tab Garanzie resterebbe una riga che non punta a nulla di visibile.
  *
  * Nessun vincolo "deve avere una garanzia": ADR-022 la rende obbligatoria di
  * FLUSSO, non di schema, perché la riga nasce prima della sua garanzia dentro
@@ -172,7 +177,8 @@ class RicambioUtilizzo extends Model
      * ⚠️ Passa da `GaranziaRicambioPrivacyScope`, quindi per chi non ha
      * `garanzie.ricambio.view` restituisce NULL. È corretto per il DETTAGLIO;
      * il calcolo del semaforo (ADR-020) è invece un AGGREGATO dovuto a tutti e
-     * dovrà leggere quelle righe bypassando esplicitamente lo scope.
+     * legge quelle righe da `Garanzia::scopeDeiPezziMontati()`, che bypassa lo
+     * scope — l'unico punto del progetto autorizzato a farlo.
      */
     public function garanzia(): HasOne
     {

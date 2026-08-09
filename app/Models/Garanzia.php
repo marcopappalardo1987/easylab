@@ -36,13 +36,14 @@ use InvalidArgumentException;
  * `ricambio` col doppio salto garanzie → ricambio_utilizzo → strumenti
  * (`GaranziaDepartmentScope`, che ha sostituito il trait generico).
  *
- * Restano:
+ * Il terzo — ADR-020, lettera **(c)** — è saldato dal blocco 4: le righe
+ * `ricambio` pesano ora sul semaforo dello strumento che monta il pezzo, lette
+ * senza GaranziaRicambioPrivacyScope da `scopeDeiPezziMontati()`, e la colonna
+ * "Prossima scadenza" degrada a dicitura neutra per chi non ha il permesso.
+ *
+ * Resta:
  * - ADR-015: al trasferimento cross-tenant le garanzie devono seguire lo
  *   strumento con un update by-query (BelongsToTenant blocca il cambio sul model).
- * - ADR-020 (S4 blocco 4): le righe `ricambio` devono pesare sul semaforo dello
- *   strumento che monta il pezzo, lette **senza** GaranziaRicambioPrivacyScope
- *   — il pallino è un aggregato dovuto a tutti, il dettaglio no. Con esso la
- *   colonna "Prossima scadenza" degradata a dicitura neutra (debito lettera c).
  *
  * ⚠️ Il tab Garanzie della scheda **non** mostra le righe ricambio, e non per
  * via degli scope: a escluderle è la clausola `strumento_id` della relazione
@@ -239,11 +240,61 @@ class Garanzia extends Model
      * Confine espresso come `< oggi+soglia+1` e MAI `<=`: vedi
      * Intervento::scopeApertiEntroSoglia (su SQLite le date sono stringhe).
      *
+     * Colonna QUALIFICATA: da ADR-020 in poi questo scope gira anche dentro la
+     * JOIN di `deiPezziMontati()`, e una colonna nuda in una query a due tabelle
+     * è ambiguità che aspetta solo che qualcuno aggiunga un omonimo.
+     *
      * @param  Builder<Garanzia>  $query
      */
     public function scopeEntroSoglia(Builder $query): void
     {
-        $query->where('data_scadenza_effettiva', '<', today()->addDays(Semaforo::giorniImminente() + 1)->toDateString());
+        $query->where(
+            $query->getModel()->qualifyColumn('data_scadenza_effettiva'),
+            '<',
+            today()->addDays(Semaforo::giorniImminente() + 1)->toDateString()
+        );
+    }
+
+    /**
+     * Garanzie dei pezzi MONTATI su uno strumento: il primo anello del doppio
+     * salto `garanzie → ricambio_utilizzo → strumenti` di ADR-020. Chi chiama
+     * aggiunge il confine sullo strumento (`ricambio_utilizzo.strumento_id`) e
+     * le colonne che gli servono.
+     *
+     * ⚠️ **È l'unico punto del progetto autorizzato a leggere le righe
+     * `soggetto = ricambio` senza `GaranziaRicambioPrivacyScope`** (ADR-020 ·
+     * Policy di Code Review §aree rosse · Schema Ruoli §6), e per questo esiste
+     * come scope invece che ripetuto nei quattro chiamanti: un'eccezione a una
+     * regola di privacy vale finché è UNA, e quattro copie sono quattro cose
+     * libere di divergere — la prima corretta da sola aprirebbe un buco muto.
+     *
+     * Il bypass è legittimo perché il pallino è un **aggregato dovuto a tutti**:
+     * il Tenant non vede le righe (ADR-004) ma vede l'arancione che ne deriva,
+     * che è informazione sul proprio bene. Il DETTAGLIO resta protetto, e il
+     * modo per non farlo trapelare non è una guardia ma la selezione: i
+     * chiamanti prendono id e data, mai il nome del pezzo (vedi
+     * `Strumento::scadenzeGaranzieRicambi()`).
+     *
+     * Restano attivi `TenantScope`, `GaranziaDepartmentScope` (che raggiunge
+     * queste stesse righe col proprio doppio salto) e il soft delete di
+     * `Garanzia`. Quello di `ricambio_utilizzo` NO — la join non passa dal
+     * model — e va quindi riapplicato a mano: è la consegna n.1 scritta nel
+     * docblock di `RicambioUtilizzo`, «una riga cestinata non esiste per nessuna
+     * lettura di dominio, semaforo compreso». Un pezzo smontato per errore non
+     * deve accendere l'arancione.
+     *
+     * Nessun filtro su `soggetto`: la FK `ricambio_utilizzo_id` è valorizzata
+     * sse il soggetto è `ricambio` (invariante di `verificaSoggetto()`), quindi
+     * la join lo impone già — e un secondo controllo sarebbe una seconda regola
+     * che può divergere dalla prima.
+     *
+     * @param  Builder<Garanzia>  $query
+     */
+    public function scopeDeiPezziMontati(Builder $query): void
+    {
+        $query->withoutGlobalScope(GaranziaRicambioPrivacyScope::class)
+            ->join('ricambio_utilizzo', 'ricambio_utilizzo.id', '=', 'garanzie.ricambio_utilizzo_id')
+            ->whereNull('ricambio_utilizzo.deleted_at');
     }
 
     /** True se la garanzia è già finita. */

@@ -11,13 +11,34 @@
     $areaVisibile = fn (MotivoSemaforo $m) => match ($m->tipo) {
         TipoMotivoSemaforo::Intervento => Gate::allows('interventi.view'),
         TipoMotivoSemaforo::GaranziaMacchina => Gate::allows('garanzie.macchina.view'),
+        TipoMotivoSemaforo::GaranziaRicambio => Gate::allows('garanzie.ricambio.view'),
     };
 
-    $tabDelMotivo = fn (MotivoSemaforo $m) => $m->tipo === TipoMotivoSemaforo::Intervento ? 'interventi' : 'garanzie';
+    // Dove porta la freccia «›». Le garanzie ricambio non hanno ancora una
+    // destinazione: il tab Ricambi nasce al blocco 5 di S4, e mandare al tab
+    // Garanzie sarebbe peggio di non linkare — quel tab mostra le sole righe
+    // macchina (clausola `strumento_id` di Strumento::garanzie()), quindi
+    // l'utente ci arriverebbe senza trovare la riga che sta cercando.
+    $tabDelMotivo = fn (MotivoSemaforo $m) => match ($m->tipo) {
+        TipoMotivoSemaforo::Intervento => 'interventi',
+        TipoMotivoSemaforo::GaranziaMacchina => 'garanzie',
+        TipoMotivoSemaforo::GaranziaRicambio => null,
+    };
 
-    $testoMotivo = fn (MotivoSemaforo $m) => match ($m->tipo) {
+    // ⚠️ La garanzia ricambio è l'unico motivo il cui TESTO dipende dal
+    // permesso: «Garanzia ricambio» rivela che sulla macchina c'è un pezzo
+    // sostituito, ed è esattamente il dato che ADR-004 nega al Tenant. Il
+    // motivo resta però in elenco per tutti, con la sua data: il pallino è un
+    // aggregato dovuto a tutti (ADR-020) e nasconderlo qui lo renderebbe
+    // inspiegabile proprio a chi lo subisce. Per l'intervento e la garanzia
+    // macchina non serve nulla di simile — lì la fonte non è un segreto, e a
+    // essere gated sono il dettaglio e il link.
+    $testoMotivo = fn (MotivoSemaforo $m, bool $visibile) => match ($m->tipo) {
         TipoMotivoSemaforo::Intervento => $m->scaduto ? 'Intervento scaduto il' : 'Intervento in scadenza il',
         TipoMotivoSemaforo::GaranziaMacchina => $m->scaduto ? 'Garanzia macchina scaduta il' : 'Garanzia macchina in scadenza il',
+        TipoMotivoSemaforo::GaranziaRicambio => $visibile
+            ? ($m->scaduto ? 'Garanzia ricambio scaduta il' : 'Garanzia ricambio in scadenza il')
+            : ($m->scaduto ? 'Garanzia scaduta il' : 'Garanzia in scadenza il'),
     };
 
     $garanziaMacchina = $garanzie->first();
@@ -40,20 +61,23 @@
             </p>
             <ul class="mt-2 divide-y divide-neutral-100">
                 @foreach ($diagnosi->motivi as $motivo)
-                    @php $visibile = $areaVisibile($motivo); @endphp
+                    @php
+                        $visibile = $areaVisibile($motivo);
+                        $tab = $tabDelMotivo($motivo);
+                    @endphp
                     <li wire:key="motivo-{{ $motivo->tipo->value }}-{{ $motivo->riferimentoId }}"
                         class="flex items-start justify-between gap-3 py-2.5 text-sm">
                         <span class="text-neutral-800">
                             {{-- Colore + simbolo + testo, mai il solo colore (Design System §4). --}}
                             <span aria-hidden="true" class="{{ $motivo->scaduto ? 'text-danger-600' : 'text-warning-500' }}">{{ $motivo->scaduto ? '✗' : '◐' }}</span>
-                            {{ $testoMotivo($motivo) }}
+                            {{ $testoMotivo($motivo, $visibile) }}
                             <span class="tabular-nums">{{ $motivo->scadenza->format('d/m/Y') }}</span>
                             @if ($visibile && $motivo->dettaglio)
                                 <span class="text-neutral-400">· {{ $motivo->dettaglio }}</span>
                             @endif
                         </span>
-                        @if ($visibile)
-                            <button type="button" x-on:click="tab = '{{ $tabDelMotivo($motivo) }}'"
+                        @if ($visibile && $tab !== null)
+                            <button type="button" x-on:click="tab = '{{ $tab }}'"
                                 class="shrink-0 text-xs font-medium text-primary-600 hover:text-primary-700"
                                 title="Vai alla riga che lo causa">›</button>
                         @endif
@@ -123,8 +147,9 @@
         </x-ui.card>
     @endcan
 
-    {{-- 4. Garanzia macchina. Le garanzie ricambio arriveranno in S4 (ADR-020),
-         in aggregato: qui non c'è nulla che le riguardi. --}}
+    {{-- 4. Garanzia macchina. Le garanzie ricambio pesano sullo stato qui sopra
+         (ADR-020) ma NON hanno un blocco proprio: sono un dettaglio con un
+         permesso diverso, e vivranno nel tab Ricambi (S4 blocco 5). --}}
     @can('garanzie.macchina.view')
         <x-ui.card>
             <p class="text-sm font-medium text-neutral-600">Garanzia macchina</p>

@@ -123,13 +123,43 @@ class Strumento extends Model
     }
 
     /**
-     * Garanzia con la scadenza effettiva più vicina: il secondo ingresso del
-     * semaforo (ADR-004/005). Speculare a prossimoInterventoAperto().
+     * Scadenze delle garanzie dei pezzi MONTATI su questa macchina: il terzo
+     * ingresso del semaforo (ADR-020, S4 blocco 4), raggiunto col doppio salto
+     * `garanzie → ricambio_utilizzo → strumenti`.
      *
-     * Nota privacy per S4: il semaforo è un AGGREGATO e dovrà considerare anche
-     * le garanzie ricambio, bypassando GaranziaRicambioPrivacyScope — il
-     * pallino non rivela la riga. La colonna "Prossima scadenza" dell'elenco è
-     * invece un DETTAGLIO e dovrà restare filtrata per permesso.
+     * **Restituisce id e scadenza, e nient'altro — è la scelta che porta il
+     * peso.** La query gira senza `GaranziaRicambioPrivacyScope` (vedi
+     * `Garanzia::scopeDeiPezziMontati()`), quindi vede righe che il Tenant non
+     * può leggere: se selezionasse `*`, ogni chiamante futuro si troverebbe in
+     * mano `ricambio_utilizzo_id` e da lì il nome del pezzo, e la protezione
+     * dipenderebbe dalla disciplina di chi scrive. Selezionando due colonne, il
+     * dato protetto non esiste nel risultato. Per lo stesso motivo NON è una
+     * relazione: una `hasManyThrough` col bypass dentro sarebbe una superficie
+     * eager-loadable, cioè un invito.
+     *
+     * `isScaduta()` funziona lo stesso: legge solo `data_scadenza_effettiva`.
+     *
+     * @return Collection<int, Garanzia>
+     */
+    public function scadenzeGaranzieRicambi(): Collection
+    {
+        return Garanzia::query()->deiPezziMontati()
+            ->where('ricambio_utilizzo.strumento_id', $this->id)
+            ->orderBy('garanzie.data_scadenza_effettiva')
+            ->orderBy('garanzie.id')
+            ->get(['garanzie.id', 'garanzie.data_scadenza_effettiva']);
+    }
+
+    /**
+     * Garanzia MACCHINA con la scadenza effettiva più vicina: il secondo
+     * ingresso del semaforo (ADR-004/005). Speculare a
+     * prossimoInterventoAperto().
+     *
+     * Le garanzie dei pezzi montati NON passano di qui (la relazione filtra
+     * `strumento_id`, NULL sulle righe ricambio): stanno in
+     * `scadenzeGaranzieRicambi()`, separate perché la colonna "Prossima
+     * scadenza" è un DETTAGLIO e le due fonti hanno permessi diversi, mentre il
+     * pallino è un aggregato dovuto a tutti (ADR-020).
      */
     public function prossimaGaranzia(): ?Garanzia
     {
@@ -189,8 +219,12 @@ class Strumento extends Model
      * Il modello assembla i CANDIDATI dalle proprie fonti — è lui a sapere
      * quali sono — e il motore decide quali superano la soglia. Nessun
      * confronto con la soglia qui, nessuna nozione di "fonte" là: le due
-     * responsabilità restano separate, ed è ciò che permetterà a S4 di
-     * aggiungere le garanzie ricambio (ADR-020) toccando solo questo metodo.
+     * responsabilità restano separate, ed è ciò che ha permesso a S4 di
+     * aggiungere le garanzie ricambio (ADR-020) toccando **solo questa riga**.
+     *
+     * La terza fonte costa una query in più per scheda, su un solo strumento:
+     * il path dove i volumi contano è il calcolo bulk dell'elenco, che non passa
+     * di qui e resta a tre query costanti per pagina.
      *
      * Non sono motivi, di proposito: l'**obsolescenza** (ADR-014 — segnalazione
      * sull'età, non tocca il semaforo) e la **forzatura** (vince sullo stato ma
@@ -203,6 +237,7 @@ class Strumento extends Model
         return Semaforo::diagnostica(
             ...$this->interventiAperti()->map(MotivoSemaforo::daIntervento(...)),
             ...$garanzie->map(MotivoSemaforo::daGaranziaMacchina(...)),
+            ...$this->scadenzeGaranzieRicambi()->map(MotivoSemaforo::daGaranziaRicambio(...)),
         );
     }
 
@@ -326,10 +361,11 @@ class Strumento extends Model
      * Pezzi montati su questa macchina (ERD §7.2 — ADR-008/022), il più recente
      * in alto: è l'ordine con cui il tab Ricambi li mostrerà.
      *
-     * Nota per ADR-020: le garanzie di questi pezzi peseranno sul semaforo dello
-     * strumento, ma NON si raggiungono da qui — servirà una relazione dedicata
-     * che bypassi `GaranziaRicambioPrivacyScope`, perché il pallino è un
-     * aggregato dovuto a tutti mentre il dettaglio no.
+     * ADR-020: le garanzie di questi pezzi pesano sul semaforo dello strumento,
+     * ma NON si raggiungono da qui — questa relazione porta il DETTAGLIO ed è
+     * scopata come dev'essere. L'aggregato passa da
+     * `scadenzeGaranzieRicambi()`, l'unica lettura che bypassa
+     * `GaranziaRicambioPrivacyScope`.
      */
     public function ricambiUtilizzati(): HasMany
     {
