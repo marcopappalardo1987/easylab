@@ -31,10 +31,14 @@ beforeEach(function () {
 
     $this->admin = ($this->utente)('Admin');
 
+    // Dal 9 Ago 2026 un intervento è SEMPRE assegnato a un tecnico.
+    $this->tecnico = ($this->utente)('Tecnico');
+
     $this->compila = fn ($test) => $test
         ->set('interventoForm.descrizione', 'Sostituzione guarnizione')
         ->set('interventoForm.tipo', 'manutenzione_straordinaria')
-        ->set('interventoForm.data_scadenza', today()->toDateString());
+        ->set('interventoForm.data_scadenza', today()->toDateString())
+        ->set('interventoForm.tecnico_id', $this->tecnico->id);
 });
 
 it('creates the intervento and its parts in one gesture', function () {
@@ -74,7 +78,7 @@ it('pre-ticks the checkbox when the intervento already has parts', function () {
     // Rientro dall'uso reale (9 Ago 2026): la checkbox era spenta e le righe
     // salvate risultavano invisibili finché non la si spuntava a mano — un
     // utente ragionevole conclude che i suoi dati siano spariti.
-    $intervento = Intervento::factory()->forStrumento($this->strumento)->create();
+    $intervento = Intervento::factory()->forStrumento($this->strumento)->assegnatoA($this->tecnico)->create();
     app(RegistraRicambiIntervento::class)->esegui($intervento, [
         ['nome' => 'Cinghia', 'scadenza_garanzia' => today()->addYear()->toDateString()],
     ]);
@@ -86,7 +90,7 @@ it('pre-ticks the checkbox when the intervento already has parts', function () {
 });
 
 it('leaves the checkbox off when the intervento has no parts', function () {
-    $intervento = Intervento::factory()->forStrumento($this->strumento)->create();
+    $intervento = Intervento::factory()->forStrumento($this->strumento)->assegnatoA($this->tecnico)->create();
 
     scheda($this->admin, $this->strumento)
         ->call('openModificaIntervento', $intervento->id)
@@ -98,7 +102,7 @@ it('leaves the checkbox off when the intervento has no parts', function () {
 // accesa, e il test verifica ciò che il wireframe dice davvero: **togliere una
 // spunta accesa** non cancella lo storico.
 it('does not touch saved lines when the checkbox is unticked', function () {
-    $intervento = Intervento::factory()->forStrumento($this->strumento)->create();
+    $intervento = Intervento::factory()->forStrumento($this->strumento)->assegnatoA($this->tecnico)->create();
     app(RegistraRicambiIntervento::class)->esegui($intervento, [
         ['nome' => 'Cinghia', 'scadenza_garanzia' => today()->addYear()->toDateString()],
     ]);
@@ -119,6 +123,7 @@ it('defaults the description to «Sostituzione ricambio» when parts are registe
         ->call('openNuovoIntervento')
         ->set('interventoForm.tipo', 'manutenzione_straordinaria')
         ->set('interventoForm.data_scadenza', today()->toDateString())
+        ->set('interventoForm.tecnico_id', $this->tecnico->id)
         ->set('interventoForm.descrizione', '')
         ->set('ricambiEffettuati', true)
         ->call('addRicambio')
@@ -142,7 +147,7 @@ it('still requires a description when there are no parts', function () {
 });
 
 it('removes a saved line only when explicitly marked, and can undo it', function () {
-    $intervento = Intervento::factory()->forStrumento($this->strumento)->create();
+    $intervento = Intervento::factory()->forStrumento($this->strumento)->assegnatoA($this->tecnico)->create();
     app(RegistraRicambiIntervento::class)->esegui($intervento, [
         ['nome' => 'Cinghia', 'scadenza_garanzia' => today()->addYear()->toDateString()],
     ]);

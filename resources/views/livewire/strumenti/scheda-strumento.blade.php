@@ -213,7 +213,14 @@
                         <label for="interventoTecnico" class="block text-sm font-medium text-neutral-800">Assegnatario</label>
                         <select id="interventoTecnico" wire:model="interventoForm.tecnico_id"
                             class="mt-1 block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
-                            <option value="">— Nessun assegnatario —</option>
+                            {{-- `disabled`: un intervento è sempre assegnato, quindi
+                                 il segnaposto si vede ma non si può scegliere. Serve
+                                 comunque, perché aprendo una delle righe storiche
+                                 senza assegnatario il select deve poter mostrare
+                                 "non ancora scelto" invece del primo tecnico
+                                 dell'elenco — che sarebbe un'assegnazione fatta di
+                                 fatto da un default. --}}
+                            <option value="" disabled>— Scegli un assegnatario —</option>
                             @foreach ($assegnatari as $tecnico)
                                 <option value="{{ $tecnico->id }}">{{ $tecnico->name }}</option>
                             @endforeach

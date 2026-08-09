@@ -724,7 +724,23 @@ class SchedaStrumento extends Component
                 : ['required', 'string', 'max:1000'],
             'interventoForm.tipo' => ['required', Rule::in(array_map(fn (TipoIntervento $c) => $c->value, TipoIntervento::cases()))],
             'interventoForm.data_scadenza' => ['required', 'date'], // passato permesso: lo storico è legittimo (ADR-005)
-            'interventoForm.tecnico_id' => ['nullable', 'integer'],
+            // Un intervento è sempre assegnato a un tecnico (9 Ago 2026).
+            //
+            // **Obbligatorio nel form, nullable nello schema**: è il precedente
+            // già ratificato da ADR-023 per il fornitore. Sul DB di sviluppo
+            // 4178 interventi su 20672 non hanno assegnatario — righe storiche
+            // che una FK NOT NULL renderebbe non salvabili, e a cui bisognerebbe
+            // inventare un tecnico per farle passare. Un vincolo che costringe a
+            // inventare un valore non protegge nulla.
+            //
+            // Condizionato al permesso, non incondizionato: chi non ha
+            // `interventi.assign` non mette la chiave nel payload (vedi
+            // saveIntervento), quindi un `required` lo bloccherebbe del tutto.
+            // Oggi non c'è nessuno in quello stato — un meta-test lo congela —
+            // ma la regola non deve dipendere da quel fatto per non esplodere.
+            'interventoForm.tecnico_id' => Gate::allows('interventi.assign')
+                ? ['required', 'integer']
+                : ['nullable', 'integer'],
             'interventoForm.gia_eseguito' => ['boolean'],
             'interventoForm.data_esecuzione' => $this->interventoForm['gia_eseguito']
                 ? ['required', 'date', 'before_or_equal:today']

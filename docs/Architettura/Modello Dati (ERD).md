@@ -231,7 +231,7 @@ Cuore manutentivo. Le **tarature e certificazioni** sono interventi `tipo = tara
 | `id` | bigint PK | |
 | `tenant_id` / `reseller_id` | scoping | |
 | `strumento_id` | bigint FK → `strumenti.id` | |
-| `tecnico_id` | bigint nullable FK → `users.id` | Assegnatario (grant puntuale al tecnico — ADR-007). |
+| `tecnico_id` | bigint **nullable** FK → `users.id` | Assegnatario (grant puntuale al tecnico — ADR-007). **Obbligatorio nel form, nullable nello schema** (9 Ago 2026): un intervento è sempre di qualcuno, ma sul DB di sviluppo 4178 righe su 20672 non hanno assegnatario e una FK NOT NULL le renderebbe non salvabili — costringendo a inventare un tecnico pur di farle passare. È la stessa divergenza di `strumenti.fornitore_id` (ADR-023), e si scrive qui perché è ciò che il prossimo lettore scambia per una dimenticanza. Conseguenza voluta: le righe storiche restano com'è finché nessuno le tocca, ma **modificarne una obbliga a scegliere**. Il vincolo è nel form perché il campo dipende dal permesso `interventi.assign`: un meta-test congela che ogni ruolo con `interventi.create` abbia anche `.assign`, così la regola non può essere aggirata da una modifica alla matrice. |
 | `descrizione` | text | |
 | `tipo` | enum: `manutenzione_ordinaria` \| `manutenzione_straordinaria` \| `manutenzione_full_risk` \| `taratura_e_certificazione` \| `altro` | Elenco fissato dal cliente (ADR-021). "Taratura e certificazione" è **una voce sola**. Colonna `string` senza CHECK: il vincolo vive nell'enum PHP. |
 | `data_scadenza` | date | Passata (storico) o futura (pianificata). Alimenta il semaforo e l'"email del futuro". |

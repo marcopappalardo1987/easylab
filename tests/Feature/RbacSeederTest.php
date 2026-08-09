@@ -81,6 +81,25 @@ it('lets the Tecnico create catalog entries but not update or delete them', func
     expect($tecnico->hasPermissionTo('semaforo.force'))->toBeFalse();
 });
 
+it('never lets a role create interventi without being able to assign them', function () {
+    // Dal 9 Ago 2026 un intervento è SEMPRE assegnato a un tecnico, e il campo
+    // è obbligatorio nel form per chi ha `interventi.assign`. Un ruolo che
+    // potesse creare SENZA assegnare produrrebbe interventi non assegnati —
+    // cioè un buco nella regola, aperto da una modifica alla matrice e non da
+    // un bug nel form. Il test lo congela: se domani qualcuno concede
+    // `interventi.create` senza `interventi.assign`, se ne accorge qui.
+    foreach (Rbac::roleNames() as $ruolo) {
+        $permessi = Rbac::permissionsForRole($ruolo);
+
+        if (in_array('interventi.create', $permessi, true)) {
+            // NB: `toContain` in Pest prende N valori da cercare, non un
+            // messaggio — il nome del ruolo va nella descrizione, non lì.
+            expect(in_array('interventi.assign', $permessi, true))
+                ->toBeTrue("il ruolo {$ruolo} può creare interventi ma non assegnarli");
+        }
+    }
+});
+
 it('defines the locked permission set', function () {
     expect(Rbac::locked())->toHaveCount(9);
     expect(Rbac::isLocked('garanzie.ricambio.view'))->toBeTrue();
