@@ -333,8 +333,8 @@ Registra "questo pezzo è montato su questa macchina". Base della **ricerca incr
 | `strumento_id` | bigint FK → `strumenti.id` | |
 | `ricambio_id` | bigint FK → `ricambi.id` | Voce di catalogo. |
 | `intervento_id` | bigint nullable FK → `interventi.id` | Intervento in cui è stato montato (visibile anche dal tab "Ricambi"). Valorizzato per le righe create dal form intervento (ADR-022); nullable per gli inserimenti diretti dal tab Ricambi. |
-| `quantita` | integer default 1 | |
-| `data` | date | |
+| `quantita` | integer default 1 | Il form intervento scrive sempre 1 (wireframe §2.1 non chiede la quantità): due pezzi uguali sullo stesso intervento sono un refuso, e il caso vero si registra dal tab Ricambi. `>= 1` imposta nel model e **non** con `unsignedInteger` — SQLite ignora l'unsigned, quindi il vincolo esisterebbe solo su Postgres. |
+| `data` | date | **Quando il pezzo è stato montato**, cioè la `data_esecuzione` dell'intervento. Su un intervento *pianificato* non si conosce ancora: alla creazione si scrive oggi come **segnaposto**, e `Intervento::segnaFatto()` la riallinea alla chiusura insieme alla `data_inizio` della garanzia. Senza questo passaggio un pezzo registrato in anticipo risulterebbe «montato» giorni prima che qualcuno lo toccasse. |
 | timestamps, `deleted_at` | | soft delete — vedi la nota qui sotto. |
 
 > La garanzia del singolo pezzo (§6) punta a questa riga, non al catalogo generico (ADR-008), ed è **obbligatoria** per le righe create dal form intervento (ADR-022): è il dato che accende il semaforo (ADR-020). L'obbligo è di flusso, non di schema — nello schema resta una relazione 1-0..1, perché una riga può nascere prima della sua garanzia dentro la stessa transazione.
@@ -465,6 +465,10 @@ Legenda: ✅ pieno · ⚠️ ristretto (per sotto-albero/portafoglio/proprietà)
 | **ADR-022** Ricambi dall'intervento | `ricambi.nome`/`nome_normalizzato` (+ `codice` nullable); `ricambio_utilizzo.intervento_id` valorizzato; garanzia `soggetto = ricambio` obbligatoria per riga. |
 | **ADR-023** Fornitore 1-N | `strumenti.fornitore_id` (+ indice); `fornitori` con `tenant_id`; pivot `fornitore_strumento` **non creato**. |
 | **ADR-024** Tab Panoramica | Nessuna tabella: il campo derivato `diagnosi_semaforo` (§5.1) sostituisce il solo stato. |
+| **ADR-025** Documenti su B2 | Nessuna colonna: `documenti.path` (§8.1) punta a un bucket privato invece che al disco locale — il provider è un dettaglio di `.env`. |
+| **ADR-026** Download mediati dall'app | Nessuna colonna: rotta firmata + Policy sul model `Documento`. |
+| **ADR-027** Tracciabilità delle scritture | Nessuna tabella nuova: `activity_log` (§9) sul canale `audit`, via il trait `AuditsDomainWrites`. Il permesso `garanzie.ricambio.*` passa al Tecnico (§10). |
+| **ADR-028** Intervento sempre assegnato | Nessuna modifica di schema: `interventi.tecnico_id` **resta nullable** (§5.2) e l'obbligo vive nel form, come per `strumenti.fornitore_id`. |
 
 ---
 

@@ -654,4 +654,34 @@ Dettagli di configurazione: `AWS_ENDPOINT` vuole lo schema **`https://`** (il pa
 - ⚠️ **La retention dell'audit diventa più urgente.** Il registro dei trattamenti segna T6 con "retention definita (APERTO)". Tracciare ogni scrittura significa più dati personali **sui dipendenti**, conservati più a lungo: la decisione col legale va presa prima che il volume renda scomodo cambiare idea.
 - **"Tracciato" non significa ancora "visibile".** La vista Audit è in S6: fino ad allora i dati si accumulano e si leggono solo dal database. Va detto a chi si aspetta di vederli subito.
 - Il volume di `activity_log` cresce in modo non banale: va tenuto d'occhio e si intreccia con la retention sopra.
-- **Come tracciare**, da decidere in implementazione: oggi lo stile del progetto sono chiamate `activity()` esplicite dentro i metodi di dominio (`forzaSemaforo` lo fa così, perché ogni chiamante resti tracciato); il trait `LogsActivity` è più sostenibile su larga scala ma più rumoroso e con meno controllo sul messaggio. Probabilmente serviranno entrambi: il trait per la copertura, le chiamate esplicite dove il messaggio conta.
+- ~~**Come tracciare**, da decidere in implementazione~~ → **deciso e attuato il 9 Ago 2026** (S4). Servono entrambi, come si era ipotizzato, con una regola netta a separarli: **un model usa O il trait O le chiamate `activity()` esplicite, mai entrambi** — altrimenti la vista Audit di S6 mostrerebbe due righe per un gesto solo.
+  - Il trait `App\Models\Concerns\AuditsDomainWrites` (`LogsActivity` di spatie sul canale `audit`) copre le scritture CRUD dove basta sapere *cosa è cambiato*: applicato a `Garanzia`, `Ricambio`, `RicambioUtilizzo`. Il suo hook `attributiDerivatiTracciati()` aggiunge al set le colonne **derivate** che decidono qualcosa (`data_scadenza_effettiva`, `nome_normalizzato`): senza, l'audit registrerebbe l'input e non l'effetto.
+  - Le `activity()` esplicite restano dove il **messaggio** vale più dell'elenco dei campi: `Strumento::forzaSemaforo()`/`rimuoviForzatura()` descrivono un ATTO, non un evento CRUD, ed è giusto che si distinguano a colpo d'occhio in una lista.
+  - Descrizioni in forma **nome-primo** («Creazione garanzia», non «Garanzia creata»): l'italiano concorda il participio col genere, e un trait condiviso o inventa un campo `genere` su ogni model o prima o poi scrive «Intervento creata».
+  - `dontLogEmptyChanges()` è indispensabile e non cosmesi: `logEmptyChanges` è `true` di **default** in activitylog v5, e l'hook `saving` di `Garanzia` riscrive la scadenza a ogni salvataggio — senza, ogni save innocuo lascerebbe una riga vuota.
+  - ⚠️ **Copertura parziale, dichiarata**: 3 entità su 5. Restano `Intervento` e gli spostamenti, con la loro casella di roadmap: il trait su `Intervento` traccerebbe superfici (`segnaFatto`, `riapri`, cancellazioni) che quel passo non tocca né testa, e chiudere a metà una casella che sembra chiusa è peggio che lasciarla aperta.
+
+---
+
+**ADR-028 — Ogni intervento ha un assegnatario**
+
+*Stato: Accettata (9 Ago 2026) — **precisa ADR-007**, che tratta l'assegnazione come uno dei due modi di dare accesso al Tecnico e non come un obbligo.*
+
+**Contesto.** `interventi.tecnico_id` è nato nullable, e il form lo offriva con una voce «— Nessun assegnatario —». Emerso dall'uso: un intervento senza assegnatario non è una situazione reale, è un dato lasciato a metà. Nessuno lo "prende in carico", non compare nel lavoro di nessuno, e l'unico modo di accorgersene è cercarlo.
+
+**Decisione.**
+- Un intervento è **sempre assegnato a un tecnico**.
+- **Obbligatorio nel form, nullable nello schema** — la stessa divergenza di `strumenti.fornitore_id` (🔗 ADR-023), per la stessa ragione, qui misurata: sul database di sviluppo **4178 interventi su 20672** non hanno assegnatario. Una FK NOT NULL li renderebbe non salvabili e costringerebbe a **inventare** un tecnico pur di farli passare — e un vincolo che obbliga a inventare un valore non protegge nulla, sposta solo il problema nei dati.
+- Le righe storiche restano com'è finché nessuno le tocca, ma **modificarne una obbliga a scegliere**. È il prezzo della scelta e va detto, non scoperto.
+- La regola è **condizionata al permesso `interventi.assign`**: chi non ce l'ha non mette la chiave nel payload (comportamento preesistente, ADR-007), quindi un `required` secco lo bloccherebbe del tutto invece di lasciargli fare ciò che può.
+
+**Alternative scartate.**
+- *FK NOT NULL con backfill:* il vincolo più forte, ma richiede di assegnare 4178 interventi storici a qualcuno che non li ha mai visti. Un dato inventato è peggio di un dato assente, perché è indistinguibile da uno vero.
+- *Un utente "non assegnato" di sistema:* rende la colonna NOT NULL senza inventare persone, ma sposta la stessa ambiguità dentro i dati e costringe ogni lettura a conoscere quel caso speciale.
+- *Regola nel model (hook `saving`) invece che nel form:* coerente con lo stile del progetto per gli invarianti, ma bloccherebbe seeder, import e migration su tutte le righe storiche — e renderebbe impossibile perfino correggerle.
+
+**Conseguenze.**
+- ERD §5.2: la colonna resta nullable, con la divergenza dichiarata sulla riga — è ciò che il prossimo lettore scambierebbe per una dimenticanza.
+- ⚠️ **Accoppiamento fra permessi da sorvegliare**: un ruolo con `interventi.create` ma senza `interventi.assign` creerebbe interventi non assegnati, aggirando la regola senza toccare il form. Oggi non esiste — un **meta-test in `RbacSeederTest`** congela l'accoppiamento, così una modifica alla matrice se ne accorge lì e non da interventi senza padrone comparsi in produzione.
+- Il segnaposto del select è `disabled`: serve ancora, perché aprendo una riga storica il campo deve poter mostrare «non ancora scelto» invece del primo tecnico dell'elenco — che sarebbe un'assegnazione fatta di fatto da un default.
+- Rafforza ADR-007: se ogni intervento ha un assegnatario, il grant puntuale del Tecnico smette di essere un'eccezione e diventa il caso normale.

@@ -150,6 +150,14 @@ Primo tab e **landing di default** della scheda. Risponde a una domanda sola: *p
 
 **Note del form.** La checkbox "Ricambio effettuato" **non è un campo persistito**: apre e chiude il repeater; la verità è l'esistenza delle righe. Il campo nome è un **autocomplete sul catalogo** (collega-o-crea, ADR-008/022): il codice costruttore non è richiesto. **La scadenza garanzia è obbligatoria per ogni riga** — è il dato che accende il semaforo (ADR-020). Deselezionare la checkbox in modifica **non cancella** righe già salvate: la rimozione è esplicita, riga per riga (`✕`), perché una spunta tolta per sbaglio non deve distruggere storico. Righe e garanzie si salvano **nella stessa transazione** dell'intervento.
 
+*Precisazioni dall'attuazione (9 Ago 2026), tutte emerse dalla prima prova a mano:*
+
+- **Il campo Tecnico è obbligatorio** (🔗 ADR-028): un intervento è sempre di qualcuno. Nel select il segnaposto «— Scegli un assegnatario —» è `disabled` — serve solo perché, aprendo uno dei 4178 interventi storici senza assegnatario, il campo possa mostrare «non ancora scelto» invece del primo tecnico dell'elenco, che sarebbe un'assegnazione fatta da un default.
+- **La Descrizione diventa facoltativa quando ci sono ricambi** e vale «Sostituzione ricambio»: registrare un pezzo non deve costare anche una frase. Senza ricambi resta obbligatoria — un intervento qualunque descritto come una sostituzione sarebbe falso in tabella e in Panoramica.
+- **Riaprendo un intervento che ha già ricambi la checkbox è accesa.** Resta stato di UI e non un campo persistito, ma il suo valore iniziale deve *riflettere* l'esistenza delle righe: spenta, le nascondeva, e chi guardava concludeva che i suoi dati fossero spariti.
+- **«Scad. garanzia» accetta anche date passate** su un inserimento storico: il confine è la data di *montaggio*, non oggi.
+- Il combobox mostra i suggerimenti man mano che si scrive e segnala solo il caso che la lista non può dire, «Nuovo ricambio: verrà creato». Vincoli e trappole del componente: Design System §5.6.
+
 **Contenuto dei tab.**
 - **Panoramica ‹default›:** stato del semaforo **coi motivi**, prossimo/ultimo intervento, garanzie, sintesi anagrafica, statistiche della macchina (§2.0, ADR-024).
 - **Anagrafica:** modello, parametri tecnici, data installazione, ubicazione corrente, **fornitore** (uno, obbligatorio nel form — ADR-023), storico spostamenti (`spostamenti.view`).
