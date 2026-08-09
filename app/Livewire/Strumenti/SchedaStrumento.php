@@ -228,6 +228,15 @@ class SchedaStrumento extends Component
             'data_esecuzione' => today()->toDateString(),
         ];
         $this->editingInterventoId = $id;
+
+        // DOPO il reset, che la azzera. Il flag resta stato di UI e non un
+        // campo persistito (ADR-022: la verità è l'esistenza delle righe), ma
+        // il suo valore iniziale ora la RIFLETTE invece di contraddirla:
+        // riaprendo un intervento con dei pezzi la checkbox era spenta e le
+        // righe salvate risultavano invisibili, il che si legge come «i miei
+        // dati sono spariti».
+        $this->ricambiEffettuati = $intervento->ricambiUtilizzi()->exists();
+
         $this->showInterventoForm = true;
     }
 
@@ -265,7 +274,13 @@ class SchedaStrumento extends Component
         }
 
         $payload = [
-            'descrizione' => $this->interventoForm['descrizione'],
+            // Con dei ricambi la descrizione è facoltativa (vedi le regole) e
+            // il default lo mette qui l'applicazione: la colonna è NOT NULL
+            // senza default, e una descrizione vuota lascerebbe celle bianche
+            // in tabella e virgolette spaiate «» nelle modali di conferma.
+            'descrizione' => filled($this->interventoForm['descrizione'])
+                ? $this->interventoForm['descrizione']
+                : 'Ricambio effettuato',
             'tipo' => $this->interventoForm['tipo'],
             'data_scadenza' => $this->interventoForm['data_scadenza'],
         ];
@@ -700,7 +715,13 @@ class SchedaStrumento extends Component
     protected function interventoFormRules(): array
     {
         return [
-            'interventoForm.descrizione' => ['required', 'string', 'max:1000'],
+            // Obbligatoria SOLO in assenza di ricambi: quando l'intervento
+            // nasce per registrare un pezzo, la descrizione la mette il
+            // salvataggio («Ricambio effettuato»). Stesso pattern condizionale
+            // di `gia_eseguito` e delle righe ricambio.
+            'interventoForm.descrizione' => $this->haRicambi()
+                ? ['nullable', 'string', 'max:1000']
+                : ['required', 'string', 'max:1000'],
             'interventoForm.tipo' => ['required', Rule::in(array_map(fn (TipoIntervento $c) => $c->value, TipoIntervento::cases()))],
             'interventoForm.data_scadenza' => ['required', 'date'], // passato permesso: lo storico è legittimo (ADR-005)
             'interventoForm.tecnico_id' => ['nullable', 'integer'],
@@ -738,15 +759,23 @@ class SchedaStrumento extends Component
     }
 
     /**
-     * Senza questi, Laravel scrive «Il campo ricambi nuovi.0.nome è
-     * obbligatorio»: un messaggio che espone la struttura interna del form.
+     * I nomi leggibili dei campi vivono in `lang/it/validation.php` sotto
+     * `attributes`, non qui: valgono per tutti i form del progetto e non solo
+     * per questo componente, e una seconda definizione locale li farebbe
+     * divergere. (Qui c'era l'unico `validationAttributes()` del progetto, e
+     * copriva due chiavi su decine.)
      */
-    protected function validationAttributes(): array
+    private function haRicambi(): bool
     {
-        return [
-            'ricambiNuovi.*.nome' => 'nome del ricambio',
-            'ricambiNuovi.*.scadenza_garanzia' => 'scadenza garanzia',
-        ];
+        if ($this->ricambiEffettuati && $this->righeRicambiPulite() !== []) {
+            return true;
+        }
+
+        // Anche le righe già salvate contano: in modifica, un intervento nato
+        // per registrare un pezzo non deve tornare a pretendere la descrizione.
+        return $this->editingInterventoId !== null
+            && $this->strumento->interventi()->whereKey($this->editingInterventoId)
+                ->whereHas('ricambiUtilizzi')->exists();
     }
 
     protected function resetInterventoForm(): void

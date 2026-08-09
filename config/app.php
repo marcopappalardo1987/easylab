@@ -78,10 +78,20 @@ return [
     |
     */
 
-    'locale' => env('APP_LOCALE', 'en'),
+    /*
+    | Il default è `it` e NON solo una riga di `.env`: l'app è italiana, e
+    | affidare la lingua a una variabile d'ambiente significa che basta una
+    | dimenticanza in CI o al deploy per far tornare i messaggi in inglese.
+    |
+    | ⚠️ Il fallback resta `en` di proposito: se manca una chiave in
+    | `lang/it/`, l'utente legge il messaggio inglese del framework — degradato
+    | ma comprensibile — invece della chiave grezza `validation.foo`.
+    */
+    'locale' => env('APP_LOCALE', 'it'),
 
     'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
 
+    // Le fixture restano in inglese: i nomi finti non sono UI.
     'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
 
     /*

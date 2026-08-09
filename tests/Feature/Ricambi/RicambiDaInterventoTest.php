@@ -70,9 +70,10 @@ it('rolls back the intervento too when a part line is invalid at model level', f
     expect(Intervento::count())->toBe(1);
 });
 
-it('does not touch saved lines when the checkbox is unticked', function () {
-    // La nota del wireframe, resa test: una spunta tolta per sbaglio non
-    // distrugge storico.
+it('pre-ticks the checkbox when the intervento already has parts', function () {
+    // Rientro dall'uso reale (9 Ago 2026): la checkbox era spenta e le righe
+    // salvate risultavano invisibili finché non la si spuntava a mano — un
+    // utente ragionevole conclude che i suoi dati siano spariti.
     $intervento = Intervento::factory()->forStrumento($this->strumento)->create();
     app(RegistraRicambiIntervento::class)->esegui($intervento, [
         ['nome' => 'Cinghia', 'scadenza_garanzia' => today()->addYear()->toDateString()],
@@ -80,12 +81,64 @@ it('does not touch saved lines when the checkbox is unticked', function () {
 
     scheda($this->admin, $this->strumento)
         ->call('openModificaIntervento', $intervento->id)
-        ->set('ricambiEffettuati', false)
+        ->assertSet('ricambiEffettuati', true)
+        ->assertSee('Cinghia');
+});
+
+it('leaves the checkbox off when the intervento has no parts', function () {
+    $intervento = Intervento::factory()->forStrumento($this->strumento)->create();
+
+    scheda($this->admin, $this->strumento)
+        ->call('openModificaIntervento', $intervento->id)
+        ->assertSet('ricambiEffettuati', false);
+});
+
+// Aggiornato consapevolmente il 9 Ago 2026: prima faceva `set(false)` su un
+// default che era GIÀ false, quindi non provava granché. Ora la checkbox nasce
+// accesa, e il test verifica ciò che il wireframe dice davvero: **togliere una
+// spunta accesa** non cancella lo storico.
+it('does not touch saved lines when the checkbox is unticked', function () {
+    $intervento = Intervento::factory()->forStrumento($this->strumento)->create();
+    app(RegistraRicambiIntervento::class)->esegui($intervento, [
+        ['nome' => 'Cinghia', 'scadenza_garanzia' => today()->addYear()->toDateString()],
+    ]);
+
+    scheda($this->admin, $this->strumento)
+        ->call('openModificaIntervento', $intervento->id)
+        ->assertSet('ricambiEffettuati', true) // accesa dalla riapertura
+        ->set('ricambiEffettuati', false)      // l'utente la toglie
         ->call('saveIntervento')
         ->assertHasNoErrors();
 
     expect(RicambioUtilizzo::count())->toBe(1)
         ->and(Garanzia::count())->toBe(1);
+});
+
+it('defaults the description to «Ricambio effettuato» when parts are registered', function () {
+    scheda($this->admin, $this->strumento)
+        ->call('openNuovoIntervento')
+        ->set('interventoForm.tipo', 'manutenzione_straordinaria')
+        ->set('interventoForm.data_scadenza', today()->toDateString())
+        ->set('interventoForm.descrizione', '')
+        ->set('ricambiEffettuati', true)
+        ->call('addRicambio')
+        ->set('ricambiNuovi.0.nome', 'Guarnizione portello')
+        ->set('ricambiNuovi.0.scadenza_garanzia', today()->addYear()->toDateString())
+        ->call('saveIntervento')
+        ->assertHasNoErrors();
+
+    expect(Intervento::first()->descrizione)->toBe('Ricambio effettuato');
+});
+
+it('still requires a description when there are no parts', function () {
+    // Il default vale SOLO con dei ricambi: un intervento senza pezzi descritto
+    // come «Ricambio effettuato» sarebbe una bugia in tabella e in Panoramica.
+    ($this->compila)(scheda($this->admin, $this->strumento)->call('openNuovoIntervento'))
+        ->set('interventoForm.descrizione', '')
+        ->call('saveIntervento')
+        ->assertHasErrors(['interventoForm.descrizione']);
+
+    expect(Intervento::count())->toBe(0);
 });
 
 it('removes a saved line only when explicitly marked, and can undo it', function () {
