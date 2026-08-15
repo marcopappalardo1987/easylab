@@ -156,6 +156,21 @@ class RicambioUtilizzo extends Model
         }
     }
 
+    /**
+     * «Creazione ricambio montato», non «Creazione ricambioutilizzo».
+     *
+     * Difetto in produzione dal 9 Ago 2026: il trait c'era, questo override no,
+     * e `mb_strtolower('RicambioUtilizzo')` ha prodotto per una settimana righe
+     * con una parola che nessuno direbbe. `AuditRicambiTest` non se n'era
+     * accorto perché asseriva solo `toStartWith('Creazione')` — un test che
+     * guarda il prefisso non vede il sostantivo. Le righe già scritte restano
+     * come sono: l'audit non si riscrive.
+     */
+    protected function nomeDominio(): string
+    {
+        return 'ricambio montato';
+    }
+
     public function strumento(): BelongsTo
     {
         return $this->belongsTo(Strumento::class, 'strumento_id');

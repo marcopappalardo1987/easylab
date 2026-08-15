@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\StatoIntervento;
 use App\Enums\TipoIntervento;
+use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Concerns\BelongsToOrgNodeThroughStrumento;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Scopes\GaranziaRicambioPrivacyScope;
@@ -41,7 +42,28 @@ use Illuminate\Support\Facades\DB;
 class Intervento extends Model
 {
     /** @use HasFactory<InterventoFactory> */
-    use BelongsToOrgNodeThroughStrumento, BelongsToTenant, HasFactory, SoftDeletes;
+    /**
+     * **Audit (ADR-027): il trait, e deliberatamente nient'altro.**
+     *
+     * Niente `attributiDerivatiTracciati()`: su `Garanzia` quell'hook serve
+     * perché `data_scadenza_effettiva` — il campo che pilota il semaforo — sta
+     * FUORI da `$fillable`. Qui tutto ciò che decide qualcosa (`stato`,
+     * `data_esecuzione`, `data_scadenza`, `tipo`, `tecnico_id`) è già
+     * assegnabile, quindi già tracciato: aggiungerlo «per simmetria»
+     * duplicherebbe colonne e basta.
+     *
+     * Niente `nomeDominio()`: il default dà «intervento», che è il sostantivo
+     * giusto.
+     *
+     * Niente `activity()` esplicite, e il criterio è quello di ADR-027 letto
+     * per esteso: le esplicite servono quando l'informazione che conta **non è
+     * una colonna** — in `Strumento::forzaSemaforo()` è il fatto che il forzato
+     * SCAVALCA uno stato calcolato che in tabella non esiste. Qui invece
+     * chiudere un intervento È scrivere `stato` e `data_esecuzione`: l'elenco
+     * dei campi cambiati dice già tutto, e una riga esplicita in più
+     * significherebbe due righe per un gesto solo.
+     */
+    use AuditsDomainWrites, BelongsToOrgNodeThroughStrumento, BelongsToTenant, HasFactory, SoftDeletes;
 
     protected $table = 'interventi';
 

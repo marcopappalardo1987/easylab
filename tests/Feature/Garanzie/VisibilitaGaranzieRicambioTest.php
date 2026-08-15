@@ -5,9 +5,11 @@ use App\Livewire\Anagrafica\Albero;
 use App\Models\Garanzia;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
+use App\Support\AuditLog;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
+use Spatie\Activitylog\Models\Activity;
 
 /**
  * L'impostazione per-Ente della visibilità garanzie ricambio (🔗 ADR-029).
@@ -142,6 +144,27 @@ it('lets the Superadmin change it, and the change takes effect at once', functio
     expect($this->ente->fresh()->visibilita_garanzie_ricambio)->toBe(VisibilitaGaranzieRicambio::Lettura)
         ->and(Gate::forUser($tenant->fresh())->allows('view', Garanzia::class))->toBeTrue()
         ->and(Gate::forUser($tenant->fresh())->allows('manage', Garanzia::class))->toBeFalse();
+});
+
+it('records who changed the setting, and from what to what', function () {
+    // ADR-029 ha scartato la concessione RBAC caso-per-caso con l'argomento che
+    // «non lascia traccia di CHI l'ha decisa». Senza questa riga l'impostazione
+    // scelta al suo posto non ne lascerebbe neanche lei, e l'argomento che
+    // regge la decisione non sarebbe soddisfatto dalla decisione stessa
+    // (🔗 ADR-027, 15 Ago 2026).
+    $superadmin = ($this->utente)('Superadmin');
+    $this->actingAs($superadmin);
+
+    $this->ente->fissaVisibilitaGaranzieRicambio(VisibilitaGaranzieRicambio::Nascosta);
+
+    $riga = Activity::where('log_name', AuditLog::NAME)
+        ->where('subject_type', UnitaOrganizzativa::class)->first();
+
+    expect($riga)->not->toBeNull()
+        ->and($riga->description)->toBe('Visibilità garanzie ricambio modificata')
+        ->and($riga->causer_id)->toBe($superadmin->id)
+        ->and($riga->properties['da'])->toBe('modifica')
+        ->and($riga->properties['a'])->toBe('nascosta');
 });
 
 it('refuses a value that is not one of the three states', function () {

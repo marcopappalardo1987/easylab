@@ -6,6 +6,7 @@ use App\Enums\TipoUnitaOrganizzativa;
 use App\Enums\VisibilitaGaranzieRicambio;
 use App\Models\Concerns\BelongsToOrgNode;
 use App\Models\Concerns\BelongsToTenant;
+use App\Support\AuditLog;
 use Database\Factories\UnitaOrganizzativaFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -80,9 +81,31 @@ class UnitaOrganizzativa extends Model
      */
     public function fissaVisibilitaGaranzieRicambio(VisibilitaGaranzieRicambio $visibilita): bool
     {
+        $precedente = $this->visibilita_garanzie_ricambio;
         $this->visibilita_garanzie_ricambio = $visibilita;
 
-        return $this->save();
+        $salvato = $this->save();
+
+        // Tracciata a mano e non col trait (ADR-027: o l'uno o le altre).
+        // ADR-029 ha scartato la concessione RBAC caso-per-caso con l'argomento
+        // che «un'eccezione concessa a mano non lascia traccia di CHI l'ha
+        // decisa»: senza questa riga, l'impostazione scelta al suo posto non ne
+        // lascerebbe neanche lei, e l'argomento che regge la decisione non
+        // sarebbe soddisfatto dall'implementazione della decisione stessa.
+        //
+        // È una clausola del rapporto commerciale con un cliente: qui conta chi
+        // e quando, non l'elenco dei campi — ed è il criterio per cui questo
+        // gesto vuole l'esplicita e non il trait.
+        activity(AuditLog::NAME)
+            ->causedBy(auth()->user())
+            ->performedOn($this)
+            ->withProperties([
+                'da' => $precedente?->value,
+                'a' => $visibilita->value,
+            ])
+            ->log('Visibilità garanzie ricambio modificata');
+
+        return $salvato;
     }
 
     /**

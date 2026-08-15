@@ -18,6 +18,11 @@ use Spatie\Activitylog\Models\Activity;
  * perché è la seconda metà del patto che ha dato al Tecnico
  * `garanzie.ricambio.manage`: è la fonte del dato **e** ogni sua scrittura è
  * tracciata. Le due metà non possono viaggiare separate.
+ *
+ * Dal 15 Ago 2026 la copertura è completa (interventi e spostamenti hanno il
+ * trait): la conseguenza per questo file è che una `Intervento::factory()
+ * ->create()` nel corpo di un test **lascia una riga**, e i conteggi vanno
+ * azzerati prima del gesto che si vuole misurare.
  */
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
@@ -36,6 +41,13 @@ it('records who registered a part, on the audit channel', function () {
     $this->actingAs($this->tecnico);
     $intervento = Intervento::factory()->forStrumento($this->strumento)->create();
 
+    // ⚠️ Aggiunto il 15 Ago 2026 col trait su `Intervento`, e non è una pezza:
+    // senza, la `create()` qui sopra lascia una QUARTA riga («Creazione
+    // intervento») e l'assert «tre scritture, tre righe» conterebbe il file
+    // invece del gesto. Che il test sia caduto appena messo il trait è la prova
+    // migliore che il trait è davvero attivo. Stesso idioma del terzo caso.
+    Activity::query()->delete();
+
     app(RegistraRicambiIntervento::class)->esegui($intervento, [
         ['nome' => 'Guarnizione O-Ring', 'scadenza_garanzia' => today()->addYears(2)->toDateString()],
     ]);
@@ -48,7 +60,11 @@ it('records who registered a part, on the audit channel', function () {
         ->toEqual([Garanzia::class, Ricambio::class, RicambioUtilizzo::class])
         ->and($righe->pluck('causer_id')->unique()->all())->toBe([$this->tecnico->id])
         ->and($righe->pluck('description')->all())
-        ->each->toStartWith('Creazione');
+        ->each->toStartWith('Creazione')
+        // Il sostantivo, non il solo prefisso: è guardando solo `Creazione` che
+        // per una settimana è passato «Creazione ricambioutilizzo».
+        ->and($righe->firstWhere('subject_type', RicambioUtilizzo::class)->description)
+        ->toBe('Creazione ricambio montato');
 });
 
 it('records the derived date that drives the semaforo, not just the input', function () {
