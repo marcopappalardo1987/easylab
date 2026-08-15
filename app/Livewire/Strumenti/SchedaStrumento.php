@@ -916,6 +916,7 @@ class SchedaStrumento extends Component
                 : collect(),
             'ricambiMontati' => $this->ricambiMontati(),
             'documenti' => $this->documentiMostrati(),
+            'certificati' => $this->certificatiPerIntervento(),
             'interventiAllegabili' => $this->interventiAllegabili(),
             'tipiDocumento' => $this->tipiDocumento(),
             'puoCorreggereRicambi' => $this->puoCorreggereRicambi(),

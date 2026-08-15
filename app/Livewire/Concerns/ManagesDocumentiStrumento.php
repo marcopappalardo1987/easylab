@@ -5,7 +5,9 @@ namespace App\Livewire\Concerns;
 use App\Actions\Documenti\CaricaDocumento;
 use App\Enums\TipoDocumento;
 use App\Models\Documento;
+use App\Models\Intervento;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Livewire\WithFileUploads;
 
@@ -36,7 +38,13 @@ trait ManagesDocumentiStrumento
         $this->authorize('documenti.upload');
         $this->reset(['fileDocumento', 'tipoDocumento']);
         $this->documentoInterventoId = $interventoId;
-        $this->tipoDocumento = TipoDocumento::Manuale->value;
+
+        // Preselezione onesta: si allega a una taratura quasi solo il
+        // certificato, e a una macchina quasi solo un manuale. Resta
+        // cambiabile — è un default, non un vincolo.
+        $this->tipoDocumento = $interventoId !== null
+            ? TipoDocumento::CertificatoTaratura->value
+            : TipoDocumento::Manuale->value;
         $this->showDocumentoForm = true;
     }
 
@@ -116,6 +124,34 @@ trait ManagesDocumentiStrumento
         return $this->showDocumentoForm && Gate::allows('interventi.view')
             ? $this->strumento->interventi()->get(['id', 'descrizione', 'data_scadenza'])
             : collect();
+    }
+
+    /**
+     * Il certificato di ogni taratura, indicizzato per intervento.
+     *
+     * Serve alla riga della taratura nel tab Interventi: **il certificato è la
+     * prova legale del lavoro, e il posto in cui l'utente lo cerca è la riga
+     * della taratura**, non un archivio piatto. Un tab Documenti generico
+     * soddisfa la lettera di ADR-009 e non il suo scopo.
+     *
+     * Una query sola per l'intera lista: `keyBy` sul soggetto, e la vista
+     * legge dall'array. Con un `has()` per riga sarebbe una N+1 su una tabella
+     * che cresce con lo storico.
+     *
+     * @return Collection<int, Documento>
+     */
+    public function certificatiPerIntervento()
+    {
+        if (! Gate::allows('documenti.view')) {
+            return collect();
+        }
+
+        return $this->documentiDelloStrumento()
+            ->where('documentabile_type', Intervento::class)
+            ->where('tipo', TipoDocumento::CertificatoTaratura->value)
+            ->orderByDesc('created_at')
+            ->get()
+            ->keyBy('documentabile_id');
     }
 
     /** @return array<string,string> */

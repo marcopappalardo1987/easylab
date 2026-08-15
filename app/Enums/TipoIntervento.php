@@ -15,8 +15,11 @@ namespace App\Enums;
  * `TaraturaECertificazione` è **una voce sola**, non due: nel linguaggio del
  * cliente le due cose viaggiano insieme (la taratura si chiude con il
  * certificato). È la voce con valenza documentale di ADR-009 — l'attività
- * porta il certificato allegato e la sua scadenza alimenta il semaforo, senza
- * un secondo motore di scadenze.
+ * porta il certificato allegato, e a pilotare il semaforo è la `data_scadenza`
+ * **dell'attività**, non una scadenza del documento (corretto il 15 Ago 2026:
+ * «la sua» si leggeva come «del certificato», e da lì a mettere una scadenza su
+ * `documenti` il passo era breve — sarebbe una quarta fonte, che ADR-009 vieta
+ * esplicitamente). Nessun secondo motore di scadenze.
  *
  * `Altro` resta come fallback dichiarato (ADR-021): sul campo l'intervento
  * non classificabile deve comunque essere registrabile, e la `descrizione`

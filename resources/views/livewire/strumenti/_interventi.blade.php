@@ -1,5 +1,6 @@
 @php
     use App\Enums\StatoIntervento;
+    use App\Enums\TipoIntervento;
     use Illuminate\Support\Facades\Gate;
 
     // Stato di riga a 3 valori (l'enum ne ha 2): colore + simbolo + etichetta,
@@ -53,7 +54,33 @@
                                 <span class="block text-xs text-neutral-400">Eseguito il {{ $i->data_esecuzione->format('d/m/Y') }}</span>
                             @endif
                         </td>
-                        <td class="px-4 py-3 text-neutral-600">{{ $i->tipo->label() }}</td>
+                        <td class="px-4 py-3 text-neutral-600">
+                            {{ $i->tipo->label() }}
+                            {{-- Il certificato è la PROVA della taratura, e il posto in cui
+                                 l'utente lo cerca è questa riga, non l'archivio dei documenti
+                                 (ADR-009). Se manca, dirlo: «fatto» e «documentato» non sono
+                                 la stessa cosa, e confonderli è ciò che rende inutile una
+                                 taratura in un audit. --}}
+                            @if ($i->tipo === TipoIntervento::TaraturaECertificazione)
+                                @php $certificato = $certificati[$i->id] ?? null; @endphp
+                                <span class="mt-1 block text-xs">
+                                    @if ($certificato)
+                                        @can('documenti.download')
+                                            <a href="{{ route('documenti.download', $certificato) }}"
+                                                class="font-medium text-primary-600 hover:text-primary-700">📄 Certificato</a>
+                                        @else
+                                            <span class="text-neutral-400">📄 Certificato allegato</span>
+                                        @endcan
+                                    @else
+                                        <span class="text-warning-800">Certificato mancante</span>
+                                        @can('documenti.upload')
+                                            <button type="button" wire:click="openCaricaDocumento({{ $i->id }})"
+                                                class="ml-1 font-medium text-primary-600 hover:text-primary-700">Allega</button>
+                                        @endcan
+                                    @endif
+                                </span>
+                            @endif
+                        </td>
                         <td class="px-4 py-3 text-neutral-800">{{ $i->descrizione }}</td>
                         <td class="px-4 py-3 text-neutral-600">{{ $i->tecnicoLabel() }}</td>
                         @if ($mostraAzioni)

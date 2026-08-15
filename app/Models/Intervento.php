@@ -20,8 +20,9 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Attività/intervento su uno strumento (ERD §5.2 — ADR-005/007/009): la fonte
- * di verità del semaforo. Una taratura è un intervento `tipo = taratura`
- * (ADR-009). Visibile anche al ruolo Tenant.
+ * di verità del semaforo. Una taratura è un intervento
+ * `tipo = taratura_e_certificazione` (ADR-009; il valore `taratura` è stato
+ * rimappato da ADR-021 il 3 Ago 2026). Visibile anche al ruolo Tenant.
  *
  * Non ha collocazione propria nell'albero: eredita la restrizione di reparto
  * dallo strumento (BelongsToOrgNodeThroughStrumento). NON usare BelongsToOrgNode

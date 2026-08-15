@@ -12,7 +12,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use InvalidArgumentException;
 
 /**
  * Documento allegato a uno Strumento o a un Intervento (ERD §8.1 —
@@ -60,6 +62,62 @@ class Documento extends Model
 
     /** Il disco è UNO e dichiarato qui: `documenti`, l'unico con `throw => true`. */
     public const DISCO = 'documenti';
+
+    /**
+     * Soggetti ammessi: la whitelist è esplicita perché `morphTo` accetta
+     * QUALUNQUE stringa in `documentabile_type`, e una riga che puntasse a un
+     * model senza `tenant_id` uscirebbe da ogni scoping — silenziosamente.
+     */
+    public const SOGGETTI = [Strumento::class, Intervento::class];
+
+    /**
+     * Due invarianti, su `creating`/`updating` e **mai su `saving`**: `saving`
+     * gira PRIMA di `creating`, ed è in `creating` che `BelongsToTenant`
+     * riscrive `tenant_id` — una guardia in `saving` confronterebbe un valore
+     * che sta per cambiare, cioè non guarderebbe nulla. È la trappola già
+     * pagata su `RicambioUtilizzo` e ripetuta su `Strumento`.
+     */
+    protected static function booted(): void
+    {
+        static::creating(fn (Documento $documento) => $documento->verificaSoggetto());
+        static::updating(fn (Documento $documento) => $documento->verificaSoggetto());
+    }
+
+    /**
+     * Query builder e non Eloquent: i global scope nasconderebbero proprio la
+     * riga da controllare, e un riferimento cross-tenant si presenterebbe come
+     * un "non trovato" dal messaggio fuorviante.
+     */
+    protected function verificaSoggetto(): void
+    {
+        if (! in_array($this->documentabile_type, self::SOGGETTI, true)) {
+            throw new InvalidArgumentException(
+                'Documento: si allega a uno Strumento o a un Intervento (ERD §8.1).'
+            );
+        }
+
+        $tabella = $this->documentabile_type === Strumento::class ? 'strumenti' : 'interventi';
+        $tenantSoggetto = DB::table($tabella)->where('id', $this->documentabile_id)->value('tenant_id');
+
+        if ($tenantSoggetto === null || (int) $tenantSoggetto !== (int) $this->tenant_id) {
+            throw new InvalidArgumentException(
+                'Documento: il soggetto deve appartenere allo stesso Ente del documento — è l\'invariante su cui poggia il livello 2 dello scope (ADR-006).'
+            );
+        }
+
+        // `strumento_id` è la colonna da cui dipende la restrizione al
+        // sotto-albero: una riga che puntasse allo strumento sbagliato sarebbe
+        // invisibile al Responsabile giusto e visibile a quello sbagliato.
+        $strumentoAtteso = $this->documentabile_type === Strumento::class
+            ? $this->documentabile_id
+            : DB::table('interventi')->where('id', $this->documentabile_id)->value('strumento_id');
+
+        if ((int) $this->strumento_id !== (int) $strumentoAtteso) {
+            throw new InvalidArgumentException(
+                'Documento: `strumento_id` deve essere lo strumento del soggetto (ERD §8.1).'
+            );
+        }
+    }
 
     public function documentabile(): MorphTo
     {
