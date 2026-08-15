@@ -425,6 +425,7 @@ gantt
 **Dipendenze:** S2–S5 (dati e billing in piedi).
 
 - [ ] `[CORE]` **Dashboard Superadmin**: vista globale clienti, laboratori, strumenti totali, **MRR** globale. 🔗 ADR-001, Funzionalità per Ruolo §2
+  - 📦 **Consegna da S4 (15 Ago 2026, 🔗 ADR-029)**: qui va portato il controllo della **visibilità garanzie ricambio per Ente**. Oggi vive nel form dell'anagrafica, ma il Superadmin è tenant-bound (🔗 ADR-018) e ne vede un Ente solo: per gli altri l'impostazione si cambia da console. È questa la vista che interroga la piattaforma senza scoping, quindi è qui che il controllo diventa usabile davvero.
 - [ ] `[CORE]` **User Impersonation** con UI 1-click + **banner persistente** di ripristino; ogni impersonation loggata. 🔗 ADR (Superadmin)/activitylog
 - [ ] `[CORE]` **Editor permessi ruolo** (UI Superadmin): matrice ruolo×permesso editabile a runtime, set bloccato 🔒 in sola lettura, modifiche loggate. 🔗 ADR-016, `../Architettura/Schema Ruoli e Permessi.md` §7
 - [ ] `[CORE]` **Dashboard Developer**: accesso ai log di sistema globali + monitoraggio. 🔗 Funzionalità per Ruolo §1
