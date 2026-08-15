@@ -82,7 +82,7 @@ A seguito del chiarimento del modello di business (EasyLab è il Superadmin unic
 
 **ADR-003 — Accesso via QR Code: login obbligatorio + scope dei permessi**
 
-*Stato: Accettata*
+*Stato: Accettata — **attuata il 15 Ago 2026** (S4). La contraddizione che l'ADR cita nel Contesto era ancora viva nei permessi: la matrice dava `qr.scan` ❌ al Tenant mentre l'Elenco Funzionalità §4 diceva «il tecnico **o il cliente** inquadra il QR», e il cliente prendeva 403 sulla propria macchina. Sciolta a favore dell'Elenco: il QR è una **scorciatoia verso una pagina già autorizzata**, non un accesso in più — la rotta reindirizza a `strumenti.show`, che resta gatata e scopata. Deciso inoltre che la firma **non scade** (un adesivo vive quanto la macchina; a invalidarne uno serve rigenerare il token) e che **ristampare non rigenera** (un adesivo rovinato si rifà identico).*
 
 **Contesto.** I documenti funzionalità erano contraddittori: in un punto "il tecnico *o il cliente* inquadra il QR e accede immediatamente alla scheda", in un altro "funzionalità *solo per EasyLab o tecnici*". Poiché il valore centrale del prodotto è l'isolamento dei dati, un QR che espone la scheda senza autenticazione sarebbe una fuga di dati (URL indovinabili o condivise mostrerebbero strumenti di altri clienti).
 

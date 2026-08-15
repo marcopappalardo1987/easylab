@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
@@ -38,6 +39,10 @@ class Strumento extends Model
      * scheda e l'import CSV scrivono per mass-assignment: tenendole fuori,
      * nessun payload — presente o futuro — può forzare il semaforo scavalcando
      * forzaSemaforo()/rimuoviForzatura(), che sono l'unica via.
+     *
+     * Stessa ragione per `qr_token` (ADR-003): un payload che potesse
+     * riscriverlo invaliderebbe l'adesivo sulla macchina passando dal form
+     * dell'anagrafica. Si scrive solo alla creazione e da `rigeneraQrToken()`.
      */
     protected $fillable = [
         'tenant_id',
@@ -58,6 +63,56 @@ class Strumento extends Model
             'forced_state' => StatoSemaforo::class,
             'forced_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Il token del QR nasce con lo strumento e non si tocca più (ADR-003).
+     *
+     * `creating` e non `saving`: la stessa ragione di `RicambioUtilizzo` —
+     * `saving` gira anche sugli update, e un `??=` lì dentro sarebbe una
+     * guardia che sembra proteggere e non protegge. Qui la condizione è
+     * esplicita perché un `insert()` in blocco (DemoSeeder, import CSV) non fa
+     * scattare gli eventi: quelle righe restano senza token finché non passano
+     * da qui o da una migration, ed è il motivo per cui la colonna è nullable
+     * in schema pur essendo di fatto obbligatoria.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (Strumento $strumento): void {
+            $strumento->qr_token ??= self::nuovoQrToken();
+        });
+    }
+
+    /** 32 caratteri casuali: un segreto, non un id offuscato (vedi migration). */
+    public static function nuovoQrToken(): string
+    {
+        return Str::random(32);
+    }
+
+    /**
+     * Rigenera il token: **invalida l'adesivo già applicato sulla macchina**.
+     *
+     * Esiste separata dalla stampa proprio per questo (decisione del 15 Ago
+     * 2026): ristampare deve poter dare la stessa etichetta — un adesivo
+     * rovinato si rifà identico — mentre invalidarne una è un atto raro e
+     * conseguente, che come tale lascia una traccia esplicita.
+     *
+     * `activity()` a mano e non il trait: `Strumento` logga a mano per
+     * decisione di ADR-027, e qui l'informazione che conta non è «il valore
+     * della colonna è cambiato» ma «le etichette stampate finora non valgono
+     * più» — che in tabella non si legge.
+     */
+    public function rigeneraQrToken(): bool
+    {
+        $this->qr_token = self::nuovoQrToken();
+        $salvato = $this->save();
+
+        activity(AuditLog::NAME)
+            ->causedBy(auth()->user())
+            ->performedOn($this)
+            ->log('QR rigenerato: le etichette stampate in precedenza non sono più valide');
+
+        return $salvato;
     }
 
     /**

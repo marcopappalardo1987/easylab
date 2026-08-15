@@ -116,6 +116,15 @@ return [
             'ricambi.view',
             'ricambio_utilizzo.view',
             'documenti.view', 'documenti.upload', 'documenti.download', 'documenti.export_pdf',
+            // `qr.scan` al Tenant dal 15 Ago 2026: Elenco Funzionalità §4 dice
+            // «il tecnico **o il cliente** inquadra il QR», la matrice diceva
+            // ❌ — e la contraddizione si vedeva nell'uso, perché il cliente
+            // inquadrava l'adesivo sulla propria macchina e prendeva 403 pur
+            // potendo aprire la stessa scheda dal menù. Il QR è una
+            // scorciatoia verso una pagina già autorizzata, non un accesso in
+            // più: `AccessoQr` reindirizza a `strumenti.show`, che resta
+            // gatata e scopata come prima.
+            'qr.scan',
         ]],
 
         // Tecnico: catalogo ricambi solo 'create' (nota ⁴ del doc), niente update/delete.

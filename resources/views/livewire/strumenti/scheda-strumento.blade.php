@@ -28,6 +28,9 @@
             @can('strumenti.move')
                 <x-ui.button variant="secondary" wire:click="openMove">Sposta</x-ui.button>
             @endcan
+            @can('strumenti.qr_generate')
+                <x-ui.button variant="secondary" :href="route('strumenti.qr', $strumento)" wire:navigate>Etichetta QR</x-ui.button>
+            @endcan
             @can('strumenti.update')
                 <x-ui.button variant="secondary" wire:click="edit">Modifica</x-ui.button>
             @endcan
