@@ -10,6 +10,7 @@ use App\Enums\TipoIntervento;
 use App\Enums\TipoSpostamento;
 use App\Enums\TipoUnitaOrganizzativa;
 use App\Livewire\Concerns\ManagesStrumentoForm;
+use App\Models\Garanzia;
 use App\Models\Intervento;
 use App\Models\Ricambio;
 use App\Models\SpostamentoStrumento;
@@ -265,12 +266,14 @@ class SchedaStrumento extends Component
         if ($righeNuove !== []) {
             $this->authorize('ricambio_utilizzo.create');
             $this->authorize('ricambi.create');
-            $this->authorize('garanzie.ricambio.manage'); // ogni riga scrive SEMPRE una garanzia (ADR-022)
+            // ADR-029: l'ability della Policy, NON il permesso nudo — che
+            // spatie concederebbe prima che l'impostazione dell'Ente sia letta.
+            $this->authorize('manage', Garanzia::class); // ogni riga scrive SEMPRE una garanzia (ADR-022)
         }
 
         if ($this->ricambiRimossi !== []) {
             $this->authorize('ricambio_utilizzo.delete');
-            $this->authorize('garanzie.ricambio.manage'); // si cestina anche la garanzia
+            $this->authorize('manage', Garanzia::class); // si cestina anche la garanzia (ADR-029)
         }
 
         $payload = [
@@ -478,7 +481,7 @@ class SchedaStrumento extends Component
     {
         return Gate::allows('ricambio_utilizzo.create')
             && Gate::allows('ricambi.create')
-            && Gate::allows('garanzie.ricambio.manage');
+            && Gate::allows('manage', Garanzia::class);
     }
 
     public function closeInterventoForm(): void

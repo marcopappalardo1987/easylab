@@ -94,11 +94,25 @@ return [
             'qr.scan',
         ]],
 
+        // Tenant: `garanzie.ricambio.*` è suo dal 15 Ago 2026 (ADR-029, deciso il 9), ed è
+        // l'inversione della postura che il progetto portava da Fase 2. Il
+        // divieto («mai al Tenant») non era mai stato deciso davvero: ADR-004 lo
+        // ratificò dichiarandolo «vincolo di privacy già previsto», e da lì
+        // arrivò al set 🔒 e ai test. Poggiava su una premessa mai scritta — che
+        // i ricambi li fornisca EasyLab — che non regge quando il Tenant è
+        // l'intestatario dell'abbonamento e il pezzo sta sulla sua macchina.
+        //
+        // ⚠️ Qui c'è il DEFAULT della piattaforma, non l'ultima parola: con
+        // `teams = false` i permessi di un ruolo sono globali, quindi
+        // l'eccezione del singolo Ente vive altrove — nella colonna
+        // `visibilita_garanzie_ricambio` e in `GaranziaRicambioPolicy`, che
+        // RESTRINGE questo default e non lo allarga mai.
         'Tenant' => ['only' => [
             'unita_organizzativa.view',
             'strumenti.view',
             'interventi.view',
             'garanzie.macchina.view',
+            'garanzie.ricambio.view', 'garanzie.ricambio.manage',
             'ricambi.view',
             'ricambio_utilizzo.view',
             'documenti.view', 'documenti.upload', 'documenti.download', 'documenti.export_pdf',
@@ -131,10 +145,19 @@ return [
     // Set bloccato 🔒 (§7) — non modificabile dalla UI Superadmin.
     //
     // "Bloccato" dice che la UI non può ridistribuirlo, NON a chi è negato: le
-    // due cose si erano confuse proprio su `garanzie.ricambio.*` (ADR-027). Il
-    // vincolo di ADR-004 su quelle due voci è e resta uno solo — mai al Tenant.
+    // due cose si erano confuse proprio su `garanzie.ricambio.*` (ADR-027).
+    //
+    // Quelle due voci sono USCITE dal set il 15 Ago 2026 (ADR-029): non essendoci
+    // più un divieto assoluto da difendere, tenerle qui avrebbe impedito alla UI
+    // di S6 di cambiare un default che ora È cambiabile per decisione. Il set
+    // torna così a contenere solo ciò che è bloccato per legge, sicurezza o
+    // struttura — e da 9 voci passa a 7.
+    //
+    // Conseguenza da conoscere: l'editor di S6 potrà revocare quei permessi al
+    // ruolo Tenant per TUTTI gli Enti insieme, scavalcando le impostazioni
+    // per-Ente (che restringono, non allargano). È coerente — chi governa la
+    // piattaforma governa il default — ma non è ovvio leggendo il codice.
     'locked' => [
-        'garanzie.ricambio.view', 'garanzie.ricambio.manage',
         'utenti.impersonate',
         'system.logs.view',
         'billing.manage_global', 'billing.lockout',

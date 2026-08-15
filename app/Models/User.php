@@ -7,6 +7,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -46,6 +47,26 @@ class User extends Authenticatable
     public function isDepartmentScoped(): bool
     {
         return $this->hasRole(self::DEPARTMENT_SCOPED_ROLE);
+    }
+
+    /**
+     * Ente di appartenenza (ADR-006/018): la radice a cui punta `tenant_id`.
+     *
+     * `withoutGlobalScopes()` per la stessa ragione di `AccessibleStrumenti`:
+     * questa relazione risponde alla domanda «di chi è quest'utente», e va
+     * risposta anche dove gli scope di `UnitaOrganizzativa` non sono ancora
+     * applicabili — dentro un global scope, in console, o per un utente che il
+     * proprio Ente lo vede solo attraverso di sé. Il confine non si perde: la
+     * chiave è `tenant_id` dell'utente, non un filtro.
+     *
+     * È una relazione e non una query nuda perché Eloquent ne cachea il
+     * risultato sull'istanza: `GaranziaRicambioPolicy` la interroga a ogni
+     * lettura di garanzie (ADR-029), e senza cache sarebbe una query in più per
+     * ciascuna.
+     */
+    public function ente(): BelongsTo
+    {
+        return $this->belongsTo(UnitaOrganizzativa::class, 'tenant_id')->withoutGlobalScopes();
     }
 
     /**

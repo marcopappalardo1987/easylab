@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\SoggettoGaranzia;
+use App\Enums\VisibilitaGaranzieRicambio;
 use App\Models\Garanzia;
 use App\Models\Ricambio;
 use App\Models\RicambioUtilizzo;
@@ -173,10 +174,27 @@ it('hides a ricambio garanzia whose mounting row is soft-deleted', function () {
     ]);
 });
 
-it('shows a Tenant of the same sub-tree only the macchina rows', function () {
-    // I due global scope si compongono in AND: il Tenant non è ristretto per
-    // reparto, ma la privacy di ADR-004 gli toglie comunque le righe ricambio.
+// Aggiornato il 15 Ago 2026 (ADR-029): il Tenant non è più cieco per difetto —
+// di default vede anche le righe ricambio del proprio Ente. Il caso resta qui
+// perché quel che verifica NON è la privacy ma il fatto che il Tenant **non sia
+// ristretto per reparto**: vede tutto l'Ente, sotto-albero o no.
+it('does not restrict a Tenant by sub-tree, and by default shows the ricambio rows too', function () {
     $this->actingAs(($this->conRuolo)('Tenant'));
+
+    expect(Garanzia::pluck('id')->all())->toEqualCanonicalizing([
+        $this->a1['macchina'], $this->a1['ricambio'],
+        $this->a1a['macchina'], $this->a1a['ricambio'],
+        $this->a2['macchina'], $this->a2['ricambio'],
+    ]);
+});
+
+// Il contrappeso: con l'Ente in `nascosta` tornano le sole righe macchina, e
+// resta vero che il reparto non c'entra — è la prova che i due scope si
+// compongono in AND senza sovrapporsi.
+it('shows a Tenant of a nascosta Ente only the macchina rows, still across the whole Ente', function () {
+    $tenant = ($this->conRuolo)('Tenant');
+    $this->enteA->fissaVisibilitaGaranzieRicambio(VisibilitaGaranzieRicambio::Nascosta);
+    $this->actingAs($tenant->fresh());
 
     expect(Garanzia::pluck('id')->all())->toEqualCanonicalizing([
         $this->a1['macchina'], $this->a1a['macchina'], $this->a2['macchina'],

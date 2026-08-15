@@ -4,12 +4,14 @@ namespace App\Livewire\Anagrafica;
 
 use App\Enums\TipoSpostamento;
 use App\Enums\TipoUnitaOrganizzativa;
+use App\Enums\VisibilitaGaranzieRicambio;
 use App\Livewire\Concerns\ManagesStrumentoForm;
 use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -44,6 +46,13 @@ class Albero extends Component
 
     /** Soglia obsolescenza in anni: campo del solo nodo Ente (ADR-014). */
     public ?int $sogliaObsolescenzaAnni = null;
+
+    /**
+     * Visibilità delle garanzie ricambio per il Tenant di questo Ente (ADR-029).
+     * Solo il Superadmin la vede e la scrive: è una clausola del rapporto
+     * commerciale, non una preferenza interna dell'Ente.
+     */
+    public ?string $visibilitaGaranzieRicambio = null;
 
     // Conferma eliminazione nodo
     public ?int $deletingId = null;
@@ -136,6 +145,9 @@ class Albero extends Component
         $this->sogliaObsolescenzaAnni = $node->tipo === TipoUnitaOrganizzativa::Ente
             ? $node->soglia_obsolescenza_anni
             : null;
+        $this->visibilitaGaranzieRicambio = $node->tipo === TipoUnitaOrganizzativa::Ente
+            ? $node->visibilita_garanzie_ricambio->value
+            : null;
         $this->showForm = true;
     }
 
@@ -161,6 +173,14 @@ class Albero extends Component
                 $regole['sogliaObsolescenzaAnni'] = ['required', 'integer', 'between:1,50'];
             }
 
+            // La regola si aggiunge solo a chi il campo lo vede davvero: per
+            // tutti gli altri la property resta quella caricata da `edit()` e
+            // non viene mai riletta, quindi un valore forgiato dal browser non
+            // ha dove attaccarsi (ed è comunque `fissa…()` a decidere).
+            if ($isEnte && $this->puoGestireVisibilitaGaranzie()) {
+                $regole['visibilitaGaranzieRicambio'] = ['required', Rule::enum(VisibilitaGaranzieRicambio::class)];
+            }
+
             $validated = $this->validate($regole);
 
             $payload = ['nome' => $validated['nome'], 'note' => $validated['note']];
@@ -169,6 +189,18 @@ class Albero extends Component
             }
 
             $node->update($payload);
+
+            // ADR-029. Fuori dal payload di `update()` di proposito: la colonna
+            // è fuori da `$fillable` e si scrive solo dal metodo di dominio, che
+            // è anche il punto in cui il controllo del ruolo si esercita. Il
+            // permesso `unita_organizzativa.update` — che basta per nome, note e
+            // soglia — qui NON basta: ce l'ha anche l'Admin dell'Ente, e questa
+            // è una clausola che solo EasyLab decide.
+            if ($isEnte && $this->puoGestireVisibilitaGaranzie()) {
+                $node->fissaVisibilitaGaranzieRicambio(
+                    VisibilitaGaranzieRicambio::from($validated['visibilitaGaranzieRicambio'])
+                );
+            }
         } else {
             $this->authorize('unita_organizzativa.create');
 
@@ -235,9 +267,30 @@ class Albero extends Component
         $this->showForm = false;
     }
 
+    /**
+     * Chi può toccare la visibilità delle garanzie ricambio (ADR-029): il solo
+     * Superadmin — e il Developer, che nel progetto vede e può tutto.
+     *
+     * ⚠️ **Non è `unita_organizzativa.update`**, che pure governa questo stesso
+     * form: quel permesso ce l'ha l'Admin dell'Ente, e con `teams = false` i
+     * ruoli sono globali, quindi un Admin tenant-bound finirebbe per decidere
+     * una clausola del proprio contratto. È esattamente il caso in cui un
+     * permesso «giusto per la schermata» sarebbe sbagliato per il campo.
+     *
+     * Si appoggia a `roles.manage`, che Schema Ruoli §7 assegna a
+     * Developer/Superadmin ed è esso stesso bloccato per evitare auto-delega:
+     * chi governa la matrice dei permessi è chi governa anche questa clausola.
+     * Meglio di un `hasRole('Superadmin')`, che nominerebbe un secondo ruolo nel
+     * codice — nel progetto ne esiste UNO solo, ed è nella Policy.
+     */
+    public function puoGestireVisibilitaGaranzie(): bool
+    {
+        return Gate::allows('roles.manage');
+    }
+
     protected function resetForm(): void
     {
-        $this->reset(['editingId', 'parentId', 'tipo', 'nome', 'note', 'sogliaObsolescenzaAnni']);
+        $this->reset(['editingId', 'parentId', 'tipo', 'nome', 'note', 'sogliaObsolescenzaAnni', 'visibilitaGaranzieRicambio']);
         $this->resetValidation();
     }
 

@@ -2,6 +2,7 @@
 
 use App\Enums\StatoSemaforo;
 use App\Enums\TipoMotivoSemaforo;
+use App\Enums\VisibilitaGaranzieRicambio;
 use App\Livewire\Strumenti\ElencoStrumenti;
 use App\Livewire\Strumenti\SchedaStrumento;
 use App\Models\Garanzia;
@@ -14,6 +15,7 @@ use App\Models\User;
 use App\Support\Semaforo;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
 
 /**
@@ -66,8 +68,18 @@ beforeEach(function () {
 it('shows the Tenant an arancione caused only by a spare-part warranty, without ever naming the part', function () {
     Garanzia::factory()->forRicambio($this->utilizzo)->scaduta()->create();
 
+    // Aggiornato il 15 Ago 2026 (ADR-029). Il divieto assoluto non esiste più:
+    // il Tenant HA il permesso, ed è l'Ente a poterglielo restringere. Il test
+    // che ADR-020 impone resta però valido e necessario — cambia solo la
+    // premessa che lo mette in scena: prima era la matrice RBAC, ora è
+    // l'impostazione dell'Ente. Senza il terzo stato `nascosta` questo caso non
+    // sarebbe più costruibile, ed è metà della ragione per cui esiste.
     $tenant = ($this->utente)('Tenant');
-    expect($tenant->can('garanzie.ricambio.view'))->toBeFalse();
+    $this->ente->fissaVisibilitaGaranzieRicambio(VisibilitaGaranzieRicambio::Nascosta);
+    $tenant = $tenant->fresh();
+
+    expect($tenant->can('garanzie.ricambio.view'))->toBeTrue()
+        ->and(Gate::forUser($tenant)->allows('view', Garanzia::class))->toBeFalse();
 
     // 1. L'effetto: il pallino è arancione, in tutte e tre le forme (per-model,
     //    bulk dell'elenco, header della scheda).
@@ -87,6 +99,7 @@ it('shows the Tenant an arancione caused only by a spare-part warranty, without 
 
     // 3. E la riga resta invisibile alla lettura normale: il bypass vive nella
     //    query del semaforo, non è diventato un permesso.
+    $this->actingAs($tenant);
     expect(Garanzia::count())->toBe(0);
 });
 
@@ -98,7 +111,12 @@ it('names the source only to whoever holds garanzie.ricambio.view', function () 
     Livewire::actingAs($this->admin)->test(SchedaStrumento::class, ['strumento' => $this->strumento])
         ->assertSee('Garanzia ricambio in scadenza il');
 
+    // Il degrado si vede ora sul Tenant di un Ente `nascosta` (ADR-029): è chi
+    // il titolo a vederle non ce l'ha, e a cui il pallino va spiegato lo stesso.
     $tenant = ($this->utente)('Tenant');
+    $this->ente->fissaVisibilitaGaranzieRicambio(VisibilitaGaranzieRicambio::Nascosta);
+    $tenant = $tenant->fresh();
+
     Livewire::actingAs($tenant)->test(ElencoStrumenti::class)
         ->assertSee('Garanzia tra')->assertDontSee('Garanzia ricambio tra');
     Livewire::actingAs($tenant)->test(SchedaStrumento::class, ['strumento' => $this->strumento])
@@ -351,9 +369,10 @@ it('explains the arancione in Panoramica, neutrally and without a link, to whoev
         ->and($diagnosi->motivi[0]->dettaglio)->toBeNull();
 
     // Il motivo c'è per entrambi — il pallino è dovuto a tutti — ma il Tenant
-    // non riceve né il nome della fonte né la freccia verso un tab.
+    // di un Ente `nascosta` non riceve né il nome della fonte né la freccia.
     $tenant = ($this->utente)('Tenant');
-    Livewire::actingAs($tenant)->test(SchedaStrumento::class, ['strumento' => $this->strumento])
+    $this->ente->fissaVisibilitaGaranzieRicambio(VisibilitaGaranzieRicambio::Nascosta);
+    Livewire::actingAs($tenant->fresh())->test(SchedaStrumento::class, ['strumento' => $this->strumento])
         ->assertSee('Motivi (1)')
         ->assertSee('Garanzia scaduta il')
         ->assertDontSee('Garanzia ricambio scaduta il');

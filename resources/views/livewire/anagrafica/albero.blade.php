@@ -152,6 +152,30 @@
                             È solo una segnalazione: non blocca la manutenzione.
                         </p>
                     </div>
+
+                    {{-- Visibilità garanzie ricambio (ADR-029): clausola del
+                         rapporto commerciale, quindi solo EasyLab la decide —
+                         l'Admin dell'Ente ha `unita_organizzativa.update` e
+                         governa il resto di questo form, ma non questo campo. --}}
+                    @if ($this->puoGestireVisibilitaGaranzie())
+                        <div>
+                            <label for="visibilitaGaranzieRicambio" class="block text-sm font-medium text-neutral-700">
+                                Garanzie dei ricambi per il Tenant
+                            </label>
+                            <select id="visibilitaGaranzieRicambio" wire:model.live="visibilitaGaranzieRicambio"
+                                class="mt-1 w-full rounded-md border border-neutral-200 px-3 py-2 text-sm text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
+                                @foreach (App\Enums\VisibilitaGaranzieRicambio::cases() as $caso)
+                                    <option value="{{ $caso->value }}">{{ $caso->label() }}</option>
+                                @endforeach
+                            </select>
+                            @error('visibilitaGaranzieRicambio')
+                                <p class="mt-1 text-sm text-danger-600">{{ $message }}</p>
+                            @enderror
+                            <p class="mt-1 text-xs text-neutral-400">
+                                {{ App\Enums\VisibilitaGaranzieRicambio::tryFrom($visibilitaGaranzieRicambio ?? '')?->descrizione() }}
+                            </p>
+                        </div>
+                    @endif
                 @endif
 
                 <div class="flex justify-end gap-3">

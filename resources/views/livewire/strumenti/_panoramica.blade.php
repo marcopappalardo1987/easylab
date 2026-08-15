@@ -11,7 +11,10 @@
     $areaVisibile = fn (MotivoSemaforo $m) => match ($m->tipo) {
         TipoMotivoSemaforo::Intervento => Gate::allows('interventi.view'),
         TipoMotivoSemaforo::GaranziaMacchina => Gate::allows('garanzie.macchina.view'),
-        TipoMotivoSemaforo::GaranziaRicambio => Gate::allows('garanzie.ricambio.view'),
+        // ADR-029: l'ability della Policy, NON il permesso nudo — che spatie
+        // concede prima che l'impostazione dell'Ente sia letta. Un test lo
+        // congela, ed è così che questa riga è stata trovata.
+        TipoMotivoSemaforo::GaranziaRicambio => Gate::allows('view', App\Models\Garanzia::class),
     };
 
     // Dove porta la freccia «›». Le garanzie ricambio non hanno ancora una

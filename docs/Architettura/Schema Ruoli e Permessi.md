@@ -69,7 +69,7 @@ Risorse derivate dall'ERD §3–§9. Questo è l'elenco canonico che il seeder S
 
 ### 4.3 Garanzie
 - `garanzie.macchina.view` · `garanzie.macchina.manage` — garanzia macchina (visibile anche al Tenant).
-- `garanzie.ricambio.view` · `garanzie.ricambio.manage` — garanzia pezzo: **mai al Tenant** (🔗 ADR-004). ⚠️ **Superato da ADR-029 (9 Ago 2026), non ancora attuato**: diventerà un'impostazione per-Ente decisa dal Superadmin a tre stati (`nascosta` / `lettura` / `modifica`), con **default modifica** alla creazione, e uscirà dal set 🔒. Finché non è implementato vale quanto scritto qui. Il divieto riguarda **le righe**, non l'arancione che ne deriva: il semaforo le conta comunque (🔗 ADR-020).
+- `garanzie.ricambio.view` · `garanzie.ricambio.manage` — garanzia pezzo: **mai al Tenant** (🔗 ADR-004). ⚠️ **Superato da ADR-029** (deciso il 9, attuato il 15 Ago 2026): è un'impostazione per-Ente decisa dal Superadmin a tre stati (`nascosta` / `lettura` / `modifica`), con **default modifica** alla creazione, e le due voci sono uscite dal set 🔒. Il Tenant ha ora entrambi i permessi: quel che lo restringe è l'Ente, non la matrice. Il divieto riguarda **le righe**, non l'arancione che ne deriva: il semaforo le conta comunque (🔗 ADR-020).
   > **Il Tecnico le gestisce** (🔗 ADR-027, 8 Ago 2026): è chi monta fisicamente il pezzo, quindi la fonte del dato. Fino ad allora il divieto si estendeva anche a lui citando ADR-004, che però nomina solo il Tenant. Ogni modifica è tracciata sul canale `audit`.
 - ~~`letture_contaore.view` · `.create`~~ — **permessi rimossi** (🔗 ADR-019): eliminata la garanzia a ore, il contaore non esiste più. Tolti da `config/rbac.php` in S3-bis; **dai database già seminati solo l'8 Ago 2026** (blocco 0 di S4), perché la config è bootstrap e il seeder non cancella le righe che non conosce più.
 
@@ -191,7 +191,7 @@ I permessi della matrice §5 sono dei **default**, non una configurazione fissa:
 **Regole della UI** (Dashboard Superadmin, S6):
 - **Ambito globale:** un'unica matrice per tutta la piattaforma (no modalità "teams" in V1; personalizzazione per-Ente → V1.1).
 - **Accesso:** solo chi ha `roles.manage` (Developer/Superadmin) — esso stesso bloccato per evitare auto-delega.
-- **Set bloccato (V1):** `garanzie.ricambio.*` (mai al **Tenant** — ADR-004; ⚠️ *in uscita dal set con ADR-029, che lo rende configurabile per Ente*; *corretto l'8 Ago 2026 da ADR-027: qui c'era scritto «mai a Tenant/Tecnico», ed è la stessa citazione allargata oltre la fonte che §4.3 portava. Il Tecnico le gestisce*), `utenti.impersonate`, `system.logs.view`, `billing.manage_global`, `billing.lockout`, `tenants.view_all`, `tenants.provision`, `roles.manage`. Le righe 🔒 della matrice §5.
+- **Set bloccato (V1):** ~~`garanzie.ricambio.*`~~ (*uscite dal set il 15 Ago 2026 con ADR-029, che le rende configurabili per Ente: il set passa da 9 a 7 voci*. Erano lì per ADR-004 — mai al **Tenant**; *corretto l'8 Ago 2026 da ADR-027: qui c'era scritto «mai a Tenant/Tecnico», ed è la stessa citazione allargata oltre la fonte che §4.3 portava. Il Tecnico le gestisce*), `utenti.impersonate`, `system.logs.view`, `billing.manage_global`, `billing.lockout`, `tenants.view_all`, `tenants.provision`, `roles.manage`. Le righe 🔒 della matrice §5.
 - **Confine invariabile:** la UI modifica solo il *cosa* (permesso), **mai** il *su quali righe* (scope). Isolamento `tenant_id`, sotto-albero Responsabile e unione Tecnico restano nel codice (Global Scope/Policy) e non sono configurabili (🔗 ADR-001/006/007).
 - **Audit:** ogni modifica alla matrice è loggata in `activity_log` (chi/cosa/quando).
 - **Fonte di verità:** dopo il seeding è il DB; il seeder resta solo bootstrap/reset.
@@ -231,7 +231,7 @@ Indicazioni operative per il task S1 "definire ruoli/permessi base da S0" — il
 | **ADR-019** Garanzie solo a data | **Rimozione** di `letture_contaore.view` / `.create` da catalogo, matrice e seeder. |
 | **ADR-020** Garanzia ricambio nel semaforo | Nessun permesso nuovo: eccezione documentata al privacy scope (§6), con test negativo. |
 | **ADR-022** Ricambi dall'intervento | Nodo sciolto da ADR-027: il Tecnico ha entrambi i permessi. |
-| **ADR-029** Visibilità garanzie ricambio per-Ente | `garanzie.ricambio.*` esce dal set 🔒 e diventa impostazione dell'Ente a tre stati (`nascosta`/`lettura`/`modifica`, default **modifica**), governata dal Superadmin. **Da attuare.** |
+| **ADR-029** Visibilità garanzie ricambio per-Ente | `garanzie.ricambio.*` esce dal set 🔒 (9 → 7 voci) e passa al Tenant; l'eccezione è un'impostazione dell'Ente a tre stati (`nascosta`/`lettura`/`modifica`, default **modifica**), governata da chi ha `roles.manage`. Il vincolo di scrittura vive in `GaranziaRicambioPolicy`, non nel permesso. |
 | **ADR-027** Tracciabilità | `garanzie.ricambio.*` al Tecnico; il set bloccato torna a significare "mai al Tenant". Ogni scrittura di dominio tracciata su `audit`. |
 | **ADR-023** Fornitore 1-N | `fornitori.*` scopati per tenant; `fornitori.view` **concesso al Tenant** in lettura (nota ⁵, approvato 3 Ago 2026) — cambia un default del seeder S1. |
 | **ADR-024** Tab Panoramica | Nessun permesso nuovo: **ogni blocco resta gated dal permesso della propria area**. La vista di sintesi non deve diventare la scorciatoia che aggira i `@can` degli altri tab — vale come regola di §6. |

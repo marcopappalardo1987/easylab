@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\VisibilitaGaranzieRicambio;
 use App\Models\Garanzia;
 use App\Models\Ricambio;
 use App\Models\RicambioUtilizzo;
@@ -7,6 +8,7 @@ use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Facades\Gate;
 use Spatie\Permission\Models\Role;
 
 /**
@@ -41,12 +43,57 @@ beforeEach(function () {
     };
 });
 
-it('hides ricambio garanzie from the Tenant', function () {
-    $this->actingAs(($this->utente)('Tenant'));
+// Riscritto il 15 Ago 2026 (ADR-029). Diceva `hides ricambio garanzie from the
+// Tenant` e congelava una regola che nessuno aveva mai deciso: Fase 2 la dava
+// per scontata, ADR-004 la ratificò dichiarandola «già previsto». Il divieto
+// assoluto non esiste più — di default il Tenant vede e gestisce le garanzie
+// dei pezzi montati sulle proprie macchine —, e a nasconderle è ora
+// l'impostazione del suo Ente. I due casi stanno insieme perché è il CONFRONTO
+// a essere la regola: la stessa riga, due Enti, due esiti.
+it('shows ricambio garanzie to the Tenant by default, and hides them where the Ente says so', function () {
+    $tenant = ($this->utente)('Tenant');
+    $this->actingAs($tenant);
+
+    // Default alla creazione dell'Ente: `modifica`.
+    expect($this->ente->visibilita_garanzie_ricambio)->toBe(VisibilitaGaranzieRicambio::Modifica)
+        ->and(Garanzia::pluck('id')->all())->toContain($this->garanziaRicambio->id);
+
+    $this->ente->fissaVisibilitaGaranzieRicambio(VisibilitaGaranzieRicambio::Nascosta);
+
+    // `fresh()`: la Policy legge l'Ente dalla relazione `ente`, che Eloquent
+    // cachea sull'istanza — senza, si leggerebbe il valore di prima.
+    $this->actingAs($tenant->fresh());
 
     expect(Garanzia::pluck('id')->all())->toBe([$this->garanziaMacchina->id])
         ->and(Garanzia::find($this->garanziaRicambio->id))->toBeNull()
         ->and(Garanzia::where('id', $this->garanziaRicambio->id)->exists())->toBeFalse();
+});
+
+// `lettura` toglie la scrittura, NON le righe: è la distinzione su cui poggia
+// tutto ADR-029, e un test che non la verificasse lascerebbe passare la
+// confusione fra i due piani (scope e Policy).
+it('keeps the rows visible in sola lettura, and only takes away the writing', function () {
+    $tenant = ($this->utente)('Tenant');
+    $this->ente->fissaVisibilitaGaranzieRicambio(VisibilitaGaranzieRicambio::Lettura);
+    $this->actingAs($tenant->fresh());
+
+    expect(Garanzia::pluck('id')->all())->toContain($this->garanziaRicambio->id)
+        ->and(Gate::allows('view', Garanzia::class))->toBeTrue()
+        ->and(Gate::allows('manage', Garanzia::class))->toBeFalse();
+});
+
+it('never lets the Ente setting touch who works for EasyLab', function () {
+    // L'impostazione è una clausola verso il cliente: Admin e Tecnico non ne
+    // sono toccati, o un Ente in sola lettura bloccherebbe chi il pezzo lo monta.
+    $this->ente->fissaVisibilitaGaranzieRicambio(VisibilitaGaranzieRicambio::Nascosta);
+
+    foreach (['Admin', 'Tecnico'] as $ruolo) {
+        $this->actingAs(($this->utente)($ruolo));
+
+        expect(Gate::allows('view', Garanzia::class))->toBeTrue("«{$ruolo}» non deve essere vincolato")
+            ->and(Gate::allows('manage', Garanzia::class))->toBeTrue("«{$ruolo}» non deve essere vincolato")
+            ->and(Garanzia::pluck('id')->all())->toContain($this->garanziaRicambio->id);
+    }
 });
 
 // Invertito l'8 Ago 2026 (ADR-027): diceva `hides ... from the Tecnico`. Il

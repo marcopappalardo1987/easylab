@@ -536,7 +536,7 @@ class ElencoStrumenti extends Component
             // La colonna "Prossima scadenza" è un DETTAGLIO: senza il permesso
             // l'etichetta non nomina la fonte (ADR-020 + wireframe §1). Il
             // pallino, che è l'aggregato, non cambia per nessuno.
-            'vedeGaranzieRicambio' => Gate::allows('garanzie.ricambio.view'),
+            'vedeGaranzieRicambio' => Gate::allows('view', Garanzia::class),
             'enti' => $enti,
             'nodi' => $nodi,
             'percorsi' => $this->percorsi($tuttiNodi),

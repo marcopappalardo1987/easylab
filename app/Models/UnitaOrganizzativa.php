@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\TipoUnitaOrganizzativa;
+use App\Enums\VisibilitaGaranzieRicambio;
 use App\Models\Concerns\BelongsToOrgNode;
 use App\Models\Concerns\BelongsToTenant;
 use Database\Factories\UnitaOrganizzativaFactory;
@@ -27,6 +28,18 @@ class UnitaOrganizzativa extends Model
 
     protected $table = 'unita_organizzativa';
 
+    /**
+     * Il default di `visibilita_garanzie_ricambio` (ADR-029) è dichiarato QUI
+     * oltre che in colonna, e non è una ripetizione oziosa: il default del DB
+     * si applica all'INSERT, quindi un'istanza appena creata lo porterebbe a
+     * `null` finché qualcuno non la rilegge — e la Policy, trovando null,
+     * ricadrebbe sul proprio fallback. Due strade per lo stesso valore sono
+     * accettabili solo perché il valore è uno e sta scritto nell'enum.
+     */
+    protected $attributes = [
+        'visibilita_garanzie_ricambio' => 'modifica',
+    ];
+
     protected $fillable = [
         'tenant_id',
         'reseller_id',
@@ -37,13 +50,39 @@ class UnitaOrganizzativa extends Model
         'soglia_obsolescenza_anni',
     ];
 
+    /**
+     * `visibilita_garanzie_ricambio` è deliberatamente ESCLUSA dal
+     * mass-assignment (ADR-029): è una clausola del rapporto commerciale che
+     * solo il Superadmin decide, e il form dell'anagrafica — dove l'Admin
+     * dell'Ente scrive nome, note e soglia — passa proprio di lì. Tenendola
+     * fuori, l'unica via è `fissaVisibilitaGaranzieRicambio()`, che è anche il
+     * punto in cui il controllo del ruolo è esercitato. Stesso principio delle
+     * colonne `forced_*` di Strumento e di `data_scadenza_effettiva` su Garanzia.
+     */
     protected function casts(): array
     {
         return [
             'tipo' => TipoUnitaOrganizzativa::class,
             // Solo sul nodo ente (ADR-014); sugli altri resta al default e non si legge.
             'soglia_obsolescenza_anni' => 'integer',
+            // Idem (ADR-029): ha senso solo sull'Ente.
+            'visibilita_garanzie_ricambio' => VisibilitaGaranzieRicambio::class,
         ];
+    }
+
+    /**
+     * Unica via per cambiare la visibilità delle garanzie ricambio (ADR-029).
+     *
+     * Il metodo esiste perché la colonna è fuori da `$fillable`: senza, il
+     * form dell'anagrafica potrebbe scriverla per mass-assignment insieme a
+     * nome e note, e il controllo «solo il Superadmin» vivrebbe unicamente
+     * nella vista — cioè nel posto più facile da aggirare.
+     */
+    public function fissaVisibilitaGaranzieRicambio(VisibilitaGaranzieRicambio $visibilita): bool
+    {
+        $this->visibilita_garanzie_ricambio = $visibilita;
+
+        return $this->save();
     }
 
     /**
