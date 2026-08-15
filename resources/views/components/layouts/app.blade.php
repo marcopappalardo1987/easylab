@@ -17,13 +17,25 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
 
         @livewireStyles
+
+        {{-- Stili per-pagina: serve alle regole di STAMPA, che sono specifiche
+             del foglio e non hanno senso nel bundle di tutta l'app (@page,
+             per esempio, è globale e non si può accendere per una sola vista
+             da Tailwind). Prima uso: l'etichetta QR. --}}
+        @stack('styles')
     </head>
-    <body class="h-full bg-neutral-50 font-sans text-neutral-800 antialiased">
+    {{-- In STAMPA restano solo i contenuti: sidebar, top bar e banner di
+         impersonation portano `print:hidden`. La regola sta nel layout e non
+         nelle singole pagine perché vale per tutte — l'etichetta QR (ADR-003) è
+         solo la prima, e i report PDF di S5/S7 avranno lo stesso bisogno.
+         Il fondo torna bianco: il grigio dell'app si stampa come una campitura
+         che consuma toner e non dice niente. --}}
+    <body class="h-full bg-neutral-50 font-sans text-neutral-800 antialiased print:bg-white">
         <div x-data="{ sidebarOpen: false }" class="min-h-full">
 
             {{-- Banner impersonation persistente (Design System §5.8) --}}
             @if (app('impersonate')->isImpersonating())
-                <div class="flex items-center justify-between gap-3 bg-warning-500 px-4 py-2 text-sm text-neutral-900">
+                <div class="flex items-center justify-between gap-3 bg-warning-500 px-4 py-2 text-sm text-neutral-900 print:hidden">
                     <span>Stai impersonando <strong>{{ $user->name }}</strong></span>
                     <a href="{{ route('impersonate.leave') }}"
                        class="rounded-md bg-neutral-900/10 px-3 py-1 font-medium hover:bg-neutral-900/20">
@@ -39,7 +51,7 @@
                      class="fixed inset-0 z-30 bg-neutral-900/40 md:hidden"></div>
 
                 {{-- Sidebar (fissa su desktop, drawer su mobile) --}}
-                <aside class="fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col border-r border-neutral-200 bg-white transition-transform duration-200 md:static md:min-h-screen md:translate-x-0"
+                <aside class="fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col border-r border-neutral-200 bg-white transition-transform duration-200 md:static md:min-h-screen md:translate-x-0 print:hidden"
                        :class="sidebarOpen && 'translate-x-0'">
                     <div class="flex h-14 items-center gap-2 border-b border-neutral-200 px-4">
                         <span class="flex h-8 w-8 items-center justify-center rounded-md bg-primary-50 text-primary-600">
@@ -82,7 +94,7 @@
                 <div class="flex min-h-screen flex-1 flex-col">
 
                     {{-- Top bar (Design System §5.7) --}}
-                    <header class="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-neutral-200 bg-white px-4 shadow-sm">
+                    <header class="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-neutral-200 bg-white px-4 shadow-sm print:hidden">
                         <div class="flex items-center gap-2">
                             <button type="button" @click="sidebarOpen = true"
                                     class="-ml-1 flex h-10 w-10 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-100 md:hidden"

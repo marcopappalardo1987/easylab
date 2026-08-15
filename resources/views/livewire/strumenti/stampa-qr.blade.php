@@ -1,4 +1,19 @@
-<div class="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
+{{-- @page: margini della CARTA, non del documento — è l'unico modo di togliere
+     lo spazio che il browser riserva di suo. Intestazione e piè di pagina del
+     browser (data, titolo, URL) NON sono controllabili da CSS: restano una
+     casella nel dialogo di stampa, e vanno tolte da lì. --}}
+@push('styles')
+    <style>
+        @page { margin: 8mm; }
+        @media print {
+            /* L'etichetta parte in cima al foglio: in stampa non c'è nulla
+               sopra di lei da cui distanziarsi. */
+            .foglio-etichetta { padding: 0 !important; max-width: none !important; }
+        }
+    </style>
+@endpush
+
+<div class="foglio-etichetta mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
 
     {{-- Intestazione e azioni: tutto ciò che NON va sull'adesivo. `print:hidden`
          è la ragione per cui non serve un layout di stampa separato. --}}
@@ -25,7 +40,7 @@
 
     {{-- L'etichetta. Il bordo tratteggiato è la linea di taglio: si vede a
          schermo e in stampa, perché serve a chi ritaglia. --}}
-    <div class="mt-6 flex justify-center">
+    <div class="mt-6 flex justify-center print:mt-0 print:justify-start">
         <div class="w-[85mm] rounded-lg border-2 border-dashed border-neutral-300 bg-white p-6 text-center">
             <div class="mx-auto w-[55mm]">{!! $svg !!}</div>
 

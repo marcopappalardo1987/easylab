@@ -168,6 +168,27 @@ it('invalidates the old label only on an explicit regeneration, and records it',
     $this->actingAs($this->admin)->get($vecchioUrl)->assertNotFound();
 });
 
+it('leaves only the label on the printed sheet', function () {
+    // Marco ha stampato il primo foglio e ci ha trovato sopra la top bar: il
+    // `print:hidden` c'era sui blocchi di QUESTA vista, ma sidebar e header
+    // vivono nel layout e nessuno li nascondeva. La regola sta ora nel layout,
+    // perché varrà per ogni pagina stampabile — i report PDF di S5/S7 compresi.
+    //
+    // ⚠️ **Copertura dichiarata, non piena**: questo caso verifica che le classi
+    // ci siano, non che il browser le applichi — un test HTTP non ha un motore
+    // di stampa. La resa vera è stata verificata emulando il media `print` in
+    // Chrome: sidebar, top bar, titolo e bottoni spariti, resta la sola
+    // etichetta con la linea di taglio.
+    $html = $this->actingAs($this->admin)->get(route('strumenti.qr', $this->strumento))
+        ->assertOk()->getContent();
+
+    expect($html)->toContain('<aside class="fixed inset-y-0 left-0 z-40 flex w-64')
+        ->and($html)->toMatch('/<aside[^>]*print:hidden/')
+        ->and($html)->toMatch('/<header[^>]*print:hidden/')
+        // Il foglio non deve portarsi dietro nemmeno le proprie azioni.
+        ->and($html)->toMatch('/print:hidden[^>]*>\s*<a href="[^"]*strumenti/');
+});
+
 it('refuses the print page to whoever cannot generate QR codes', function () {
     $tenant = ($this->utente)('Tenant'); // può scansionare, non stampare
 
