@@ -515,7 +515,7 @@ Si ottengono insieme la velocità "al volo" e la ricerca incrociata affidabile (
 
 **ADR-023 — Fornitore: uno per macchinario, non molti**
 
-*Stato: Accettata (3 Ago 2026) — **corregge l'ERD §7.3**, che modellava la relazione come pivot molti-a-molti.*
+*Stato: Accettata (3 Ago 2026) — **corregge l'ERD §7.3**, che modellava la relazione come pivot molti-a-molti. **Attuata il 15 Ago 2026** (S4). Attuandola sono emerse due cose: il CRUD dell'anagrafica **non era un extra ma la precondizione** — senza una schermata da cui popolarla, il campo obbligatorio avrebbe reso `strumenti.create` inutilizzabile per tutti — e `fornitori.view` al Tenant, che questo ADR e lo Schema Ruoli davano per approvato dal 3 Ago, **non era mai entrato in `config/rbac.php`**: il documento affermava un default che il bootstrap non produceva.*
 
 **Contesto.** L'ERD prevedeva `fornitore_strumento`, un pivot N-N scelto in S0 in assenza di indicazioni. Il briefing precisa: **ogni macchinario è associato a un fornitore**, quello da cui è stato acquistato — coerente con l'Elenco Funzionalità §2, che già diceva "l'anagrafica dei fornitori **da cui vengono acquistati**". L'anagrafica è popolata da ciascun Ente e scopata per tenant come ogni altra tabella di business: ognuno vede i propri fornitori.
 

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Concerns\AuditsDomainWrites;
+use App\Models\Fornitore;
 use App\Models\Garanzia;
 use App\Models\Intervento;
 use App\Models\Ricambio;
@@ -31,6 +32,11 @@ const ESENZIONI = [
 
 /** Il sostantivo atteso nella descrizione, per ogni modello che usa il trait. */
 const SOSTANTIVI = [
+    // Aggiunto il 15 Ago 2026 col blocco Fornitore, e non a mano: è stato il
+    // meta-test a fermare la suite appena il model è nato. È il lavoro per cui
+    // esiste — la scelta «trait o esenzione» si presenta invece di poter essere
+    // dimenticata.
+    Fornitore::class => 'Creazione fornitore',
     Garanzia::class => 'Creazione garanzia',
     Ricambio::class => 'Creazione ricambio',
     RicambioUtilizzo::class => 'Creazione ricambio montato',

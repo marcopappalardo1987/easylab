@@ -396,7 +396,21 @@ gantt
 - [ ] `[CORE]` **Ricerca incrociata** ricambio → tutte le macchine/laboratori dove è montato. 🔗 ADR-008
 - [ ] `[CORE]` **Completamento del tab Panoramica** con le fonti che nascono in questo sprint: motivi da **garanzia ricambio** (in forma neutra e non cliccabile senza `garanzie.ricambio.view`), conteggi **ricambi montati** e **documenti**, **fornitore** nel blocco di sintesi. 🔗 ADR-023/024
   - 🧪 Test negativo: *un Tenant legge nella Panoramica il motivo "Garanzia di un componente…" senza nome del pezzo e senza link.*
-- [ ] `[CORE]` Modello **Fornitore** (anagrafica per Ente, `tenant_id` + `BelongsToTenant` + soft delete) e **associazione 1-N**: `strumenti.fornitore_id`, **non** il pivot `fornitore_strumento` previsto dalla prima stesura dell'ERD. 🔗 Elenco §2, ADR-023
+- [x] `[CORE]` Modello **Fornitore** (anagrafica per Ente, `tenant_id` + `BelongsToTenant` + soft delete) e **associazione 1-N**: `strumenti.fornitore_id`, **non** il pivot `fornitore_strumento` previsto dalla prima stesura dell'ERD. 🔗 Elenco §2, ADR-023
+
+  *↪️ **Chiuso il 15 Ago 2026, e il CRUD dell'anagrafica non era un extra ma la precondizione**: il fornitore è obbligatorio nel form dello strumento, e senza una schermata da cui popolare l'elenco `strumenti.create` sarebbe stato inutilizzabile per chiunque — un campo obbligatorio che nessuno può compilare. I permessi `fornitori.*` esistevano a catalogo da S1 senza aver mai avuto un consumatore.*
+
+  *🐛 **Un default dichiarato da due documenti e mai entrato nel codice**: `fornitori.view` al Tenant risultava «approvato il 3 Ago» in ADR-023 e nella nota ⁵ dello Schema Ruoli, ma `config/rbac.php` non lo conteneva — il test era già caduto una volta in S3-bis ed era stato rimandato qui. È la stessa forma dell'errore dei permessi `letture_contaore.*`, rovesciata: lì il DB aveva più della config, qui la config aveva meno del documento. Applicato con riseeding, previo confronto ruolo per ruolo.*
+
+  *🔑 **`withTrashed()` sulla relazione, ed è il punto che sbaglia chi va di fretta**: `fornitori` ha il soft delete, e un `belongsTo` verso una riga cestinata torna **null** — la scheda mostrerebbe una cella vuota, che si legge «fornitore mai inserito» invece che «fornitore cestinato». Il badge che distingue le due cose ha bisogno del nome per essere scritto. La mutazione che toglie `withTrashed` fa cadere il test.*
+
+  *🛡️ **Tre difese, ognuna con la sua mutazione**: la whitelist del select e la validazione al save sono **una sola definizione** (`fornitoriSelezionabili()`, sul precedente di `assegnabili()`), o un id forgiato dal browser passerebbe il secondo pur non comparendo nel primo; la guardia d'invariante sta su `creating`/`updating` e **mai su `saving`** — trappola n.9, `BelongsToTenant` riscrive `tenant_id` in `creating`; e la guardia di cancellazione sta nel **model** e non nel componente, così vale per CRUD, import e console.*
+
+  *📌 **Obbligatorio nel form, nullable in schema** (ADR-023), e la regola è **condizionata al permesso**: un ruolo che il campo non lo vede non può essere bloccato da un campo che non ha. Il `DemoSeeder` lascia di proposito ~12% di macchine senza fornitore: è la situazione reale del DB dopo la migration, ed è l'unico modo di vedere a occhio come si comportano scheda ed elenco su una riga storica.*
+
+  *🕸️ **Il meta-test di copertura audit ha fatto il proprio lavoro**: la suite si è fermata appena `Fornitore` è nato, obbligando a scegliere fra trait ed esenzione invece di lasciar dimenticare. È esattamente ciò per cui era stato scritto quattro blocchi fa.*
+
+  *Suite **548 verdi su entrambi i driver**, Pint e build ok, due migration applicate al DB di sviluppo e RBAC riseminato. **6 mutazioni verificate**. **Sei test esistenti aggiornati consapevolmente** — creare una macchina dal form ora richiede un fornitore, ed è un fatto nuovo, non un dettaglio. ⚠️ Un mio replace non aveva sostituito nulla e i test «passavano» per il motivo sbagliato: la verifica del conteggio delle occorrenze, che CLAUDE.md impone per le mutazioni, serve anche quando si aggiornano le fixture.*
   - Campo **obbligatorio nel form**, nullable nello schema (righe storiche e import); select + validazione al save con **una sola definizione** della whitelist, come per l'assegnatario degli interventi.
   - Cancellazione protetta (fornitore con strumenti non eliminabile); fornitore soft-deleted mostrato con badge, mai una cella vuota.
   - 🧪 Test di isolamento: un Ente non può associare uno strumento al fornitore di un altro Ente.

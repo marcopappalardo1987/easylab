@@ -130,7 +130,10 @@ class SchedaStrumento extends Component
     public function save(): void
     {
         $this->authorize('strumenti.update');
-        $this->validate($this->strumentoFormRules());
+        $this->validate($this->strumentoFormRules(
+            $this->strumento->tenant_id,
+            $this->strumento->fornitore_id, // riammette un fornitore cestinato già associato
+        ));
 
         $this->strumento->update($this->strumentoPayload());
 
@@ -889,6 +892,11 @@ class SchedaStrumento extends Component
             'interventi' => $interventi,
             // Solo a modale aperta e con permesso: a modale chiusa zero query
             // extra su users (il test N+1 del punto 2 lo congela).
+            // Solo a modale aperta: a modale chiusa zero query in più (il test
+            // N+1 sulla scheda lo congela).
+            'fornitori' => $this->showForm && Gate::allows('fornitori.view')
+                ? $this->fornitoriSelezionabili($this->strumento->tenant_id, $this->strumento->fornitore_id)->get()
+                : collect(),
             'assegnatari' => $this->showInterventoForm && Gate::allows('interventi.assign')
                 ? $this->assegnabili()->orderBy('name')->get()
                 : collect(),

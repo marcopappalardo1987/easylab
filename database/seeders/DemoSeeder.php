@@ -8,6 +8,7 @@ use App\Enums\StatoSemaforo;
 use App\Enums\TipoIntervento;
 use App\Enums\TipoSpostamento;
 use App\Enums\TipoUnitaOrganizzativa;
+use App\Models\Fornitore;
 use App\Models\Garanzia;
 use App\Models\Intervento;
 use App\Models\Ricambio;
@@ -102,6 +103,17 @@ class DemoSeeder extends Seeder
         'Kit di manutenzione annuale', 'Rotore di ricambio', 'Pompa peristaltica',
     ];
 
+    /**
+     * Fornitori: elenco CHIUSO come i modelli strumento e il catalogo ricambi.
+     * Un'anagrafica di nomi quasi tutti diversi non farebbe aggregare nulla —
+     * ed è l'errore già commesso una volta coi modelli.
+     */
+    private const FORNITORI = [
+        'Thermo Fisher Scientific Italia', 'Sartorius Italy', 'Eppendorf Italia',
+        'Bio-Rad Laboratories', 'Agilent Technologies Italia', 'Merck Life Science',
+        'VWR International', 'Carlo Erba Reagents', 'Hettich Italia', 'Binder Italia',
+    ];
+
     private const NOMI = ['Luca', 'Giulia', 'Marco', 'Francesca', 'Alessandro', 'Chiara', 'Davide', 'Sara', 'Matteo', 'Elena', 'Andrea', 'Valentina', 'Simone', 'Martina', 'Federico', 'Ilaria'];
 
     private const COGNOMI = ['Bianchi', 'Rossi', 'Ferrari', 'Esposito', 'Russo', 'Colombo', 'Ricci', 'Marino', 'Greco', 'Bruno', 'Gallo', 'Conti', 'De Luca', 'Mancini', 'Costa', 'Giordano'];
@@ -185,7 +197,8 @@ class DemoSeeder extends Seeder
         $utenti = $this->creaUtenti($ente);
         $tecnici = $utenti['tecnici'];
 
-        $strumentiIds = $this->creaStrumenti($ente, $nodi);
+        $fornitori = $this->creaFornitori($ente);
+        $strumentiIds = $this->creaStrumenti($ente, $nodi, $fornitori);
         $this->creaInterventi($ente, $strumentiIds, $tecnici);
         $this->creaSpostamenti($ente, $strumentiIds, $nodi, $utenti['admin']);
         $this->creaGaranzie($ente, $strumentiIds);
@@ -253,8 +266,32 @@ class DemoSeeder extends Seeder
         return $utente;
     }
 
+    /**
+     * Anagrafica fornitori dell'Ente (ADR-023).
+     *
+     * `firstOrCreate` sulla ragione sociale: il seeder è additivo e rilanciarlo
+     * non deve moltiplicare le anagrafiche — stessa disciplina di
+     * `Ricambio::collegaOCrea()`, che qui non si può usare perché è del
+     * catalogo ricambi.
+     *
+     * @return list<int>
+     */
+    private function creaFornitori(UnitaOrganizzativa $ente): array
+    {
+        $ids = collect(self::FORNITORI)
+            ->map(fn (string $nome) => (int) Fornitore::withoutGlobalScopes()->firstOrCreate(
+                ['tenant_id' => $ente->id, 'ragione_sociale' => $nome],
+                ['email' => str($nome)->slug().'@fornitore.test', 'telefono' => '0'.random_int(10, 99).' '.random_int(1000000, 9999999)],
+            )->id)
+            ->all();
+
+        $this->command?->info('  fornitori: '.count($ids));
+
+        return $ids;
+    }
+
     /** @return list<int> */
-    private function creaStrumenti(UnitaOrganizzativa $ente, array $nodi): array
+    private function creaStrumenti(UnitaOrganizzativa $ente, array $nodi, array $fornitori = []): array
     {
         $nomi = array_keys(self::CATALOGO);
         $righe = [];
@@ -281,6 +318,14 @@ class DemoSeeder extends Seeder
                         'Temperatura di esercizio' => random_int(-80, 250).' °C',
                     ], JSON_UNESCAPED_UNICODE),
                     'data_installazione' => today()->subDays(random_int(30, 5200))->toDateString(),
+                    // ⚠️ Una quota SENZA fornitore (~12%), di proposito: è la
+                    // situazione reale del DB dopo la migration, ed è l'unico
+                    // modo di vedere a occhio come si comportano scheda,
+                    // Panoramica ed elenco su una riga storica. Stessa ragione
+                    // per cui le garanzie ricambio nascono in forma "a data".
+                    'fornitore_id' => ($fornitori !== [] && random_int(1, 100) > 12)
+                        ? $fornitori[array_rand($fornitori)]
+                        : null,
                     'created_at' => $adesso,
                     'updated_at' => $adesso,
                 ];
@@ -732,6 +777,8 @@ class DemoSeeder extends Seeder
                 ['garanzie', Garanzia::withoutGlobalScopes()->count()],
                 ['ricambi', Ricambio::withoutGlobalScopes()->count()],
                 ['ricambio_utilizzo', RicambioUtilizzo::withoutGlobalScopes()->count()],
+                ['fornitori', Fornitore::withoutGlobalScopes()->count()],
+                ['strumenti senza fornitore', Strumento::withoutGlobalScopes()->whereNull('fornitore_id')->count()],
                 ['users', User::count()],
             ]
         );

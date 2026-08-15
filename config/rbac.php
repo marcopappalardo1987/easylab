@@ -115,6 +115,14 @@ return [
             'garanzie.ricambio.view', 'garanzie.ricambio.manage',
             'ricambi.view',
             'ricambio_utilizzo.view',
+            // `fornitori.view` in sola lettura: ADR-023 e Schema Ruoli nota ⁵
+            // lo davano per approvato il 3 Ago 2026, ma il bootstrap non lo
+            // produceva — il documento affermava un default che la config non
+            // creava, e il riseeding non l'avrebbe aggiunto da solo. Applicato
+            // il 15 Ago 2026 col blocco Fornitore. Il fornitore è un campo
+            // della scheda della SUA macchina, non un dato commerciale di
+            // EasyLab.
+            'fornitori.view',
             'documenti.view', 'documenti.upload', 'documenti.download', 'documenti.export_pdf',
             // `qr.scan` al Tenant dal 15 Ago 2026: Elenco Funzionalità §4 dice
             // «il tecnico **o il cliente** inquadra il QR», la matrice diceva

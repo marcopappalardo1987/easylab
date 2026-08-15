@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
@@ -53,6 +54,7 @@ class Strumento extends Model
         'matricola',
         'parametri_tecnici',
         'data_installazione',
+        'fornitore_id',
     ];
 
     protected function casts(): array
@@ -80,7 +82,41 @@ class Strumento extends Model
     {
         static::creating(function (Strumento $strumento): void {
             $strumento->qr_token ??= self::nuovoQrToken();
+            $strumento->verificaFornitore();
         });
+
+        static::updating(fn (Strumento $strumento) => $strumento->verificaFornitore());
+    }
+
+    /**
+     * Il fornitore deve essere dello stesso Ente della macchina (ADR-023).
+     *
+     * ⚠️ Su `creating`/`updating` e **mai su `saving`**: `saving` gira PRIMA di
+     * `creating`, ed è in `creating` che `BelongsToTenant` riscrive `tenant_id`.
+     * Una guardia in `saving` confronterebbe un valore che il trait sta per
+     * sostituire, e un payload forgiato coerentemente attorno a un altro Ente
+     * passerebbe indenne — è la trappola già pagata su `RicambioUtilizzo`.
+     *
+     * Query builder e non Eloquent: i global scope nasconderebbero proprio la
+     * riga che serve controllare, e un riferimento cross-tenant si
+     * presenterebbe come un "non trovato" dal messaggio fuorviante.
+     * `withTrashed` implicito (il builder non conosce i soft delete): riassegnare
+     * un fornitore cestinato è impedito dalla whitelist del form, qui interessa
+     * il solo confine di Ente.
+     */
+    protected function verificaFornitore(): void
+    {
+        if ($this->fornitore_id === null || ! $this->isDirty(['fornitore_id', 'tenant_id'])) {
+            return;
+        }
+
+        $tenantFornitore = DB::table('fornitori')->where('id', $this->fornitore_id)->value('tenant_id');
+
+        if ($tenantFornitore === null || (int) $tenantFornitore !== (int) $this->tenant_id) {
+            throw new InvalidArgumentException(
+                'Strumento: il fornitore deve appartenere allo stesso Ente della macchina (ADR-023).'
+            );
+        }
     }
 
     /** 32 caratteri casuali: un segreto, non un id offuscato (vedi migration). */
@@ -113,6 +149,20 @@ class Strumento extends Model
             ->log('QR rigenerato: le etichette stampate in precedenza non sono più valide');
 
         return $salvato;
+    }
+
+    /**
+     * Fornitore da cui la macchina è stata acquistata (ADR-023).
+     *
+     * ⚠️ **`withTrashed()`, e non è un dettaglio**: `fornitori` ha il soft
+     * delete, e un `belongsTo` verso un model cestinato restituisce **null** —
+     * la scheda mostrerebbe una cella vuota, che si legge come «fornitore mai
+     * inserito» invece che «fornitore cestinato». Il badge che distingue le due
+     * cose ha bisogno del nome per poter essere scritto.
+     */
+    public function fornitore(): BelongsTo
+    {
+        return $this->belongsTo(Fornitore::class, 'fornitore_id')->withTrashed();
     }
 
     /**

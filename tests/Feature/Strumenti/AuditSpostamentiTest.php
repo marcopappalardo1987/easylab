@@ -2,6 +2,7 @@
 
 use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Strumenti\SchedaStrumento;
+use App\Models\Fornitore;
 use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
@@ -33,6 +34,10 @@ beforeEach(function () {
     $this->dept1 = UnitaOrganizzativa::factory()->dipartimento()->under($this->ente)->create(['nome' => 'Dip 1']);
     $this->dept2 = UnitaOrganizzativa::factory()->dipartimento()->under($this->ente)->create(['nome' => 'Dip 2']);
     $this->strumento = Strumento::factory()->forNode($this->dept1)->create();
+
+    // Il fornitore è obbligatorio nel form dal 15 Ago 2026 (ADR-023): i casi
+    // che creano una macchina dall'anagrafica devono sceglierne uno.
+    $this->fornitore = Fornitore::factory()->forTenant($this->ente)->create();
 
     $this->utente = function (string $ruolo, ?UnitaOrganizzativa $ente = null): User {
         $u = User::factory()->create([
@@ -71,6 +76,7 @@ it('records the ingresso written when a strumento is created with a provenance',
     Livewire::actingAs($this->admin)->test(Albero::class)
         ->call('open', $this->dept1->id)
         ->call('addStrumento')
+        ->set('strumentoForm.fornitore_id', $this->fornitore->id)
         ->set('strumentoForm.nome', 'Autoclave di seconda mano')
         ->set('provenienza', 'Laboratorio Rossi')
         ->call('saveStrumento')
@@ -86,6 +92,7 @@ it('leaves no trace when a strumento is created without provenance', function ()
     Livewire::actingAs($this->admin)->test(Albero::class)
         ->call('open', $this->dept1->id)
         ->call('addStrumento')
+        ->set('strumentoForm.fornitore_id', $this->fornitore->id)
         ->set('strumentoForm.nome', 'Autoclave nuova')
         ->call('saveStrumento')
         ->assertHasNoErrors();

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccessoQr;
 use App\Livewire\Anagrafica\Albero;
+use App\Livewire\Fornitori\ElencoFornitori;
 use App\Livewire\Settings\TwoFactorAuthentication;
 use App\Livewire\Strumenti\ElencoStrumenti;
 use App\Livewire\Strumenti\ImportStrumenti;
@@ -40,6 +41,9 @@ Route::middleware(['auth', 'two-factor.enforce'])->group(function () {
     Route::get('/strumenti/{strumento}/qr', StampaQr::class)
         ->middleware('can:strumenti.qr_generate')
         ->name('strumenti.qr');
+    Route::get('/fornitori', ElencoFornitori::class)
+        ->middleware('can:fornitori.view')
+        ->name('fornitori.index');
     Route::get('/settings/security', TwoFactorAuthentication::class)->name('settings.security');
 });
 

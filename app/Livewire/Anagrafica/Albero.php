@@ -320,7 +320,7 @@ class Albero extends Component
         abort_if($node->tipo === TipoUnitaOrganizzativa::Ente, 422);
 
         $this->validate([
-            ...$this->strumentoFormRules(),
+            ...$this->strumentoFormRules($node->tenant_id),
             'provenienza' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -402,6 +402,11 @@ class Albero extends Component
             'strumenti' => $strumenti,
             'childCounts' => $childCounts,
             'strumentiCounts' => $strumentiCounts,
+            // Solo a modale aperta e con permesso: a modale chiusa zero query
+            // in più, disciplina già seguita in SchedaStrumento::render().
+            'fornitori' => $this->showStrumentoForm && $current && Gate::allows('fornitori.view')
+                ? $this->fornitoriSelezionabili($current->tenant_id)->get()
+                : collect(),
         ]);
     }
 }
