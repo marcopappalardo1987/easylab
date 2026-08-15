@@ -1,4 +1,5 @@
 @php
+    use App\Enums\TipoIntervento;
     $parametri = $strumento->parametri_tecnici ?? [];
 @endphp
 
@@ -366,6 +367,35 @@
                     «{{ $interventi->firstWhere('id', $completingInterventoId)?->descrizione }}»
                 </p>
                 <x-ui.input name="dataEsecuzione" label="Data esecuzione" type="date" wire:model="dataEsecuzione" />
+
+                {{-- Chiudendo una taratura si propone la successiva (ADR-009).
+                     Senza, il semaforo tornerebbe verde e la prossima
+                     scadenza non esisterebbe da nessuna parte: la validità del
+                     certificato non è registrata, e su un parco di migliaia di
+                     macchine «me ne ricordo io» non è un piano. --}}
+                @if ($interventi->firstWhere('id', $completingInterventoId)?->tipo === TipoIntervento::TaraturaECertificazione)
+                    <div class="rounded-md border border-neutral-200 bg-neutral-50 p-4">
+                        <label class="flex items-center gap-2 text-sm font-medium text-neutral-800">
+                            <input type="checkbox" wire:model.live="pianificaProssimaTaratura"
+                                class="rounded border-neutral-300 text-primary-600 focus:ring-primary-600">
+                            Pianifica la prossima taratura
+                        </label>
+
+                        @if ($pianificaProssimaTaratura)
+                            <div class="mt-3">
+                                <x-ui.input name="mesiProssimaTaratura" label="Fra quanti mesi" type="number"
+                                    min="1" max="120" wire:model="mesiProssimaTaratura" placeholder="es. 12" />
+                                <p class="mt-1 text-xs text-neutral-400">
+                                    {{-- Nessun default nascosto: la periodicità dipende dal contratto e
+                                         dallo strumento, e nessun documento del progetto la fissa. --}}
+                                    Verrà creata una nuova «Taratura e certificazione» con la stessa
+                                    descrizione e lo stesso tecnico, alla scadenza calcolata da questa data.
+                                </p>
+                            </div>
+                        @endif
+                    </div>
+                @endif
+
                 <div class="flex justify-end gap-3">
                     <x-ui.button variant="secondary" wire:click="closeCompleta">Annulla</x-ui.button>
                     <x-ui.button type="submit" wire:loading.attr="disabled">Conferma</x-ui.button>

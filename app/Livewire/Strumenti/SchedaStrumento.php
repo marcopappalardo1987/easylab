@@ -95,6 +95,12 @@ class SchedaStrumento extends Component
 
     public string $dataEsecuzione = '';
 
+    /** Chiudendo una taratura si propone di pianificare la successiva (ADR-009). */
+    public bool $pianificaProssimaTaratura = false;
+
+    /** Periodicità in mesi: la chiede la modale, non è un default nascosto. */
+    public ?int $mesiProssimaTaratura = null;
+
     public ?int $deletingInterventoId = null; // modale conferma aperta se non null
 
     // Modale garanzie (S3 punto 7)
@@ -503,10 +509,17 @@ class SchedaStrumento extends Component
     public function openCompleta(int $id): void
     {
         $this->authorize('interventi.complete');
-        $this->strumento->interventi()->findOrFail($id);
+
+        // Risolto una volta: serve sia come guardia (404 fuori scope) sia per
+        // sapere se è una taratura.
+        $intervento = $this->strumento->interventi()->findOrFail($id);
 
         $this->completingInterventoId = $id;
         $this->dataEsecuzione = today()->toDateString();
+        // Preselezionata sulle tarature: è il caso in cui la prossima serve
+        // quasi sempre. Resta una spunta, non un automatismo.
+        $this->pianificaProssimaTaratura = $intervento->tipo === TipoIntervento::TaraturaECertificazione;
+        $this->mesiProssimaTaratura = null;
         $this->resetValidation();
         $this->showCompletaForm = true;
     }
@@ -514,18 +527,37 @@ class SchedaStrumento extends Component
     public function completa(): void
     {
         $this->authorize('interventi.complete');
-        $this->validate(['dataEsecuzione' => ['required', 'date', 'before_or_equal:today']]);
+
+        $intervento = $this->strumento->interventi()->findOrFail($this->completingInterventoId);
+        $eraTaratura = $intervento->tipo === TipoIntervento::TaraturaECertificazione;
+
+        $this->validate([
+            'dataEsecuzione' => ['required', 'date', 'before_or_equal:today'],
+            // La periodicità si chiede solo dove ha senso, e solo se l'utente
+            // ha scelto di pianificare: una regola incondizionata bloccherebbe
+            // la chiusura di un intervento qualunque su un campo che non c'è.
+            'mesiProssimaTaratura' => $eraTaratura && $this->pianificaProssimaTaratura
+                ? ['required', 'integer', 'between:1,120']
+                : ['nullable'],
+        ]);
 
         // Sempre il metodo di dominio, mai update by-query (invariante nel model).
-        $this->strumento->interventi()->findOrFail($this->completingInterventoId)
-            ->segnaFatto(Carbon::parse($this->dataEsecuzione));
+        $intervento->segnaFatto(Carbon::parse($this->dataEsecuzione));
+
+        // La successiva nasce DOPO la chiusura e fuori dalla sua transazione:
+        // se fallisse, il lavoro fatto resterebbe registrato — chiudere una
+        // taratura e pianificarne un'altra sono due gesti, e il primo non deve
+        // dipendere dal secondo.
+        if ($eraTaratura && $this->pianificaProssimaTaratura) {
+            $intervento->pianificaTaraturaSuccessiva((int) $this->mesiProssimaTaratura);
+        }
 
         $this->closeCompleta();
     }
 
     public function closeCompleta(): void
     {
-        $this->reset(['completingInterventoId', 'dataEsecuzione']);
+        $this->reset(['completingInterventoId', 'dataEsecuzione', 'pianificaProssimaTaratura', 'mesiProssimaTaratura']);
         $this->showCompletaForm = false;
     }
 

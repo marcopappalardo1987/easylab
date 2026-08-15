@@ -236,6 +236,16 @@ Si ottengono insieme la velocità "al volo" e la ricerca incrociata affidabile (
 - I documenti senza scadenza (manuali, conformità) restano semplice archivio allegato (allo strumento o all'attività).
 - Un documento può quindi essere allegato: (a) allo *Strumento* (manuale, scheda); (b) a un'*Attività/Intervento* (certificato di taratura, report di fine lavoro — ADR già implicito).
 
+**Aggiornamento (15 Ago 2026) — il rinnovo della taratura, deciso in implementazione.**
+
+Attuando la voce è emerso il buco che ADR-009 non copriva: chiusa una taratura, il suo motivo esce dalla diagnosi e lo strumento torna verde — ma la validità del certificato (12, 24 mesi) **non è registrata da nessuna parte** e nulla crea la taratura successiva. «La taratura alimenta il semaforo» era quindi vero per quella *da fare* e falso per quella *fatta*, cioè per l'unica che ha un certificato.
+
+**Decisione**: chiudendo una taratura, l'applicazione **propone** di pianificare la successiva, e chiede **la periodicità in mesi**. La spunta è preselezionata sulle sole tarature e resta una scelta, non un automatismo.
+
+- **Non è una quarta fonte di scadenze**, ed è la ragione per cui si è scelta questa forma: produce un **intervento ordinario**, che il semaforo sa già contare da S3. Far pilotare il semaforo dalla scadenza del certificato sarebbe costato **nove punti d'ingresso**, due dentro l'espressione SQL più fragile del progetto (il min NULL-safe dell'ordinamento).
+- **La periodicità è un input e non un default nascosto**: nessun documento del progetto la quantifica, e inventare «12 mesi» in codice avrebbe prodotto scadenze plausibili e non volute su un parco di migliaia di macchine. La chiede la modale, ogni volta, a chi sta chiudendo il lavoro.
+- La successiva nasce **fuori dalla transazione** della chiusura: chiudere una taratura e pianificarne un'altra sono due gesti, e il primo non deve dipendere dal secondo.
+
 ---
 
 **ADR-010 — Fatturazione elettronica SDI: rimandata a versione futura**

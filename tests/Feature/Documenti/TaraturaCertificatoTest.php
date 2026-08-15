@@ -236,3 +236,95 @@ it('refuses a strumento_id that is not the subject machine', function () {
         'path' => 'x.pdf',
     ]))->toThrow(InvalidArgumentException::class);
 });
+
+// --- Il rinnovo: chiudere una taratura pianifica la successiva ---
+
+it('plans the next taratura when closing one, with the periodicity asked and not guessed', function () {
+    $taratura = Intervento::factory()->forStrumento($this->strumento)->create([
+        'tipo' => TipoIntervento::TaraturaECertificazione,
+        'descrizione' => 'Taratura annuale con certificato ACCREDIA',
+        'data_scadenza' => today()->toDateString(),
+    ]);
+
+    ($this->scheda)()
+        ->call('openCompleta', $taratura->id)
+        // Preselezionata sulle tarature: è il caso in cui la prossima serve
+        // quasi sempre. Resta una spunta e non un automatismo.
+        ->assertSet('pianificaProssimaTaratura', true)
+        ->set('dataEsecuzione', today()->toDateString())
+        // ⚠️ 24 e non 12: con 12 il caso non distinguerebbe la periodicità
+        // scelta da un default fisso in codice — la prova di mutazione l'ha
+        // mostrato, e un test che usa il valore più probabile è un test cieco.
+        ->set('mesiProssimaTaratura', 24)
+        ->call('completa')
+        ->assertHasNoErrors();
+
+    $successiva = Intervento::where('strumento_id', $this->strumento->id)
+        ->where('id', '!=', $taratura->id)->first();
+
+    expect($successiva)->not->toBeNull()
+        ->and($successiva->tipo)->toBe(TipoIntervento::TaraturaECertificazione)
+        ->and($successiva->data_scadenza->toDateString())->toBe(today()->addMonths(24)->toDateString())
+        ->and($successiva->descrizione)->toBe('Taratura annuale con certificato ACCREDIA')
+        ->and($successiva->tecnico_id)->toBe($taratura->tecnico_id);
+
+    // E il semaforo torna ad avere qualcosa da dire: è il limite che questo
+    // passo chiude — prima, chiusa la taratura, lo strumento restava verde e la
+    // prossima scadenza non esisteva da nessuna parte.
+    $this->actingAs($this->admin);
+    expect($this->strumento->fresh()->prossimoInterventoAperto()->id)->toBe($successiva->id);
+});
+
+it('asks for the periodicity instead of inventing one', function () {
+    $taratura = Intervento::factory()->forStrumento($this->strumento)->create([
+        'tipo' => TipoIntervento::TaraturaECertificazione,
+        'data_scadenza' => today()->toDateString(),
+    ]);
+
+    // Nessun documento del progetto quantifica la periodicità: un default in
+    // codice avrebbe prodotto scadenze plausibili e non volute su migliaia di
+    // macchine.
+    ($this->scheda)()
+        ->call('openCompleta', $taratura->id)
+        ->set('dataEsecuzione', today()->toDateString())
+        ->call('completa')
+        ->assertHasErrors('mesiProssimaTaratura');
+
+    expect(Intervento::count())->toBe(1)
+        ->and($taratura->fresh()->stato->value)->toBe('non_fatto');
+});
+
+it('lets a taratura be closed without planning the next one', function () {
+    $taratura = Intervento::factory()->forStrumento($this->strumento)->create([
+        'tipo' => TipoIntervento::TaraturaECertificazione,
+        'data_scadenza' => today()->toDateString(),
+    ]);
+
+    ($this->scheda)()
+        ->call('openCompleta', $taratura->id)
+        ->set('pianificaProssimaTaratura', false)
+        ->set('dataEsecuzione', today()->toDateString())
+        ->call('completa')
+        ->assertHasNoErrors();
+
+    expect(Intervento::count())->toBe(1);
+});
+
+it('never asks the periodicity when closing something that is not a taratura', function () {
+    // La regola è condizionata: incondizionata bloccherebbe la chiusura di un
+    // intervento qualunque su un campo che nella modale non compare nemmeno.
+    $ordinario = Intervento::factory()->forStrumento($this->strumento)->create([
+        'tipo' => TipoIntervento::ManutenzioneOrdinaria,
+        'data_scadenza' => today()->toDateString(),
+    ]);
+
+    ($this->scheda)()
+        ->call('openCompleta', $ordinario->id)
+        ->assertSet('pianificaProssimaTaratura', false)
+        ->set('dataEsecuzione', today()->toDateString())
+        ->call('completa')
+        ->assertHasNoErrors();
+
+    expect(Intervento::count())->toBe(1)
+        ->and($ordinario->fresh()->stato->value)->toBe('fatto');
+});

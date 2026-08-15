@@ -181,6 +181,44 @@ class Intervento extends Model
     }
 
     /**
+     * Pianifica la taratura successiva a partire da questa (ADR-009, 15 Ago 2026).
+     *
+     * **Non è una quarta fonte di scadenze, ed è la ragione per cui si è scelta
+     * questa forma**: produce un intervento ORDINARIO, che il semaforo sa già
+     * contare da S3. Far pilotare il semaforo dalla scadenza del certificato
+     * avrebbe voluto dire nove punti d'ingresso, due dentro l'espressione SQL
+     * più fragile del progetto.
+     *
+     * Chiude il limite dichiarato dal blocco precedente: finché nulla creava la
+     * taratura successiva, «la taratura alimenta il semaforo» era vero per
+     * quella da fare e falso per quella fatta — cioè per l'unica che ha un
+     * certificato.
+     *
+     * La periodicità è un INPUT e non un default nascosto: nessun documento del
+     * progetto la quantifica, e inventare «12 mesi» in codice avrebbe prodotto
+     * scadenze plausibili e non volute su un parco di migliaia di macchine. La
+     * chiede la modale, ogni volta, a chi sta chiudendo il lavoro.
+     *
+     * Nasce assegnata allo stesso tecnico (ADR-028: un intervento è sempre
+     * assegnato) e con la stessa descrizione: chi la troverà fra un anno deve
+     * riconoscerla come la prosecuzione di questa.
+     */
+    public function pianificaTaraturaSuccessiva(int $mesi): self
+    {
+        $partenza = $this->data_esecuzione ?? today();
+
+        return self::create([
+            'tenant_id' => $this->tenant_id,
+            'strumento_id' => $this->strumento_id,
+            'descrizione' => $this->descrizione,
+            'tipo' => TipoIntervento::TaraturaECertificazione,
+            'stato' => StatoIntervento::NonFatto,
+            'data_scadenza' => $partenza->copy()->addMonths($mesi),
+            'tecnico_id' => $this->tecnico_id,
+        ]);
+    }
+
+    /**
      * Torna a "non fatto": l'hook `saving` azzera la data di esecuzione.
      */
     public function riapri(): bool
