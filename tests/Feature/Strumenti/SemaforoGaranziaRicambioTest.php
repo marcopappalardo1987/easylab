@@ -92,10 +92,24 @@ it('shows the Tenant an arancione caused only by a spare-part warranty, without 
     $scheda = Livewire::actingAs($tenant)->test(SchedaStrumento::class, ['strumento' => $this->strumento]);
     expect($scheda->viewData('semaforo'))->toBe(StatoSemaforo::Arancione);
 
-    // 2. Il dato: da nessuna parte il nome del pezzo, e nessuna etichetta che
-    //    dica di che garanzia si tratta.
-    $elenco->assertDontSee('Guarnizione O-Ring')->assertDontSee('Garanzia ricambio');
-    $scheda->assertDontSee('Guarnizione O-Ring')->assertDontSee('Garanzia ricambio');
+    // 2. Il dato: nessuna etichetta del semaforo dice di che garanzia si tratta.
+    //
+    // ⚠️ **Ristretto il 15 Ago 2026, consapevolmente.** Fino al tab Ricambi
+    // questo caso asseriva anche l'assenza del NOME del pezzo, e passava per
+    // assenza di superficie: non esisteva schermata in cui potesse comparire.
+    // Il tab l'ha creata, e ha fatto emergere una contraddizione fra documenti
+    // — ADR-020 diceva «non vede da nessuna parte il nome del pezzo», mentre lo
+    // Schema Ruoli (nota ³) e la matrice dicono che il Tenant vede i ricambi
+    // montati sulle proprie macchine. Sciolta a favore dei secondi: ADR-004
+    // protegge la COPERTURA del pezzo, che è una condizione commerciale, non il
+    // fatto che sulla macchina del cliente sia stata montata una guarnizione.
+    // Quel che resta protetto è la garanzia, e l'etichetta che la nomina.
+    $elenco->assertDontSee('Garanzia ricambio');
+    $scheda->assertDontSee('Garanzia ricambio');
+
+    // Il nome del pezzo NON compare nell'etichetta del semaforo: è lì che il
+    // divieto di ADR-020 vive davvero, ed è ciò che il caso continua a coprire.
+    expect($scheda->viewData('diagnosi')->motivi[0]->dettaglio)->toBeNull();
 
     // 3. E la riga resta invisibile alla lettura normale: il bypass vive nella
     //    query del semaforo, non è diventato un permesso.

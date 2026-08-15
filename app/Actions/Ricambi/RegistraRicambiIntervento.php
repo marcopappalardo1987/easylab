@@ -7,7 +7,6 @@ use App\Models\Garanzia;
 use App\Models\Intervento;
 use App\Models\Ricambio;
 use App\Models\RicambioUtilizzo;
-use App\Models\Scopes\GaranziaRicambioPrivacyScope;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -121,17 +120,14 @@ class RegistraRicambiIntervento
         // intervento. È lo stesso della scheda strumento.
         $utilizzo = $intervento->ricambiUtilizzi()->findOrFail($id);
 
-        // ⚠️ SENZA il privacy scope, di proposito. `$utilizzo->garanzia` passa
-        // da GaranziaRicambioPrivacyScope: per un causer senza
-        // `garanzie.ricambio.view` tornerebbe NULL, la riga verrebbe cestinata
-        // e la sua garanzia resterebbe viva e orfana — cioè una scadenza che
-        // continua a pesare sul semaforo (ADR-020) per un pezzo non più
-        // montato. È lo stesso principio di ADR-020 letto al contrario: il
-        // permesso governa il DETTAGLIO mostrato, non l'integrità del dato.
-        $utilizzo->garanzia()
-            ->withoutGlobalScope(GaranziaRicambioPrivacyScope::class)
-            ->first()?->delete();
-
-        $utilizzo->delete();
+        // Il gesto di cancellare vive nel model (`cestinaConGaranzia`), qui
+        // resta la RISOLUZIONE della riga, che è ciò che vincola
+        // `intervento_id`. Dal 15 Ago 2026 i posti che cancellano un pezzo sono
+        // tre — questo, il tab Ricambi e la cancellazione di un intervento
+        // intero — e la sequenza garanzia-poi-utilizzo, col suo bypass del
+        // privacy scope, non può stare in tre copie: la prima dimenticata
+        // lascerebbe una garanzia viva e orfana, cioè una scadenza che pesa sul
+        // semaforo di un pezzo che non c'è più.
+        $utilizzo->cestinaConGaranzia();
     }
 }

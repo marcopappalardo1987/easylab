@@ -57,9 +57,12 @@
                     :class="tab === 'interventi' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
                     class="border-b-2 px-3 py-2 font-medium">Interventi</button>
             @endcan
-            @foreach (['Ricambi', 'Documenti'] as $t)
-                <span class="cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-neutral-300" title="In arrivo (S3/S4)">{{ $t }}</span>
-            @endforeach
+            @can('ricambio_utilizzo.view')
+                <button type="button" x-on:click="tab = 'ricambi'"
+                    :class="tab === 'ricambi' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
+                    class="border-b-2 px-3 py-2 font-medium">Ricambi</button>
+            @endcan
+            <span class="cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-neutral-300" title="In arrivo (S4)">Documenti</span>
             @can('garanzie.macchina.view')
                 <button type="button" x-on:click="tab = 'garanzie'"
                     :class="tab === 'garanzie' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
@@ -154,6 +157,15 @@
     @can('interventi.view')
         <div x-show="tab === 'interventi'" x-cloak class="mt-6">
             @include('livewire.strumenti._interventi')
+        </div>
+    @endcan
+
+    {{-- Tab Ricambi (ADR-008/022): lettura e correzione dei pezzi montati.
+         `x-cloak` come gli altri pannelli non di default, o lampeggia sotto la
+         Panoramica prima del boot di Alpine. --}}
+    @can('ricambio_utilizzo.view')
+        <div x-show="tab === 'ricambi'" x-cloak class="mt-6">
+            @include('livewire.strumenti._ricambi')
         </div>
     @endcan
 
@@ -459,6 +471,70 @@
                     </div>
                 </div>
             </form>
+        </x-ui.modal>
+    @endif
+
+    {{-- Correzione di un pezzo montato (tab Ricambi). Il combobox è lo stesso
+         del form intervento: il dropdown lo rende il server e ogni suggerimento
+         è un bottone: esiste un solo percorso di selezione, ed è testabile. --}}
+    @if ($showRicambioForm)
+        <x-ui.modal title="Correggi ricambio" close="closeRicambioForm">
+            <form wire:submit="salvaRicambio" class="space-y-5">
+                <x-ui.combobox
+                    name="ricambioForm.nome"
+                    label="Nome ricambio"
+                    placeholder="es. Guarnizione portello"
+                    wire:model.live.debounce.300ms="ricambioForm.nome"
+                    :index="0"
+                    on-select="scegliRicambioCorrezione"
+                    :suggerimenti="$ricambioAttivo === 0 ? $suggerimenti : []" />
+
+                <x-ui.input name="ricambioForm.quantita" label="Quantità" type="number" min="1"
+                    wire:model="ricambioForm.quantita" />
+
+                <div>
+                    <x-ui.input name="ricambioForm.data" label="Data di montaggio" type="date"
+                        wire:model="ricambioForm.data" />
+                    <div class="mt-1 flex items-center justify-between gap-3">
+                        <p class="text-xs text-neutral-400">
+                            Correggendola a mano, la chiusura dell'intervento non la modificherà più.
+                        </p>
+                        {{-- Bottone esplicito e non «svuota il campo»: un campo
+                             date vuoto e uno cancellato per sbaglio si
+                             assomigliano troppo perché la differenza resti
+                             implicita. --}}
+                        <button type="button" wire:click="segnaNonMontato"
+                            class="shrink-0 text-xs font-medium text-primary-600 hover:text-primary-700">
+                            Non ancora montato
+                        </button>
+                    </div>
+                </div>
+
+                @if ($vedeGaranzieRicambio)
+                    <x-ui.input name="ricambioForm.scadenza_garanzia" label="Scadenza garanzia del pezzo" type="date"
+                        wire:model="ricambioForm.scadenza_garanzia" />
+                @endif
+
+                <div class="flex justify-end gap-3">
+                    <x-ui.button variant="secondary" wire:click="closeRicambioForm">Annulla</x-ui.button>
+                    <x-ui.button type="submit" wire:loading.attr="disabled">Salva</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
+    @endif
+
+    {{-- Rimozione: la conferma dice cosa sparisce DAVVERO, garanzia compresa,
+         perché è ciò che spegne il semaforo (ADR-020) e non si deduce. --}}
+    @if ($deletingUtilizzoId !== null)
+        <x-ui.modal title="Rimuovere il ricambio?">
+            <p class="text-sm text-neutral-600">
+                La riga di montaggio e la garanzia del pezzo verranno cestinate insieme.
+                Se quella garanzia teneva acceso il semaforo, lo strumento tornerà in regola.
+            </p>
+            <div class="mt-6 flex justify-end gap-3">
+                <x-ui.button variant="secondary" wire:click="$set('deletingUtilizzoId', null)">Annulla</x-ui.button>
+                <x-ui.button variant="danger" wire:click="rimuoviRicambio">Rimuovi</x-ui.button>
+            </div>
         </x-ui.modal>
     @endif
 </div>

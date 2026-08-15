@@ -7,7 +7,6 @@ use App\Enums\TipoIntervento;
 use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Concerns\BelongsToOrgNodeThroughStrumento;
 use App\Models\Concerns\BelongsToTenant;
-use App\Models\Scopes\GaranziaRicambioPrivacyScope;
 use App\Support\Semaforo;
 use Carbon\CarbonInterface;
 use Database\Factories\InterventoFactory;
@@ -154,16 +153,19 @@ class Intervento extends Model
      * e riaprire un intervento significa "c'è ancora da fare", non "non è mai
      * successo".
      *
-     * 📥 **Da rivedere quando la data di montaggio diventerà editabile** (tab
-     * Ricambi, S4 blocco 5 — richiesto il 9 Ago 2026). Questo metodo
-     * **sovrascrive** `data` a ogni chiusura: se un utente la corregge a mano e
-     * poi qualcuno riapre e richiude l'intervento, la correzione sparisce senza
-     * dire niente. Va deciso allora — non scoperto — se distinguere una data
-     * impostata da una persona da una automatica (e non toccare mai la prima),
-     * se allineare solo quando `data` è NULL, o se lasciare che l'automatismo
-     * vinca dichiarandolo nella UI. Le tre uscite e i loro costi sono in
-     * roadmap, sotto la voce del tab Ricambi; qualunque si scelga, questo
-     * docblock va aggiornato insieme al codice.
+     * ✅ **Deciso il 15 Ago 2026** (tab Ricambi), al posto del rinvio che stava
+     * qui: la data di montaggio è ora editabile, e una riga corretta a mano
+     * porta `data_manuale = true`. Questo metodo **la salta**. Delle tre uscite
+     * possibili è l'unica che non perde silenziosamente il lavoro di una
+     * persona: allineare solo le righe NULL avrebbe reso la chiusura incapace
+     * di correggere una data automatica sbagliata, e lasciar vincere
+     * l'automatismo avrebbe fatto sparire una correzione senza dirlo.
+     *
+     * **La regola dell'allineamento non vive più qui**: sta in
+     * `RicambioUtilizzo::fissaMontaggio()`, che questo metodo chiama. Era
+     * `protected`, quindi esercitabile solo chiudendo un intervento — e la
+     * correzione dal tab avrebbe avuto bisogno della stessa regola, cioè di
+     * una seconda copia dello stesso confine.
      */
     protected function allineaRicambiAllaEsecuzione(): void
     {
@@ -173,25 +175,8 @@ class Intervento extends Model
             return;
         }
 
-        foreach ($this->ricambiUtilizzi()->get() as $utilizzo) {
-            $utilizzo->data = $esecuzione;
-            $utilizzo->save();
-
-            // SENZA il privacy scope, come nella rimozione dal form: la
-            // relazione passa da GaranziaRicambioPrivacyScope e per un causer
-            // senza `garanzie.ricambio.view` tornerebbe NULL — la garanzia
-            // resterebbe con una data d'inizio che il permesso di chi ha
-            // chiuso l'intervento ha reso invisibile. Il permesso governa il
-            // dettaglio mostrato, non l'integrità del dato.
-            $garanzia = $utilizzo->garanzia()
-                ->withoutGlobalScope(GaranziaRicambioPrivacyScope::class)
-                ->first();
-
-            if ($garanzia?->data_scadenza_dichiarata?->gt($esecuzione)) {
-                $garanzia->data_inizio = $esecuzione;
-                $garanzia->save();
-            }
-        }
+        $this->ricambiUtilizzi()->where('data_manuale', false)->get()
+            ->each(fn (RicambioUtilizzo $utilizzo) => $utilizzo->fissaMontaggio($esecuzione));
     }
 
     /**

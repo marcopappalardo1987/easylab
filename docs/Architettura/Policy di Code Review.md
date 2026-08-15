@@ -25,7 +25,15 @@ Un bug qui = fuga di dati, soldi sbagliati o accessi indebiti. Revisione umana p
 - **Billing/Stripe**: webhook, stato abbonamento, **lockout insoluti** — 🔗 ADR-013
 - **Impersonation** e relativo audit — 🔗 ADR-005/007
 - **Migrazioni** che toccano `tenant_id`/`reseller_id` o la forma dei dati (difficili da annullare in produzione)
-- **Ogni `withoutGlobalScope` scritto a mano** — è la disattivazione di una guardia. In V1 ne esistono due legittimi e nessun terzo: le query di piattaforma non-scopate (🔗 ADR-018) e la lettura delle garanzie ricambio dentro il calcolo semaforo (🔗 ADR-020). Ognuno va con un test negativo che verifichi che dal risultato **non trapeli** il dato protetto — a maggior ragione nella Panoramica (🔗 ADR-024), dove il motivo del semaforo è testo in chiaro e non un pallino.
+- **Ogni `withoutGlobalScope` scritto a mano** — è la disattivazione di una guardia. L'elenco dei legittimi è **nominativo e non un conteggio** (corretto il 15 Ago 2026: diceva «ne esistono due e nessun terzo», mentre nel codice erano già sette, e un elenco che conta male smette di funzionare come vincolo di review):
+  1. le query di piattaforma non-scopate (🔗 ADR-018);
+  2. `Garanzia::scopeDeiPezziMontati()` — il calcolo del semaforo (🔗 ADR-020);
+  3. `RicambioUtilizzo::fissaMontaggio()` e `cestinaConGaranzia()` — la garanzia va allineata e cestinata **anche** da chi non ha titolo a vederla, o resta viva e orfana a pesare sul semaforo di un pezzo che non c'è più;
+  4. `ManagesRicambiStrumento` — stessa ragione, sul lato lettura del tab;
+  5. `AccessibleStrumenti` e `GaranziaDepartmentScope` — subquery di sicurezza che rompono in anticipo la ricorsione col futuro scope Tecnico (🔗 ADR-007);
+  6. `User::ente()` — «di chi è quest'utente» va risposto anche dentro un global scope.
+
+  Il criterio che li accomuna, e che vale per il prossimo: **il permesso governa il dettaglio mostrato, non l'integrità del dato**. Ognuno va con un test negativo che verifichi che dal risultato **non trapeli** il dato protetto — a maggior ragione nella Panoramica (🔗 ADR-024), dove il motivo del semaforo è testo in chiaro e non un pallino.
 - **Viste che compongono più aree** (Panoramica, dashboard S6): il permesso va applicato **blocco per blocco**, mai una volta sola in testa alla vista — 🔗 ADR-024.
 - **Migrazioni distruttive** (drop di colonne o tabelle popolate) e i **backfill** che le precedono — 🔗 ADR-019. Un ordine sbagliato fra backfill e drop non è recuperabile.
 

@@ -34,6 +34,31 @@ class RicambioUtilizzoFactory extends Factory
         ];
     }
 
+    /**
+     * Pezzo registrato ma **non ancora montato** (`data` NULL).
+     *
+     * `definition()` valorizza sempre `data`, ed è precisamente il motivo per
+     * cui nessun test poté accorgersi che un pezzo non montato accendeva il
+     * semaforo: la lacuna emerse solo provando il flusso in browser il 9 Ago.
+     * Senza questo stato, quella categoria resterebbe di nuovo fuori copertura.
+     */
+    public function nonMontato(): static
+    {
+        return $this->state(fn () => ['data' => null]);
+    }
+
+    /**
+     * Data di montaggio corretta da una persona: la chiusura dell'intervento
+     * non la riscrive più (S4, tab Ricambi).
+     *
+     * `data_manuale` è fuori da `$fillable`, ma le factory non passano dal
+     * mass-assignment — quindi funziona, e va detto o sembrerà una svista.
+     */
+    public function montatoAMano(string $data): static
+    {
+        return $this->state(fn () => ['data' => $data, 'data_manuale' => true]);
+    }
+
     /** Strumento su cui il pezzo è montato: porta con sé il tenant. */
     public function forStrumento(Strumento $strumento): static
     {

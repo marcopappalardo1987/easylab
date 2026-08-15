@@ -47,8 +47,8 @@ use InvalidArgumentException;
  *
  * ⚠️ Il tab Garanzie della scheda **non** mostra le righe ricambio, e non per
  * via degli scope: a escluderle è la clausola `strumento_id` della relazione
- * `Strumento::garanzie()`. Compariranno col tab Ricambi (S4 blocco 5), dove
- * vivono il nome del pezzo e il permesso giusto per le azioni.
+ * `Strumento::garanzie()`. Compaiono dal 15 Ago 2026 nel **tab Ricambi**, dove
+ * vivono accanto al pezzo e alle azioni che le riguardano.
  */
 class Garanzia extends Model
 {

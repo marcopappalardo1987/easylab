@@ -9,10 +9,12 @@ use App\Enums\StatoSemaforo;
 use App\Enums\TipoIntervento;
 use App\Enums\TipoSpostamento;
 use App\Enums\TipoUnitaOrganizzativa;
+use App\Livewire\Concerns\ManagesRicambiStrumento;
 use App\Livewire\Concerns\ManagesStrumentoForm;
 use App\Models\Garanzia;
 use App\Models\Intervento;
 use App\Models\Ricambio;
+use App\Models\RicambioUtilizzo;
 use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
@@ -28,15 +30,18 @@ use Livewire\Attributes\Layout;
 use Livewire\Component;
 
 /**
- * Scheda strumento a tab (S2 punto 5). Tab Anagrafica e Interventi (lista +
- * CRUD + spunta "Fatto", S3 punti 2-3) popolati; Ricambi/Documenti/Garanzie
- * sono placeholder (S3/S4). View + edit + delete del singolo strumento;
+ * Scheda strumento a tab (S2 punto 5). Anagrafica, Interventi, Garanzie,
+ * Panoramica e — dal 15 Ago 2026 — **Ricambi** sono popolati; resta placeholder
+ * il solo tab Documenti (S4). View + edit + delete del singolo strumento;
  * isolamento via route-model binding scopato (404 fuori Ente).
+ *
+ * Lo stato e le azioni del tab Ricambi vivono in `ManagesRicambiStrumento`, che
+ * la vista campo del tecnico (blocco 10) erediterà invece di riscrivere.
  */
 #[Layout('components.layouts.app')]
 class SchedaStrumento extends Component
 {
-    use ManagesStrumentoForm;
+    use ManagesRicambiStrumento, ManagesStrumentoForm;
 
     public Strumento $strumento;
 
@@ -710,7 +715,25 @@ class SchedaStrumento extends Component
     public function eliminaIntervento(): void
     {
         $this->authorize('interventi.delete');
-        $this->strumento->interventi()->findOrFail($this->deletingInterventoId)->delete();
+
+        $intervento = $this->strumento->interventi()->findOrFail($this->deletingInterventoId);
+
+        // Cancellare l'intervento cancella anche ciò che ha prodotto (decisione
+        // del 15 Ago 2026). Prima non lo faceva, e il difetto era invisibile
+        // perché il doppio salto di ADR-020 guarda `ricambio_utilizzo` e non
+        // passa da `interventi`: la garanzia di un pezzo il cui intervento era
+        // stato cestinato continuava ad accendere il semaforo, per un
+        // montaggio che nella scheda non risultava più da nessuna parte.
+        //
+        // In transazione, perché la riga di montaggio e la sua garanzia devono
+        // sparire insieme all'intervento o restare tutte: una cancellazione a
+        // metà è esattamente lo stato che il difetto produceva.
+        DB::transaction(function () use ($intervento): void {
+            $intervento->ricambiUtilizzi()->get()
+                ->each(fn (RicambioUtilizzo $utilizzo) => $utilizzo->cestinaConGaranzia());
+
+            $intervento->delete();
+        });
 
         $this->deletingInterventoId = null;
     }
@@ -882,6 +905,9 @@ class SchedaStrumento extends Component
                 ? $this->strumento->interventi()->findOrFail($this->editingInterventoId)
                     ->ricambiUtilizzi()->with('ricambio')->get()
                 : collect(),
+            'ricambiMontati' => $this->ricambiMontati(),
+            'puoCorreggereRicambi' => $this->puoCorreggereRicambi(),
+            'vedeGaranzieRicambio' => Gate::allows('view', Garanzia::class),
             'spostamenti' => $this->strumento->spostamenti()->with(['daNodo', 'aNodo', 'eseguitoBy'])->get(),
             'nodiDestinazione' => $nodiDestinazione,
         ]);

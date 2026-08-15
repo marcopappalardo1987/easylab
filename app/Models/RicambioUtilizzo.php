@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Concerns\BelongsToOrgNodeThroughStrumento;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Scopes\GaranziaRicambioPrivacyScope;
+use Carbon\CarbonInterface;
 use Database\Factories\RicambioUtilizzoFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -36,9 +38,12 @@ use InvalidArgumentException;
  *    Quella subquery si porta quindi un `whereNull('ricambio_utilizzo.deleted_at')`
  *    esplicito, o le righe cestinate tornerebbero a contare. Stessa ragione per
  *    cui il `join` del semaforo, che non passa dal model, lo scrive a mano.
- * 3. **Aperta**: la cancellazione "di dominio" dal tab Ricambi (blocco 5) dovrà
- *    cestinare in transazione **sia** l'utilizzo **sia** la sua garanzia, o nel
- *    tab Garanzie resterebbe una riga che non punta a nulla di visibile.
+ * 3. **Saldata il 15 Ago 2026**: la cancellazione "di dominio" cestina in
+ *    transazione **sia** l'utilizzo **sia** la sua garanzia, e vive in un solo
+ *    metodo — `cestinaConGaranzia()` — perché i posti che cancellano un pezzo
+ *    sono ora tre (tab Ricambi, form intervento, cancellazione dell'intervento
+ *    intero) e la prima copia dimenticata lascerebbe una garanzia viva e orfana
+ *    a pesare sul semaforo (ADR-020).
  *
  * Nessun vincolo "deve avere una garanzia": ADR-022 la rende obbligatoria di
  * FLUSSO, non di schema, perché la riga nasce prima della sua garanzia dentro
@@ -61,12 +66,94 @@ class RicambioUtilizzo extends Model
         'data',
     ];
 
+    /**
+     * `data_manuale` è fuori da `$fillable`: dice **chi** ha scritto la data, e
+     * un payload che potesse impostarlo renderebbe la protezione una gentilezza
+     * del chiamante invece di un fatto. Si scrive solo da `fissaMontaggio()`.
+     */
     protected function casts(): array
     {
         return [
             'data' => 'date',
+            'data_manuale' => 'boolean',
             'quantita' => 'integer',
         ];
+    }
+
+    /**
+     * Fissa la data di montaggio del pezzo, e allinea l'inizio della garanzia.
+     *
+     * **La regola dell'allineamento vive QUI e in nessun altro posto.** Prima
+     * stava dentro `Intervento::allineaRicambiAllaEsecuzione()`, che è
+     * `protected` e si esercita solo chiudendo un intervento: due copie del
+     * confine — una per la chiusura, una per la correzione a mano — sarebbero
+     * state due cose libere di divergere, e la seconda non l'avrebbe mai vista
+     * un test del tab.
+     *
+     * ⚠️ La `data_inizio` della garanzia segue il montaggio **solo se resta
+     * prima della scadenza dichiarata**: il model esige quel confine, e
+     * spostare l'inizio oltre una scadenza ravvicinata farebbe fallire
+     * un'operazione per colpa di un refuso in una riga. In quel caso la
+     * garanzia si lascia com'è — un dato informativo incoerente è meno grave
+     * di un gesto che non si può più completare. La scadenza, che è l'unica
+     * grandezza a pilotare il semaforo, non si tocca in nessun caso.
+     *
+     * `$manuale` marca la riga come corretta da una persona: da quel momento
+     * `segnaFatto()` non la riscrive più (vedi la migration di `data_manuale`).
+     */
+    public function fissaMontaggio(?CarbonInterface $data, bool $manuale = false): bool
+    {
+        $this->data = $data;
+
+        if ($manuale) {
+            $this->data_manuale = true;
+        }
+
+        $salvato = $this->save();
+
+        if ($data === null) {
+            return $salvato;
+        }
+
+        // SENZA il privacy scope: la relazione passa da
+        // `GaranziaRicambioPrivacyScope` e per un causer che non ha titolo a
+        // vedere le righe ricambio tornerebbe NULL — la garanzia resterebbe con
+        // una data d'inizio che il permesso di chi ha agito ha reso invisibile.
+        // Il permesso governa il dettaglio mostrato, non l'integrità del dato.
+        $garanzia = $this->garanzia()
+            ->withoutGlobalScope(GaranziaRicambioPrivacyScope::class)
+            ->first();
+
+        if ($garanzia?->data_scadenza_dichiarata?->gt($data)) {
+            $garanzia->data_inizio = $data;
+            $garanzia->save();
+        }
+
+        return $salvato;
+    }
+
+    /**
+     * Cestina il pezzo **e la sua garanzia**, in una transazione.
+     *
+     * È la consegna n.3 di questo stesso docblock, e vale ovunque si cancelli:
+     * dal tab Ricambi, dal form intervento, e dalla cancellazione di un
+     * intervento intero. Senza, nel tab Garanzie resterebbe una riga che non
+     * punta a nulla di visibile — e, peggio, quella garanzia continuerebbe a
+     * pesare sul semaforo dello strumento (ADR-020), perché il doppio salto
+     * guarda `ricambio_utilizzo.deleted_at` e non l'esistenza del pezzo.
+     *
+     * Il bypass del privacy scope per la stessa ragione di `fissaMontaggio()`:
+     * una garanzia orfana e viva sarebbe ADR-020 letto al contrario.
+     */
+    public function cestinaConGaranzia(): void
+    {
+        DB::transaction(function (): void {
+            $this->garanzia()
+                ->withoutGlobalScope(GaranziaRicambioPrivacyScope::class)
+                ->first()?->delete();
+
+            $this->delete();
+        });
     }
 
     /**

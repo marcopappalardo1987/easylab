@@ -26,6 +26,13 @@ use App\Models\User;
  * `authorize('garanzie.ricambio.manage')` scavalcherebbe l'impostazione
  * dell'Ente — un test lo congela.
  *
+ * **I call site, elencati perché è la difesa contro il ritorno del permesso
+ * nudo** (che è già successo una volta, in `_panoramica.blade.php`):
+ * `GaranziaRicambioPrivacyScope`, `ElencoStrumenti::render()`,
+ * `SchedaStrumento` (registrazione ricambi dal form intervento),
+ * `ManagesRicambiStrumento` (tab Ricambi), `_panoramica.blade.php`,
+ * `_ricambi.blade.php`.
+ *
  * **Il permesso resta la condizione necessaria.** Con `teams = false` in
  * `config/permission.php` (Schema Ruoli §7) i permessi di un ruolo sono
  * globali: RBAC dice il *default* della piattaforma, questa Policy applica
