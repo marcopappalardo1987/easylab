@@ -60,6 +60,42 @@ return [
             'report' => false,
         ],
 
+        /*
+         * Documenti allegati a strumenti e interventi (ADR-009/025/026).
+         *
+         * ⚠️ **`throw => true`, ed è la ragione per cui questo disco esiste
+         * separato** invece di riusare `s3`. Con `false` — il default di
+         * Laravel, che gli altri tre dischi portano — un upload fallito
+         * restituisce `false` **in silenzio**: l'utente vedrebbe la riga
+         * comparire in elenco e il file non ci sarebbe. Peggio in lettura:
+         * `get()` e `readStream()` tornano `null`, e `response()` chiama
+         * `readStream()` DENTRO la closure dello StreamedResponse — cioè a
+         * header già inviati — quindi un file mancante produrrebbe un **200
+         * troncato** invece di un errore.
+         *
+         * Cambiare il flag sui dischi esistenti sarebbe stato più semplice e
+         * più rischioso: `local` e `public` servono anche ad altro, e un
+         * `throw` globale trasformerebbe in eccezione ogni lettura mancante
+         * già tollerata altrove. Qui il perimetro è uno solo.
+         *
+         * `root` distinto perché in locale (`FILESYSTEM_DISK=local`) i
+         * documenti non finiscano mescolati al resto di `storage/app/private`.
+         */
+        'documenti' => [
+            'driver' => env('DOCUMENTI_DISK_DRIVER', 'local'),
+            'root' => storage_path('app/private/documenti'),
+            'serve' => false,
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'region' => env('AWS_DEFAULT_REGION'),
+            'bucket' => env('AWS_BUCKET'),
+            'endpoint' => env('AWS_ENDPOINT'),
+            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+            'visibility' => 'private',
+            'throw' => true,
+            'report' => false,
+        ],
+
     ],
 
     /*

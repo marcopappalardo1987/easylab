@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AccessoQr;
+use App\Http\Controllers\ScaricaDocumento;
 use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Fornitori\ElencoFornitori;
 use App\Livewire\Settings\TwoFactorAuthentication;
@@ -41,6 +42,11 @@ Route::middleware(['auth', 'two-factor.enforce'])->group(function () {
     Route::get('/strumenti/{strumento}/qr', StampaQr::class)
         ->middleware('can:strumenti.qr_generate')
         ->name('strumenti.qr');
+    // Download mediato dall'applicazione (ADR-026): l'autorizzazione si
+    // ricontrolla a ogni richiesta, e il binding scopato dà 404 fuori Ente.
+    Route::get('/documenti/{documento}', ScaricaDocumento::class)
+        ->middleware('can:documenti.view')
+        ->name('documenti.download');
     Route::get('/fornitori', ElencoFornitori::class)
         ->middleware('can:fornitori.view')
         ->name('fornitori.index');

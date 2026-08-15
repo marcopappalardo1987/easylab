@@ -62,7 +62,11 @@
                     :class="tab === 'ricambi' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
                     class="border-b-2 px-3 py-2 font-medium">Ricambi</button>
             @endcan
-            <span class="cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-neutral-300" title="In arrivo (S4)">Documenti</span>
+            @can('documenti.view')
+                <button type="button" x-on:click="tab = 'documenti'"
+                    :class="tab === 'documenti' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
+                    class="border-b-2 px-3 py-2 font-medium">Documenti</button>
+            @endcan
             @can('garanzie.macchina.view')
                 <button type="button" x-on:click="tab = 'garanzie'"
                     :class="tab === 'garanzie' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
@@ -166,6 +170,14 @@
     @can('ricambio_utilizzo.view')
         <div x-show="tab === 'ricambi'" x-cloak class="mt-6">
             @include('livewire.strumenti._ricambi')
+        </div>
+    @endcan
+
+    {{-- Tab Documenti (ADR-009/025/026): allegati della macchina e dei suoi
+         interventi. `x-cloak` come gli altri pannelli non di default. --}}
+    @can('documenti.view')
+        <div x-show="tab === 'documenti'" x-cloak class="mt-6">
+            @include('livewire.strumenti._documenti')
         </div>
     @endcan
 
@@ -520,6 +532,68 @@
                     <x-ui.button type="submit" wire:loading.attr="disabled">Salva</x-ui.button>
                 </div>
             </form>
+        </x-ui.modal>
+    @endif
+
+    {{-- Caricamento di un documento. Il select dell'intervento permette di
+         allegare al singolo lavoro invece che alla macchina: è il certificato
+         di taratura, che vive sull'intervento che l'ha prodotto. --}}
+    @if ($showDocumentoForm)
+        <x-ui.modal title="Carica documento" close="closeDocumentoForm">
+            <form wire:submit="salvaDocumento" class="space-y-5">
+                <div>
+                    <label for="fileDocumento" class="block text-sm font-medium text-neutral-800">File</label>
+                    <input id="fileDocumento" type="file" wire:model="fileDocumento"
+                        class="mt-1 block w-full text-sm text-neutral-700 file:mr-3 file:rounded-md file:border-0 file:bg-primary-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-700 hover:file:bg-primary-100">
+                    <p class="mt-1 text-xs text-neutral-400">PDF o immagine, fino a 20 MB.</p>
+                    @error('fileDocumento')
+                        <p class="mt-1 text-sm text-danger-600">{{ $message }}</p>
+                    @enderror
+                    <p class="mt-1 text-xs text-neutral-400" wire:loading wire:target="fileDocumento">Caricamento in corso…</p>
+                </div>
+
+                <div>
+                    <label for="tipoDocumento" class="block text-sm font-medium text-neutral-800">Tipo</label>
+                    <select id="tipoDocumento" wire:model="tipoDocumento"
+                        class="mt-1 block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
+                        @foreach ($tipiDocumento as $valore => $etichetta)
+                            <option value="{{ $valore }}">{{ $etichetta }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                @if ($interventiAllegabili->isNotEmpty())
+                    <div>
+                        <label for="documentoInterventoId" class="block text-sm font-medium text-neutral-800">Allega a</label>
+                        <select id="documentoInterventoId" wire:model="documentoInterventoId"
+                            class="mt-1 block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
+                            <option value="">La macchina</option>
+                            @foreach ($interventiAllegabili as $intervento)
+                                <option value="{{ $intervento->id }}">
+                                    {{ $intervento->data_scadenza->format('d/m/Y') }} · {{ $intervento->descrizione }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                @endif
+
+                <div class="flex justify-end gap-3">
+                    <x-ui.button variant="secondary" wire:click="closeDocumentoForm">Annulla</x-ui.button>
+                    <x-ui.button type="submit" wire:loading.attr="disabled" wire:target="salvaDocumento,fileDocumento">Carica</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
+    @endif
+
+    @if ($deletingDocumentoId !== null)
+        <x-ui.modal title="Eliminare il documento?">
+            <p class="text-sm text-neutral-600">
+                L'operazione è reversibile: la riga viene cestinata e il file resta archiviato.
+            </p>
+            <div class="mt-6 flex justify-end gap-3">
+                <x-ui.button variant="secondary" wire:click="$set('deletingDocumentoId', null)">Annulla</x-ui.button>
+                <x-ui.button variant="danger" wire:click="eliminaDocumento">Elimina</x-ui.button>
+            </div>
         </x-ui.modal>
     @endif
 

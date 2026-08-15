@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Concerns\AuditsDomainWrites;
+use App\Models\Documento;
 use App\Models\Fornitore;
 use App\Models\Garanzia;
 use App\Models\Intervento;
@@ -36,6 +37,10 @@ const SOSTANTIVI = [
     // meta-test a fermare la suite appena il model è nato. È il lavoro per cui
     // esiste — la scelta «trait o esenzione» si presenta invece di poter essere
     // dimenticata.
+    // Aggiunto il 15 Ago 2026 col blocco Documenti — di nuovo su richiesta del
+    // meta-test, che ha fermato la suite appena il model è nato. Due blocchi
+    // consecutivi, due volte la scelta presentata invece che dimenticata.
+    Documento::class => 'Creazione documento',
     Fornitore::class => 'Creazione fornitore',
     Garanzia::class => 'Creazione garanzia',
     Ricambio::class => 'Creazione ricambio',

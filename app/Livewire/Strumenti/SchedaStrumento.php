@@ -9,6 +9,7 @@ use App\Enums\StatoSemaforo;
 use App\Enums\TipoIntervento;
 use App\Enums\TipoSpostamento;
 use App\Enums\TipoUnitaOrganizzativa;
+use App\Livewire\Concerns\ManagesDocumentiStrumento;
 use App\Livewire\Concerns\ManagesRicambiStrumento;
 use App\Livewire\Concerns\ManagesStrumentoForm;
 use App\Models\Garanzia;
@@ -41,7 +42,7 @@ use Livewire\Component;
 #[Layout('components.layouts.app')]
 class SchedaStrumento extends Component
 {
-    use ManagesRicambiStrumento, ManagesStrumentoForm;
+    use ManagesDocumentiStrumento, ManagesRicambiStrumento, ManagesStrumentoForm;
 
     public Strumento $strumento;
 
@@ -914,6 +915,9 @@ class SchedaStrumento extends Component
                     ->ricambiUtilizzi()->with('ricambio')->get()
                 : collect(),
             'ricambiMontati' => $this->ricambiMontati(),
+            'documenti' => $this->documentiMostrati(),
+            'interventiAllegabili' => $this->interventiAllegabili(),
+            'tipiDocumento' => $this->tipiDocumento(),
             'puoCorreggereRicambi' => $this->puoCorreggereRicambi(),
             'vedeGaranzieRicambio' => Gate::allows('view', Garanzia::class),
             'spostamenti' => $this->strumento->spostamenti()->with(['daNodo', 'aNodo', 'eseguitoBy'])->get(),
