@@ -911,6 +911,19 @@ class SchedaStrumento extends Component
         // non deve costare query in più del tab che riassume).
         $interventi = $this->interventiPerUrgenza();
 
+        // Stessa regola per ricambi e documenti (S4 blocco 7): la Panoramica
+        // riassume un TAB, non ricalcola per conto proprio. I contatori sono
+        // fold PHP su queste due collection — quelle che i rispettivi tab
+        // caricano comunque — quindi il pannello di sintesi continua a costare
+        // zero query in più di ciò che riassume, come vuole ADR-024.
+        //
+        // Conseguenza voluta: se un giorno il tab Documenti passasse a una
+        // paginazione, il contatore diventerebbe "documenti in pagina" e
+        // andrebbe rifatto con un `count()` aggregato. È il prezzo di non avere
+        // due definizioni di "quali documenti sono di questa macchina".
+        $ricambi = $this->ricambiMontati();
+        $documenti = $this->documentiMostrati();
+
         return view('livewire.strumenti.scheda-strumento', [
             'percorso' => $percorso->implode(' › '),
             // Semaforo (ADR-005): sempre lo stato "effettivo" (forzato ?? calcolato).
@@ -946,8 +959,19 @@ class SchedaStrumento extends Component
                 ? $this->strumento->interventi()->findOrFail($this->editingInterventoId)
                     ->ricambiUtilizzi()->with('ricambio')->get()
                 : collect(),
-            'ricambiMontati' => $this->ricambiMontati(),
-            'documenti' => $this->documentiMostrati(),
+            'ricambiMontati' => $ricambi,
+            'statRicambi' => $this->statisticheRicambi($ricambi),
+            'documenti' => $documenti,
+            // Il fornitore nel blocco "In sintesi" (ADR-023/024). Gated qui e
+            // non solo nella vista: chi non ha `fornitori.view` non paga la
+            // query, ed è la stessa postura di `garanzie` qui sopra.
+            //
+            // La relazione ha `withTrashed()`: un fornitore cestinato torna
+            // valorizzato e la vista lo etichetta, perché una cella vuota si
+            // legge «mai inserito» e non «cestinato».
+            'fornitore' => Gate::allows('fornitori.view')
+                ? $this->strumento->fornitore
+                : null,
             'certificati' => $this->certificatiPerIntervento(),
             'interventiAllegabili' => $this->interventiAllegabili(),
             'tipiDocumento' => $this->tipiDocumento(),
@@ -1054,6 +1078,53 @@ class SchedaStrumento extends Component
                     && $i->data_esecuzione->gte($limite))
                 ->count(),
             'scadutiAperti' => $interventi->filter(fn (Intervento $i) => $i->isScaduto())->count(),
+        ];
+    }
+
+    /**
+     * Conteggi dei ricambi per la Panoramica (S4 blocco 7 — ADR-020/024/029).
+     *
+     * Fold sulla collection di `ricambiMontati()`, per la ragione di
+     * `statisticheInterventi()`: nessuna query in più del tab riassunto, e il
+     * gate `ricambio_utilizzo.view` è già applicato là (senza permesso la
+     * collection è vuota, quindi qui esce zero invece di un dato trapelato —
+     * ed è la vista a far sparire il contatore).
+     *
+     * **`montati` e `inAttesa` sono due numeri e non uno**, ed è la decisione
+     * del blocco: `ricambio_utilizzo.data` NULL vuol dire «registrato ma non
+     * ancora montato» (ADR-020, la riga che per questo non pesa sul semaforo).
+     * Sommarli direbbe che quei pezzi sono sulla macchina; ometterli direbbe
+     * che non sono stati registrati. Entrambe le letture sarebbero false, e la
+     * seconda porterebbe qualcuno a registrarli una seconda volta.
+     *
+     * **`copertiDaGaranzia` conta i pezzi COPERTI ADESSO**, non le righe
+     * `garanzie` esistenti: una garanzia scaduta l'anno scorso non copre nulla,
+     * e chiamarla copertura è esattamente l'errore che il contatore dovrebbe
+     * aiutare a evitare. Il confine è `Garanzia::isScaduta()` — la sola
+     * definizione del progetto, come impone ADR-024 ("la Panoramica non calcola
+     * nulla di suo").
+     *
+     * ⚠️ La visibilità passa dalla relazione `garanzia`, che `ricambiMontati()`
+     * popola **solo** per chi ha titolo a vederla secondo
+     * `GaranziaRicambioPolicy::view()` (ability, mai il permesso nudo: spatie
+     * registra un `Gate::before` che concede appena il permesso esiste sul
+     * ruolo, e scavalcherebbe l'impostazione per-Ente di ADR-029). Per un
+     * Tenant di un Ente `nascosta` la relazione è NULL su ogni riga, quindi
+     * questo conteggio è naturalmente 0 — e la vista non disegna la riga.
+     *
+     * @param  Collection<int, RicambioUtilizzo>  $ricambi
+     * @return array{montati:int, inAttesa:int, copertiDaGaranzia:int}
+     */
+    private function statisticheRicambi(Collection $ricambi): array
+    {
+        $montati = $ricambi->filter(fn (RicambioUtilizzo $r) => $r->data !== null);
+
+        return [
+            'montati' => $montati->count(),
+            'inAttesa' => $ricambi->count() - $montati->count(),
+            'copertiDaGaranzia' => $montati
+                ->filter(fn (RicambioUtilizzo $r) => $r->garanzia !== null && ! $r->garanzia->isScaduta())
+                ->count(),
         ];
     }
 }

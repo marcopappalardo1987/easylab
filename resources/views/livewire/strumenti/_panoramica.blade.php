@@ -17,15 +17,25 @@
         TipoMotivoSemaforo::GaranziaRicambio => Gate::allows('view', App\Models\Garanzia::class),
     };
 
-    // Dove porta la freccia «›». Le garanzie ricambio non hanno ancora una
-    // destinazione: il tab Ricambi nasce al blocco 5 di S4, e mandare al tab
-    // Garanzie sarebbe peggio di non linkare — quel tab mostra le sole righe
+    // Dove porta la freccia «›».
+    //
+    // La garanzia ricambio ha una destinazione da quando esiste il tab Ricambi
+    // (S4 blocco 5): fino ad allora era `null`, e mandare al tab Garanzie
+    // sarebbe stato peggio di non linkare — quel tab mostra le sole righe
     // macchina (clausola `strumento_id` di Strumento::garanzie()), quindi
-    // l'utente ci arriverebbe senza trovare la riga che sta cercando.
+    // l'utente ci sarebbe arrivato senza trovare la riga cercata.
+    //
+    // ⚠️ Il permesso da chiedere è quello del TAB di destinazione, che non è
+    // quello che rende visibile il motivo: il motivo si vede con l'ability di
+    // ADR-029 sulla garanzia, il tab Ricambi è gated su `ricambio_utilizzo.view`
+    // (scheda-strumento.blade.php). Oggi nessun ruolo di `config/rbac.php` ha
+    // l'uno senza l'altro — verificato — ma un ruolo creato dalla UI di S6
+    // potrebbe, e si ritroverebbe una freccia che non apre nulla. Una porta si
+    // mostra solo se dietro c'è una stanza.
     $tabDelMotivo = fn (MotivoSemaforo $m) => match ($m->tipo) {
         TipoMotivoSemaforo::Intervento => 'interventi',
         TipoMotivoSemaforo::GaranziaMacchina => 'garanzie',
-        TipoMotivoSemaforo::GaranziaRicambio => null,
+        TipoMotivoSemaforo::GaranziaRicambio => Gate::allows('ricambio_utilizzo.view') ? 'ricambi' : null,
     };
 
     // ⚠️ La garanzia ricambio è l'unico motivo il cui TESTO dipende dal
@@ -152,7 +162,7 @@
 
     {{-- 4. Garanzia macchina. Le garanzie ricambio pesano sullo stato qui sopra
          (ADR-020) ma NON hanno un blocco proprio: sono un dettaglio con un
-         permesso diverso, e vivranno nel tab Ricambi (S4 blocco 5). --}}
+         permesso diverso, e vivono nel tab Ricambi (S4 blocco 5). --}}
     @can('garanzie.macchina.view')
         <x-ui.card>
             <p class="text-sm font-medium text-neutral-600">Garanzia macchina</p>
@@ -180,10 +190,36 @@
         </x-ui.card>
     @endcan
 
-    {{-- 5. Sintesi anagrafica. Il fornitore (ADR-023) entra qui in S4. --}}
+    {{-- 5. Sintesi anagrafica. --}}
     <x-ui.card>
         <p class="text-sm font-medium text-neutral-600">In sintesi</p>
         <dl class="mt-2 divide-y divide-neutral-100 text-sm">
+            {{-- Il fornitore ha il permesso della PROPRIA area, non quello
+                 della card: senza `fornitori.view` sparisce la riga, e
+                 ubicazione e installazione restano. Un solo @can in testa al
+                 pannello è l'errore che ADR-024 nomina per non farlo. --}}
+            @can('fornitori.view')
+                <div class="flex justify-between gap-4 py-2">
+                    <dt class="text-neutral-500">Fornitore</dt>
+                    <dd class="text-right text-neutral-800">
+                        @if ($fornitore)
+                            {{ $fornitore->ragione_sociale }}
+                            {{-- ADR-023: `Strumento::fornitore()` è `withTrashed()`
+                                 apposta perché questa riga possa dire «cestinato»
+                                 invece di restare vuota — e una cella vuota si
+                                 legge «fornitore mai inserito», che è un'altra
+                                 cosa e manda a cercare nel posto sbagliato. --}}
+                            @if ($fornitore->trashed())
+                                <x-ui.badge variant="warning"><span aria-hidden="true">⌫</span> Cestinato</x-ui.badge>
+                            @endif
+                        @else
+                            {{-- Nullable in schema per le righe storiche e per
+                                 l'import, benché obbligatorio nel form. --}}
+                            <span class="text-neutral-400">—</span>
+                        @endif
+                    </dd>
+                </div>
+            @endcan
             <div class="flex justify-between gap-4 py-2">
                 <dt class="text-neutral-500">Ubicazione</dt>
                 <dd class="text-right text-neutral-800">{{ $percorso }}</dd>
@@ -200,21 +236,84 @@
         </dl>
     </x-ui.card>
 
-    {{-- 6. Statistiche della macchina. Ricambi montati e documenti: S4. --}}
-    @can('interventi.view')
+    {{-- 6. Statistiche della macchina: interventi, ricambi, documenti.
+
+         Tre AREE in una card sola, e ognuna porta il proprio permesso: chi
+         perde `documenti.view` perde la riga dei documenti e tiene le altre.
+         Il gate d'insieme qui sotto non è una scorciatoia sulle tre — è solo
+         ciò che evita di disegnare una card col titolo e nessun contenuto. --}}
+    @php
+        $vedeStatInterventi = Gate::allows('interventi.view');
+        $vedeStatRicambi = Gate::allows('ricambio_utilizzo.view');
+        $vedeStatDocumenti = Gate::allows('documenti.view');
+    @endphp
+    @if ($vedeStatInterventi || $vedeStatRicambi || $vedeStatDocumenti)
         <x-ui.card>
             <p class="text-sm font-medium text-neutral-600">Statistiche</p>
             <dl class="mt-2 divide-y divide-neutral-100 text-sm">
-                <div class="flex justify-between gap-4 py-2">
-                    <dt class="text-neutral-500">Interventi ultimi 12 mesi</dt>
-                    <dd class="font-medium tabular-nums text-neutral-800">{{ $statInterventi['dodiciMesi'] }}</dd>
-                </div>
-                <div class="flex justify-between gap-4 py-2">
-                    <dt class="text-neutral-500">Scaduti non fatti</dt>
-                    <dd class="font-medium tabular-nums text-neutral-800">{{ $statInterventi['scadutiAperti'] }}</dd>
-                </div>
+                @if ($vedeStatInterventi)
+                    <div class="flex justify-between gap-4 py-2">
+                        <dt class="text-neutral-500">Interventi ultimi 12 mesi</dt>
+                        <dd class="font-medium tabular-nums text-neutral-800">{{ $statInterventi['dodiciMesi'] }}</dd>
+                    </div>
+                    <div class="flex justify-between gap-4 py-2">
+                        <dt class="text-neutral-500">Scaduti non fatti</dt>
+                        <dd class="font-medium tabular-nums text-neutral-800">{{ $statInterventi['scadutiAperti'] }}</dd>
+                    </div>
+                @endif
+
+                @if ($vedeStatRicambi)
+                    <div class="flex justify-between gap-4 py-2">
+                        <dt class="text-neutral-500">Ricambi montati</dt>
+                        <dd class="font-medium tabular-nums text-neutral-800">{{ $statRicambi['montati'] }}</dd>
+                    </div>
+
+                    {{-- Riga separata e SOLO se ce n'è almeno uno: un pezzo con
+                         `data` NULL è registrato ma non ancora sulla macchina
+                         (ADR-020, ed è il motivo per cui non pesa sul semaforo).
+                         Fonderlo col numero sopra direbbe che è montato; una
+                         riga «In attesa: 0» sempre presente sarebbe rumore su
+                         una macchina che non ha nulla in sospeso. --}}
+                    @if ($statRicambi['inAttesa'] > 0)
+                        <div class="flex justify-between gap-4 py-2">
+                            <dt class="text-neutral-500">In attesa di montaggio</dt>
+                            <dd class="font-medium tabular-nums text-warning-800">{{ $statRicambi['inAttesa'] }}</dd>
+                        </div>
+                    @endif
+
+                    {{-- ⚠️ `$vedeGaranzieRicambio` è `Gate::allows('view',
+                         Garanzia::class)`, cioè l'ability della Policy: MAI
+                         `@can('garanzie.ricambio.view')`, che spatie concede
+                         via `Gate::before` appena il permesso è sul ruolo e che
+                         scavalcherebbe l'impostazione per-Ente di ADR-029.
+                         L'errore è già stato commesso una volta in questo file.
+
+                         Sta qui e non nella card «Garanzia macchina» perché
+                         quella è gated su `garanzie.macchina.view`: ospitarlo là
+                         toglierebbe un dato della propria area a chi vede i
+                         ricambi e non le garanzie della macchina. --}}
+                    @if ($vedeGaranzieRicambio)
+                        <div class="flex justify-between gap-4 py-2">
+                            <dt class="text-neutral-500">Ricambi coperti da garanzia</dt>
+                            <dd class="font-medium tabular-nums text-neutral-800">{{ $statRicambi['copertiDaGaranzia'] }}</dd>
+                        </div>
+                    @endif
+                @endif
+
+                {{-- Tutti i documenti che il tab Documenti elenca: quelli della
+                     macchina E quelli dei suoi interventi, dove vivono i
+                     certificati di taratura — cioè la maggior parte. Il numero
+                     viene dalla collection già caricata da quel tab, così non
+                     esistono due definizioni di «documenti di questa macchina»
+                     libere di divergere. --}}
+                @if ($vedeStatDocumenti)
+                    <div class="flex justify-between gap-4 py-2">
+                        <dt class="text-neutral-500">Documenti allegati</dt>
+                        <dd class="font-medium tabular-nums text-neutral-800">{{ $documenti->count() }}</dd>
+                    </div>
+                @endif
             </dl>
         </x-ui.card>
-    @endcan
+    @endif
 
 </div>

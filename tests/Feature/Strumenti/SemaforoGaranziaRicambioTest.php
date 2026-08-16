@@ -17,6 +17,7 @@ use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
+use Spatie\Permission\Models\Role;
 
 /**
  * La garanzia del ricambio nel semaforo (🔗 ADR-020 — S4 blocco 4).
@@ -390,4 +391,44 @@ it('explains the arancione in Panoramica, neutrally and without a link, to whoev
         ->assertSee('Motivi (1)')
         ->assertSee('Garanzia scaduta il')
         ->assertDontSee('Garanzia ricambio scaduta il');
+});
+
+/**
+ * La freccia «›» del motivo garanzia ricambio è rimasta senza destinazione fino
+ * a che il tab Ricambi non è esistito (S4 blocco 5); ora c'è, e la destinazione
+ * ha un permesso PROPRIO — `ricambio_utilizzo.view` — diverso da quello che
+ * rende visibile il motivo. Le due metà si verificano insieme: mostrarla sempre
+ * darebbe una porta su una stanza che per qualcuno non esiste, non mostrarla mai
+ * riporterebbe il difetto che questo caso chiude.
+ */
+it('links the spare-part motivo to the Ricambi tab, but only to whoever can open that tab', function () {
+    Garanzia::factory()->forRicambio($this->utilizzo)->scaduta()->create();
+
+    // ⚠️ Non basta cercare `tab = 'ricambi'`: quella stringa sta ANCHE nel
+    // bottone del tab in cima alla scheda, che l'Admin vede comunque — e con
+    // quell'asserzione la mutazione «la freccia non porta da nessuna parte»
+    // NON cadeva. Serve la freccia, riconosciuta dal suo title, insieme alla
+    // sua destinazione.
+    $frecciaAiRicambi = "/x-on:click=\"tab = 'ricambi'\"[^>]*Vai alla riga che lo causa/s";
+
+    $html = Livewire::actingAs($this->admin)->test(SchedaStrumento::class, ['strumento' => $this->strumento])
+        ->assertSee('Garanzia ricambio scaduta il')
+        ->html();
+
+    expect($html)->toMatch($frecciaAiRicambi);
+
+    // Ruolo sintetico: oggi nessun ruolo di `config/rbac.php` vede le garanzie
+    // ricambio senza vedere i montaggi, ma la UI dei ruoli di S6 permetterà di
+    // comporne uno così — ed è quello il momento in cui questa riga serve.
+    Role::create(['name' => 'Garanzie senza montaggi'])
+        ->givePermissionTo(['strumenti.view', 'garanzie.ricambio.view']);
+
+    $spaiato = User::factory()->create(['tenant_id' => $this->ente->id, 'two_factor_confirmed_at' => now()]);
+    $spaiato->assignRole('Garanzie senza montaggi');
+
+    Livewire::actingAs($spaiato)->test(SchedaStrumento::class, ['strumento' => $this->strumento])
+        // Il motivo resta, col nome della fonte: l'ability di ADR-029 ce l'ha.
+        ->assertSee('Garanzia ricambio scaduta il')
+        // La freccia no: il tab Ricambi è gated su `ricambio_utilizzo.view`.
+        ->assertDontSeeHtml("tab = 'ricambi'");
 });

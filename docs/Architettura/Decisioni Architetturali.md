@@ -570,6 +570,12 @@ Attuando la voce è emerso il buco che ADR-009 non copriva: chiusa una taratura,
 5. **Sintesi anagrafica** — fornitore (🔗 ADR-023), ubicazione corrente, data installazione, età e stato di obsolescenza.
 6. **Statistiche leggere** — interventi negli ultimi 12 mesi, scaduti-non-fatti aperti, ricambi montati, documenti allegati.
 
+**Emendamento del 15 Ago 2026 (S4 blocco 7, completamento del tab).** Tre precisazioni, prese scrivendolo:
+
+- **Il punto 4 si legge al contrario, e va corretto.** «N pezzi coperti *per chi non ha il permesso*» sottintendeva che l'aggregato fosse il ripiego di chi non vede il dettaglio. Non lo è: un aggregato di coperture **è** informazione sulle garanzie ricambio, e mostrarlo a chi non ha titolo a vederle direbbe a un Tenant in Ente `nascosta` quanti pezzi coperti ci sono sulla propria macchina — cioè la cosa che 🔗 ADR-029 gli nega. Il contatore è quindi **gated come tutto il resto dell'area**, sull'ability `view` di `GaranziaRicambioPolicy` (mai sul permesso nudo: `spatie` lo concederebbe prima che l'impostazione dell'Ente sia letta). Resta valido e distinto il caso dei **motivi del semaforo**, che si degradano a testo neutro per tutti: lì l'aggregato è il pallino, dovuto a chiunque subisca il suo effetto.
+- **Il contatore delle coperture sta accanto ai RICAMBI, non nella card della garanzia macchina**, che è gated su `garanzie.macchina.view`: sono due aree con due permessi, e ospitare l'una nell'altra toglierebbe un dato della propria area a chi ha solo la prima. «Coperto» significa inoltre **coperto adesso**: una garanzia già scaduta non entra nel conteggio.
+- **I ricambi del punto 6 sono due numeri, non uno**: «montati» conta le righe con la data di montaggio valorizzata, «in attesa di montaggio» le altre, e la seconda riga compare solo se maggiore di zero. È lo stesso confine con cui 🔗 ADR-020 decide se un pezzo pesa sul semaforo, e un conteggio unico lo contraddirebbe in una vista che di quel semaforo è la spiegazione.
+
 **Alternative scartate.**
 - *Pannello sul pallino invece di un tab:* è il "badge cliccabile" già rimandato in S3. Su mobile un pannello galleggiante con sei blocchi è inservibile, e il cliente ha chiesto esplicitamente un tab.
 - *Persistere stato e motivi in colonna:* renderebbe la Panoramica istantanea, ma introduce un ricalcolo da tenere in sincronia a ogni evento. Rimandato insieme all'ipotesi di materializzazione già annotata come debito in S3 (paginazione a OFFSET): se arriverà, arriverà per la dashboard S6 — non per un tab che carica un solo strumento.

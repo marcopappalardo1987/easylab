@@ -4,6 +4,7 @@ use App\Http\Controllers\AccessoQr;
 use App\Http\Controllers\ScaricaDocumento;
 use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Fornitori\ElencoFornitori;
+use App\Livewire\Ricambi\RicercaRicambi;
 use App\Livewire\Settings\TwoFactorAuthentication;
 use App\Livewire\Strumenti\ElencoStrumenti;
 use App\Livewire\Strumenti\ImportStrumenti;
@@ -50,6 +51,12 @@ Route::middleware(['auth', 'two-factor.enforce'])->group(function () {
     Route::get('/fornitori', ElencoFornitori::class)
         ->middleware('can:fornitori.view')
         ->name('fornitori.index');
+    // Ricerca incrociata «dove è montato questo pezzo» (ADR-008). Pagina propria
+    // e non un tab della scheda: la domanda parte dal pezzo e attraversa tutte
+    // le macchine, mentre il tab Ricambi vive dentro una macchina sola.
+    Route::get('/ricambi', RicercaRicambi::class)
+        ->middleware('can:ricambi.view')
+        ->name('ricambi.index');
     Route::get('/settings/security', TwoFactorAuthentication::class)->name('settings.security');
 });
 
