@@ -5,6 +5,12 @@
         Cerca un pezzo e vedi su quali macchine è montato, e in quali laboratori.
     </p>
 
+    @if ($esitoUnione)
+        <div class="mt-4 rounded-md border border-success-500 bg-success-100 px-4 py-3 text-sm text-neutral-800">
+            <span aria-hidden="true">✓</span> {{ $esitoUnione }}
+        </div>
+    @endif
+
     <x-ui.card class="mt-6">
         <x-ui.input name="search" wire:model.live.debounce.300ms="search"
             placeholder="Cerca un ricambio… (es. guarnizione O-Ring)" autofocus />
@@ -57,6 +63,16 @@
                                 {{ $r['totale_macchine'] }} {{ $r['totale_macchine'] === 1 ? 'macchina' : 'macchine' }}
                             </x-ui.badge>
                             <x-ui.badge>{{ $r['totale_pezzi'] }} pz</x-ui.badge>
+                            {{-- ADR-008: unire doppioni è l'antidoto al costo di
+                                 ADR-022 — la chiave è il NOME, quindi «O-Ring» e
+                                 «OR» diventano due voci per lo stesso pezzo. Sta
+                                 QUI e non in una pagina di amministrazione a
+                                 parte perché è guardando i risultati affiancati
+                                 che si riconosce un doppione. --}}
+                            @can('ricambi.merge')
+                                <button type="button" wire:click="apriUnione({{ $r['id'] }})"
+                                    class="text-xs font-medium text-primary-600 hover:text-primary-700">Unisci…</button>
+                            @endcan
                             @if ($r['non_montati'] > 0)
                                 {{-- ADR-020: registrato non vuol dire montato, e la
                                      differenza pesa sul semaforo della macchina. --}}
@@ -120,5 +136,57 @@
                 </x-ui.card>
             @endforeach
         </div>
+    @endif
+    {{-- Modale di unione (ADR-008) --}}
+    @if ($unendoId)
+        @php
+            $sorgente = $risultati->firstWhere('id', $unendoId);
+            $altre = $risultati->reject(fn ($x) => $x['id'] === $unendoId);
+        @endphp
+        <x-ui.modal title="Unisci voce di catalogo" close="chiudiUnione">
+            <form wire:submit="unisci" class="space-y-5">
+                <p class="text-sm text-neutral-600">
+                    «<span class="font-medium text-neutral-900">{{ $sorgente['nome'] ?? '' }}</span>» sparirà dal
+                    catalogo e i suoi <span class="font-medium">{{ $sorgente['totale_pezzi'] ?? 0 }}</span> pezzi su
+                    <span class="font-medium">{{ $sorgente['totale_macchine'] ?? 0 }}</span> macchine passeranno
+                    alla voce che scegli.
+                </p>
+
+                @if ($altre->isEmpty())
+                    {{-- Le destinazioni sono le ALTRE voci TROVATE: si unisce ciò
+                         che si sta guardando, non una voce qualunque pescata da un
+                         elenco di migliaia — è la ricerca che ha già fatto il
+                         lavoro di mettere i due doppioni uno accanto all'altro. --}}
+                    <p class="rounded-md border border-warning-500 bg-warning-100 p-3 text-sm text-neutral-800">
+                        Questa ricerca ha trovato una voce sola. Cerca un termine che mostri
+                        anche il doppione, così puoi scegliere dove unirla.
+                    </p>
+                @else
+                    <div>
+                        <label for="destinazioneId" class="block text-sm font-medium text-neutral-800">Unisci in</label>
+                        <select id="destinazioneId" wire:model="destinazioneId"
+                            class="mt-1 block w-full rounded-md border-neutral-300 text-sm shadow-sm focus:border-primary-600 focus:ring-primary-600">
+                            <option value="">— Scegli la voce da tenere —</option>
+                            @foreach ($altre as $altra)
+                                <option value="{{ $altra['id'] }}">{{ $altra['nome'] }}@if ($altra['codice']) ({{ $altra['codice'] }})@endif — {{ $altra['totale_macchine'] }} macchine</option>
+                            @endforeach
+                        </select>
+                        @error('destinazioneId')<p class="mt-1 text-xs text-danger-600">{{ $message }}</p>@enderror
+                    </div>
+
+                    <p class="text-xs text-neutral-400">
+                        I montaggi non vengono ricreati ma rietichettati: id, date e garanzie
+                        restano quelli. La voce unita finisce nel cestino, non cancellata.
+                    </p>
+                @endif
+
+                <div class="flex justify-end gap-3 max-md:flex-col-reverse">
+                    <x-ui.button variant="secondary" wire:click="chiudiUnione" class="max-md:w-full">Annulla</x-ui.button>
+                    @if ($altre->isNotEmpty())
+                        <x-ui.button type="submit" wire:loading.attr="disabled" class="max-md:w-full">Unisci</x-ui.button>
+                    @endif
+                </div>
+            </form>
+        </x-ui.modal>
     @endif
 </div>

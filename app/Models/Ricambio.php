@@ -4,12 +4,14 @@ namespace App\Models;
 
 use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Concerns\BelongsToTenant;
+use App\Support\AuditLog;
 use Database\Factories\RicambioFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
@@ -186,5 +188,84 @@ class Ricambio extends Model
     public function utilizzi(): HasMany
     {
         return $this->hasMany(RicambioUtilizzo::class, 'ricambio_id');
+    }
+
+    /**
+     * Unisce questa voce di catalogo in un'altra (ADR-008 «l'admin può unire
+     * doppioni», peso aumentato da ADR-022 — S4 STRETCH).
+     *
+     * **Perché serve, e perché ADR-022 l'ha reso più probabile**: la chiave del
+     * collega-o-crea è il NOME normalizzato, non il codice costruttore, e sul
+     * campo si scrive quello che si ha in testa. «Guarnizione O-Ring» e
+     * «Guarnizione OR» sono lo stesso pezzo per un tecnico e due voci per il
+     * database — e ogni voce di troppo degrada la ricerca incrociata, che è la
+     * ragione per cui il catalogo esiste.
+     *
+     * **Sposta i montaggi, non li ricrea.** Un `update` sulla FK conserva id,
+     * date, garanzie agganciate e tracce di audit: ricrearli avrebbe rotto le
+     * garanzie ricambio (che puntano a `ricambio_utilizzo`, non al catalogo) e
+     * riscritto uno storico che è la prova di cosa è stato montato e quando.
+     *
+     * **Update by-query e non riga per riga**, che è l'eccezione al «sempre i
+     * metodi di dominio» di questo progetto: gli hook di `RicambioUtilizzo`
+     * verificano che il ricambio sia dello stesso Ente — cosa già garantita qui
+     * dal confronto sui `tenant_id` — e su una voce con centinaia di montaggi
+     * quella verifica costerebbe una query ciascuna per riconfermare un fatto
+     * già stabilito. Il prezzo è che `updated_at` delle righe non cambia, ed è
+     * corretto: il montaggio non è stato modificato, è stato **rietichettato**.
+     *
+     * La voce sorgente si CESTINA e non si cancella: l'unique parziale del
+     * catalogo è `where deleted_at is null`, quindi il nome resta riusabile, e
+     * un merge sbagliato si può leggere nello storico invece di sparire.
+     *
+     * @return int quanti montaggi sono passati alla destinazione
+     */
+    public function unisciIn(self $destinazione): int
+    {
+        if ($destinazione->id === $this->id) {
+            throw new InvalidArgumentException('Ricambio: non si può unire una voce con sé stessa.');
+        }
+
+        // Il confine di Ente è già imposto dagli scope a chi ha risolto i due
+        // model, ma questo metodo è di dominio e deve reggere anche in console,
+        // dove gli scope non filtrano (seeder, comandi, import futuri).
+        if ((int) $destinazione->tenant_id !== (int) $this->tenant_id) {
+            throw new InvalidArgumentException('Ricambio: le due voci appartengono a Enti diversi.');
+        }
+
+        if ($destinazione->trashed()) {
+            throw new InvalidArgumentException('Ricambio: la destinazione è cestinata.');
+        }
+
+        return DB::transaction(function () use ($destinazione): int {
+            $spostati = RicambioUtilizzo::withoutGlobalScopes()
+                ->where('ricambio_id', $this->id)
+                ->update(['ricambio_id' => $destinazione->id]);
+
+            // ⚠️ `disableLogging()` PRIMA di cestinare, o il gesto produrrebbe
+            // DUE righe di audit: la «Cancellazione ricambio» del trait e
+            // l'unione qui sotto. E la prima sarebbe pure fuorviante — dice che
+            // la voce è stata cancellata, mentre è confluita in un'altra, che è
+            // un'altra cosa per chi legge il registro. La cancellazione della
+            // sorgente non è un evento a sé: è una PARTE dell'unione.
+            $this->disableLogging()->delete();
+
+            // `activity()` esplicita, e il criterio è quello di ADR-027: ciò che
+            // conta qui NON è una colonna. In tabella si legge un `deleted_at`
+            // valorizzato, che è indistinguibile da una cancellazione qualunque;
+            // l'informazione — «questa voce è confluita in quest'altra, e con
+            // essa N montaggi» — non esiste da nessuna parte se non la si scrive.
+            activity(AuditLog::NAME)
+                ->causedBy(auth()->user())
+                ->performedOn($destinazione)
+                ->withProperties([
+                    'unita_da_id' => $this->id,
+                    'unita_da_nome' => $this->nome,
+                    'montaggi_spostati' => $spostati,
+                ])
+                ->log("Unito il ricambio «{$this->nome}» in «{$destinazione->nome}»");
+
+            return $spostati;
+        });
     }
 }

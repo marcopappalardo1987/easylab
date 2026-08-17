@@ -84,8 +84,20 @@ it('never lets a model use both the trait and explicit activity() calls', functi
             ->implode('');
     };
 
+    // ⚠️ **Un'eccezione dichiarata, e che deve guadagnarsi il posto.**
+    // `Ricambio::unisciIn()` (ADR-008) scrive una riga esplicita perché
+    // l'informazione «questa voce è confluita in quest'altra, con N montaggi»
+    // NON è una colonna: in tabella resta solo un `deleted_at`, indistinguibile
+    // da una cancellazione qualunque. Il gesto resta però UNO SOLO, perché il
+    // metodo chiama `disableLogging()` prima di cestinare la sorgente — ed è
+    // esattamente ciò che questa regola vuole impedire, cioè due righe per un
+    // gesto. Che sia davvero una sola lo verifica `UnioneDoppioniTest`; togliere
+    // quel `disableLogging()` non fa cadere QUESTO test, fa cadere quello.
+    $ammessi = [Ricambio::class];
+
     $doppi = collect(modelliDiBusiness())
         ->filter(fn (string $c) => in_array(AuditsDomainWrites::class, class_uses_recursive($c), true))
+        ->reject(fn (string $c) => in_array($c, $ammessi, true))
         ->filter(fn (string $c) => str_contains($codiceSenzaCommenti($c), 'activity('))
         ->values()->all();
 

@@ -61,6 +61,15 @@ class RicercaRicambi extends Component
     #[Url]
     public string $search = '';
 
+    /** Voce da unire: la modale è aperta se non è null (ADR-008). */
+    public ?int $unendoId = null;
+
+    /** Destinazione scelta nella modale. */
+    public ?int $destinazioneId = null;
+
+    /** Esito dell'ultima unione, da mostrare una volta sola. */
+    public ?string $esitoUnione = null;
+
     /**
      * Corrispondenze di catalogo.
      *
@@ -235,6 +244,54 @@ class RicercaRicambi extends Component
             'totale_pezzi' => (int) $macchine->sum('pezzi'),
             'non_montati' => (int) $macchine->sum('non_montati'),
         ];
+    }
+
+    /**
+     * Apre la modale di unione (ADR-008: «l'admin può unire doppioni»).
+     *
+     * `findOrFail` sul model e non sull'array dei risultati: riapplica gli scope,
+     * quindi una voce di un altro Ente dà 404 invece di entrare nella modale.
+     */
+    public function apriUnione(int $id): void
+    {
+        $this->authorize('ricambi.merge');
+
+        $this->unendoId = Ricambio::findOrFail($id)->id;
+        $this->destinazioneId = null;
+        $this->esitoUnione = null;
+        $this->resetValidation();
+    }
+
+    public function chiudiUnione(): void
+    {
+        $this->reset(['unendoId', 'destinazioneId']);
+        $this->resetValidation();
+    }
+
+    /**
+     * Esegue l'unione. La regola vive in `Ricambio::unisciIn()`: qui restano
+     * l'autorizzazione, la risoluzione scopata dei due model e il messaggio.
+     */
+    public function unisci(): void
+    {
+        $this->authorize('ricambi.merge');
+
+        $this->validate([
+            'destinazioneId' => ['required', 'integer', 'different:unendoId'],
+        ], [
+            'destinazioneId.required' => 'Scegli la voce in cui unire questa.',
+            'destinazioneId.different' => 'La destinazione non può essere la voce stessa.',
+        ]);
+
+        $sorgente = Ricambio::findOrFail($this->unendoId);
+        $destinazione = Ricambio::findOrFail($this->destinazioneId);
+
+        $spostati = $sorgente->unisciIn($destinazione);
+
+        $this->esitoUnione = "«{$sorgente->nome}» è confluito in «{$destinazione->nome}»"
+            .($spostati > 0 ? ": {$spostati} ".($spostati === 1 ? 'montaggio spostato' : 'montaggi spostati').'.' : '.');
+
+        $this->chiudiUnione();
     }
 
     public function render()
