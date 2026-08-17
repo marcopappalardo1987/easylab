@@ -400,9 +400,28 @@
                     </div>
                 @endif
 
-                <div class="flex justify-end gap-3">
-                    <x-ui.button variant="secondary" wire:click="closeCompleta">Annulla</x-ui.button>
-                    <x-ui.button type="submit" wire:loading.attr="disabled">Conferma</x-ui.button>
+                {{-- Report di fine lavoro (Wireframe §3, Elenco Funzionalità
+                     «foglio di intervento»): è ciò che il tecnico scrive col
+                     telefono in mano, davanti alla macchina, ed è il momento in
+                     cui si ricorda cosa ha trovato. Chiederlo dopo significa non
+                     averlo. Facoltativo di proposito: un lavoro fatto resta
+                     fatto anche senza nota, e pretenderla bloccherebbe la
+                     chiusura degli interventi storici che non ne hanno una. --}}
+                <div>
+                    <label for="reportFineLavoro" class="block text-sm font-medium text-neutral-800">
+                        Report di fine lavoro <span class="font-normal text-neutral-400">— facoltativo</span>
+                    </label>
+                    <textarea id="reportFineLavoro" wire:model="reportFineLavoro" rows="4" maxlength="5000"
+                        placeholder="Cosa hai trovato e cosa hai fatto…"
+                        class="mt-1 block w-full rounded-md border-neutral-300 text-sm shadow-sm focus:border-primary-600 focus:ring-primary-600"></textarea>
+                    @error('reportFineLavoro')<p class="mt-1 text-xs text-danger-600">{{ $message }}</p>@enderror
+                </div>
+
+                {{-- Su un telefono i bottoni vanno a tutta larghezza e la
+                     conferma per ultima, dove arriva il pollice. --}}
+                <div class="flex justify-end gap-3 max-md:flex-col-reverse">
+                    <x-ui.button variant="secondary" wire:click="closeCompleta" class="max-md:w-full">Annulla</x-ui.button>
+                    <x-ui.button type="submit" wire:loading.attr="disabled" class="max-md:w-full">Conferma</x-ui.button>
                 </div>
             </form>
         </x-ui.modal>

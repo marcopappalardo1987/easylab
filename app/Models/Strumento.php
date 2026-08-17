@@ -216,19 +216,54 @@ class Strumento extends Model implements ReachesStrumento
      * e l'etichetta QR stampata è il posto in cui un'ubicazione mancante fa più
      * danno, perché il foglio finisce sulla macchina e nessuno lo rilegge.
      */
-    public function percorsoUbicazione(): string
+    public function percorsoUbicazione(?array $nodi = null): string
     {
+        $risolvi = fn (?int $id) => $id === null
+            ? null
+            : ($nodi !== null
+                ? ($nodi[$id] ?? null)
+                : UnitaOrganizzativa::withoutGlobalScopes()->find($id));
+
         $catena = collect();
-        $nodo = UnitaOrganizzativa::withoutGlobalScopes()->find($this->unita_organizzativa_id);
+        $nodo = $risolvi($this->unita_organizzativa_id);
 
         while ($nodo !== null) {
             $catena->prepend($nodo->nome);
-            $nodo = $nodo->parent_id !== null
-                ? UnitaOrganizzativa::withoutGlobalScopes()->find($nodo->parent_id)
-                : null;
+            $nodo = $risolvi($nodo->parent_id);
         }
 
         return $catena->implode(' › ');
+    }
+
+    /**
+     * Mappa `id → nodo` per risolvere l'ubicazione di molti strumenti senza una
+     * query per riga: la si passa a `percorsoUbicazione()`.
+     *
+     * Serve alla vista di campo, dove la lista è lunga per costruzione e la
+     * risalita costava DUE query a riga — dipartimento più Ente. Un test ne
+     * congela il conteggio, ed è stato quel test a scoprirlo.
+     *
+     * Carica l'albero intero e non i soli antenati necessari: i nodi di un Ente
+     * sono decine, la ricorsione per prenderne un ramo sarebbe più costosa della
+     * tabella intera, e una seconda query per ogni livello di profondità
+     * riporterebbe il problema che questo metodo esiste per togliere.
+     *
+     * @param  iterable<Strumento>  $strumenti
+     * @return array<int, UnitaOrganizzativa>
+     */
+    public static function mappaUbicazioni(iterable $strumenti): array
+    {
+        $tenant = collect($strumenti)->pluck('tenant_id')->filter()->unique();
+
+        if ($tenant->isEmpty()) {
+            return [];
+        }
+
+        return UnitaOrganizzativa::withoutGlobalScopes()
+            ->whereIn('tenant_id', $tenant)
+            ->get(['id', 'nome', 'parent_id', 'tenant_id'])
+            ->keyBy('id')
+            ->all();
     }
 
     /**

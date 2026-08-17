@@ -102,6 +102,9 @@ class SchedaStrumento extends Component
     /** Periodicità in mesi: la chiede la modale, non è un default nascosto. */
     public ?int $mesiProssimaTaratura = null;
 
+    /** Report di fine lavoro: cosa è stato trovato e cosa è stato fatto. */
+    public string $reportFineLavoro = '';
+
     public ?int $deletingInterventoId = null; // modale conferma aperta se non null
 
     // Modale garanzie (S3 punto 7)
@@ -535,6 +538,9 @@ class SchedaStrumento extends Component
         // quasi sempre. Resta una spunta, non un automatismo.
         $this->pianificaProssimaTaratura = $intervento->tipo === TipoIntervento::TaraturaECertificazione;
         $this->mesiProssimaTaratura = null;
+        // Ri-chiudendo un intervento riaperto si ritrova ciò che si era scritto:
+        // ripartire da vuoto farebbe credere che la nota sia andata persa.
+        $this->reportFineLavoro = (string) $intervento->report_fine_lavoro;
         $this->resetValidation();
         $this->showCompletaForm = true;
     }
@@ -554,10 +560,14 @@ class SchedaStrumento extends Component
             'mesiProssimaTaratura' => $eraTaratura && $this->pianificaProssimaTaratura
                 ? ['required', 'integer', 'between:1,120']
                 : ['nullable'],
+            // Facoltativo: un lavoro fatto resta fatto anche senza nota, e
+            // pretenderla qui significherebbe bloccare la chiusura di migliaia
+            // di interventi storici che non ne hanno una.
+            'reportFineLavoro' => ['nullable', 'string', 'max:5000'],
         ]);
 
         // Sempre il metodo di dominio, mai update by-query (invariante nel model).
-        $intervento->segnaFatto(Carbon::parse($this->dataEsecuzione));
+        $intervento->segnaFatto(Carbon::parse($this->dataEsecuzione), $this->reportFineLavoro);
 
         // La successiva nasce DOPO la chiusura e fuori dalla sua transazione:
         // se fallisse, il lavoro fatto resterebbe registrato — chiudere una
@@ -572,7 +582,7 @@ class SchedaStrumento extends Component
 
     public function closeCompleta(): void
     {
-        $this->reset(['completingInterventoId', 'dataEsecuzione', 'pianificaProssimaTaratura', 'mesiProssimaTaratura']);
+        $this->reset(['completingInterventoId', 'dataEsecuzione', 'pianificaProssimaTaratura', 'mesiProssimaTaratura', 'reportFineLavoro']);
         $this->showCompletaForm = false;
     }
 

@@ -81,7 +81,18 @@
                                 </span>
                             @endif
                         </td>
-                        <td data-etichetta="Descrizione" class="px-4 py-3 text-neutral-800">{{ $i->descrizione }}</td>
+                        <td data-etichetta="Descrizione" class="px-4 py-3 text-neutral-800">
+                            {{ $i->descrizione }}
+                            {{-- Il report sta QUI e non in una colonna propria:
+                                 è un testo lungo e quasi sempre assente, e una
+                                 colonna vuota su ogni riga storica avrebbe
+                                 stretto tutte le altre per niente. Sotto la
+                                 descrizione si legge come ciò che è: il seguito
+                                 di quella riga. --}}
+                            @if ($i->report_fine_lavoro)
+                                <span class="mt-1 block text-xs whitespace-pre-line text-neutral-500">{{ $i->report_fine_lavoro }}</span>
+                            @endif
+                        </td>
                         <td data-etichetta="Tecnico" class="px-4 py-3 text-neutral-600">{{ $i->tecnicoLabel() }}</td>
                         @if ($mostraAzioni)
                             <td data-azioni class="px-4 py-3 text-right whitespace-nowrap text-xs max-md:flex max-md:flex-wrap max-md:gap-x-5 max-md:text-sm">

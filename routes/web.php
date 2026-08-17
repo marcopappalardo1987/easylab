@@ -3,6 +3,7 @@
 use App\Http\Controllers\AccessoQr;
 use App\Http\Controllers\ScaricaDocumento;
 use App\Livewire\Anagrafica\Albero;
+use App\Livewire\Campo\Home as CampoHome;
 use App\Livewire\Fornitori\ElencoFornitori;
 use App\Livewire\Ricambi\RicercaRicambi;
 use App\Livewire\Settings\TwoFactorAuthentication;
@@ -57,6 +58,14 @@ Route::middleware(['auth', 'two-factor.enforce'])->group(function () {
     Route::get('/ricambi', RicercaRicambi::class)
         ->middleware('can:ricambi.view')
         ->name('ricambi.index');
+    // Vista di campo (ADR-003/007, Wireframe §3): il punto di partenza di chi
+    // arriva col telefono. `interventi.view` e non il ruolo Tecnico — la pagina
+    // mostra «i miei interventi», quindi per chi non ne ha è semplicemente
+    // vuota, e legare una rotta a un nome di ruolo è ciò che il progetto evita
+    // ovunque tranne dove è inevitabile.
+    Route::get('/campo', CampoHome::class)
+        ->middleware('can:interventi.view')
+        ->name('campo.index');
     Route::get('/settings/security', TwoFactorAuthentication::class)->name('settings.security');
 });
 

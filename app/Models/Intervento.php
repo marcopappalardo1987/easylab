@@ -78,6 +78,7 @@ class Intervento extends Model implements ReachesStrumento
         'data_scadenza',
         'stato',
         'data_esecuzione',
+        'report_fine_lavoro',
     ];
 
     protected $attributes = [
@@ -114,10 +115,19 @@ class Intervento extends Model implements ReachesStrumento
      * Allinea anche la data di montaggio dei ricambi registrati su questo
      * intervento: vedi `allineaRicambiAllaEsecuzione()`.
      */
-    public function segnaFatto(?CarbonInterface $data = null): bool
+    public function segnaFatto(?CarbonInterface $data = null, ?string $report = null): bool
     {
         $this->stato = StatoIntervento::Fatto;
         $this->data_esecuzione = $data;
+
+        // Il report si scrive solo se arriva: `riapri()` non lo cancella e una
+        // ri-chiusura senza nota non deve azzerare quella scritta prima. È lo
+        // stesso principio per cui riaprire non riporta indietro le date di
+        // montaggio — ciò che una persona ha scritto non si perde per effetto
+        // collaterale di un altro gesto.
+        if ($report !== null) {
+            $this->report_fine_lavoro = trim($report) ?: null;
+        }
 
         return DB::transaction(function (): bool {
             $salvato = $this->save();
