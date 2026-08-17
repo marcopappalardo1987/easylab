@@ -6,11 +6,14 @@ use App\Enums\StatoIntervento;
 use App\Enums\StatoSemaforo;
 use App\Models\Concerns\BelongsToOrgNode;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Contracts\ReachesStrumento;
 use App\Support\AuditLog;
 use App\Support\DiagnosiSemaforo;
 use App\Support\MotivoSemaforo;
 use App\Support\Semaforo;
 use Database\Factories\StrumentoFactory;
+use Illuminate\Contracts\Database\Query\Builder as BuilderContract;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -28,12 +31,33 @@ use InvalidArgumentException;
  * (BelongsToTenant) e la restrizione sotto-albero del Responsabile
  * (BelongsToOrgNode).
  */
-class Strumento extends Model
+class Strumento extends Model implements ReachesStrumento
 {
     /** @use HasFactory<StrumentoFactory> */
     use BelongsToOrgNode, BelongsToTenant, HasFactory, SoftDeletes;
 
     protected $table = 'strumenti';
+
+    /**
+     * Per lo strumento il vincolo è l'identità (ADR-030).
+     *
+     * Sembra una riga inutile e invece è quella senza cui il blocco non
+     * funziona: `AccessoTecnico` riconosce il canale "assegnazione" da questo
+     * contratto, e uno `Strumento` che non lo dichiara resta visibile al Tecnico
+     * per il solo portafoglio — cioè chi ha un intervento assegnato non riesce
+     * ad aprire la scheda della macchina su cui deve andare a lavorare.
+     *
+     * Non arriva dal trait `BelongsToOrgNodeThroughStrumento` perché a
+     * `Strumento` quel trait non serve: ha già `unita_organizzativa_id` e usa
+     * `BelongsToOrgNode`, e i due sono mutuamente esclusivi.
+     *
+     * @param  Builder<*>  $query
+     * @param  Builder<*>|BuilderContract  $strumenti
+     */
+    public function vincolaAStrumenti(Builder $query, Builder|BuilderContract $strumenti): void
+    {
+        $query->whereIn($this->qualifyColumn($this->getKeyName()), $strumenti);
+    }
 
     /**
      * NOTA: le colonne `forced_*` sono deliberatamente ESCLUSE. Il form della

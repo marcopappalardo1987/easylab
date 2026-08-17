@@ -252,10 +252,21 @@ class DemoSeeder extends Seeder
             $this->utente($nome, str($nome)->slug('.')->value().".resp.{$slug}.{$i}@demo.test", $ente->id, 'Responsabile Reparto');
         }
 
+        // Un tecnico ESTERNO per Ente (ADR-030): `tenant_id` NULL — è staff
+        // EasyLab, non un dipendente del laboratorio — e accede per portafoglio.
+        //
+        // Senza almeno una di queste righe la demo mostrerebbe un solo tipo di
+        // tecnico su due, e il canale portafoglio non si vedrebbe mai
+        // funzionare: i dodici qui sopra sono INTERNI, e a loro l'accesso
+        // arriva dalle assegnazioni.
+        $nome = self::NOMI[array_rand(self::NOMI)].' '.self::COGNOMI[array_rand(self::COGNOMI)];
+        $esterno = $this->utente($nome, "esterno.{$slug}@easylab.test", null, 'Tecnico');
+        $esterno->portafoglioClienti()->syncWithoutDetaching([$ente->id]);
+
         return ['admin' => $admin, 'tecnici' => $tecnici];
     }
 
-    private function utente(string $nome, string $email, int $tenantId, string $ruolo): User
+    private function utente(string $nome, string $email, ?int $tenantId, string $ruolo): User
     {
         $utente = User::updateOrCreate(
             ['email' => $email],

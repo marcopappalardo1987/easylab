@@ -7,6 +7,7 @@ use App\Enums\TipoIntervento;
 use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Concerns\BelongsToOrgNodeThroughStrumento;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Contracts\ReachesStrumento;
 use App\Support\Semaforo;
 use Carbon\CarbonInterface;
 use Database\Factories\InterventoFactory;
@@ -39,7 +40,7 @@ use Illuminate\Support\Facades\DB;
  * eventi). L'invariante `interventi.tenant_id == strumenti.tenant_id` regge la
  * sicurezza di DepartmentThroughStrumentoScope: va preservata.
  */
-class Intervento extends Model
+class Intervento extends Model implements ReachesStrumento
 {
     /** @use HasFactory<InterventoFactory> */
     /**

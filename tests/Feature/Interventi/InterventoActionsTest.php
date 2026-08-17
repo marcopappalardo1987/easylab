@@ -176,7 +176,14 @@ it('forbids a Tenant from every intervento action', function () {
 it('lets a Tecnico complete and reopen but not create, update or delete', function () {
     $tecnico = User::factory()->create(['tenant_id' => $this->ente->id]);
     $tecnico->assignRole('Tecnico');
-    $intervento = Intervento::factory()->forStrumento($this->strumento)->scaduto()->create();
+
+    // ⚠️ `tecnico_id` dal 17 Ago 2026 (ADR-030): senza assegnazione il tecnico
+    // non vede l'intervento, quindi non potrebbe nemmeno provare a chiuderlo — e
+    // il caso misurerebbe l'accesso invece dei PERMESSI, che è ciò di cui parla.
+    // Non è un vincolo artificioso: chiudere un lavoro che non ti è stato
+    // affidato non è uno scenario che ADR-007 preveda.
+    $intervento = Intervento::factory()->forStrumento($this->strumento)->scaduto()
+        ->create(['tecnico_id' => $tecnico->id]);
 
     scheda($tecnico, $this->strumento)
         ->call('openCompleta', $intervento->id)

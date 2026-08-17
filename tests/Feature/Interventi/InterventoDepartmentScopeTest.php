@@ -133,8 +133,21 @@ it('exposes withoutGlobalScope as an escape hatch from the department filter', f
     expect(Intervento::withoutGlobalScope(DepartmentThroughStrumentoScope::class)->count())->toBe(3);
 });
 
-it('does not yet grant a Tecnico access through an assigned intervento (ADR-007 lands in S4)', function () {
-    // Il Tecnico è senza tenant: fail-closed (ADR-018). Congela il debito noto.
+/**
+ * ⚠️ **Questo caso diceva l'opposto fino al 17 Ago 2026**, e il cambiamento è
+ * il blocco 9 di S4: si chiamava «does not YET grant a Tecnico access through an
+ * assigned intervento (ADR-007 lands in S4)» e congelava il debito, cioè il
+ * fatto che un tecnico senza tenant non vedesse nemmeno ciò che gli era
+ * assegnato. ADR-030 lo salda, quindi l'affermazione si rovescia: non è un test
+ * adattato a una rottura, è un test che ha finito di descrivere un'assenza.
+ *
+ * Resta però metà del vecchio contenuto, ed è la metà che conta: l'assegnazione
+ * dà accesso a **quella macchina** e a nient'altro. Un tecnico che, ricevuto un
+ * intervento, si ritrovasse l'Ente intero sarebbe il difetto peggiore che questo
+ * blocco poteva introdurre — e sarebbe passato inosservato se il caso avesse
+ * verificato solo che ora "vede qualcosa".
+ */
+it('grants a Tecnico access to the machine of an assigned intervento, and to nothing else', function () {
     $tecnico = interventiUserWith('Tecnico', null);
     Intervento::withoutGlobalScopes()
         ->whereKey($this->intA1->id)
@@ -142,5 +155,18 @@ it('does not yet grant a Tecnico access through an assigned intervento (ADR-007 
 
     $this->actingAs($tecnico);
 
-    expect(Intervento::count())->toBe(0);
+    // Uno solo: quello assegnato. Gli altri tre interventi dell'Ente A e dell'Ente B
+    // restano invisibili, perché l'assegnazione non è un lasciapassare sull'Ente.
+    expect(Intervento::pluck('id')->all())->toBe([$this->intA1->id]);
+    expect(Strumento::pluck('id')->all())->toBe([$this->strumentoA1->id]);
+});
+
+it('leaves a Tecnico with neither assignments nor portfolio seeing nothing at all', function () {
+    // Il fail-closed di ADR-018 sopravvive ad ADR-030 per COSTRUZIONE: i due
+    // canali sono `IN (sottoquery)`, e due sottoquery vuote danno falso senza
+    // bisogno di un ramo dedicato che qualcuno debba ricordarsi di scrivere.
+    $this->actingAs(interventiUserWith('Tecnico', null));
+
+    expect(Intervento::count())->toBe(0)
+        ->and(Strumento::count())->toBe(0);
 });

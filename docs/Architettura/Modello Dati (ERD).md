@@ -102,7 +102,10 @@ Utente della piattaforma. Auth/2FA via Jetstream/Fortify (ADR-012). Non tutti gl
 | `name` | string | |
 | `email` | string unique | |
 | `password` | string | |
-| `tenant_id` | bigint nullable, FK → `unita_organizzativa.id` | NULL per utenti piattaforma (Developer/Superadmin/Tecnico); valorizzato per Admin/Responsabile/Tenant. |
+| `tenant_id` | bigint nullable, FK → `unita_organizzativa.id` | Valorizzato per Admin/Responsabile/Tenant **e per Developer/Superadmin**, che 🔗 ADR-018 ha reso tenant-bound (l'accesso cross-tenant passa solo dall'impersonazione). NULL per il **Tecnico esterno** (staff EasyLab), che accede per portafoglio ∪ assegnazione; valorizzato per il **Tecnico interno**, dipendente del laboratorio, dove però non è un criterio di accesso ma una difesa in profondità — 🔗 ADR-030. |
+
+> **Revisione del 17 Ago 2026 (S4 blocco 9).** Questa riga diceva «NULL per utenti piattaforma (Developer/Superadmin/Tecnico)» ed era falsa in due punti su tre: per Developer e Superadmin da 🔗 ADR-018, che li ha vincolati al proprio Ente, e per il Tecnico da 🔗 ADR-030, che ne riconosce due forme. Restava vera solo per il tecnico esterno, ed è il tipo di riga che si legge come specifica e nel frattempo ha smesso di descrivere il sistema.
+
 | `two_factor_secret` / `two_factor_recovery_codes` | text nullable | 2FA (Fortify). |
 | `is_active` | boolean | Abilitazione (provisioning/lockout — ADR-012/013). |
 | timestamps, `deleted_at` | | soft delete. |

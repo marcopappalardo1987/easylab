@@ -5,7 +5,10 @@ namespace App\Models;
 use App\Enums\TipoSpostamento;
 use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Contracts\ReachesStrumento;
 use Database\Factories\SpostamentoStrumentoFactory;
+use Illuminate\Contracts\Database\Query\Builder as BuilderContract;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -33,12 +36,36 @@ use RuntimeException;
  * stanno le eccezioni di questa classe. Un `update()` lancia prima di arrivare
  * a scrivere, quindi non lascia né riga né traccia.
  */
-class SpostamentoStrumento extends Model
+class SpostamentoStrumento extends Model implements ReachesStrumento
 {
     /** @use HasFactory<SpostamentoStrumentoFactory> */
     use AuditsDomainWrites, BelongsToTenant, HasFactory;
 
     protected $table = 'spostamenti_strumento';
+
+    /**
+     * Implementazione di `ReachesStrumento` (ADR-030): il tecnico che ha un
+     * intervento assegnato deve poter leggere **dove è stata** la macchina su
+     * cui va a lavorare — è la «lettura storico» che ADR-003 chiede alla vista
+     * di campo del blocco 10.
+     *
+     * Scritta a mano invece di arrivare da `BelongsToOrgNodeThroughStrumento`,
+     * e la differenza non è di comodo: quel trait porta con sé anche
+     * `DepartmentThroughStrumentoScope`, cioè cambierebbe la visibilità degli
+     * spostamenti per il Responsabile — una decisione che non appartiene a
+     * questo blocco e che va presa guardando il caso suo (uno spostamento
+     * attraversa due nodi, quindi «di quale nodo è» non ha una risposta ovvia).
+     * Il meta-test di `TenantScopeGuardrailTest` ha segnalato questo modello, e
+     * segnalarlo era giusto: senza, il tecnico avrebbe perso lo storico in
+     * silenzio.
+     *
+     * @param  Builder<*>  $query
+     * @param  Builder<*>|BuilderContract  $strumenti
+     */
+    public function vincolaAStrumenti(Builder $query, Builder|BuilderContract $strumenti): void
+    {
+        $query->whereIn($this->qualifyColumn('strumento_id'), $strumenti);
+    }
 
     protected $fillable = [
         'tenant_id',

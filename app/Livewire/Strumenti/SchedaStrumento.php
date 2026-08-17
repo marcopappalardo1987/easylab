@@ -21,6 +21,7 @@ use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Rules\NomeRicambio;
+use App\Support\Tenancy\AccessoTecnico;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -122,9 +123,23 @@ class SchedaStrumento extends Component
     /** @var array{stato:string,motivo:string} */
     public array $forzaForm = ['stato' => '', 'motivo' => ''];
 
+    /**
+     * ⚠️ La traccia sta in `mount` e non in `render` (ADR-007/030): `render`
+     * rigira a ogni interazione con la pagina — un filtro, l'apertura di una
+     * modale — e produrrebbe decine di righe per una sola visita, rendendo il
+     * registro illeggibile proprio a chi deve consultarlo. `mount` gira una
+     * volta per apertura, che è l'evento che l'ADR vuole registrato.
+     *
+     * La chiamata non è condizionata: `tracciaAperturaScheda()` è no-op per
+     * chiunque non sia un Tecnico, così il controllo di ruolo resta scritto in
+     * un posto solo e il secondo punto d'ingresso (la scansione QR) potrà
+     * chiamarla allo stesso modo.
+     */
     public function mount(Strumento $strumento): void
     {
         $this->strumento = $strumento;
+
+        AccessoTecnico::tracciaAperturaScheda($strumento);
     }
 
     public function edit(): void

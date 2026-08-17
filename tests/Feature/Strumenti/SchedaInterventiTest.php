@@ -147,11 +147,19 @@ it('shows the list to a Tenant but no actions (read-only)', function () {
         ->assertDontSee('Segna come fatto');
 });
 
-it('shows the list to a Tecnico of the ente', function () {
+/**
+ * ⚠️ Si chiamava «shows the list to a Tecnico of the ENTE» fino al 17 Ago 2026, e
+ * il titolo era già la regola sbagliata: da ADR-030 appartenere all'Ente non dà
+ * accesso a un tecnico: glielo dà l'intervento assegnato (o il portafoglio).
+ * Qui l'assegnazione arriva dalla riga stessa che il caso vuole leggere — che è
+ * poi la situazione reale, «vedo la scheda perché devo andarci a lavorare».
+ */
+it('shows the list to a Tecnico who has been assigned an intervento on the machine', function () {
     $tecnico = User::factory()->create(['tenant_id' => $this->ente->id]);
     $tecnico->assignRole('Tecnico');
 
-    Intervento::factory()->forStrumento($this->strumento)->create(['descrizione' => 'Taratura annuale']);
+    Intervento::factory()->forStrumento($this->strumento)
+        ->create(['descrizione' => 'Taratura annuale', 'tecnico_id' => $tecnico->id]);
 
     Livewire::actingAs($tecnico)->test(SchedaStrumento::class, ['strumento' => $this->strumento])
         ->assertSee('Taratura annuale');

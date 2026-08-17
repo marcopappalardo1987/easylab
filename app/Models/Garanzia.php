@@ -5,12 +5,14 @@ namespace App\Models;
 use App\Enums\SoggettoGaranzia;
 use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Contracts\ReachesStrumento;
 use App\Models\Scopes\GaranziaDepartmentScope;
 use App\Models\Scopes\GaranziaRicambioPrivacyScope;
 use App\Support\Semaforo;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Database\Factories\GaranziaFactory;
+use Illuminate\Contracts\Database\Query\Builder as BuilderContract;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -50,7 +52,7 @@ use InvalidArgumentException;
  * `Strumento::garanzie()`. Compaiono dal 15 Ago 2026 nel **tab Ricambi**, dove
  * vivono accanto al pezzo e alle azioni che le riguardano.
  */
-class Garanzia extends Model
+class Garanzia extends Model implements ReachesStrumento
 {
     /**
      * @use HasFactory<GaranziaFactory>
@@ -313,6 +315,57 @@ class Garanzia extends Model
     public function isScaduta(): bool
     {
         return $this->data_scadenza_effettiva->lt(today());
+    }
+
+    /**
+     * Implementazione di `ReachesStrumento` (ADR-030) — e il caso per cui quel
+     * contratto chiede una RESTRIZIONE invece di una colonna.
+     *
+     * Le strade verso lo strumento sono due, le stesse di
+     * `GaranziaDepartmentScope` (ERD §6.1):
+     *
+     *   soggetto = macchina  →  garanzie.strumento_id
+     *   soggetto = ricambio  →  garanzie.ricambio_utilizzo_id → ricambio_utilizzo.strumento_id
+     *
+     * Con un contratto "dammi la colonna" il secondo ramo sarebbe inesprimibile:
+     * su una riga `ricambio` `strumento_id` è NULL e `NULL IN (...)` è UNKNOWN,
+     * quindi il Tecnico non vedrebbe le garanzie dei pezzi montati sulla
+     * macchina che gli è stata assegnata — fail-closed, ma sbagliato, perché il
+     * permesso ce l'ha (è lo stesso difetto che il blocco 2 aveva corretto per
+     * il Responsabile).
+     *
+     * ⚠️ **Le due clausole stanno in un gruppo di parentesi proprio.** Fuori dal
+     * gruppo l'OR si legherebbe alla condizione applicata prima — il portafoglio
+     * — e il risultato sarebbe «(portafoglio OR strumento assegnato) OR utilizzo
+     * assegnato» invece dell'unione voluta: un ramo senza il vincolo che lo
+     * precede. Uno scope mal parentesizzato non restringe, ALLARGA.
+     *
+     * ⚠️ **La subquery interna NON riapplica `CurrentTenant::id()`**, ed è la
+     * differenza rispetto a `GaranziaDepartmentScope`: per un tecnico ESTERNO
+     * quel valore è NULL, e `where tenant_id = null` non seleziona nulla — il
+     * ramo ricambio morirebbe in silenzio proprio per chi ne ha più bisogno. Il
+     * confine non si perde: `$strumenti` contiene già i soli strumenti a cui il
+     * tecnico ha titolo, e il tenant di una riga `ricambio_utilizzo` è per
+     * invariante quello del suo strumento.
+     *
+     * `withoutGlobalScopes()` per non annidare un secondo livello 2 dentro il
+     * primo; il soft delete va quindi riapplicato a mano — una riga cestinata
+     * non esiste per nessuna lettura di dominio.
+     *
+     * @param  Builder<*>  $query
+     * @param  Builder<*>|BuilderContract  $strumenti
+     */
+    public function vincolaAStrumenti(Builder $query, Builder|BuilderContract $strumenti): void
+    {
+        $query->where(fn (Builder $strade) => $strade
+            ->whereIn($this->qualifyColumn('strumento_id'), $strumenti)
+            ->orWhereIn(
+                $this->qualifyColumn('ricambio_utilizzo_id'),
+                RicambioUtilizzo::withoutGlobalScopes()
+                    ->whereNull('ricambio_utilizzo.deleted_at')
+                    ->whereIn('ricambio_utilizzo.strumento_id', $strumenti)
+                    ->select('ricambio_utilizzo.id')
+            ));
     }
 
     public function strumento(): BelongsTo

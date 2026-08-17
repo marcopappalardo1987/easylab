@@ -32,12 +32,12 @@ Nomi ruolo **identici** a ERD §3.1 (usati così come stringa spatie).
 | `Admin` | Tenant-bound | valorizzato | ❌ | "Piccolo EasyLab" sul proprio Ente: anagrafica, interventi, garanzie (incl. ricambio), fornitori, forzatura semaforo, abbonamento proprio. |
 | `Responsabile Reparto` | Tenant-bound | valorizzato | ❌ | Come Admin sull'operatività, ma ristretto al **sotto-albero** assegnato (pivot `responsabile_unita`); niente billing/audit/provisioning. |
 | `Tenant` | Tenant-bound | valorizzato | ❌ | Laboratorio/Ente finale: vista semaforo, interventi, documenti, garanzia **macchina**. Mai garanzie ricambio (privacy). |
-| `Tecnico` | Piattaforma | NULL | ❌ (accesso derivato) | Personale sul campo: accesso a strumenti = **portafoglio ∪ assegnazione** (ADR-007), ogni accesso loggato. |
+| `Tecnico` | Piattaforma **o** Ente | NULL (esterno) **o** valorizzato (interno) | ❌ (accesso derivato) | Personale sul campo: accesso a strumenti = **portafoglio ∪ assegnazione** (ADR-007/030) per **entrambe** le forme, ogni accesso loggato. Per l'interno il `tenant_id` è difesa in profondità (in AND), non un criterio: appartenere all'Ente non dà accesso alle sue macchine. |
 
 **Note sulla gerarchia.**
 - `Developer` e `Superadmin` bypassano il Global Scope (vedono tutti i tenant) — indispensabile per dashboard globali e assistenza (🔗 ADR-001).
 - `Superadmin` eredita *funzionalmente* tutti i permessi di `Admin` (Funzionalità per Ruolo §2: "tutte le funzionalità dell'Admin sono integrate nel superadmin").
-- `Tecnico` è un ruolo di piattaforma con accesso **derivato** (non bypassa lo scope, ma ne ha uno proprio come unione di due insiemi — §6, ADR-007), non un utente-tenant.
+- `Tecnico` è un ruolo con accesso **derivato** (non bypassa lo scope, ma ne ha uno proprio come unione di due insiemi — §6, ADR-007/030). Ne esistono **due forme**: l'**esterno** (staff EasyLab, `tenant_id` NULL, con portafoglio clienti) e l'**interno** (dipendente del laboratorio, `tenant_id` valorizzato). La regola di visibilità è la stessa per entrambi: la forma cambia solo *da dove* arriva l'accesso, non *quanto* se ne ottiene.
 
 ---
 
@@ -153,7 +153,7 @@ Risorse derivate dall'ERD §3–§9. Questo è l'elenco canonico che il seeder S
 
 **Note di scope (livello "su quali righe", vedi ERD §10):**
 - ¹ **Responsabile Reparto / Admin:** limitato al proprio Ente; il Responsabile è ulteriormente ristretto al **sotto-albero** assegnato (`responsabile_unita`, 🔗 ADR-006). `Admin.utenti.*` e `audit.view` valgono solo per il proprio Ente.
-- ² **Tecnico:** solo strumenti in **portafoglio ∪ assegnazione** (🔗 ADR-007); ogni accesso loggato (cross-tenant).
+- ² **Tecnico:** solo strumenti in **portafoglio ∪ assegnazione** (🔗 ADR-007, esteso da 🔗 **ADR-030** il 17 Ago 2026); ogni accesso loggato — e dal 17 Ago **per tutti i tecnici**, non solo per quelli esterni, perché distinguerli richiederebbe di fidarsi di un `tenant_id` che ADR-030 declassa da criterio a difesa. È la seconda eccezione al perimetro di ADR-027 «si tracciano le scritture, non le letture», dopo il download documenti (ADR-026).
 - ³ **Tenant:** vede ricambi/utilizzi montati sulle proprie macchine, **ma non** la garanzia del pezzo (`garanzie.ricambio.*` = ❌, 🔗 ADR-004). Vede però il **pallino arancione** che quella garanzia accende (🔗 ADR-020): il divieto è sul dato, non sul suo effetto.
 - ⁶ **Tecnico — modifica approvata l'8 Ago 2026** (🔗 ADR-027). Gestisce le garanzie dei ricambi che monta: è la fonte del dato, e negargliela costringeva a farla compilare a chi il pezzo non l'ha visto. Il controllo non è il divieto ma la **traccia**: ogni scrittura finisce nel canale `audit` con chi/cosa/quando. ⚠️ Cambia un default del seeder S1 e **richiede di riscrivere il test** `never grants spare-part warranties to Tenant or Tecnico`, che congelava la regola sbagliata.
 - ⁵ **Tenant — approvata il 3 Ago 2026, APPLICATA il 15 Ago 2026** (🔗 ADR-023): fra le due date il documento affermava un default che `config/rbac.php` non produceva, e il riseeding non l'avrebbe aggiunto da solo. `fornitori.view` passa da ❌ a ✅ **in sola lettura**: il fornitore è ora un campo della scheda strumento e della Panoramica, e l'anagrafica è popolata *dall'Ente stesso* — nascondere al cliente da chi ha comprato la propria macchina non protegge nulla e lascerebbe un campo vuoto inspiegabile. Creazione/modifica restano all'Admin. ⚠ **Cambia un default del seeder S1** (`config/rbac.php`), quindi va con un test che asserisca il nuovo default: è l'unico modo perché una riga di matrice non torni indietro da sola al prossimo riseed.

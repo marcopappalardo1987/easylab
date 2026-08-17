@@ -176,7 +176,7 @@ Il QR è quindi una scorciatoia di navigazione (evita la ricerca manuale), non u
 
 **ADR-007 — Accesso dei Tecnici: per assegnazione di intervento E per portafoglio clienti (in unione)**
 
-*Stato: Accettata*
+*Stato: **Attuata il 17 Ago 2026** (S4 blocco 9) — **estesa da ADR-030**, che distingue il tecnico interno da quello esterno e ne unifica la regola di accesso. Nulla di quanto segue è stato ritirato: i due canali, il pivot `tecnico_cliente` e l'audit sono attuati alla lettera.*
 
 **Contesto.** I tecnici (staff EasyLab) operano su macchine di clienti/tenant diversi: serve un'eccezione controllata allo scoping per tenant (ADR-001/006) senza dare a ogni tecnico la visione globale di tutti i clienti (rischio privacy/GDPR).
 
@@ -747,3 +747,34 @@ Ma il caso opposto esiste davvero — un Ente servito da EasyLab in full service
   L'impostazione **non allarga mai**: un Ente in `modifica` non dà nulla a chi il permesso non ce l'ha. Conseguenza da mettere in conto: uscito dal set 🔒, l'editor di S6 potrà revocare il permesso al ruolo `Tenant` per tutti gli Enti con un click, scavalcando di fatto ogni impostazione — è coerente (chi governa la piattaforma governa il default), ma va saputo.
 - **Il vincolo di scrittura NON può appoggiarsi al permesso nudo.** `spatie` registra un `Gate::before` che **concede** non appena il permesso esiste sul ruolo: un `Gate::define` omonimo non verrebbe mai raggiunto, e un secondo `before` registrato dopo nemmeno. Serve quindi un'**ability di Policy** distinta dal nome del permesso — che è del resto ciò che Schema Ruoli §6 prescriveva già («applicato via Policy + Global Scope»).
 - 🔗 Si incrocia con la questione aperta **«un utente, N Enti»** (vedi roadmap S5): se l'abbonamento arriverà a coprire più Enti, questa impostazione resta per-Ente ma il suo intestatario sarà l'account, non il singolo Ente.
+
+---
+
+**ADR-030 — Il Tecnico esiste in due forme (interno ed esterno), e la regola di accesso è una sola**
+
+*Stato: Accettata (17 Ago 2026) — **estende ADR-007**, che resta valido in ogni sua parte: i due canali, il pivot, l'audit. Attuata nello stesso giorno (S4 blocco 9).*
+
+**Contesto.** ADR-007 descrive il Tecnico come **staff EasyLab** che opera su clienti diversi, e chiude dicendo che «non è un utente-tenant: vive a livello piattaforma». L'ERD, di conseguenza, dà `users.tenant_id` NULL per il Tecnico. Il `DemoSeeder` però glielo valorizzava, e non per errore: esiste una seconda figura, reale e frequente, che ADR-007 non nomina — il **tecnico dipendente del laboratorio**, che non serve più clienti perché ne ha uno solo, il proprio.
+
+Fino a S4 la contraddizione non costava nulla, perché il Tecnico non vedeva niente in ogni caso (fail-closed di ADR-018, congelato da un test). Implementando l'accesso andava sciolta, e sceglierne una sola forma avrebbe fatto danni in entrambe le direzioni: «solo esterno» rende inesprimibile il tecnico interno; «solo interno» cancella il portafoglio clienti, cioè metà di ADR-007.
+
+**Decisione.**
+
+1. **Due forme, distinte dal dato**: `users.tenant_id` NULL → tecnico **esterno** (staff EasyLab); valorizzato → tecnico **interno** (dipendente dell'Ente).
+2. **Una sola regola di visibilità, per entrambi**:
+
+   > visibile ⇔ riga di un Ente nel **portafoglio** ∪ riga della macchina di un **intervento assegnato**
+
+   Anche l'interno vede quindi solo le macchine che gli sono state affidate, e **non più tutto il proprio Ente**. È l'esposizione minima che ADR-007 già voleva; applicarla a una sola delle due forme avrebbe significato due regole da tenere allineate, cioè due regole destinate a divergere.
+3. **Il `tenant_id` dell'interno resta, come difesa in profondità**: si applica in AND al criterio. Non è più un criterio di accesso, ma impedisce che un errore nel portafoglio — una riga inserita per sbaglio dalla futura pagina permessi — porti un dipendente del laboratorio A dentro i dati del laboratorio B.
+4. **L'audit vale per tutti i tecnici**, interni compresi. È la **seconda eccezione** al perimetro di ADR-027 «si tracciano le scritture, non le letture» — la prima è il download dei documenti (ADR-026). Distinguere interno da esterno vorrebbe dire far dipendere la traccia da `tenant_id`, che questo ADR declassa espressamente da criterio a difesa: il registro si baserebbe su un dato che abbiamo appena dichiarato non portante.
+
+**Conseguenze.**
+
+- **Il fail-closed di ADR-018 sopravvive per costruzione, non per una guardia.** Entrambi i canali sono `IN (sottoquery)`: due sottoquery vuote danno falso, quindi un tecnico senza portafoglio né assegnazioni non vede nulla senza che nessuno debba ricordarsi di scrivere il ramo «se non ha niente».
+- **Il ramo vive in `TenantScope` e non in uno scope separato**, perché il criterio **sostituisce** il confine Ente — per l'esterno non c'è alcun Ente da cui partire — mentre un secondo scope avrebbe potuto solo comporsi in AND, cioè restringere ciò che non esiste ancora.
+- **Nuovo contratto `ReachesStrumento`** (`app/Models/Contracts/`): il modello sa **restringere una query** alle proprie righe che si riferiscono a un insieme di strumenti. Il contratto è la restrizione e non la colonna, ed è `Garanzia` a imporlo: allo strumento arriva per due strade — `strumento_id` sulle righe macchina, il doppio salto via `ricambio_utilizzo` su quelle ricambio — e con un contratto «dammi la colonna» il secondo ramo sarebbe inesprimibile, perché `NULL IN (...)` è UNKNOWN. È lo stesso difetto che il blocco 2 aveva corretto per il Responsabile.
+- **Dimenticare il contratto non apre falle ma toglie accessi in silenzio**: il modello resta raggiungibile per il solo portafoglio. Un meta-test (`TenantScopeGuardrailTest`) esige quindi che ogni modello con `strumento_id` lo dichiari — e alla prima esecuzione ha segnalato `SpostamentoStrumento`, cioè lo storico che la vista di campo del blocco 10 deve mostrare.
+- **Cinque test preesistenti hanno cambiato affermazione**, tutti per la restrizione del punto 2 e ciascuno annotato sul posto: quello che congelava il debito di ADR-007 (rovesciato), due di `GaranziaPrivacyTest` (il tecnico riceve ora il portafoglio, o misurerebbero l'accesso invece della privacy), uno di `InterventoActionsTest` e uno di `SchedaInterventiTest`, che si chiamava «shows the list to a Tecnico of the ENTE» — un titolo che era già la regola sbagliata.
+- **La UI del portafoglio non esiste ancora**: in S4 nascono pivot, scope, audit e seeder. La gestione arriva in S6 con la pagina permessi, dove vivranno anche gli altri controlli di questo tipo.
+- 🔗 Si incrocia con **«un utente, N Enti»** (roadmap S5): il tecnico esterno è oggi l'unico utente della piattaforma che legittimamente attraversa più Enti, e lo fa **senza** `tenant_id`. Se quella questione porterà a un'entità *account* sopra l'Ente, il portafoglio sarà la relazione da rileggere per prima.

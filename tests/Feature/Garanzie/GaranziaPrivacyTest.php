@@ -35,9 +35,19 @@ beforeEach(function () {
     $this->garanziaMacchina = Garanzia::factory()->forStrumento($this->strumento)->create();
     $this->garanziaRicambio = Garanzia::factory()->forRicambio($this->utilizzo)->create();
 
+    // ⚠️ Dal 17 Ago 2026 (ADR-030) un Tecnico non vede una macchina per il solo
+    // fatto di stare nel suo Ente: gli serve il portafoglio o un intervento
+    // assegnato. Qui glielo si dà col portafoglio, e non è un aggiustamento per
+    // far tornare il verde — è ciò che tiene questi casi ONESTI: parlano di
+    // privacy delle garanzie ricambio, e senza accesso misurerebbero l'accesso,
+    // cioè passerebbero anche se il privacy scope fosse rotto.
     $this->utente = function (string $ruolo): User {
         $u = User::factory()->create(['tenant_id' => $this->ente->id, 'two_factor_confirmed_at' => now()]);
         $u->assignRole($ruolo);
+
+        if ($ruolo === 'Tecnico') {
+            $u->portafoglioClienti()->attach($this->ente);
+        }
 
         return $u;
     };

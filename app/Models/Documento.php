@@ -6,6 +6,7 @@ use App\Enums\TipoDocumento;
 use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Concerns\BelongsToOrgNodeThroughStrumento;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Contracts\ReachesStrumento;
 use Database\Factories\DocumentoFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -31,7 +32,7 @@ use InvalidArgumentException;
  * token — chi ce l'ha legge il file fino alla scadenza, con la Policy fuori dal
  * giro — e legherebbe il prodotto al provider.
  */
-class Documento extends Model
+class Documento extends Model implements ReachesStrumento
 {
     /** @use HasFactory<DocumentoFactory> */
     use AuditsDomainWrites, BelongsToOrgNodeThroughStrumento, BelongsToTenant, HasFactory, SoftDeletes;

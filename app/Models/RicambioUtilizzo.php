@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Concerns\BelongsToOrgNodeThroughStrumento;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Contracts\ReachesStrumento;
 use App\Models\Scopes\GaranziaRicambioPrivacyScope;
 use Carbon\CarbonInterface;
 use Database\Factories\RicambioUtilizzoFactory;
@@ -49,7 +50,7 @@ use InvalidArgumentException;
  * FLUSSO, non di schema, perché la riga nasce prima della sua garanzia dentro
  * la stessa transazione (ERD §7.2).
  */
-class RicambioUtilizzo extends Model
+class RicambioUtilizzo extends Model implements ReachesStrumento
 {
     /** @use HasFactory<RicambioUtilizzoFactory> */
     use AuditsDomainWrites, BelongsToOrgNodeThroughStrumento, BelongsToTenant, HasFactory, SoftDeletes;
