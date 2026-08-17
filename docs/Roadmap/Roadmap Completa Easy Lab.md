@@ -1,6 +1,6 @@
 🗺️ Roadmap Completa — Easy Lab
 
-*Piano cronologico di progetto: fasi progettuali + sprint datati fino al rilascio della V1 (MVP) e backlog delle versioni successive. Questo documento è il **master roadmap**: incorpora e supera i due ToDo originali (`Fase 1 - ToDo List Installazione Stack.md` e `Fase 2 - ToDo List.md`), che restano come materiale di origine. Tutte le scelte qui riflesse sono tracciate in `../Architettura/Decisioni Architetturali.md` (ADR-001 → ADR-027).*
+*Piano cronologico di progetto: fasi progettuali + sprint datati fino al rilascio della V1 (MVP) e backlog delle versioni successive. Questo documento è il **master roadmap**: incorpora e supera i due ToDo originali (`Fase 1 - ToDo List Installazione Stack.md` e `Fase 2 - ToDo List.md`), che restano come materiale di origine. Tutte le scelte qui riflesse sono tracciate in `../Architettura/Decisioni Architetturali.md` (ADR-001 → ADR-031).*
 
 > **Revisione del 3 Agosto 2026 — briefing col cliente destinatario** (🔗 ADR-019 ÷ ADR-024). Sei chiarimenti di dominio, di cui uno **revoca** lavoro già consegnato in S3. Le date restano invariate: il rientro è contenuto (vedi **Sprint 3-bis**) e cade dentro la coda di S3 (3–7 Ago), mentre le voci nuove sono assorbite da S4, che già prevedeva ricambi, garanzia pezzo e fornitori. L'unica aggiunta di sostanza è il **tab Panoramica** (ADR-024), messo in S3-bis di proposito: tocca `Semaforo`, la stessa classe che S4 dovrà estendere, e farlo prima evita di rimetterci mano due volte con criteri diversi.
 
@@ -222,6 +222,12 @@ gantt
 **Obiettivo:** operatività sul campo: catalogo ricambi, documenti, QR sicuro, interfaccia tecnico mobile.
 **Dipendenze:** S3 (interventi/garanzie).
 ⚠ **Nota capacità:** sprint a cavallo di **Ferragosto** → capacità ridotta. Gli `[STRETCH]` qui slittano con alta probabilità.
+
+> ✅ **Sprint chiuso il 17 Ago 2026 — 18 punti su 18, `[STRETCH]` compresi.** La previsione qui sopra è stata smentita: entrambi gli STRETCH sono atterrati, e il merge doppioni ha finito per correggere una regola di audit sbagliata (una riga «Cancellazione ricambio» dove il gesto era un'unione). Si lascia scritta perché una previsione mancata dice qualcosa sulla stima quanto una azzeccata.
+>
+> **Tre punti sono nati durante lo sprint e non erano a piano**, tutti da cose viste e non dedotte: (a) 🔗 **ADR-029**, la visibilità delle garanzie ricambio come impostazione dell'**Ente** invece che divieto globale, dopo la domanda «ma il Tenant è il proprietario, chi ha deciso diversamente?»; (b) 🔗 **ADR-030**, che riconosce **due forme di Tecnico** — interno ed esterno — sciogliendo una contraddizione che ERD e DemoSeeder si portavano dietro da mesi; (c) il **responsive dell'intera applicazione**, che i wireframe davano per previsto da S1 e che nessuno aveva mai implementato: due classi CSS, e con esse l'accensione di sei `overflow-x-auto` che erano codice morto.
+>
+> **Due ADR emendati in corsa**, entrambi perché guardare un telefono ha smentito un ragionamento fatto al desktop: ADR-030 sull'ubicazione visibile al Tecnico (il giorno dopo averlo scritto) e la nota «niente garanzie ricambio» del wireframe §3, superata da ADR-027 dall'8 agosto.
 
 - [x] `[CORE]` **Catalogo Ricambi** incrementale + **autocomplete sul nome** (collega esistente / crea al volo); `codice` **nullable**, `nome_normalizzato` indicizzato come chiave del collega-o-crea. 🔗 ADR-008/022
 
@@ -552,6 +558,14 @@ gantt
 
 **Definition of Done:** un tecnico inquadra il QR, fa login, vede solo le macchine consentite, registra un ricambio **dal form intervento** (nome + scadenza garanzia) e chiude l'intervento; la ricerca incrociata trova il pezzo su più macchine; **un ricambio con garanzia in scadenza entro 30 giorni accende l'arancione sullo strumento anche per il Tenant, che non ne vede il dettaglio.**
 
+> ✅ **DoD verificata il 17 Ago 2026**, in parte su dati veri del DB di sviluppo e non solo in test:
+> - *«vede solo le macchine consentite»* — impersonando un tecnico reale: **304 macchine** (le sue assegnate) invece delle **1299** dell'Ente, contate anche in pagina («di 304»);
+> - *«un ricambio con garanzia in scadenza accende l'arancione anche per il Tenant»* — sull'Agitatore 2358: 4 pezzi montati, **3 coperti** (uno scaduto il 10/08 escluso), semaforo arancione col motivo in Panoramica e **nessun nome di pezzo** per chi non ha titolo a vederlo;
+> - *«la ricerca incrociata trova il pezzo su più macchine»* — cercando «lampada» escono **entrambe le grafie** di catalogo, che è il motivo per cui `nome_normalizzato` esiste;
+> - *«il tecnico chiude l'intervento»* — con il **report di fine lavoro**, che prima non esisteva come dato.
+>
+> Suite **661 verdi su SQLite e Postgres**; nessun punto rimandato a S5.
+
 ---
 
 ### 📧 Sprint 5 — Notifiche, Cron, SaaS Billing, Onboarding (24 Ago–4 Set)
@@ -563,6 +577,12 @@ gantt
 - [ ] `[CORE]` **Notifiche email** "del futuro" via SMTP accodate su Redis; **notifiche in-app**. 🔗 ADR-011
 - [ ] `[CORE]` 🧪 Test del scheduler (scadenze passate/imminenti generano le notifiche giuste, niente duplicati).
 - [ ] 🚩 `[CORE]` **Da sciogliere PRIMA di scrivere il billing: un utente deve poter avere N Enti, e i piani si tarano su quel numero.** *(Segnalato da Marco il 9 Ago 2026, durante la verifica del blocco 4 di S4. Chi paga di più gestisce più Enti.)* **Oggi il modello non ci arriva, e non per una dimenticanza ma per tre decisioni esplicite**: `tenant_id` punta all'Ente top-level (🔗 ADR-006), ogni utente è legato a **un solo** Ente senza bypass per nessun ruolo (🔗 ADR-018), e il modello di incasso del 14 Giu 2026 mette **l'Ente** come pagatore del rapporto A. L'unica entità che oggi sta *sopra* gli Enti è il **Rivenditore** (`reseller_id`, tabella `resellers` definita e non popolata, rimandata a V1.1 da 🔗 ADR-002) — ma quello è un *rivenditore terzo che incassa in proprio*, non un cliente con più sedi: usarlo per questo scopo confonderebbe due modelli di incasso diversi. Le forme da confrontare in un ADR sono quindi tre: **(a)** entità *account/abbonamento* nuova sopra l'Ente, con `tenant_id` invariato e il limite di Enti come attributo del piano; **(b)** utenti multi-Ente, che significa riaprire ADR-018 — cioè il fondamento fail-closed dello scoping, l'ultima cosa da toccare a cuor leggero; **(c)** Enti gerarchici (un Ente radice con figli), che rompe l'assunto «l'Ente è la radice» su cui poggiano `AccessibleNodes` e tutti i livelli 2. **La scelta va fatta prima di Cashier**, non dopo: l'intestatario dell'abbonamento è ciò che il billing, il lockout per insoluto e l'onboarding devono conoscere per primo. Si incrocia con 🔗 ADR-029, la cui impostazione resta per-Ente ma cambierebbe intestatario.*
+
+  > ✅ **Confermato da Marco il 17 Ago 2026: un utente `Tenant` può avere N Enti.** Il *cosa* è deciso; resta da scegliere il *come*, che è il contenuto dell'ADR da scrivere a inizio S5. La conferma però **esclude già la forma (c)**: se il proprietario dell'abbonamento è l'utente e non una radice organizzativa, gli Enti gerarchici risolverebbero un problema diverso da quello posto. Restano in gara **(a)** l'entità *account* sopra l'Ente e **(b)** l'utente multi-Ente.
+  >
+  > ⚠️ **La differenza fra (a) e (b) non è di stile: (b) riapre ADR-018**, cioè il fondamento fail-closed dello scoping — `tenant_id` singolo su `users`, nessun bypass per nessun ruolo — che regge oggi **661 test** e ogni garanzia di isolamento data al cliente. La forma (a) lascia `tenant_id` dov'è e sposta la questione sull'intestatario del pagamento, che è dove il problema è nato («chi paga di più gestisce più Enti»). Va deciso **prima** di Cashier, perché l'intestatario è la prima cosa che billing, lockout e onboarding devono conoscere.
+  >
+  > 📌 **Precedente utile, e nato proprio da questo sprint**: il **Tecnico esterno** (🔗 ADR-030) è già oggi l'unico utente che attraversa legittimamente più Enti, e lo fa **senza `tenant_id`**, con un pivot che elenca gli Enti a cui ha accesso. È la forma (a) applicata a un caso più piccolo: qualunque strada si scelga per il Tenant, quel pivot è il posto da guardare per primo.
 - [ ] `[CORE]` **Laravel Cashier + Stripe**: piani in abbonamento; webhook Stripe. 🔗 Elenco §7
 - [ ] `[CORE]` Due modelli: **Free (omaggiato)** e **SaaS a pagamento**. 🔗 ADR-002
 - [ ] `[CORE]` **Onboarding doppio**: provisioning (invito da EasyLab/Admin) + self-signup pubblico con verifica email/pagamento. 🔗 ADR-012
