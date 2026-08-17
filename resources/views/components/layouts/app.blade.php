@@ -103,7 +103,18 @@
                 </aside>
 
                 {{-- Colonna contenuto --}}
-                <div class="flex min-h-screen flex-1 flex-col">
+                {{-- ⚠️ `min-w-0` non è decorativo, ed è la riga che rende mobile
+                     l'intera applicazione (S4 blocco 10). Un flex item ha
+                     `min-width: auto`, quindi si RIFIUTA di restringersi sotto la
+                     larghezza intrinseca del proprio contenuto: senza questa
+                     classe la colonna cresceva fino alla tabella più larga della
+                     pagina — 503px su un telefono da 390 — e a scorrere in
+                     orizzontale era il documento intero, header compreso.
+                     Conseguenza meno ovvia: gli `overflow-x-auto` che avvolgono
+                     le tabelle non entravano MAI in funzione, perché il loro
+                     contenitore aveva sempre spazio a sufficienza. C'erano tutti
+                     e non servivano a niente. --}}
+                <div class="flex min-h-screen min-w-0 flex-1 flex-col">
 
                     {{-- Top bar (Design System §5.7) --}}
                     <header class="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-neutral-200 bg-white px-4 shadow-sm print:hidden">

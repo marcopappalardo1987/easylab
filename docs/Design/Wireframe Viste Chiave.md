@@ -200,6 +200,10 @@ Interfaccia sul campo, mobile-first: scansiona QR → vedi storico → chiudi in
    schermata iniziale            dopo scansione/selezione
 ```
 
+> **Rettifica del 17 Ago 2026 (S4 blocco 10).** Questa vista **non è stata costruita come schermata separata**, e il motivo è nei documenti stessi: §1, §2 e §5 prevedono già il responsive («tabella → lista di card», «i tab diventano un menù ▼ o scroll orizzontale», «albero in drawer ☰»), e 🔗 ADR-003 esiste per affermare che la scheda vive **in un posto solo, con una sola catena di autorizzazione**. La schermata di destra qui sotto *è* la scheda §2 resa mobile: righe che diventano card, azioni a tutta larghezza, nessun markup duplicato. Resta nuova la sola schermata di **sinistra** — QR e «I miei interventi» — che non esiste altrove. Conseguenza voluta: `/q/{token}` continua a portare **tutti** su `strumenti.show`, senza diramare per ruolo, e ADR-003 resta intatto invece di essere derogato.
+
+> **Terza rettifica, stessa data.** La nota «Niente garanzie ricambio» e il rimando al «nodo di permessi di §4.4 ancora da sciogliere» sono **superati da 🔗 ADR-027** (8 Ago 2026): il Tecnico gestisce le garanzie dei pezzi che monta — è la fonte del dato — e il controllo è la traccia sul canale `audit`, non la cecità. Il tab Ricambi della scheda gliele mostra.
+
 **Note.** Accesso post-QR via URL firmata → login se necessario → scheda **solo se autorizzato** (mai dati senza auth, ADR-003). Il tecnico vede solo strumenti in portafoglio ∪ assegnazione (ADR-007); ogni accesso loggato. Niente garanzie ricambio. Azioni disponibili filtrate per permesso (`interventi.complete`, `ricambio_utilizzo.create`, `documenti.upload`). L'azione "⏱ Lettura contaore" è **rimossa** (ADR-019). "+ Aggiungi ricambio" chiede **nome e scadenza garanzia**, come nel form desktop (ADR-022) — con il nodo di permessi di §4.4 dello Schema Ruoli ancora da sciogliere.
 
 ---

@@ -66,3 +66,92 @@
     font-size: 24px;
     line-height: 1;
 }
+
+/*
+ | Tabella → card su mobile (Wireframe §1 «Mobile: tabella → lista di card»,
+ | S4 blocco 10).
+ |
+ | UN SOLO MARKUP, ed è il punto della scelta. La strada ovvia — una `<table>`
+ | con `hidden md:table` più un blocco di card `md:hidden` — raddoppia il markup
+ | di quattro tab: ogni colonna aggiunta domani andrebbe scritta due volte, e la
+ | seconda è quella che si dimentica. Questo progetto ha già pagato due volte lo
+ | stesso errore (le due definizioni di «documenti della macchina», le due di
+ | «casella vuota»), quindi qui la duplicazione non si gestisce: non si crea.
+ |
+ | Sotto i 768px le righe diventano schede e ogni cella espone la propria
+ | intestazione da `data-etichetta`. L'etichetta è l'unica cosa scritta due volte
+ | — nel `<th>` e nell'attributo — e un test di guardia verifica che le due
+ | coincidano, trasformando il rischio di deriva in un invariante controllato.
+ |
+ | ⚠️ La cella delle azioni si marca con `data-azioni`: perde l'etichetta e
+ | diventa un blocco a tutta larghezza in fondo alla card. Sul campo «Segna come
+ | fatto» è l'azione per cui si apre la pagina, e in tabella è l'ULTIMA colonna,
+ | cioè quella che su un telefono resta fuori schermo: è il difetto che questo
+ | blocco esiste per correggere, non un dettaglio estetico.
+ */
+@utility tabella-a-card {
+    @media (width < 48rem) {
+        display: block;
+
+        & thead {
+            /* Nascosta agli occhi, non agli screen reader: le intestazioni
+               ricompaiono cella per cella da `data-etichetta`. */
+            display: none;
+        }
+
+        & tbody {
+            display: block;
+        }
+
+        & tbody tr {
+            display: block;
+            margin-bottom: 0.75rem;
+            border: 1px solid var(--color-neutral-200);
+            border-radius: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            background-color: white;
+        }
+
+        & tbody td {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 1rem;
+            width: auto;
+            padding: 0.5rem 0;
+            border: 0;
+            text-align: right;
+        }
+
+        & tbody td + td {
+            border-top: 1px solid var(--color-neutral-100);
+        }
+
+        & tbody td::before {
+            content: attr(data-etichetta);
+            flex-shrink: 0;
+            text-align: left;
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--color-neutral-400);
+        }
+
+        /* Una cella vuota resta muta: senza contenuto l'etichetta da sola
+           direbbe «questo dato manca», che è un'altra cosa da «non si applica». */
+        & tbody td:empty {
+            display: none;
+        }
+
+        & tbody td[data-azioni] {
+            display: block;
+            text-align: left;
+            padding-top: 0.75rem;
+        }
+
+        & tbody td[data-azioni]::before {
+            content: none;
+        }
+    }
+}

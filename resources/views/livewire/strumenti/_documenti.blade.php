@@ -12,7 +12,7 @@
     </div>
 
     <div class="overflow-x-auto">
-        <table class="w-full text-left text-sm">
+        <table class="tabella-a-card w-full text-left text-sm">
             <thead class="border-b border-neutral-200 text-xs tracking-wide text-neutral-400 uppercase">
                 <tr>
                     <th class="px-4 py-3 font-semibold">Nome</th>
@@ -26,9 +26,9 @@
             <tbody class="divide-y divide-neutral-100">
                 @forelse ($documenti as $documento)
                     <tr wire:key="doc-{{ $documento->id }}">
-                        <td class="px-4 py-3 font-medium text-neutral-900">{{ $documento->nome }}</td>
-                        <td class="px-4 py-3 text-neutral-600">{{ $documento->tipo->label() }}</td>
-                        <td class="px-4 py-3 text-neutral-600">
+                        <td data-etichetta="Nome" class="px-4 py-3 font-medium text-neutral-900">{{ $documento->nome }}</td>
+                        <td data-etichetta="Tipo" class="px-4 py-3 text-neutral-600">{{ $documento->tipo->label() }}</td>
+                        <td data-etichetta="Allegato a" class="px-4 py-3 text-neutral-600">
                             {{-- Dice a COSA è appeso: sulla stessa lista convivono i
                                  documenti della macchina e quelli dei suoi interventi. --}}
                             @if ($documento->documentabile instanceof App\Models\Intervento)
@@ -40,14 +40,14 @@
                                 <span class="text-neutral-400">La macchina</span>
                             @endif
                         </td>
-                        <td class="px-4 py-3 whitespace-nowrap text-neutral-600">{{ $documento->dimensioneLeggibile() }}</td>
-                        <td class="px-4 py-3 whitespace-nowrap text-neutral-600">
+                        <td data-etichetta="Dimensione" class="px-4 py-3 whitespace-nowrap text-neutral-600">{{ $documento->dimensioneLeggibile() }}</td>
+                        <td data-etichetta="Caricato" class="px-4 py-3 whitespace-nowrap text-neutral-600">
                             {{ $documento->created_at->format('d/m/Y') }}
                             @if ($documento->caricatoBy)
                                 <span class="text-neutral-400">· {{ $documento->caricatoBy->name }}</span>
                             @endif
                         </td>
-                        <td class="px-4 py-3 text-right whitespace-nowrap">
+                        <td data-azioni class="px-4 py-3 text-right whitespace-nowrap max-md:flex max-md:flex-wrap max-md:gap-x-5 max-md:text-sm">
                             @can('documenti.download')
                                 <a href="{{ route('documenti.download', $documento) }}"
                                     class="text-xs font-medium text-primary-600 hover:text-primary-700">Scarica</a>

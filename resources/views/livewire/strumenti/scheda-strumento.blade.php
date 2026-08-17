@@ -22,7 +22,11 @@
                 @if ($strumento->data_installazione) · Installato {{ $strumento->data_installazione->format('m/Y') }} <x-ui.obsoleto :strumento="$strumento" /> @endif
             </p>
         </div>
-        <div class="flex items-center gap-2">
+        {{-- `flex-wrap` e non un menù «⋯»: le azioni sono al massimo cinque e
+             gatate una a una, quindi su un telefono vanno a capo e restano tutte
+             raggiungibili con un pollice. Nasconderle dietro un menù avrebbe
+             aggiunto un tocco proprio a chi lavora con una mano sola. --}}
+        <div class="flex flex-wrap items-center gap-2">
             @can('semaforo.force')
                 <x-ui.button variant="secondary" wire:click="openForza">Forza semaforo</x-ui.button>
             @endcan

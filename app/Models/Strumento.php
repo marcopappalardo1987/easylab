@@ -190,6 +190,48 @@ class Strumento extends Model implements ReachesStrumento
     }
 
     /**
+     * «Ente › Dipartimento › Sotto-laboratorio»: dove si trova fisicamente la
+     * macchina (ADR-006, ADR-030 emendato il 17 Ago 2026).
+     *
+     * ⚠️ **Legge i nodi SENZA global scope, ed è un'eccezione deliberata** —
+     * la terza del progetto, dopo `User::ente()` e `Garanzia::deiPezziMontati()`,
+     * e come quelle sta in un metodo solo, nominato, motivato qui.
+     *
+     * Il motivo è concreto e l'ha rivelato la vista di campo: un **Tecnico** che
+     * raggiunge una macchina per assegnazione (ADR-030) non ha accesso
+     * all'albero organizzativo del cliente, quindi `$strumento->unita` gli
+     * tornava NULL e la scheda diceva «Christ Alpha 2-4 · · Installato 09/2017»
+     * — un buco al posto del laboratorio in cui deve andare a lavorare. Il
+     * wireframe §3 mette l'ubicazione **subito sotto il nome della macchina**
+     * proprio perché sul campo è così che la si trova.
+     *
+     * **Non allarga l'esposizione**: la si chiama a partire da uno strumento che
+     * il chiamante sta già vedendo, e dire dove sta una macchina che si vede non
+     * rivela nulla che quella macchina non riveli già. La stessa cosa valeva —
+     * silenziosamente — per il **Responsabile Reparto**, il cui percorso si
+     * fermava al confine del proprio sotto-albero perdendo il nome dell'Ente.
+     *
+     * Esiste come metodo del modello e non nei due componenti perché la risalita
+     * era scritta due volte, identica, in `SchedaStrumento` e in `StampaQr` —
+     * e l'etichetta QR stampata è il posto in cui un'ubicazione mancante fa più
+     * danno, perché il foglio finisce sulla macchina e nessuno lo rilegge.
+     */
+    public function percorsoUbicazione(): string
+    {
+        $catena = collect();
+        $nodo = UnitaOrganizzativa::withoutGlobalScopes()->find($this->unita_organizzativa_id);
+
+        while ($nodo !== null) {
+            $catena->prepend($nodo->nome);
+            $nodo = $nodo->parent_id !== null
+                ? UnitaOrganizzativa::withoutGlobalScopes()->find($nodo->parent_id)
+                : null;
+        }
+
+        return $catena->implode(' › ');
+    }
+
+    /**
      * Ubicazione corrente (nodo dipartimento/sotto-laboratorio).
      */
     public function unita(): BelongsTo

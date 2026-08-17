@@ -65,17 +65,14 @@ class StampaQr extends Component
         ]);
     }
 
-    /** Ente › Dipartimento › Sotto-laboratorio: sull'etichetta serve a ritrovare la macchina. */
+    /**
+     * Ente › Dipartimento › Sotto-laboratorio: sull'etichetta serve a ritrovare
+     * la macchina, ed è il posto in cui un'ubicazione mancante fa più danno —
+     * il foglio finisce sulla macchina e nessuno lo rilegge. La risalita vive
+     * ora in `Strumento::percorsoUbicazione()`: era scritta due volte, identica.
+     */
     private function percorso(): string
     {
-        $catena = collect();
-        $nodo = $this->strumento->unita;
-
-        while ($nodo !== null) {
-            $catena->prepend($nodo->nome);
-            $nodo = $nodo->parent;
-        }
-
-        return $catena->implode(' › ');
+        return $this->strumento->percorsoUbicazione();
     }
 }

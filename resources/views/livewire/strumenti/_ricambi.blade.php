@@ -29,7 +29,7 @@
     </div>
 
     <div class="overflow-x-auto">
-        <table class="w-full text-left text-sm">
+        <table class="tabella-a-card w-full text-left text-sm">
             <thead class="border-b border-neutral-200 text-xs tracking-wide text-neutral-400 uppercase">
                 <tr>
                     <th class="px-4 py-3 font-semibold">Pezzo</th>
@@ -48,9 +48,9 @@
                 @forelse ($ricambiMontati as $utilizzo)
                     @php [$testoData, $coloreData, $notaData] = $etichettaMontaggio($utilizzo); @endphp
                     <tr wire:key="ric-{{ $utilizzo->id }}">
-                        <td class="px-4 py-3 font-medium text-neutral-900">{{ $utilizzo->ricambio->nome }}</td>
-                        <td class="px-4 py-3 tabular-nums text-neutral-600">{{ $utilizzo->quantita }}</td>
-                        <td class="px-4 py-3 whitespace-nowrap {{ $coloreData }}">
+                        <td data-etichetta="Pezzo" class="px-4 py-3 font-medium text-neutral-900">{{ $utilizzo->ricambio->nome }}</td>
+                        <td data-etichetta="Q.tà" class="px-4 py-3 tabular-nums text-neutral-600">{{ $utilizzo->quantita }}</td>
+                        <td data-etichetta="Montaggio" class="px-4 py-3 whitespace-nowrap {{ $coloreData }}">
                             <span @if ($notaData) title="{{ $notaData }}" @endif>
                                 {{ $testoData }}
                                 @if ($notaData)
@@ -59,7 +59,7 @@
                                 @endif
                             </span>
                         </td>
-                        <td class="px-4 py-3 text-neutral-600">
+                        <td data-etichetta="Intervento" class="px-4 py-3 text-neutral-600">
                             @if ($utilizzo->intervento)
                                 <button type="button" x-on:click="tab = 'interventi'"
                                     class="text-left text-primary-600 hover:text-primary-700">
@@ -71,7 +71,7 @@
                             @endif
                         </td>
                         @if ($vedeGaranzieRicambio)
-                            <td class="px-4 py-3 whitespace-nowrap text-neutral-600">
+                            <td data-etichetta="Garanzia" class="px-4 py-3 whitespace-nowrap text-neutral-600">
                                 @if ($utilizzo->garanzia)
                                     <span class="tabular-nums">{{ $utilizzo->garanzia->data_scadenza_effettiva->format('d/m/Y') }}</span>
                                     @if ($utilizzo->garanzia->isScaduta())
@@ -83,7 +83,7 @@
                             </td>
                         @endif
                         @if ($puoCorreggereRicambi)
-                            <td class="px-4 py-3 text-right whitespace-nowrap">
+                            <td data-azioni class="px-4 py-3 text-right whitespace-nowrap max-md:flex max-md:flex-wrap max-md:gap-x-5 max-md:text-sm">
                                 <button type="button" wire:click="openCorreggiRicambio({{ $utilizzo->id }})"
                                     class="text-xs font-medium text-primary-600 hover:text-primary-700">Correggi</button>
                                 @can('ricambio_utilizzo.delete')

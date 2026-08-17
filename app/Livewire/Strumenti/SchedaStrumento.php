@@ -906,13 +906,6 @@ class SchedaStrumento extends Component
 
     public function render()
     {
-        // Ubicazione come catena di nodi (Ente › Dipartimento › Sotto-lab).
-        $percorso = collect();
-        $node = $this->strumento->unita;
-        while ($node !== null) {
-            $percorso->prepend($node->nome);
-            $node = $node->parent;
-        }
 
         // Destinazioni possibili: nodi non-Ente del proprio Ente (già scopati),
         // escluso il nodo attuale.
@@ -940,7 +933,7 @@ class SchedaStrumento extends Component
         $documenti = $this->documentiMostrati();
 
         return view('livewire.strumenti.scheda-strumento', [
-            'percorso' => $percorso->implode(' › '),
+            'percorso' => $this->strumento->percorsoUbicazione(),
             // Semaforo (ADR-005): sempre lo stato "effettivo" (forzato ?? calcolato).
             'semaforo' => $this->strumento->statoSemaforoEffettivo(),
             // Diagnosi (ADR-024): stato CALCOLATO + motivi, per il tab Panoramica.

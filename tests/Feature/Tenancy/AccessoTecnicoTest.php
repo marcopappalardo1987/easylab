@@ -200,3 +200,39 @@ it('does not reach the rows of a machine that is neither assigned nor in the por
         ->and(Garanzia::count())->toBe(0)
         ->and(Documento::count())->toBe(0);
 });
+
+/**
+ * ADR-030 **emendato il 17 Ago 2026**, e l'emendamento nasce da una schermata,
+ * non da un ragionamento: la prima stesura dichiarava accettabile che un tecnico
+ * raggiunto per assegnazione non leggesse l'albero organizzativo del cliente.
+ * Sul desktop non si notava; aperta la scheda su un telefono, al posto del
+ * laboratorio c'era un buco — «Christ Alpha 2-4 · · Installato 09/2017» — cioè
+ * mancava proprio il dato con cui si trova fisicamente la macchina, che il
+ * wireframe §3 mette subito sotto il nome.
+ *
+ * Dire dove sta una macchina che l'utente **già vede** non rivela nulla che
+ * quella macchina non riveli da sé.
+ */
+it('tells a tecnico where an assigned machine physically is', function () {
+    $tecnico = ($this->tecnico)();
+    Intervento::factory()->forStrumento($this->autoclave)->create(['tecnico_id' => $tecnico->id]);
+
+    $this->actingAs($tecnico);
+
+    // La relazione resta scopata — l'albero non è diventato visibile —
+    // ma il percorso si legge lo stesso, ed è la distinzione che l'ADR fa.
+    expect($this->autoclave->unita)->toBeNull()
+        ->and($this->autoclave->percorsoUbicazione())->toBe('Ente A › '.$this->deptA->nome);
+});
+
+it('keeps the whole path for a Responsabile, Ente included', function () {
+    // Difetto silenzioso che c'era da prima di ADR-030: il percorso si fermava
+    // al confine del sotto-albero, quindi il nome dell'Ente spariva.
+    $resp = User::factory()->create(['tenant_id' => $this->enteA->id, 'two_factor_confirmed_at' => now()]);
+    $resp->assignRole('Responsabile Reparto');
+    $resp->unitaResponsabili()->attach($this->deptA);
+
+    $this->actingAs($resp);
+
+    expect($this->autoclave->percorsoUbicazione())->toBe('Ente A › '.$this->deptA->nome);
+});
