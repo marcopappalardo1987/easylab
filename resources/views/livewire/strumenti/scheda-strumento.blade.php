@@ -33,6 +33,14 @@
             @can('strumenti.move')
                 <x-ui.button variant="secondary" wire:click="openMove">Sposta</x-ui.button>
             @endcan
+            @can('documenti.export_pdf')
+                {{-- `target="_blank"`: il foglio si apre accanto alla scheda,
+                     così chi lo consulta non perde il tab su cui stava
+                     lavorando. --}}
+                <x-ui.button variant="secondary" :href="route('strumenti.storico-pdf', $strumento)" target="_blank">
+                    Storico PDF
+                </x-ui.button>
+            @endcan
             @can('strumenti.qr_generate')
                 <x-ui.button variant="secondary" :href="route('strumenti.qr', $strumento)" wire:navigate>Etichetta QR</x-ui.button>
             @endcan

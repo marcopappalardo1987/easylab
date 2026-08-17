@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AccessoQr;
+use App\Http\Controllers\EsportaStoricoPdf;
 use App\Http\Controllers\ScaricaDocumento;
 use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Campo\Home as CampoHome;
@@ -66,6 +67,13 @@ Route::middleware(['auth', 'two-factor.enforce'])->group(function () {
     Route::get('/campo', CampoHome::class)
         ->middleware('can:interventi.view')
         ->name('campo.index');
+    // Storico macchina in PDF (ADR-031). Due middleware perché sono due
+    // domande diverse: `strumenti.view` è «puoi vedere le macchine», e il
+    // route-model binding scopato dice QUALE; `documenti.export_pdf` è «puoi
+    // portartene via un foglio», che il Tecnico non ha.
+    Route::get('/strumenti/{strumento}/storico.pdf', EsportaStoricoPdf::class)
+        ->middleware(['can:strumenti.view', 'can:documenti.export_pdf'])
+        ->name('strumenti.storico-pdf');
     Route::get('/settings/security', TwoFactorAuthentication::class)->name('settings.security');
 });
 

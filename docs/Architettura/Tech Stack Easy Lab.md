@@ -44,7 +44,7 @@ Evitiamo di reinventare la ruota. Ecco le librerie standard dell'ecosistema Lara
 - **Gestione Permessi & Ruoli:** spatie/laravel-permission (Lo standard assoluto per gestire Super Admin, Admin Cliente, Responsabile Reparto).
 - **Impersonificazione:** lab404/laravel-impersonate (Pacchetto plug&play per far accedere il Super Admin come qualsiasi altro utente con 1 click).
 - **QR Code Generator:** ~~simplesoftwareio/simple-qrcode~~ → **`bacon/bacon-qr-code`** (corretto il 15 Ago 2026, attuando ADR-003). Il wrapper indicato qui è fermo a `bacon ^2.0` mentre il progetto ha già `bacon v3.1.1`, **installata da Fortify** per il QR della verifica in due passaggi: usarlo avrebbe richiesto di retrocedere una dipendenza dell'autenticazione in cambio di una comodità di sintassi. Si usa direttamente la libreria sottostante, con lo stesso idioma di `TwoFactorAuthenticatable` (`SvgImageBackEnd` + `ImageRenderer` + `Writer`) — zero dipendenze nuove. Vedi `App\Support\QrStrumento`.
-- **Esportazione PDF:** barryvdh/laravel-dompdf o spatie/laravel-pdf (Per generare i report di fine intervento in PDF).
+- **Esportazione PDF:** **`barryvdh/laravel-dompdf`** — scelto il 17 Ago 2026, 🔗 **ADR-031**: PHP puro, nessun Chromium da installare e aggiornare su Laravel Cloud (ADR-025). L'alternativa `spatie/laravel-pdf` rende come un browser, ma un foglio A4 non ha bisogno del CSS moderno che quella fedeltà serve — e un PDF non è responsive.
 - **Task Scheduling:** Cron Job nativi di Laravel (Per il controllo giornaliero delle scadenze garanzie e invio allerte rosse).
 
 6. Infrastruttura e Rilascio (Deploy)

@@ -781,3 +781,26 @@ Fino a S4 la contraddizione non costava nulla, perché il Tecnico non vedeva nie
 - ⚠️ **Emendamento del 17 Ago 2026 — l'ubicazione di una macchina visibile si legge sempre.** La prima stesura di questo ADR dichiarava accettabile che il canale «assegnazione» non desse accesso all'albero organizzativo: `UnitaOrganizzativa` non raggiunge uno strumento, quindi al tecnico restava il solo portafoglio. Sul desktop la conseguenza non si notava; aperta la scheda su un telefono si vedeva «Christ Alpha 2-4 · **·** Installato 09/2017» — un buco al posto del laboratorio in cui il tecnico deve andare a lavorare, cioè proprio il dato che il wireframe §3 mette subito sotto il nome della macchina perché è così che la si trova. **Dire dove sta una macchina che l'utente già vede non rivela nulla che quella macchina non riveli da sé**, mentre nasconderlo rende inutilizzabile il caso d'uso per cui l'accesso è stato concesso. La risalita vive ora in `Strumento::percorsoUbicazione()`, che legge i nodi senza global scope: è la **terza eccezione nominata** del progetto, dopo `User::ente()` e `Garanzia::deiPezziMontati()`, e come quelle sta in un metodo solo e motivato. Nota: lo stesso difetto colpiva **silenziosamente** il Responsabile Reparto, il cui percorso si fermava al confine del sotto-albero perdendo il nome dell'Ente.
 - **La UI del portafoglio non esiste ancora**: in S4 nascono pivot, scope, audit e seeder. La gestione arriva in S6 con la pagina permessi, dove vivranno anche gli altri controlli di questo tipo.
 - 🔗 Si incrocia con **«un utente, N Enti»** (roadmap S5): il tecnico esterno è oggi l'unico utente della piattaforma che legittimamente attraversa più Enti, e lo fa **senza** `tenant_id`. Se quella questione porterà a un'entità *account* sopra l'Ente, il portafoglio sarà la relazione da rileggere per prima.
+
+---
+
+**ADR-031 — Esportazione PDF con dompdf (HTML→PDF in PHP), non con un browser headless**
+
+*Stato: Accettata (17 Ago 2026) — scioglie l'alternativa lasciata aperta dal Tech Stack §47 («barryvdh/laravel-dompdf **o** spatie/laravel-pdf»). Attuata lo stesso giorno (S4 STRETCH).*
+
+**Contesto.** L'Elenco Funzionalità chiede di esportare «storici, certificati e report di fine lavoro in formato PDF formattato», e il permesso `documenti.export_pdf` era a catalogo dal S1. Le due librerie candidate hanno nature diverse: **dompdf** è PHP puro e interpreta un sottoinsieme di HTML/CSS; **spatie/laravel-pdf** guida un Chromium headless via Browsershot e rende esattamente come un browser.
+
+**Decisione.** Si usa **`barryvdh/laravel-dompdf`**.
+
+**Perché.**
+
+- **Nessun binario esterno da installare e tenere aggiornato.** 🔗 ADR-025 mette l'applicazione su Laravel Cloud: Browsershot richiederebbe Chromium e Node nel container, cioè una superficie di attacco e una catena di aggiornamenti in più per produrre un foglio A4. Un PDF non vale un browser sul server.
+- **La resa fedele non serve, perché il documento non è la pagina.** Un report di fine lavoro non è la scheda strumento stampata: è un foglio con intestazione, tabella e firme, scritto in HTML dedicato. Il CSS moderno che dompdf non regge — flexbox, grid, i token Tailwind v4 — in un foglio del genere non serve, e usarlo sarebbe un errore anche col browser: **un PDF non è responsive**.
+- **Prevedibilità.** Un rendering in-process fallisce con un'eccezione PHP; un browser headless fallisce per timeout, memoria o versione, cioè in modi che si vedono solo in produzione.
+
+**Conseguenze.**
+
+- I fogli si scrivono con **HTML e CSS semplici** (tabelle, `@page`, unità assolute), in view dedicate sotto `resources/views/pdf/`. Non si riusano i blade dell'app: sarebbero due consumatori con esigenze opposte sullo stesso markup.
+- **Nessun font esterno**: dompdf ha i font di base incorporati, e caricarne uno via `@font-face` significherebbe scaricarlo a ogni render o versionarlo nel repository. I fogli usano quindi un font di sistema, e la coerenza col Design System si esprime in struttura e gerarchia, non nel disegno delle lettere.
+- Se un domani servisse un documento con resa grafica fedele — un'offerta commerciale, non un report tecnico — la decisione si riapre: le due librerie possono convivere, perché la scelta è per-documento e non di piattaforma.
+- ⚠️ **Il PDF si genera al volo e non si archivia.** Un file salvato invecchia: lo storico cambia, l'intervento si riapre, il report si corregge — e resterebbe in giro un foglio che dice un'altra cosa. Se servirà congelare un documento (una firma, un invio al cliente), sarà una decisione esplicita con una sua riga in `documenti`, non un effetto collaterale dell'export.

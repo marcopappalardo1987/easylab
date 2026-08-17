@@ -536,7 +536,19 @@ gantt
   *🛡️ **Sta sulla pagina `/ricambi` e non in un'amministrazione a parte**, perché è guardando i risultati affiancati che si riconosce un doppione; e le destinazioni proposte sono le altre voci **trovate dalla ricerca**, non un elenco di migliaia da cui pescare. Permesso `ricambi.merge`: Developer, Superadmin e Admin — il Responsabile Reparto amministra il catalogo (view/create/update/delete) ma non unisce, ed è l'unica azione del catalogo che gli manca, perché un merge sbagliato riscrive righe di reparti che non sono i suoi. Entrambi i permessi di questi due STRETCH (`ricambi.merge`, `documenti.export_pdf`) erano **già a catalogo e già seminati**: nessuna modifica a `config/rbac.php`, nessun riseeding.*
 
   *9 test, **6 mutazioni verificate** (via il confine di Ente, via la guardia sul merge con sé stessa, via quella sulla destinazione cestinata, la sorgente che non si cestina, via la traccia, via l'autorizzazione): cadono tutte, ciascuna sul proprio caso.*
-- [ ] `[STRETCH]` **Esportazione PDF** report di fine lavoro / storici / certificati. *(Se slitta, va recuperato in S5/S7.)*
+- [x] `[STRETCH]` **Esportazione PDF** report di fine lavoro / storici / certificati. 🔗 **ADR-031**
+
+  *↪️ **Chiuso il 17 Ago 2026.** Ha senso adesso e non prima: il report di fine lavoro esiste come dato solo dal blocco 10, quindi fino a ieri non c'era nulla da esportare.*
+
+  *🔑 **Scelta la libreria** (🔗 ADR-031), che il Tech Stack §47 lasciava aperta fra due: **`barryvdh/laravel-dompdf`**, PHP puro, contro `spatie/laravel-pdf` che guida un Chromium headless. ADR-025 mette l'applicazione su Laravel Cloud, e Browsershot vorrebbe dire Chromium e Node nel container — una superficie d'attacco e una catena di aggiornamenti in più per produrre un foglio A4. La fedeltà di resa del browser non serve, perché **il documento non è la pagina**: un report è intestazione, tabella e firme, scritto in HTML dedicato, e il CSS moderno che dompdf non regge lì non si usa. Un PDF non è responsive.*
+
+  *🔑 **Il foglio non riusa i blade dell'app**, e non è pigrizia al contrario: quelli hanno tab, modali e azioni, cioè tutto ciò che su carta non esiste. Riusarli avrebbe creato due consumatori con esigenze opposte sullo stesso markup — la duplicazione che questo progetto evita è quella di una REGOLA, non quella di una presentazione.*
+
+  *🛡️ **Due middleware perché sono due domande diverse**: `strumenti.view` è «puoi vedere le macchine» e il route-model binding scopato dice QUALE (una macchina di un altro Ente dà **404**, come la sua scheda); `documenti.export_pdf` è «puoi portartene via un foglio» — e il **Tecnico non ce l'ha**: sul campo legge e chiude, ma non esce con lo storico di un cliente. La garanzia macchina entra nel foglio solo per chi ha `garanzie.macchina.view`, e le garanzie ricambio non ci entrano mai: **un PDF non sa degradare per permesso una volta uscito dall'applicazione**, quindi ciò che non deve leggere chi lo esporta non ci deve proprio entrare.*
+
+  *⚠️ **Il PDF si genera al volo e non si archivia.** Un file salvato invecchia mentre lo storico cambia — l'intervento si riapre, il report si corregge — e resterebbe in giro un foglio che dice un'altra cosa. Per questo il foglio **dichiara la propria data**: è una fotografia, e ritrovato fra un anno deve dire di quando parla. Congelare un documento (una firma, un invio al cliente) sarà semmai una decisione esplicita con una riga in `documenti`, non un effetto collaterale dell'export.*
+
+  *«Fatto» e «da fare» si distinguono per **parola** e non per colore: su un foglio stampato in bianco e nero il colore non esiste — Design System §4 applicato alla carta. 8 test; la mutazione che toglie `can:documenti.export_pdf` fa cadere il caso del Tecnico.*
 
 **Definition of Done:** un tecnico inquadra il QR, fa login, vede solo le macchine consentite, registra un ricambio **dal form intervento** (nome + scadenza garanzia) e chiude l'intervento; la ricerca incrociata trova il pezzo su più macchine; **un ricambio con garanzia in scadenza entro 30 giorni accende l'arancione sullo strumento anche per il Tenant, che non ne vede il dettaglio.**
 
