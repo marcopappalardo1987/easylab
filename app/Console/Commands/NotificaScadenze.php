@@ -76,8 +76,20 @@ class NotificaScadenze extends Command
 
     public function handle(): int
     {
+        // Gli Enti degli account in lockout restano fuori (ADR-013): il blocco
+        // per insoluto è **totale**, e mandare a un cliente a cui abbiamo
+        // chiuso la porta un promemoria operativo — con un link che lo sbatte
+        // su /bloccato — la contraddirebbe due volte, dicendogli «fai la
+        // manutenzione» e «non puoi entrare» nello stesso minuto. Gli avvisi
+        // non si perdono: `avvisi_scadenza` non viene scritto per loro, quindi
+        // allo sblocco le scadenze ancora aperte tornano a essere novità.
+        //
+        // `whereDoesntHave` e NON `whereNotIn(...)`: su un Ente con
+        // `account_id` NULL — legittimo, fail-open come nel middleware — il
+        // `NOT IN` darebbe UNKNOWN e lo escluderebbe in silenzio.
         $enti = UnitaOrganizzativa::query()
             ->where('tipo', TipoUnitaOrganizzativa::Ente->value)
+            ->whereDoesntHave('account', fn ($query) => $query->where('is_locked', true))
             ->orderBy('id')
             ->get(['id', 'nome']);
 

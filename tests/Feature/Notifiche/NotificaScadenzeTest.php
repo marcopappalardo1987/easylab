@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Account;
 use App\Models\AvvisoScadenza;
 use App\Models\Garanzia;
 use App\Models\Intervento;
@@ -193,6 +194,51 @@ it('ignores a ricambio that is not mounted yet', function () {
     // L'intervento non è in scadenza; la garanzia del pezzo non montato non
     // deve avvisare nessuno (ADR-020, «montati» preso alla lettera).
     Notification::assertNothingSent();
+});
+
+it('never warns the enti of an account in lockout', function () {
+    // ADR-013: il blocco per insoluto è totale. Un promemoria operativo con un
+    // link che sbatte su /bloccato direbbe due cose opposte nello stesso
+    // minuto. Trovato dalla review del blocco S5, non da un test preesistente.
+    $bloccato = Account::factory()->bloccato()->create();
+    $sedeBloccata = UnitaOrganizzativa::factory()->ente()->perAccount($bloccato)->create();
+    $suoStrumento = Strumento::factory()->forNode($sedeBloccata)->create();
+    $suoAdmin = User::factory()->create(['tenant_id' => $sedeBloccata->id]);
+    $suoAdmin->assignRole('Admin');
+
+    Intervento::factory()->forStrumento($suoStrumento)
+        ->create(['data_scadenza' => today()->addDays(5)->toDateString()]);
+    // …e una scadenza nell'Ente sano del setup, che invece deve partire.
+    Intervento::factory()->forStrumento($this->strumento)
+        ->create(['data_scadenza' => today()->addDays(5)->toDateString()]);
+
+    scheduler();
+
+    Notification::assertNotSentTo($suoAdmin, DigestScadenze::class);
+    expect(righeRicevuteDa($this->admin))->toHaveCount(1);
+
+    // Gli avvisi non si «consumano» per l'Ente bloccato: allo sblocco la
+    // scadenza ancora aperta torna a essere una novità.
+    expect(AvvisoScadenza::where('tenant_id', $sedeBloccata->id)->count())->toBe(0);
+});
+
+it('warns again after the account is unlocked', function () {
+    $bloccato = Account::factory()->bloccato()->create();
+    $sede = UnitaOrganizzativa::factory()->ente()->perAccount($bloccato)->create();
+    $strumento = Strumento::factory()->forNode($sede)->create();
+    $admin = User::factory()->create(['tenant_id' => $sede->id]);
+    $admin->assignRole('Admin');
+    Intervento::factory()->forStrumento($strumento)
+        ->create(['data_scadenza' => today()->addDays(5)->toDateString()]);
+
+    scheduler();
+    Notification::assertNotSentTo($admin, DigestScadenze::class);
+
+    $bloccato->sblocca();
+    Notification::fake();
+    scheduler();
+
+    Notification::assertSentTo($admin, DigestScadenze::class);
 });
 
 it('never puts rows of another Ente in a digest', function () {
