@@ -1,5 +1,6 @@
 <?php
 
+use App\Livewire\Tenancy\SwitcherEnte;
 use App\Models\Account;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
@@ -137,6 +138,83 @@ it('never lets tenant_id be mass-assigned', function () {
     $this->membro->update(['tenant_id' => $this->enteB->id, 'name' => 'Rinominato']);
     expect($this->membro->fresh()->tenant_id)->toBe($this->enteA->id)
         ->and($this->membro->fresh()->name)->toBe('Rinominato');
+});
+
+it('shows the ente name without a tendina to a single-sede user', function () {
+    $solo = User::factory()->create(['tenant_id' => $this->enteA->id]);
+    $solo->assignRole('Tenant');
+    $this->actingAs($solo);
+
+    Livewire\Livewire::test(SwitcherEnte::class)
+        ->assertSet('sediRaggiungibili', 0)
+        ->assertSee('Sede Nord')
+        ->assertDontSee('Le tue sedi');
+});
+
+it('lists the other sedi in the tendina for a membro', function () {
+    $this->actingAs($this->membro);
+
+    Livewire\Livewire::test(SwitcherEnte::class)
+        ->assertSet('sediRaggiungibili', 1)
+        ->assertSee('Sede Nord')
+        ->call('apri')
+        ->assertSee('Sede Sud');
+});
+
+it('switches and redirects to the dashboard from the tendina', function () {
+    $this->actingAs($this->membro);
+
+    Livewire\Livewire::test(SwitcherEnte::class)
+        ->call('passa', $this->enteB->id)
+        ->assertRedirect(route('dashboard'));
+
+    expect($this->membro->fresh()->tenant_id)->toBe($this->enteB->id);
+});
+
+it('does not redirect on an illegitimate target', function () {
+    $altrui = UnitaOrganizzativa::factory()->ente()
+        ->perAccount(Account::factory()->create())
+        ->create();
+    $this->actingAs($this->membro);
+
+    Livewire\Livewire::test(SwitcherEnte::class)
+        ->call('passa', $altrui->id)
+        ->assertNoRedirect();
+
+    expect($this->membro->fresh()->tenant_id)->toBe($this->enteA->id);
+});
+
+it('suppresses the tendina while impersonating, keeping the name', function () {
+    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id]);
+    $superadmin->assignRole('Superadmin');
+    $this->actingAs($superadmin)->get(route('impersonate', $this->membro));
+
+    Livewire\Livewire::test(SwitcherEnte::class)
+        ->assertSee('Sede Nord')
+        ->assertDontSee('Le tue sedi')
+        ->call('passa', $this->enteB->id)
+        ->assertNoRedirect();
+
+    expect($this->membro->fresh()->tenant_id)->toBe($this->enteA->id);
+});
+
+it('renders nothing for a user without a tenant', function () {
+    $esterno = User::factory()->create(['tenant_id' => null]);
+    $esterno->assignRole('Tecnico');
+    $this->actingAs($esterno);
+
+    Livewire\Livewire::test(SwitcherEnte::class)
+        ->assertSet('nomeEnte', null);
+});
+
+it('appears in the app shell', function () {
+    $tenant = User::factory()->create(['tenant_id' => $this->enteA->id]);
+    $tenant->assignRole('Tenant');
+
+    $this->actingAs($tenant)->get('/dashboard')
+        ->assertOk()
+        ->assertSeeLivewire(SwitcherEnte::class)
+        ->assertSee('Sede Nord');
 });
 
 it('leaves a Responsabile fail-safe in the ente they switched into', function () {
