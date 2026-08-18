@@ -25,7 +25,10 @@ Route::redirect('/', '/login');
 
 // Area autenticata. Il middleware two-factor.enforce forza il 2FA sui ruoli
 // privilegiati (si auto-esclude da settings.security per consentirne l'attivazione).
-Route::middleware(['auth', 'two-factor.enforce'])->group(function () {
+// `account.lockout` PRIMA di `two-factor.enforce`: un Admin bloccato e senza
+// 2FA deve finire su /bloccato, non sul setup della sicurezza — la condizione
+// più forte parla per prima (ADR-013).
+Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(function () {
     Route::view('/dashboard', 'dashboard')->name('dashboard');
     Route::get('/anagrafica', Albero::class)
         ->middleware('can:unita_organizzativa.view')
@@ -102,6 +105,9 @@ Route::middleware(['auth', 'two-factor.enforce'])->group(function () {
  * impersonazione: chi scansiona in reparto col telefono non deve trovarsi
  * bloccato da un setup che riguarda i ruoli privilegiati.
  */
+// Niente `account.lockout` qui, e non è un buco: questa rotta traduce solo
+// token → id e REINDIRIZZA a `strumenti.show`, che sta nel gruppo protetto —
+// il bloccato rimbalza lì (ADR-013).
 Route::middleware(['signed', 'auth', 'can:qr.scan'])->group(function () {
     Route::get('/q/{token}', AccessoQr::class)->name('qr.strumento');
 });
