@@ -114,7 +114,7 @@ Utente della piattaforma. Auth/2FA via Jetstream/Fortify (ADR-012). Non tutti gl
 > **Revisione del 17 Ago 2026 (S4 blocco 9).** Questa riga diceva «NULL per utenti piattaforma (Developer/Superadmin/Tecnico)» ed era falsa in due punti su tre: per Developer e Superadmin da 🔗 ADR-018, che li ha vincolati al proprio Ente, e per il Tecnico da 🔗 ADR-030, che ne riconosce due forme. Restava vera solo per il tecnico esterno, ed è il tipo di riga che si legge come specifica e nel frattempo ha smesso di descrivere il sistema.
 
 | `two_factor_secret` / `two_factor_recovery_codes` | text nullable | 2FA (Fortify). |
-| `is_active` | boolean | Abilitazione (provisioning/lockout — ADR-012/013). |
+| ~~`is_active`~~ | — | **Mai nata, e non nascerà così** (revisione del 18 Ago 2026, attuando 🔗 ADR-012). Questa riga descriveva un'abilitazione per-utente che nessuna migration ha mai creato. Lo stato «invitato» si deriva da **`email_verified_at IS NULL`** (+ password random mai comunicata) e il blocco per insoluto vive su `accounts.is_locked` (🔗 ADR-013, §4.3): un terzo interruttore sarebbe stata la terza sorgente di verità su «questo utente può entrare?». Se un domani servirà spegnere una *persona* — cosa diversa dal sospendere un *contratto* — sarà una decisione con la sua migration. |
 | `riceve_email_scadenze` | boolean default true | Opt-out dal digest email (🔗 ADR-011, 18 Ago 2026) = diritto di opposizione del registro T4. Riguarda **solo l'email**: le notifiche in-app restano sempre. Fuori dall'attributo `Fillable`, come `visibilita_garanzie_ricambio` (ADR-029): si scrive solo da `/settings/notifiche`. |
 | timestamps, `deleted_at` | | soft delete. |
 
@@ -501,7 +501,7 @@ Legenda: ✅ pieno · ⚠️ ristretto (per sotto-albero/portafoglio/proprietà)
 | **ADR-009** Tarature come Attività | `interventi.tipo = taratura` + `documenti` morph. |
 | **ADR-010** E-invoicing → futuro | dati fiscali sul nodo ente (predisposizione). |
 | **ADR-011** Notifiche email + in-app | `notifications` (Laravel, senza `tenant_id` — §9) + **`avvisi_scadenza`** (§5.5, memoria anti-duplicati dello scheduler) + `users.riceve_email_scadenze` (opt-out, §3.1). |
-| **ADR-012** Onboarding doppio | `users.is_active` + flussi auth (no tabella nuova). |
+| **ADR-012** Onboarding doppio | Nessuna colonna nuova: lo stato «invitato» è `users.email_verified_at IS NULL` (§3.1) + URL firmata temporanea sulla pagina `/invito/{user}`. ~~`users.is_active`~~ mai nata. Metà provisioning attuata il 18 Ago 2026; self-signup col blocco Cashier. |
 | **ADR-013** Lockout insoluto | `is_locked`/`locked_*` su **`accounts`** (§4.3 — spostati lì da ADR-032; questa riga diceva «sul nodo ente» quando le colonne erano solo documentate). Attuato il 18 Ago 2026: gesto + middleware `account.lockout`, nessuna colonna in più. |
 | **ADR-014** Obsolescenza | `unita_organizzativa.soglia_obsolescenza_anni` + `strumenti.data_installazione`. |
 | **ADR-015** Spostamenti / trasferimenti | `spostamenti_strumento` (append-only) + update `tenant_id`/ubicazione. |

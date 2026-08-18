@@ -301,7 +301,14 @@ Il volume gioca a favore: il digest è **una email al giorno per destinatario e 
 
 **ADR-012 — Onboarding: provisioning + self-signup (entrambi)**
 
-*Stato: Accettata. **Integrata da ADR-032** (18 Ago 2026): il self-signup crea **account + primo Ente + primo membro** in un colpo; il provisioning aggancia l'Ente a un account esistente o ne crea uno (`easylab:provision-tenant --account=`).*
+*Stato: Accettata. **Integrata da ADR-032** (18 Ago 2026): il self-signup crea **account + primo Ente + primo membro** in un colpo; il provisioning aggancia l'Ente a un account esistente o ne crea uno (`easylab:provision-tenant --account=`). **Metà provisioning attuata lo stesso giorno** (invito via email + set password); il self-signup aspetta Cashier, perché la sua condizione d'ingresso è la verifica del pagamento.*
+
+***Note di attuazione della metà provisioning (18 Ago 2026):***
+- *Il link d'invito è una **URL firmata temporanea** (7 giorni) su una pagina dedicata, **non** il flusso di reset password di Fortify: quello esiste già stilizzato, ma il broker `users` scade in **60 minuti** e Fortify valida i token con quello — un invito morto in un'ora non è un invito. È il precedente del QR (🔗 ADR-003), con `signed` davanti a tutto perché manomettere id o scadenza invalidi l'URL **prima** del route-model binding.*
+- *Lo stato «invitato» **non è una colonna**: è `email_verified_at IS NULL` con una password random di 64 caratteri mai comunicata. Il click sul link e la scelta della password **sono** la verifica della casella. ⚠️ **`users.is_active` non è mai nata** (l'ERD la documentava come se esistesse): un terzo stato sarebbe stata la terza sorgente di verità su «questo utente può entrare?». L'euristica regge finché `Features::updateProfileInformation()` resta spenta — è l'unico percorso che potrebbe azzerare `email_verified_at` a un utente vero, e va rivisto quando la si accenderà.*
+- *L'invito parte **fuori dalla transazione** e in modo **sincrono** (nessun `ShouldQueue`): in console un worker di coda può non esserci, e una notifica accodata direbbe «inviato» a un invito fermo in Redis. SMTP giù → il provisioning è comunque riuscito e il comando lo dichiara. **Reinviare = rilanciare lo stesso comando** su chi non ha ancora attivato: nessun comando in più.*
+- *Nessun auto-login dopo il set: l'Admin è un ruolo 2FA-required, e la catena invito → password → login → 2FA è il flusso giusto.*
+- *⚠️ Difetto latente emerso attuando: `email_verified_at` **non è nel `Fillable`** di `User`, quindi il `firstOrCreate` del provisioning lo scartava in silenzio — ogni Admin creato restava non verificato contro l'intenzione del codice. Ora si scrive con `forceFill`, come `tenant_id`.*
 
 **Decisione.** Convivono due flussi di ingresso:
 - **Provisioning gestito** da EasyLab/Admin per i clienti "Free / chiavi in mano" (creazione Ente + utente admin, invito via email, set password).
