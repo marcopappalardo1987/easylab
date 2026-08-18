@@ -1,4 +1,5 @@
 @php
+    use App\Enums\TipoIntervento;
     $parametri = $strumento->parametri_tecnici ?? [];
 @endphp
 
@@ -21,12 +22,27 @@
                 @if ($strumento->data_installazione) · Installato {{ $strumento->data_installazione->format('m/Y') }} <x-ui.obsoleto :strumento="$strumento" /> @endif
             </p>
         </div>
-        <div class="flex items-center gap-2">
+        {{-- `flex-wrap` e non un menù «⋯»: le azioni sono al massimo cinque e
+             gatate una a una, quindi su un telefono vanno a capo e restano tutte
+             raggiungibili con un pollice. Nasconderle dietro un menù avrebbe
+             aggiunto un tocco proprio a chi lavora con una mano sola. --}}
+        <div class="flex flex-wrap items-center gap-2">
             @can('semaforo.force')
                 <x-ui.button variant="secondary" wire:click="openForza">Forza semaforo</x-ui.button>
             @endcan
             @can('strumenti.move')
                 <x-ui.button variant="secondary" wire:click="openMove">Sposta</x-ui.button>
+            @endcan
+            @can('documenti.export_pdf')
+                {{-- `target="_blank"`: il foglio si apre accanto alla scheda,
+                     così chi lo consulta non perde il tab su cui stava
+                     lavorando. --}}
+                <x-ui.button variant="secondary" :href="route('strumenti.storico-pdf', $strumento)" target="_blank">
+                    Storico PDF
+                </x-ui.button>
+            @endcan
+            @can('strumenti.qr_generate')
+                <x-ui.button variant="secondary" :href="route('strumenti.qr', $strumento)" wire:navigate>Etichetta QR</x-ui.button>
             @endcan
             @can('strumenti.update')
                 <x-ui.button variant="secondary" wire:click="edit">Modifica</x-ui.button>
@@ -54,9 +70,16 @@
                     :class="tab === 'interventi' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
                     class="border-b-2 px-3 py-2 font-medium">Interventi</button>
             @endcan
-            @foreach (['Ricambi', 'Documenti'] as $t)
-                <span class="cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-neutral-300" title="In arrivo (S3/S4)">{{ $t }}</span>
-            @endforeach
+            @can('ricambio_utilizzo.view')
+                <button type="button" x-on:click="tab = 'ricambi'"
+                    :class="tab === 'ricambi' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
+                    class="border-b-2 px-3 py-2 font-medium">Ricambi</button>
+            @endcan
+            @can('documenti.view')
+                <button type="button" x-on:click="tab = 'documenti'"
+                    :class="tab === 'documenti' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
+                    class="border-b-2 px-3 py-2 font-medium">Documenti</button>
+            @endcan
             @can('garanzie.macchina.view')
                 <button type="button" x-on:click="tab = 'garanzie'"
                     :class="tab === 'garanzie' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
@@ -154,6 +177,23 @@
         </div>
     @endcan
 
+    {{-- Tab Ricambi (ADR-008/022): lettura e correzione dei pezzi montati.
+         `x-cloak` come gli altri pannelli non di default, o lampeggia sotto la
+         Panoramica prima del boot di Alpine. --}}
+    @can('ricambio_utilizzo.view')
+        <div x-show="tab === 'ricambi'" x-cloak class="mt-6">
+            @include('livewire.strumenti._ricambi')
+        </div>
+    @endcan
+
+    {{-- Tab Documenti (ADR-009/025/026): allegati della macchina e dei suoi
+         interventi. `x-cloak` come gli altri pannelli non di default. --}}
+    @can('documenti.view')
+        <div x-show="tab === 'documenti'" x-cloak class="mt-6">
+            @include('livewire.strumenti._documenti')
+        </div>
+    @endcan
+
     {{-- Tab Garanzie (S3 punti 7-8, ADR-004). Visibile anche a Tenant e Tecnico
          in sola lettura: hanno `garanzie.macchina.view`. Le righe sui ricambi
          restano invisibili a chi non ha `garanzie.ricambio.view` — filtro di
@@ -213,7 +253,14 @@
                         <label for="interventoTecnico" class="block text-sm font-medium text-neutral-800">Assegnatario</label>
                         <select id="interventoTecnico" wire:model="interventoForm.tecnico_id"
                             class="mt-1 block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
-                            <option value="">— Nessun assegnatario —</option>
+                            {{-- `disabled`: un intervento è sempre assegnato, quindi
+                                 il segnaposto si vede ma non si può scegliere. Serve
+                                 comunque, perché aprendo una delle righe storiche
+                                 senza assegnatario il select deve poter mostrare
+                                 "non ancora scelto" invece del primo tecnico
+                                 dell'elenco — che sarebbe un'assegnazione fatta di
+                                 fatto da un default. --}}
+                            <option value="" disabled>— Scegli un assegnatario —</option>
                             @foreach ($assegnatari as $tecnico)
                                 <option value="{{ $tecnico->id }}">{{ $tecnico->name }}</option>
                             @endforeach
@@ -235,6 +282,87 @@
                     @endif
                 @endif
 
+                {{-- Ricambio effettuato (ADR-022, wireframe §2.1). FUORI dal wrapper
+                     "solo in create": vale anche in modifica. La checkbox NON è un
+                     campo persistito — apre e chiude il repeater, la verità è
+                     l'esistenza delle righe. --}}
+                @if ($puoRegistrareRicambi)
+                    <div class="border-t border-neutral-200 pt-5">
+                        <label class="flex items-center gap-2 text-sm text-neutral-800">
+                            <input type="checkbox" wire:model.live="ricambiEffettuati"
+                                class="rounded border-neutral-300 text-primary-600 focus:ring-primary-600">
+                            Ricambio effettuato
+                        </label>
+
+                        @if ($ricambiEffettuati)
+                            {{-- Righe già salvate: sola lettura + ✕. La correzione di
+                                 nome/scadenza è del tab Ricambi (S4 blocco 5); qui una
+                                 spunta tolta per sbaglio non deve distruggere storico,
+                                 quindi la rimozione è esplicita e reversibile fino al
+                                 salvataggio. --}}
+                            @foreach ($ricambiSalvati as $salvato)
+                                @php $inRimozione = in_array($salvato->id, array_map('intval', $ricambiRimossi), true); @endphp
+                                <div class="mt-3 flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm {{ $inRimozione ? 'opacity-50' : '' }}"
+                                    wire:key="ricambio-salvato-{{ $salvato->id }}">
+                                    <span class="flex-1 {{ $inRimozione ? 'line-through' : '' }}">
+                                        {{ $salvato->ricambio?->nome ?? '—' }}
+                                        {{-- Senza data il pezzo non è ancora montato: si dice quello,
+                                             non una data inventata. Si monterà alla chiusura
+                                             dell'intervento, che è quando la data diventa vera. --}}
+                                        <span class="text-neutral-500">
+                                            @if ($salvato->data)
+                                                · montato il {{ $salvato->data->format('d/m/Y') }}
+                                            @else
+                                                · montaggio ancora non effettuato
+                                            @endif
+                                        </span>
+                                    </span>
+                                    @if ($inRimozione)
+                                        <button type="button" wire:click="annullaRimozioneRicambio({{ $salvato->id }})"
+                                            class="flex h-11 items-center rounded px-2 text-sm text-primary-700 hover:bg-primary-50">Annulla</button>
+                                    @else
+                                        <button type="button" wire:click="segnaRicambioRimosso({{ $salvato->id }})"
+                                            aria-label="Rimuovi il ricambio {{ $salvato->ricambio?->nome }}"
+                                            class="flex h-11 w-11 shrink-0 items-center justify-center rounded text-danger-500 hover:bg-danger-100">✕</button>
+                                    @endif
+                                </div>
+                            @endforeach
+
+                            @foreach ($ricambiNuovi as $i => $riga)
+                                <div class="mt-3 rounded-md border border-neutral-200 p-3" wire:key="ricambio-nuovo-{{ $i }}">
+                                    <x-ui.combobox
+                                        name="ricambiNuovi.{{ $i }}.nome"
+                                        label="Nome ricambio"
+                                        placeholder="es. Guarnizione portello"
+                                        wire:model.live.debounce.300ms="ricambiNuovi.{{ $i }}.nome"
+                                        :index="$i"
+                                        on-select="scegliRicambio"
+                                        :suggerimenti="$ricambioAttivo === $i ? $suggerimenti : []"
+                                        :stato="$ricambioAttivo === $i && filled($riga['nome']) && count($suggerimenti) === 0 ? 'nuovo' : null" />
+
+                                    <div class="mt-2 flex items-end gap-2">
+                                        <div class="flex-1">
+                                            <x-ui.input name="ricambiNuovi.{{ $i }}.scadenza_garanzia" label="Scad. garanzia"
+                                                type="date" wire:model="ricambiNuovi.{{ $i }}.scadenza_garanzia" />
+                                        </div>
+                                        <button type="button" wire:click="removeRicambio({{ $i }})"
+                                            aria-label="Rimuovi questa riga" title="Rimuovi"
+                                            class="flex h-11 w-11 shrink-0 items-center justify-center rounded text-danger-500 hover:bg-danger-100">✕</button>
+                                    </div>
+                                </div>
+                            @endforeach
+
+                            <x-ui.button variant="ghost" wire:click="addRicambio" class="mt-3 !px-2 !py-1 text-sm">
+                                + Aggiungi ricambio
+                            </x-ui.button>
+
+                            @if (count($ricambiNuovi) === 0 && $ricambiSalvati->isEmpty())
+                                <p class="mt-1 text-sm text-neutral-400">Nessun ricambio. La scadenza della garanzia è obbligatoria per ogni pezzo.</p>
+                            @endif
+                        @endif
+                    </div>
+                @endif
+
                 <div class="flex justify-end gap-3">
                     <x-ui.button variant="secondary" wire:click="closeInterventoForm">Annulla</x-ui.button>
                     <x-ui.button type="submit" wire:loading.attr="disabled">Salva</x-ui.button>
@@ -251,9 +379,57 @@
                     «{{ $interventi->firstWhere('id', $completingInterventoId)?->descrizione }}»
                 </p>
                 <x-ui.input name="dataEsecuzione" label="Data esecuzione" type="date" wire:model="dataEsecuzione" />
-                <div class="flex justify-end gap-3">
-                    <x-ui.button variant="secondary" wire:click="closeCompleta">Annulla</x-ui.button>
-                    <x-ui.button type="submit" wire:loading.attr="disabled">Conferma</x-ui.button>
+
+                {{-- Chiudendo una taratura si propone la successiva (ADR-009).
+                     Senza, il semaforo tornerebbe verde e la prossima
+                     scadenza non esisterebbe da nessuna parte: la validità del
+                     certificato non è registrata, e su un parco di migliaia di
+                     macchine «me ne ricordo io» non è un piano. --}}
+                @if ($interventi->firstWhere('id', $completingInterventoId)?->tipo === TipoIntervento::TaraturaECertificazione)
+                    <div class="rounded-md border border-neutral-200 bg-neutral-50 p-4">
+                        <label class="flex items-center gap-2 text-sm font-medium text-neutral-800">
+                            <input type="checkbox" wire:model.live="pianificaProssimaTaratura"
+                                class="rounded border-neutral-300 text-primary-600 focus:ring-primary-600">
+                            Pianifica la prossima taratura
+                        </label>
+
+                        @if ($pianificaProssimaTaratura)
+                            <div class="mt-3">
+                                <x-ui.input name="mesiProssimaTaratura" label="Fra quanti mesi" type="number"
+                                    min="1" max="120" wire:model="mesiProssimaTaratura" placeholder="es. 12" />
+                                <p class="mt-1 text-xs text-neutral-400">
+                                    {{-- Nessun default nascosto: la periodicità dipende dal contratto e
+                                         dallo strumento, e nessun documento del progetto la fissa. --}}
+                                    Verrà creata una nuova «Taratura e certificazione» con la stessa
+                                    descrizione e lo stesso tecnico, alla scadenza calcolata da questa data.
+                                </p>
+                            </div>
+                        @endif
+                    </div>
+                @endif
+
+                {{-- Report di fine lavoro (Wireframe §3, Elenco Funzionalità
+                     «foglio di intervento»): è ciò che il tecnico scrive col
+                     telefono in mano, davanti alla macchina, ed è il momento in
+                     cui si ricorda cosa ha trovato. Chiederlo dopo significa non
+                     averlo. Facoltativo di proposito: un lavoro fatto resta
+                     fatto anche senza nota, e pretenderla bloccherebbe la
+                     chiusura degli interventi storici che non ne hanno una. --}}
+                <div>
+                    <label for="reportFineLavoro" class="block text-sm font-medium text-neutral-800">
+                        Report di fine lavoro <span class="font-normal text-neutral-400">— facoltativo</span>
+                    </label>
+                    <textarea id="reportFineLavoro" wire:model="reportFineLavoro" rows="4" maxlength="5000"
+                        placeholder="Cosa hai trovato e cosa hai fatto…"
+                        class="mt-1 block w-full rounded-md border-neutral-300 text-sm shadow-sm focus:border-primary-600 focus:ring-primary-600"></textarea>
+                    @error('reportFineLavoro')<p class="mt-1 text-xs text-danger-600">{{ $message }}</p>@enderror
+                </div>
+
+                {{-- Su un telefono i bottoni vanno a tutta larghezza e la
+                     conferma per ultima, dove arriva il pollice. --}}
+                <div class="flex justify-end gap-3 max-md:flex-col-reverse">
+                    <x-ui.button variant="secondary" wire:click="closeCompleta" class="max-md:w-full">Annulla</x-ui.button>
+                    <x-ui.button type="submit" wire:loading.attr="disabled" class="max-md:w-full">Conferma</x-ui.button>
                 </div>
             </form>
         </x-ui.modal>
@@ -368,6 +544,132 @@
                     </div>
                 </div>
             </form>
+        </x-ui.modal>
+    @endif
+
+    {{-- Correzione di un pezzo montato (tab Ricambi). Il combobox è lo stesso
+         del form intervento: il dropdown lo rende il server e ogni suggerimento
+         è un bottone: esiste un solo percorso di selezione, ed è testabile. --}}
+    @if ($showRicambioForm)
+        <x-ui.modal title="Correggi ricambio" close="closeRicambioForm">
+            <form wire:submit="salvaRicambio" class="space-y-5">
+                <x-ui.combobox
+                    name="ricambioForm.nome"
+                    label="Nome ricambio"
+                    placeholder="es. Guarnizione portello"
+                    wire:model.live.debounce.300ms="ricambioForm.nome"
+                    :index="0"
+                    on-select="scegliRicambioCorrezione"
+                    :suggerimenti="$ricambioAttivo === 0 ? $suggerimenti : []" />
+
+                <x-ui.input name="ricambioForm.quantita" label="Quantità" type="number" min="1"
+                    wire:model="ricambioForm.quantita" />
+
+                <div>
+                    <x-ui.input name="ricambioForm.data" label="Data di montaggio" type="date"
+                        wire:model="ricambioForm.data" />
+                    <div class="mt-1 flex items-center justify-between gap-3">
+                        <p class="text-xs text-neutral-400">
+                            Correggendola a mano, la chiusura dell'intervento non la modificherà più.
+                        </p>
+                        {{-- Bottone esplicito e non «svuota il campo»: un campo
+                             date vuoto e uno cancellato per sbaglio si
+                             assomigliano troppo perché la differenza resti
+                             implicita. --}}
+                        <button type="button" wire:click="segnaNonMontato"
+                            class="shrink-0 text-xs font-medium text-primary-600 hover:text-primary-700">
+                            Non ancora montato
+                        </button>
+                    </div>
+                </div>
+
+                @if ($vedeGaranzieRicambio)
+                    <x-ui.input name="ricambioForm.scadenza_garanzia" label="Scadenza garanzia del pezzo" type="date"
+                        wire:model="ricambioForm.scadenza_garanzia" />
+                @endif
+
+                <div class="flex justify-end gap-3">
+                    <x-ui.button variant="secondary" wire:click="closeRicambioForm">Annulla</x-ui.button>
+                    <x-ui.button type="submit" wire:loading.attr="disabled">Salva</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
+    @endif
+
+    {{-- Caricamento di un documento. Il select dell'intervento permette di
+         allegare al singolo lavoro invece che alla macchina: è il certificato
+         di taratura, che vive sull'intervento che l'ha prodotto. --}}
+    @if ($showDocumentoForm)
+        <x-ui.modal title="Carica documento" close="closeDocumentoForm">
+            <form wire:submit="salvaDocumento" class="space-y-5">
+                <div>
+                    <label for="fileDocumento" class="block text-sm font-medium text-neutral-800">File</label>
+                    <input id="fileDocumento" type="file" wire:model="fileDocumento"
+                        class="mt-1 block w-full text-sm text-neutral-700 file:mr-3 file:rounded-md file:border-0 file:bg-primary-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-700 hover:file:bg-primary-100">
+                    <p class="mt-1 text-xs text-neutral-400">PDF o immagine, fino a 20 MB.</p>
+                    @error('fileDocumento')
+                        <p class="mt-1 text-sm text-danger-600">{{ $message }}</p>
+                    @enderror
+                    <p class="mt-1 text-xs text-neutral-400" wire:loading wire:target="fileDocumento">Caricamento in corso…</p>
+                </div>
+
+                <div>
+                    <label for="tipoDocumento" class="block text-sm font-medium text-neutral-800">Tipo</label>
+                    <select id="tipoDocumento" wire:model="tipoDocumento"
+                        class="mt-1 block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
+                        @foreach ($tipiDocumento as $valore => $etichetta)
+                            <option value="{{ $valore }}">{{ $etichetta }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                @if ($interventiAllegabili->isNotEmpty())
+                    <div>
+                        <label for="documentoInterventoId" class="block text-sm font-medium text-neutral-800">Allega a</label>
+                        <select id="documentoInterventoId" wire:model="documentoInterventoId"
+                            class="mt-1 block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
+                            <option value="">La macchina</option>
+                            @foreach ($interventiAllegabili as $intervento)
+                                <option value="{{ $intervento->id }}">
+                                    {{ $intervento->data_scadenza->format('d/m/Y') }} · {{ $intervento->descrizione }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                @endif
+
+                <div class="flex justify-end gap-3">
+                    <x-ui.button variant="secondary" wire:click="closeDocumentoForm">Annulla</x-ui.button>
+                    <x-ui.button type="submit" wire:loading.attr="disabled" wire:target="salvaDocumento,fileDocumento">Carica</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
+    @endif
+
+    @if ($deletingDocumentoId !== null)
+        <x-ui.modal title="Eliminare il documento?">
+            <p class="text-sm text-neutral-600">
+                L'operazione è reversibile: la riga viene cestinata e il file resta archiviato.
+            </p>
+            <div class="mt-6 flex justify-end gap-3">
+                <x-ui.button variant="secondary" wire:click="$set('deletingDocumentoId', null)">Annulla</x-ui.button>
+                <x-ui.button variant="danger" wire:click="eliminaDocumento">Elimina</x-ui.button>
+            </div>
+        </x-ui.modal>
+    @endif
+
+    {{-- Rimozione: la conferma dice cosa sparisce DAVVERO, garanzia compresa,
+         perché è ciò che spegne il semaforo (ADR-020) e non si deduce. --}}
+    @if ($deletingUtilizzoId !== null)
+        <x-ui.modal title="Rimuovere il ricambio?">
+            <p class="text-sm text-neutral-600">
+                La riga di montaggio e la garanzia del pezzo verranno cestinate insieme.
+                Se quella garanzia teneva acceso il semaforo, lo strumento tornerà in regola.
+            </p>
+            <div class="mt-6 flex justify-end gap-3">
+                <x-ui.button variant="secondary" wire:click="$set('deletingUtilizzoId', null)">Annulla</x-ui.button>
+                <x-ui.button variant="danger" wire:click="rimuoviRicambio">Rimuovi</x-ui.button>
+            </div>
         </x-ui.modal>
     @endif
 </div>

@@ -24,6 +24,11 @@ beforeEach(function () {
 
     $this->admin = User::factory()->create(['tenant_id' => $this->ente->id, 'two_factor_confirmed_at' => now()]);
     $this->admin->assignRole('Admin');
+
+    // Dal 9 Ago 2026 un intervento è SEMPRE assegnato a un tecnico: i test che
+    // salvano dal form devono indicarne uno, come farebbe l'utente.
+    $this->tecnico = User::factory()->create(['tenant_id' => $this->ente->id, 'name' => 'Mario Rossi']);
+    $this->tecnico->assignRole('Tecnico');
 });
 
 // --- CRUD felice ---
@@ -34,6 +39,7 @@ it('creates a planned intervento from the modal', function () {
         ->set('interventoForm.descrizione', 'Controllo pressione valvole')
         ->set('interventoForm.tipo', 'manutenzione_ordinaria')
         ->set('interventoForm.data_scadenza', today()->addMonths(2)->toDateString())
+        ->set('interventoForm.tecnico_id', $this->tecnico->id)
         ->call('saveIntervento')
         ->assertHasNoErrors()
         ->assertSet('showInterventoForm', false);
@@ -54,6 +60,7 @@ it('creates a historical done intervento in one step', function () {
         ->set('interventoForm.data_scadenza', '2025-05-28')
         ->set('interventoForm.gia_eseguito', true)
         ->set('interventoForm.data_esecuzione', '2025-05-30')
+        ->set('interventoForm.tecnico_id', $this->tecnico->id)
         ->call('saveIntervento')
         ->assertHasNoErrors();
 
@@ -71,6 +78,7 @@ it('updates descrizione, tipo and data_scadenza without touching stato', functio
         ->set('interventoForm.descrizione', 'Descrizione corretta')
         ->set('interventoForm.tipo', 'manutenzione_straordinaria')
         ->set('interventoForm.data_scadenza', '2026-03-01')
+        ->set('interventoForm.tecnico_id', $this->tecnico->id)
         ->call('saveIntervento')
         ->assertHasNoErrors();
 
@@ -168,7 +176,14 @@ it('forbids a Tenant from every intervento action', function () {
 it('lets a Tecnico complete and reopen but not create, update or delete', function () {
     $tecnico = User::factory()->create(['tenant_id' => $this->ente->id]);
     $tecnico->assignRole('Tecnico');
-    $intervento = Intervento::factory()->forStrumento($this->strumento)->scaduto()->create();
+
+    // ⚠️ `tecnico_id` dal 17 Ago 2026 (ADR-030): senza assegnazione il tecnico
+    // non vede l'intervento, quindi non potrebbe nemmeno provare a chiuderlo — e
+    // il caso misurerebbe l'accesso invece dei PERMESSI, che è ciò di cui parla.
+    // Non è un vincolo artificioso: chiudere un lavoro che non ti è stato
+    // affidato non è uno scenario che ADR-007 preveda.
+    $intervento = Intervento::factory()->forStrumento($this->strumento)->scaduto()
+        ->create(['tecnico_id' => $tecnico->id]);
 
     scheda($tecnico, $this->strumento)
         ->call('openCompleta', $intervento->id)
@@ -188,6 +203,65 @@ it('lets a Tecnico complete and reopen but not create, update or delete', functi
     ] as $call) {
         scheda($tecnico, $this->strumento)->call(...$call)->assertForbidden();
     }
+});
+
+it('requires an assignee: an intervento is always someone\'s', function () {
+    // Regola del 9 Ago 2026. **Obbligatorio nel form, nullable nello schema**,
+    // come il fornitore di ADR-023: sul DB di sviluppo 4178 interventi su 20672
+    // non hanno assegnatario, e una FK NOT NULL li renderebbe non salvabili —
+    // costringendo a inventare un tecnico per farli passare.
+    scheda($this->admin, $this->strumento)
+        ->call('openNuovoIntervento')
+        ->set('interventoForm.descrizione', 'Senza nessuno')
+        ->set('interventoForm.tipo', 'manutenzione_ordinaria')
+        ->set('interventoForm.data_scadenza', today()->addWeek()->toDateString())
+        ->set('interventoForm.tecnico_id', null)
+        ->call('saveIntervento')
+        ->assertHasErrors(['interventoForm.tecnico_id']);
+
+    expect(Intervento::withoutGlobalScopes()->count())->toBe(0);
+});
+
+it('forces an assignee when editing one of the legacy unassigned interventi', function () {
+    // Conseguenza voluta: le righe storiche restano com'è finché nessuno le
+    // tocca, ma modificarne una obbliga a scegliere. È il prezzo di non aver
+    // inventato un assegnatario per 4178 interventi.
+    $storico = Intervento::factory()->forStrumento($this->strumento)->create(['tecnico_id' => null]);
+
+    scheda($this->admin, $this->strumento)
+        ->call('openModificaIntervento', $storico->id)
+        ->set('interventoForm.descrizione', 'Corretta')
+        ->call('saveIntervento')
+        ->assertHasErrors(['interventoForm.tecnico_id']);
+
+    expect($storico->fresh()->descrizione)->not->toBe('Corretta');
+});
+
+it('does not lock out a user who can create but not assign', function () {
+    // ⚠️ Il ramo che rende la regola CONDIZIONALE al permesso, e senza questo
+    // test non era coperto: il caso vicino («ignores tecnico_id…») imposta la
+    // chiave nel payload, quindi soddisfa comunque un `required` e non
+    // distingue le due varianti. Qui il campo si lascia vuoto, com'è nella
+    // realtà per chi il select non lo vede nemmeno.
+    //
+    // Nessuno dei 6 ruoli è in questo stato — un meta-test in RbacSeederTest lo
+    // congela — ma un `required` incondizionato bloccherebbe del tutto un ruolo
+    // futuro invece di lasciargli fare ciò che può.
+    Role::create(['name' => 'Compilatore junior'])
+        ->givePermissionTo(['strumenti.view', 'interventi.view', 'interventi.create']);
+    $compilatore = User::factory()->create(['tenant_id' => $this->ente->id]);
+    $compilatore->assignRole('Compilatore junior');
+
+    scheda($compilatore, $this->strumento)
+        ->call('openNuovoIntervento')
+        ->set('interventoForm.descrizione', 'Creato senza poter assegnare')
+        ->set('interventoForm.tipo', 'manutenzione_ordinaria')
+        ->set('interventoForm.data_scadenza', today()->addWeek()->toDateString())
+        ->call('saveIntervento')
+        ->assertHasNoErrors();
+
+    expect(Intervento::withoutGlobalScopes()->where('descrizione', 'Creato senza poter assegnare')->sole()->tecnico_id)
+        ->toBeNull();
 });
 
 it('ignores tecnico_id from a user with create but without assign', function () {
@@ -311,6 +385,7 @@ it('accepts a past data_scadenza (historical entries are legitimate)', function 
         ->set('interventoForm.descrizione', 'Scadenza passata')
         ->set('interventoForm.tipo', 'manutenzione_ordinaria')
         ->set('interventoForm.data_scadenza', '2025-01-01')
+        ->set('interventoForm.tecnico_id', $this->tecnico->id)
         ->call('saveIntervento')
         ->assertHasNoErrors();
 });

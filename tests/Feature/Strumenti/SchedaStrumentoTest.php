@@ -1,6 +1,7 @@
 <?php
 
 use App\Livewire\Strumenti\SchedaStrumento;
+use App\Models\Fornitore;
 use App\Models\Intervento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
@@ -37,6 +38,8 @@ it('returns 404 for a strumento of another tenant', function () {
 it('lets an admin edit the strumento including parametri', function () {
     Livewire::actingAs($this->admin)->test(SchedaStrumento::class, ['strumento' => $this->strumento])
         ->call('edit')
+        // Il fornitore è obbligatorio nel form dal 15 Ago 2026 (ADR-023).
+        ->set('strumentoForm.fornitore_id', Fornitore::factory()->forTenant($this->ente)->create()->id)
         ->set('strumentoForm.nome', 'Autoclave X')
         ->call('addParametro')
         ->set('parametri.0.chiave', 'Tensione')
@@ -74,6 +77,8 @@ it('lets a Responsabile edit a strumento in its subtree but 404 outside', functi
 
     Livewire::actingAs($resp)->test(SchedaStrumento::class, ['strumento' => $this->strumento])
         ->call('edit')
+        // Il fornitore è obbligatorio nel form dal 15 Ago 2026 (ADR-023).
+        ->set('strumentoForm.fornitore_id', Fornitore::factory()->forTenant($this->ente)->create()->id)
         ->set('strumentoForm.nome', 'Rinominato')
         ->call('save')
         ->assertHasNoErrors();

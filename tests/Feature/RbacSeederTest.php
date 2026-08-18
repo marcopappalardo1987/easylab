@@ -45,12 +45,39 @@ it('withholds platform-level permissions from the Admin', function () {
     expect($admin->hasPermissionTo('billing.manage_own'))->toBeTrue();
 });
 
-it('never grants spare-part warranties to Tenant or Tecnico', function () {
-    foreach (['Tenant', 'Tecnico'] as $role) {
-        $r = Role::findByName($role);
-        expect($r->hasPermissionTo('garanzie.ricambio.view'))->toBeFalse();
-        expect($r->hasPermissionTo('garanzie.ricambio.manage'))->toBeFalse();
-    }
+// Riscritto l'8 Ago 2026 (ADR-027). Diceva «to Tenant or Tecnico» e congelava
+// una svista: ADR-004 — la fonte che sia Schema Ruoli §4.3 sia ADR-016 citavano —
+// nomina il SOLO Tenant, e il Tecnico è personale EasyLab. Il divieto al Tecnico
+// non era mai stato deciso da nessuno, ma difeso da questo test era diventato
+// indistinguibile da una decisione. Modifica consapevole, non adeguamento.
+// Invertito il 15 Ago 2026 (ADR-029), ed è la seconda volta che questo test
+// cambia verso: l'8 Ago aveva perso il Tecnico (ADR-027), ora perde il Tenant.
+// Il divieto che difendeva non era mai stato deciso — Fase 2 lo dava per
+// scontato, ADR-004 lo ratificò come «già previsto» — e poggiava su una
+// premessa mai scritta: che i ricambi li fornisca EasyLab. Qui resta il
+// DEFAULT della piattaforma; l'eccezione del singolo Ente non è esprimibile in
+// RBAC (`teams = false`) e vive nella colonna dell'Ente + Policy.
+it('grants spare-part warranties to the Tenant, who owns the machine', function () {
+    $tenant = Role::findByName('Tenant');
+
+    expect($tenant->hasPermissionTo('garanzie.ricambio.view'))->toBeTrue();
+    expect($tenant->hasPermissionTo('garanzie.ricambio.manage'))->toBeTrue();
+
+    // Contrappeso: resta un ruolo in sola lettura sul resto dell'operatività —
+    // il permesso nuovo non ne ha allargato il profilo.
+    expect($tenant->hasPermissionTo('interventi.create'))->toBeFalse();
+    expect($tenant->hasPermissionTo('strumenti.create'))->toBeFalse();
+});
+
+// ADR-027: è il Tecnico a montare il pezzo, quindi è la fonte del dato sulla sua
+// garanzia. `.manage` e non solo `.view`, perché il form intervento (ADR-022) la
+// CREA contestualmente alla riga di ricambio: con la sola lettura resterebbe il
+// gesto spezzato in due che ADR-022 esisteva per evitare.
+it('grants spare-part warranties to the Tecnico, who mounts the part', function () {
+    $tecnico = Role::findByName('Tecnico');
+
+    expect($tecnico->hasPermissionTo('garanzie.ricambio.view'))->toBeTrue();
+    expect($tecnico->hasPermissionTo('garanzie.ricambio.manage'))->toBeTrue();
 });
 
 it('lets the Tecnico create catalog entries but not update or delete them', function () {
@@ -63,8 +90,33 @@ it('lets the Tecnico create catalog entries but not update or delete them', func
     expect($tecnico->hasPermissionTo('semaforo.force'))->toBeFalse();
 });
 
+it('never lets a role create interventi without being able to assign them', function () {
+    // Dal 9 Ago 2026 un intervento è SEMPRE assegnato a un tecnico, e il campo
+    // è obbligatorio nel form per chi ha `interventi.assign`. Un ruolo che
+    // potesse creare SENZA assegnare produrrebbe interventi non assegnati —
+    // cioè un buco nella regola, aperto da una modifica alla matrice e non da
+    // un bug nel form. Il test lo congela: se domani qualcuno concede
+    // `interventi.create` senza `interventi.assign`, se ne accorge qui.
+    foreach (Rbac::roleNames() as $ruolo) {
+        $permessi = Rbac::permissionsForRole($ruolo);
+
+        if (in_array('interventi.create', $permessi, true)) {
+            // NB: `toContain` in Pest prende N valori da cercare, non un
+            // messaggio — il nome del ruolo va nella descrizione, non lì.
+            expect(in_array('interventi.assign', $permessi, true))
+                ->toBeTrue("il ruolo {$ruolo} può creare interventi ma non assegnarli");
+        }
+    }
+});
+
 it('defines the locked permission set', function () {
-    expect(Rbac::locked())->toHaveCount(9);
-    expect(Rbac::isLocked('garanzie.ricambio.view'))->toBeTrue();
+    // 9 → 7 il 15 Ago 2026: `garanzie.ricambio.*` è uscito dal set con ADR-029.
+    // Non essendoci più un divieto assoluto da difendere, tenerle bloccate
+    // avrebbe impedito alla UI di S6 di cambiare un default che ora È una
+    // decisione. Il set torna a contenere solo ciò che è bloccato per legge,
+    // sicurezza o struttura.
+    expect(Rbac::locked())->toHaveCount(7);
+    expect(Rbac::isLocked('garanzie.ricambio.view'))->toBeFalse();
+    expect(Rbac::isLocked('utenti.impersonate'))->toBeTrue();
     expect(Rbac::isLocked('strumenti.view'))->toBeFalse();
 });

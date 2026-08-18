@@ -6,17 +6,22 @@ use App\Enums\StatoIntervento;
 use App\Enums\StatoSemaforo;
 use App\Models\Concerns\BelongsToOrgNode;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Contracts\ReachesStrumento;
 use App\Support\AuditLog;
 use App\Support\DiagnosiSemaforo;
 use App\Support\MotivoSemaforo;
 use App\Support\Semaforo;
 use Database\Factories\StrumentoFactory;
+use Illuminate\Contracts\Database\Query\Builder as BuilderContract;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
@@ -26,7 +31,7 @@ use InvalidArgumentException;
  * (BelongsToTenant) e la restrizione sotto-albero del Responsabile
  * (BelongsToOrgNode).
  */
-class Strumento extends Model
+class Strumento extends Model implements ReachesStrumento
 {
     /** @use HasFactory<StrumentoFactory> */
     use BelongsToOrgNode, BelongsToTenant, HasFactory, SoftDeletes;
@@ -34,10 +39,35 @@ class Strumento extends Model
     protected $table = 'strumenti';
 
     /**
+     * Per lo strumento il vincolo è l'identità (ADR-030).
+     *
+     * Sembra una riga inutile e invece è quella senza cui il blocco non
+     * funziona: `AccessoTecnico` riconosce il canale "assegnazione" da questo
+     * contratto, e uno `Strumento` che non lo dichiara resta visibile al Tecnico
+     * per il solo portafoglio — cioè chi ha un intervento assegnato non riesce
+     * ad aprire la scheda della macchina su cui deve andare a lavorare.
+     *
+     * Non arriva dal trait `BelongsToOrgNodeThroughStrumento` perché a
+     * `Strumento` quel trait non serve: ha già `unita_organizzativa_id` e usa
+     * `BelongsToOrgNode`, e i due sono mutuamente esclusivi.
+     *
+     * @param  Builder<*>  $query
+     * @param  Builder<*>|BuilderContract  $strumenti
+     */
+    public function vincolaAStrumenti(Builder $query, Builder|BuilderContract $strumenti): void
+    {
+        $query->whereIn($this->qualifyColumn($this->getKeyName()), $strumenti);
+    }
+
+    /**
      * NOTA: le colonne `forced_*` sono deliberatamente ESCLUSE. Il form della
      * scheda e l'import CSV scrivono per mass-assignment: tenendole fuori,
      * nessun payload — presente o futuro — può forzare il semaforo scavalcando
      * forzaSemaforo()/rimuoviForzatura(), che sono l'unica via.
+     *
+     * Stessa ragione per `qr_token` (ADR-003): un payload che potesse
+     * riscriverlo invaliderebbe l'adesivo sulla macchina passando dal form
+     * dell'anagrafica. Si scrive solo alla creazione e da `rigeneraQrToken()`.
      */
     protected $fillable = [
         'tenant_id',
@@ -48,6 +78,7 @@ class Strumento extends Model
         'matricola',
         'parametri_tecnici',
         'data_installazione',
+        'fornitore_id',
     ];
 
     protected function casts(): array
@@ -58,6 +89,181 @@ class Strumento extends Model
             'forced_state' => StatoSemaforo::class,
             'forced_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Il token del QR nasce con lo strumento e non si tocca più (ADR-003).
+     *
+     * `creating` e non `saving`: la stessa ragione di `RicambioUtilizzo` —
+     * `saving` gira anche sugli update, e un `??=` lì dentro sarebbe una
+     * guardia che sembra proteggere e non protegge. Qui la condizione è
+     * esplicita perché un `insert()` in blocco (DemoSeeder, import CSV) non fa
+     * scattare gli eventi: quelle righe restano senza token finché non passano
+     * da qui o da una migration, ed è il motivo per cui la colonna è nullable
+     * in schema pur essendo di fatto obbligatoria.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (Strumento $strumento): void {
+            $strumento->qr_token ??= self::nuovoQrToken();
+            $strumento->verificaFornitore();
+        });
+
+        static::updating(fn (Strumento $strumento) => $strumento->verificaFornitore());
+    }
+
+    /**
+     * Il fornitore deve essere dello stesso Ente della macchina (ADR-023).
+     *
+     * ⚠️ Su `creating`/`updating` e **mai su `saving`**: `saving` gira PRIMA di
+     * `creating`, ed è in `creating` che `BelongsToTenant` riscrive `tenant_id`.
+     * Una guardia in `saving` confronterebbe un valore che il trait sta per
+     * sostituire, e un payload forgiato coerentemente attorno a un altro Ente
+     * passerebbe indenne — è la trappola già pagata su `RicambioUtilizzo`.
+     *
+     * Query builder e non Eloquent: i global scope nasconderebbero proprio la
+     * riga che serve controllare, e un riferimento cross-tenant si
+     * presenterebbe come un "non trovato" dal messaggio fuorviante.
+     * `withTrashed` implicito (il builder non conosce i soft delete): riassegnare
+     * un fornitore cestinato è impedito dalla whitelist del form, qui interessa
+     * il solo confine di Ente.
+     */
+    protected function verificaFornitore(): void
+    {
+        if ($this->fornitore_id === null || ! $this->isDirty(['fornitore_id', 'tenant_id'])) {
+            return;
+        }
+
+        $tenantFornitore = DB::table('fornitori')->where('id', $this->fornitore_id)->value('tenant_id');
+
+        if ($tenantFornitore === null || (int) $tenantFornitore !== (int) $this->tenant_id) {
+            throw new InvalidArgumentException(
+                'Strumento: il fornitore deve appartenere allo stesso Ente della macchina (ADR-023).'
+            );
+        }
+    }
+
+    /** 32 caratteri casuali: un segreto, non un id offuscato (vedi migration). */
+    public static function nuovoQrToken(): string
+    {
+        return Str::random(32);
+    }
+
+    /**
+     * Rigenera il token: **invalida l'adesivo già applicato sulla macchina**.
+     *
+     * Esiste separata dalla stampa proprio per questo (decisione del 15 Ago
+     * 2026): ristampare deve poter dare la stessa etichetta — un adesivo
+     * rovinato si rifà identico — mentre invalidarne una è un atto raro e
+     * conseguente, che come tale lascia una traccia esplicita.
+     *
+     * `activity()` a mano e non il trait: `Strumento` logga a mano per
+     * decisione di ADR-027, e qui l'informazione che conta non è «il valore
+     * della colonna è cambiato» ma «le etichette stampate finora non valgono
+     * più» — che in tabella non si legge.
+     */
+    public function rigeneraQrToken(): bool
+    {
+        $this->qr_token = self::nuovoQrToken();
+        $salvato = $this->save();
+
+        activity(AuditLog::NAME)
+            ->causedBy(auth()->user())
+            ->performedOn($this)
+            ->log('QR rigenerato: le etichette stampate in precedenza non sono più valide');
+
+        return $salvato;
+    }
+
+    /**
+     * Fornitore da cui la macchina è stata acquistata (ADR-023).
+     *
+     * ⚠️ **`withTrashed()`, e non è un dettaglio**: `fornitori` ha il soft
+     * delete, e un `belongsTo` verso un model cestinato restituisce **null** —
+     * la scheda mostrerebbe una cella vuota, che si legge come «fornitore mai
+     * inserito» invece che «fornitore cestinato». Il badge che distingue le due
+     * cose ha bisogno del nome per poter essere scritto.
+     */
+    public function fornitore(): BelongsTo
+    {
+        return $this->belongsTo(Fornitore::class, 'fornitore_id')->withTrashed();
+    }
+
+    /**
+     * «Ente › Dipartimento › Sotto-laboratorio»: dove si trova fisicamente la
+     * macchina (ADR-006, ADR-030 emendato il 17 Ago 2026).
+     *
+     * ⚠️ **Legge i nodi SENZA global scope, ed è un'eccezione deliberata** —
+     * la terza del progetto, dopo `User::ente()` e `Garanzia::deiPezziMontati()`,
+     * e come quelle sta in un metodo solo, nominato, motivato qui.
+     *
+     * Il motivo è concreto e l'ha rivelato la vista di campo: un **Tecnico** che
+     * raggiunge una macchina per assegnazione (ADR-030) non ha accesso
+     * all'albero organizzativo del cliente, quindi `$strumento->unita` gli
+     * tornava NULL e la scheda diceva «Christ Alpha 2-4 · · Installato 09/2017»
+     * — un buco al posto del laboratorio in cui deve andare a lavorare. Il
+     * wireframe §3 mette l'ubicazione **subito sotto il nome della macchina**
+     * proprio perché sul campo è così che la si trova.
+     *
+     * **Non allarga l'esposizione**: la si chiama a partire da uno strumento che
+     * il chiamante sta già vedendo, e dire dove sta una macchina che si vede non
+     * rivela nulla che quella macchina non riveli già. La stessa cosa valeva —
+     * silenziosamente — per il **Responsabile Reparto**, il cui percorso si
+     * fermava al confine del proprio sotto-albero perdendo il nome dell'Ente.
+     *
+     * Esiste come metodo del modello e non nei due componenti perché la risalita
+     * era scritta due volte, identica, in `SchedaStrumento` e in `StampaQr` —
+     * e l'etichetta QR stampata è il posto in cui un'ubicazione mancante fa più
+     * danno, perché il foglio finisce sulla macchina e nessuno lo rilegge.
+     */
+    public function percorsoUbicazione(?array $nodi = null): string
+    {
+        $risolvi = fn (?int $id) => $id === null
+            ? null
+            : ($nodi !== null
+                ? ($nodi[$id] ?? null)
+                : UnitaOrganizzativa::withoutGlobalScopes()->find($id));
+
+        $catena = collect();
+        $nodo = $risolvi($this->unita_organizzativa_id);
+
+        while ($nodo !== null) {
+            $catena->prepend($nodo->nome);
+            $nodo = $risolvi($nodo->parent_id);
+        }
+
+        return $catena->implode(' › ');
+    }
+
+    /**
+     * Mappa `id → nodo` per risolvere l'ubicazione di molti strumenti senza una
+     * query per riga: la si passa a `percorsoUbicazione()`.
+     *
+     * Serve alla vista di campo, dove la lista è lunga per costruzione e la
+     * risalita costava DUE query a riga — dipartimento più Ente. Un test ne
+     * congela il conteggio, ed è stato quel test a scoprirlo.
+     *
+     * Carica l'albero intero e non i soli antenati necessari: i nodi di un Ente
+     * sono decine, la ricorsione per prenderne un ramo sarebbe più costosa della
+     * tabella intera, e una seconda query per ogni livello di profondità
+     * riporterebbe il problema che questo metodo esiste per togliere.
+     *
+     * @param  iterable<Strumento>  $strumenti
+     * @return array<int, UnitaOrganizzativa>
+     */
+    public static function mappaUbicazioni(iterable $strumenti): array
+    {
+        $tenant = collect($strumenti)->pluck('tenant_id')->filter()->unique();
+
+        if ($tenant->isEmpty()) {
+            return [];
+        }
+
+        return UnitaOrganizzativa::withoutGlobalScopes()
+            ->whereIn('tenant_id', $tenant)
+            ->get(['id', 'nome', 'parent_id', 'tenant_id'])
+            ->keyBy('id')
+            ->all();
     }
 
     /**
@@ -123,13 +329,43 @@ class Strumento extends Model
     }
 
     /**
-     * Garanzia con la scadenza effettiva più vicina: il secondo ingresso del
-     * semaforo (ADR-004/005). Speculare a prossimoInterventoAperto().
+     * Scadenze delle garanzie dei pezzi MONTATI su questa macchina: il terzo
+     * ingresso del semaforo (ADR-020, S4 blocco 4), raggiunto col doppio salto
+     * `garanzie → ricambio_utilizzo → strumenti`.
      *
-     * Nota privacy per S4: il semaforo è un AGGREGATO e dovrà considerare anche
-     * le garanzie ricambio, bypassando GaranziaRicambioPrivacyScope — il
-     * pallino non rivela la riga. La colonna "Prossima scadenza" dell'elenco è
-     * invece un DETTAGLIO e dovrà restare filtrata per permesso.
+     * **Restituisce id e scadenza, e nient'altro — è la scelta che porta il
+     * peso.** La query gira senza `GaranziaRicambioPrivacyScope` (vedi
+     * `Garanzia::scopeDeiPezziMontati()`), quindi vede righe che il Tenant non
+     * può leggere: se selezionasse `*`, ogni chiamante futuro si troverebbe in
+     * mano `ricambio_utilizzo_id` e da lì il nome del pezzo, e la protezione
+     * dipenderebbe dalla disciplina di chi scrive. Selezionando due colonne, il
+     * dato protetto non esiste nel risultato. Per lo stesso motivo NON è una
+     * relazione: una `hasManyThrough` col bypass dentro sarebbe una superficie
+     * eager-loadable, cioè un invito.
+     *
+     * `isScaduta()` funziona lo stesso: legge solo `data_scadenza_effettiva`.
+     *
+     * @return Collection<int, Garanzia>
+     */
+    public function scadenzeGaranzieRicambi(): Collection
+    {
+        return Garanzia::query()->deiPezziMontati()
+            ->where('ricambio_utilizzo.strumento_id', $this->id)
+            ->orderBy('garanzie.data_scadenza_effettiva')
+            ->orderBy('garanzie.id')
+            ->get(['garanzie.id', 'garanzie.data_scadenza_effettiva']);
+    }
+
+    /**
+     * Garanzia MACCHINA con la scadenza effettiva più vicina: il secondo
+     * ingresso del semaforo (ADR-004/005). Speculare a
+     * prossimoInterventoAperto().
+     *
+     * Le garanzie dei pezzi montati NON passano di qui (la relazione filtra
+     * `strumento_id`, NULL sulle righe ricambio): stanno in
+     * `scadenzeGaranzieRicambi()`, separate perché la colonna "Prossima
+     * scadenza" è un DETTAGLIO e le due fonti hanno permessi diversi, mentre il
+     * pallino è un aggregato dovuto a tutti (ADR-020).
      */
     public function prossimaGaranzia(): ?Garanzia
     {
@@ -189,8 +425,12 @@ class Strumento extends Model
      * Il modello assembla i CANDIDATI dalle proprie fonti — è lui a sapere
      * quali sono — e il motore decide quali superano la soglia. Nessun
      * confronto con la soglia qui, nessuna nozione di "fonte" là: le due
-     * responsabilità restano separate, ed è ciò che permetterà a S4 di
-     * aggiungere le garanzie ricambio (ADR-020) toccando solo questo metodo.
+     * responsabilità restano separate, ed è ciò che ha permesso a S4 di
+     * aggiungere le garanzie ricambio (ADR-020) toccando **solo questa riga**.
+     *
+     * La terza fonte costa una query in più per scheda, su un solo strumento:
+     * il path dove i volumi contano è il calcolo bulk dell'elenco, che non passa
+     * di qui e resta a tre query costanti per pagina.
      *
      * Non sono motivi, di proposito: l'**obsolescenza** (ADR-014 — segnalazione
      * sull'età, non tocca il semaforo) e la **forzatura** (vince sullo stato ma
@@ -203,6 +443,7 @@ class Strumento extends Model
         return Semaforo::diagnostica(
             ...$this->interventiAperti()->map(MotivoSemaforo::daIntervento(...)),
             ...$garanzie->map(MotivoSemaforo::daGaranziaMacchina(...)),
+            ...$this->scadenzeGaranzieRicambi()->map(MotivoSemaforo::daGaranziaRicambio(...)),
         );
     }
 
@@ -318,6 +559,28 @@ class Strumento extends Model
     public function spostamenti(): HasMany
     {
         return $this->hasMany(SpostamentoStrumento::class, 'strumento_id')
+            ->orderByDesc('data')
+            ->orderByDesc('id');
+    }
+
+    /**
+     * Pezzi montati su questa macchina (ERD §7.2 — ADR-008/022), il più recente
+     * in alto: è l'ordine con cui il tab Ricambi li mostrerà.
+     *
+     * ADR-020: le garanzie di questi pezzi pesano sul semaforo dello strumento,
+     * ma NON si raggiungono da qui — questa relazione porta il DETTAGLIO ed è
+     * scopata come dev'essere. L'aggregato passa da
+     * `scadenzeGaranzieRicambi()`, l'unica lettura che bypassa
+     * `GaranziaRicambioPrivacyScope`.
+     */
+    public function ricambiUtilizzati(): HasMany
+    {
+        return $this->hasMany(RicambioUtilizzo::class, 'strumento_id')
+            // ⚠️ NULL = «non ancora montato», e va IN CIMA: è la riga che
+            // aspetta qualcosa, non la più vecchia. Il CASE è esplicito perché
+            // SQLite ordina i NULL per primi e Postgres per ultimi — senza,
+            // l'ordine cambierebbe fra locale e produzione (trappola nota).
+            ->orderByRaw('case when data is null then 0 else 1 end')
             ->orderByDesc('data')
             ->orderByDesc('id');
     }

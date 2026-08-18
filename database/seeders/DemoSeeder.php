@@ -8,8 +8,11 @@ use App\Enums\StatoSemaforo;
 use App\Enums\TipoIntervento;
 use App\Enums\TipoSpostamento;
 use App\Enums\TipoUnitaOrganizzativa;
+use App\Models\Fornitore;
 use App\Models\Garanzia;
 use App\Models\Intervento;
+use App\Models\Ricambio;
+use App\Models\RicambioUtilizzo;
 use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
@@ -85,6 +88,30 @@ class DemoSeeder extends Seeder
         'Distillatore per acqua' => [['Millipore Milli-Q IQ', 'DST'], ['Elga Purelab Flex', 'DST']],
         'Frigoemoteca' => [['Fiocchetti Emoteca 700', 'FEM'], ['Angelantoni BBR-625', 'FEM']],
         'Vortex da laboratorio' => [['IKA Vortex 3', 'VRT'], ['Velp ZX4', 'VRT']],
+    ];
+
+    /**
+     * Catalogo ricambi: CHIUSO e piccolo per la stessa ragione dei modelli
+     * strumento — la ricerca incrociata di ADR-008 ("dove è montato questo
+     * pezzo") aggrega per voce di catalogo, e nomi quasi tutti diversi le
+     * darebbero migliaia di righe da un'unità ciascuna, cioè niente da
+     * aggregare. È l'errore già commesso una volta coi modelli.
+     */
+    private const RICAMBI = [
+        'Guarnizione di tenuta', 'Filtro HEPA', 'Lampada UV', 'Sonda di temperatura',
+        'Cinghia di trasmissione', 'Scheda di controllo', 'Ventola di raffreddamento',
+        'Kit di manutenzione annuale', 'Rotore di ricambio', 'Pompa peristaltica',
+    ];
+
+    /**
+     * Fornitori: elenco CHIUSO come i modelli strumento e il catalogo ricambi.
+     * Un'anagrafica di nomi quasi tutti diversi non farebbe aggregare nulla —
+     * ed è l'errore già commesso una volta coi modelli.
+     */
+    private const FORNITORI = [
+        'Thermo Fisher Scientific Italia', 'Sartorius Italy', 'Eppendorf Italia',
+        'Bio-Rad Laboratories', 'Agilent Technologies Italia', 'Merck Life Science',
+        'VWR International', 'Carlo Erba Reagents', 'Hettich Italia', 'Binder Italia',
     ];
 
     private const NOMI = ['Luca', 'Giulia', 'Marco', 'Francesca', 'Alessandro', 'Chiara', 'Davide', 'Sara', 'Matteo', 'Elena', 'Andrea', 'Valentina', 'Simone', 'Martina', 'Federico', 'Ilaria'];
@@ -170,10 +197,12 @@ class DemoSeeder extends Seeder
         $utenti = $this->creaUtenti($ente);
         $tecnici = $utenti['tecnici'];
 
-        $strumentiIds = $this->creaStrumenti($ente, $nodi);
+        $fornitori = $this->creaFornitori($ente);
+        $strumentiIds = $this->creaStrumenti($ente, $nodi, $fornitori);
         $this->creaInterventi($ente, $strumentiIds, $tecnici);
         $this->creaSpostamenti($ente, $strumentiIds, $nodi, $utenti['admin']);
         $this->creaGaranzie($ente, $strumentiIds);
+        $this->creaRicambi($ente, $strumentiIds);
         $this->forzaAlcuniSemafori($ente, $utenti['admin'], $strumentiIds);
     }
 
@@ -223,10 +252,21 @@ class DemoSeeder extends Seeder
             $this->utente($nome, str($nome)->slug('.')->value().".resp.{$slug}.{$i}@demo.test", $ente->id, 'Responsabile Reparto');
         }
 
+        // Un tecnico ESTERNO per Ente (ADR-030): `tenant_id` NULL — è staff
+        // EasyLab, non un dipendente del laboratorio — e accede per portafoglio.
+        //
+        // Senza almeno una di queste righe la demo mostrerebbe un solo tipo di
+        // tecnico su due, e il canale portafoglio non si vedrebbe mai
+        // funzionare: i dodici qui sopra sono INTERNI, e a loro l'accesso
+        // arriva dalle assegnazioni.
+        $nome = self::NOMI[array_rand(self::NOMI)].' '.self::COGNOMI[array_rand(self::COGNOMI)];
+        $esterno = $this->utente($nome, "esterno.{$slug}@easylab.test", null, 'Tecnico');
+        $esterno->portafoglioClienti()->syncWithoutDetaching([$ente->id]);
+
         return ['admin' => $admin, 'tecnici' => $tecnici];
     }
 
-    private function utente(string $nome, string $email, int $tenantId, string $ruolo): User
+    private function utente(string $nome, string $email, ?int $tenantId, string $ruolo): User
     {
         $utente = User::updateOrCreate(
             ['email' => $email],
@@ -237,8 +277,32 @@ class DemoSeeder extends Seeder
         return $utente;
     }
 
+    /**
+     * Anagrafica fornitori dell'Ente (ADR-023).
+     *
+     * `firstOrCreate` sulla ragione sociale: il seeder è additivo e rilanciarlo
+     * non deve moltiplicare le anagrafiche — stessa disciplina di
+     * `Ricambio::collegaOCrea()`, che qui non si può usare perché è del
+     * catalogo ricambi.
+     *
+     * @return list<int>
+     */
+    private function creaFornitori(UnitaOrganizzativa $ente): array
+    {
+        $ids = collect(self::FORNITORI)
+            ->map(fn (string $nome) => (int) Fornitore::withoutGlobalScopes()->firstOrCreate(
+                ['tenant_id' => $ente->id, 'ragione_sociale' => $nome],
+                ['email' => str($nome)->slug().'@fornitore.test', 'telefono' => '0'.random_int(10, 99).' '.random_int(1000000, 9999999)],
+            )->id)
+            ->all();
+
+        $this->command?->info('  fornitori: '.count($ids));
+
+        return $ids;
+    }
+
     /** @return list<int> */
-    private function creaStrumenti(UnitaOrganizzativa $ente, array $nodi): array
+    private function creaStrumenti(UnitaOrganizzativa $ente, array $nodi, array $fornitori = []): array
     {
         $nomi = array_keys(self::CATALOGO);
         $righe = [];
@@ -265,6 +329,14 @@ class DemoSeeder extends Seeder
                         'Temperatura di esercizio' => random_int(-80, 250).' °C',
                     ], JSON_UNESCAPED_UNICODE),
                     'data_installazione' => today()->subDays(random_int(30, 5200))->toDateString(),
+                    // ⚠️ Una quota SENZA fornitore (~12%), di proposito: è la
+                    // situazione reale del DB dopo la migration, ed è l'unico
+                    // modo di vedere a occhio come si comportano scheda,
+                    // Panoramica ed elenco su una riga storica. Stessa ragione
+                    // per cui le garanzie ricambio nascono in forma "a data".
+                    'fornitore_id' => ($fornitori !== [] && random_int(1, 100) > 12)
+                        ? $fornitori[array_rand($fornitori)]
+                        : null,
                     'created_at' => $adesso,
                     'updated_at' => $adesso,
                 ];
@@ -420,14 +492,25 @@ class DemoSeeder extends Seeder
                 default => today()->subDays(random_int(1, 1200)),
             };
 
+            // ⚠️ La scadenza si RICALCOLA da `data_inizio` con la regola del
+            // model, invece di scrivere il target scelto sopra: `subMonths` non
+            // è l'inverso di `addMonths` quando la data cade in un giorno che
+            // il mese di arrivo non ha (29 febbraio, 31 del mese). Scrivendo il
+            // target si ottenevano righe con `data_inizio + durata ≠
+            // data_scadenza_effettiva` — cioè fuori dalla normalizzazione
+            // ADR-019 — una ogni qualche migliaio, quindi invisibili finché
+            // `verificaInvarianti()` non le ha cercate. Lo spostamento rispetto
+            // al target è di un giorno e non cambia la distribuzione voluta.
+            $inizio = $effettiva->copy()->subMonths($durata);
+
             $righe[] = [
                 'tenant_id' => $ente->id,
                 'soggetto' => SoggettoGaranzia::Macchina->value,
                 'strumento_id' => $strumentoId,
                 'ricambio_utilizzo_id' => null,
-                'data_inizio' => $effettiva->copy()->subMonths($durata)->toDateString(),
+                'data_inizio' => $inizio->toDateString(),
                 'durata_mesi' => $durata,
-                'data_scadenza_effettiva' => $effettiva->toDateString(),
+                'data_scadenza_effettiva' => $inizio->copy()->addMonths($durata)->toDateString(),
                 'created_at' => $adesso,
                 'updated_at' => $adesso,
             ];
@@ -438,6 +521,130 @@ class DemoSeeder extends Seeder
         }
 
         $this->command?->info('  garanzie: '.count($righe));
+    }
+
+    /**
+     * Pezzi montati e loro garanzie (ERD §7.1/7.2 — ADR-008/020/022).
+     *
+     * Serve a rendere ADR-020 **ispezionabile a occhio** sul DB di sviluppo:
+     * finché non esistono righe vere, la fonte "garanzia ricambio" del semaforo
+     * si può solo testare, non guardare — e in S3-bis la verifica sui dati veri
+     * («Incubatore INC-H») aveva scoperto cose che i test non avevano visto.
+     *
+     * Tre scelte, e nessuna è di comodo:
+     *
+     * 1. **Il catalogo passa da `Ricambio::collegaOCrea()` e non da `insert()`**:
+     *    è il metodo di dominio del blocco 1, e farlo girare qui lo esercita
+     *    sulle grafie vere invece che sulle sole fixture. Sono dieci righe per
+     *    Ente: il costo di non ottimizzare è nullo, il guadagno è che il
+     *    collega-o-crea è provato anche fuori dai test.
+     * 2. **Le righe di montaggio vanno a `insert()` a blocchi**, che salta gli
+     *    eventi e quindi le quattro guardie di `RicambioUtilizzo`: sono perciò
+     *    costruite già conformi (tenant dello strumento, tenant del ricambio,
+     *    intervento dello stesso strumento, quantità ≥ 1) e
+     *    `verificaInvarianti()` le ricontrolla una per una a posteriori.
+     * 3. **La garanzia del pezzo nasce "a data"** (`data_scadenza_dichiarata`,
+     *    ADR-022) e non "a durata": è la forma che il form intervento produce
+     *    davvero, e seminare l'altra darebbe un DB di dimostrazione che non
+     *    somiglia a quello di esercizio.
+     *
+     * Stesso mix 70/15/15 delle garanzie macchina: un parco tutto arancione non
+     * discrimina più nulla.
+     */
+    private function creaRicambi(UnitaOrganizzativa $ente, array $strumentiIds): void
+    {
+        $catalogo = collect(self::RICAMBI)
+            ->map(fn (string $nome) => (int) Ricambio::collegaOCrea($nome, (int) $ente->id)->id)
+            ->all();
+
+        // Un intervento per strumento, quando c'è: ADR-022 dice che il punto
+        // d'ingresso abituale è il form intervento, quindi la maggior parte
+        // delle righe deve portarne il riferimento. `intervento_id` resta NULL
+        // dove non ce n'è uno — è il caso "inserito dal tab Ricambi".
+        $interventoPerStrumento = Intervento::withoutGlobalScopes()
+            ->whereIn('strumento_id', $strumentiIds)
+            ->pluck('id', 'strumento_id');
+
+        $righe = [];
+        $adesso = now();
+
+        // Circa un terzo del parco monta almeno un pezzo: non tutti, o la
+        // fonte non si distinguerebbe dalle altre guardando l'elenco.
+        foreach ($strumentiIds as $strumentoId) {
+            if (random_int(1, 3) !== 1) {
+                continue;
+            }
+
+            foreach (range(1, random_int(1, 2)) as $ignored) {
+                $righe[] = [
+                    'tenant_id' => $ente->id,
+                    'strumento_id' => $strumentoId,
+                    'ricambio_id' => $catalogo[array_rand($catalogo)],
+                    'intervento_id' => $interventoPerStrumento[$strumentoId] ?? null,
+                    'quantita' => random_int(1, 3),
+                    'data' => today()->subDays(random_int(30, 900))->toDateString(),
+                    'created_at' => $adesso,
+                    'updated_at' => $adesso,
+                ];
+            }
+        }
+
+        foreach (array_chunk($righe, 500) as $blocco) {
+            RicambioUtilizzo::insert($blocco);
+        }
+
+        $this->command?->info('  ricambi montati: '.count($righe));
+
+        // Le righe appena scritte, rilette dal DB per averne gli id (come per
+        // gli strumenti: gli id contigui non sono garantiti). Si escludono
+        // quelle che hanno già una garanzia, così un secondo giro del seeder
+        // non appende una seconda garanzia agli stessi pezzi.
+        $senzaGaranzia = RicambioUtilizzo::withoutGlobalScopes()
+            ->where('ricambio_utilizzo.tenant_id', $ente->id)
+            ->whereNotExists(fn ($q) => $q->select(DB::raw(1))->from('garanzie')
+                ->whereColumn('garanzie.ricambio_utilizzo_id', 'ricambio_utilizzo.id'))
+            ->get(['id', 'data']);
+
+        $garanzie = [];
+
+        foreach ($senzaGaranzia as $utilizzo) {
+            $esito = match (true) {
+                random_int(1, 100) <= 70 => 'attiva',
+                random_int(1, 100) <= 50 => 'imminente',
+                default => 'scaduta',
+            };
+
+            $montaggio = $utilizzo->data;
+
+            // La garanzia del pezzo parte dal montaggio, quindi la scadenza
+            // deve caderci dopo (è l'invariante di `normalizzaScadenza`, che
+            // l'insert() non applica): per il ramo "scaduta" si prende il
+            // minimo fra montaggio+N e ieri, mai una data anteriore al pezzo.
+            $effettiva = match ($esito) {
+                'attiva' => today()->addDays(random_int(31, 1200)),
+                'imminente' => today()->addDays(random_int(0, 30)),
+                default => $montaggio->copy()->addDays(random_int(1, 300))->min(today()->subDay()),
+            };
+
+            $garanzie[] = [
+                'tenant_id' => $ente->id,
+                'soggetto' => SoggettoGaranzia::Ricambio->value,
+                'strumento_id' => null,
+                'ricambio_utilizzo_id' => $utilizzo->id,
+                'data_inizio' => $montaggio->toDateString(),
+                'durata_mesi' => null,
+                'data_scadenza_dichiarata' => $effettiva->toDateString(),
+                'data_scadenza_effettiva' => $effettiva->toDateString(),
+                'created_at' => $adesso,
+                'updated_at' => $adesso,
+            ];
+        }
+
+        foreach (array_chunk($garanzie, 500) as $blocco) {
+            Garanzia::insert($blocco);
+        }
+
+        $this->command?->info('  garanzie ricambio: '.count($garanzie));
     }
 
     /**
@@ -506,13 +713,18 @@ class DemoSeeder extends Seeder
 
         // Le garanzie: `data_scadenza_effettiva` deve rispettare la
         // normalizzazione ADR-004/019, che gli insert() a blocchi non applicano.
+        // DUE rami, perché ADR-022 ha aggiunto la forma "a data": controllarne
+        // uno solo lascerebbe scoperte proprio le garanzie ricambio — e con
+        // `durata_mesi` NULL il controllo vecchio esploderebbe, non fallirebbe.
         $garanzieIncoerenti = Garanzia::withoutGlobalScopes()->get()
-            ->reject(fn (Garanzia $g) => $g->data_inizio->copy()->addMonths($g->durata_mesi)
-                ->isSameDay($g->data_scadenza_effettiva))
+            ->reject(fn (Garanzia $g) => $g->durata_mesi !== null
+                ? $g->data_inizio->copy()->addMonths($g->durata_mesi)->isSameDay($g->data_scadenza_effettiva)
+                : $g->data_scadenza_dichiarata?->isSameDay($g->data_scadenza_effettiva)
+                    && $g->data_scadenza_dichiarata->gt($g->data_inizio))
             ->count();
 
         if ($garanzieIncoerenti > 0) {
-            throw new \RuntimeException("Invarianti violati: {$garanzieIncoerenti} garanzie con data_scadenza_effettiva fuori normalizzazione (ADR-019).");
+            throw new \RuntimeException("Invarianti violati: {$garanzieIncoerenti} garanzie con data_scadenza_effettiva fuori normalizzazione (ADR-019/022).");
         }
 
         if ($fattiSenzaData || $apertiConData || $tenantDisallineati) {
@@ -522,7 +734,46 @@ class DemoSeeder extends Seeder
             );
         }
 
-        $this->command?->info('Invarianti verificati: stato/data_esecuzione e tenant allineati.');
+        $this->verificaRicambiUtilizzo();
+
+        $this->command?->info('Invarianti verificati: stato/data_esecuzione, tenant allineati, ricambi montati coerenti.');
+    }
+
+    /**
+     * Le quattro guardie di `RicambioUtilizzo` (ERD §7.2), una per una: gli
+     * `insert()` a blocchi non fanno scattare gli eventi, quindi qui si
+     * ricontrolla a posteriori ciò che il model avrebbe impedito.
+     *
+     * Non è zelo: le prime due sono **sicurezza**, non ordine. Un utilizzo il
+     * cui strumento appartiene a un altro Ente rompe l'invariante su cui poggia
+     * il livello 2 di `DepartmentThroughStrumentoScope` (che filtra per
+     * `strumento_id` fidandosi che il tenant coincida), e uno il cui ricambio è
+     * di un altro Ente farebbe comparire il NOME di un pezzo altrui nella
+     * ricerca incrociata di ADR-008.
+     */
+    private function verificaRicambiUtilizzo(): void
+    {
+        $quantitaNonValide = RicambioUtilizzo::withoutGlobalScopes()->where('quantita', '<', 1)->count();
+
+        $strumentoAltroEnte = RicambioUtilizzo::withoutGlobalScopes()
+            ->join('strumenti', 'strumenti.id', '=', 'ricambio_utilizzo.strumento_id')
+            ->whereColumn('ricambio_utilizzo.tenant_id', '!=', 'strumenti.tenant_id')->count();
+
+        $ricambioAltroEnte = RicambioUtilizzo::withoutGlobalScopes()
+            ->join('ricambi', 'ricambi.id', '=', 'ricambio_utilizzo.ricambio_id')
+            ->whereColumn('ricambio_utilizzo.tenant_id', '!=', 'ricambi.tenant_id')->count();
+
+        $interventoAltroStrumento = RicambioUtilizzo::withoutGlobalScopes()
+            ->join('interventi', 'interventi.id', '=', 'ricambio_utilizzo.intervento_id')
+            ->whereColumn('interventi.strumento_id', '!=', 'ricambio_utilizzo.strumento_id')->count();
+
+        if ($quantitaNonValide || $strumentoAltroEnte || $ricambioAltroEnte || $interventoAltroStrumento) {
+            throw new \RuntimeException(
+                "Invarianti violati sui ricambi montati — quantità < 1: {$quantitaNonValide}, ".
+                "strumento di un altro Ente: {$strumentoAltroEnte}, ricambio di un altro Ente: {$ricambioAltroEnte}, ".
+                "intervento di un altro strumento: {$interventoAltroStrumento}"
+            );
+        }
     }
 
     private function riepilogo(): void
@@ -535,6 +786,10 @@ class DemoSeeder extends Seeder
                 ['interventi', Intervento::withoutGlobalScopes()->count()],
                 ['spostamenti_strumento', SpostamentoStrumento::withoutGlobalScopes()->count()],
                 ['garanzie', Garanzia::withoutGlobalScopes()->count()],
+                ['ricambi', Ricambio::withoutGlobalScopes()->count()],
+                ['ricambio_utilizzo', RicambioUtilizzo::withoutGlobalScopes()->count()],
+                ['fornitori', Fornitore::withoutGlobalScopes()->count()],
+                ['strumenti senza fornitore', Strumento::withoutGlobalScopes()->whereNull('fornitore_id')->count()],
                 ['users', User::count()],
             ]
         );

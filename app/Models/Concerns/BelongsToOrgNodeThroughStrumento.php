@@ -3,6 +3,8 @@
 namespace App\Models\Concerns;
 
 use App\Models\Scopes\DepartmentThroughStrumentoScope;
+use Illuminate\Contracts\Database\Query\Builder as BuilderContract;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Opt-in per i modelli appesi a uno strumento e privi di collocazione propria
@@ -25,5 +27,21 @@ trait BelongsToOrgNodeThroughStrumento
     public function strumentoColumn(): string
     {
         return 'strumento_id';
+    }
+
+    /**
+     * Implementazione di `ReachesStrumento` per il caso normale — una colonna
+     * sola (ADR-030). I modelli che allo strumento arrivano per più strade la
+     * sovrascrivono: `Garanzia` è il caso che ha dato forma al contratto.
+     *
+     * Una clausola sola, quindi nessun gruppo di parentesi necessario qui: chi
+     * chiama la incapsula già nel proprio.
+     *
+     * @param  Builder<*>  $query
+     * @param  Builder<*>|BuilderContract  $strumenti
+     */
+    public function vincolaAStrumenti(Builder $query, Builder|BuilderContract $strumenti): void
+    {
+        $query->whereIn($this->qualifyColumn($this->strumentoColumn()), $strumenti);
     }
 }

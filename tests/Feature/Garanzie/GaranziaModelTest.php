@@ -2,6 +2,8 @@
 
 use App\Enums\SoggettoGaranzia;
 use App\Models\Garanzia;
+use App\Models\Ricambio;
+use App\Models\RicambioUtilizzo;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Support\Semaforo;
@@ -54,9 +56,13 @@ it('ignores a forged data_scadenza_effettiva in the payload', function () {
     expect($garanzia->fresh()->data_scadenza_effettiva->toDateString())->toBe('2027-01-01');
 });
 
-it('rejects a garanzia without durata_mesi', function () {
-    // Unica forma rimasta dopo ADR-019: senza durata non c'è scadenza da
-    // normalizzare, e una garanzia senza scadenza non pilota nulla.
+// Riscritto il 9 Ago 2026 (ADR-022): si chiamava `rejects a garanzia without
+// durata_mesi` e congelava «la durata è obbligatoria». Dopo l'estensione del
+// dominio le forme sono due — durata oppure scadenza dichiarata — e ciò che va
+// congelato è l'XOR: senza nessuna delle due non c'è scadenza da normalizzare,
+// e una garanzia senza scadenza non pilota nulla. Il caso "entrambe" sta in
+// GaranziaScadenzaEsplicitaTest, insieme al resto del ramo nuovo.
+it('rejects a garanzia with neither durata_mesi nor a declared scadenza', function () {
     expect(fn () => Garanzia::factory()->forStrumento($this->strumento)->create([
         'durata_mesi' => null,
     ]))->toThrow(InvalidArgumentException::class);
@@ -97,13 +103,14 @@ it('rejects a garanzia ricambio pointing at a strumento', function () {
 });
 
 it('accepts a garanzia ricambio with only the ricambio_utilizzo_id', function () {
-    // La FK vera arriva in S4: oggi la colonna è libera, di proposito.
-    $garanzia = Garanzia::factory()->create([
-        'tenant_id' => $this->ente->id,
-        'soggetto' => SoggettoGaranzia::Ricambio,
-        'strumento_id' => null,
-        'ricambio_utilizzo_id' => 42,
-    ]);
+    // Dall'8 Ago 2026 la FK esiste (S4 blocco 1): serve una riga VERA, un intero
+    // libero viola il vincolo su entrambi i driver.
+    $utilizzo = RicambioUtilizzo::factory()
+        ->forStrumento($this->strumento)
+        ->forRicambio(Ricambio::factory()->forTenant($this->ente)->create())
+        ->create();
+
+    $garanzia = Garanzia::factory()->forRicambio($utilizzo)->create();
 
     expect($garanzia->soggetto)->toBe(SoggettoGaranzia::Ricambio)
         ->and($garanzia->strumento_id)->toBeNull();

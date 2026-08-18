@@ -67,6 +67,33 @@ final class MotivoSemaforo
     }
 
     /**
+     * Motivo dalla garanzia di un pezzo montato (ADR-020, S4 blocco 4).
+     *
+     * `dettaglio` è **null e resta null**: il nome del pezzo è il dato che
+     * ADR-004 protegge, e la riga da cui questo motivo nasce arriva da
+     * `Strumento::scadenzeGaranzieRicambi()`, che seleziona apposta le sole
+     * colonne id e scadenza. Non c'è quindi nulla da nascondere qui, perché non
+     * c'è nulla da mostrare: la protezione è nella forma della query, non in una
+     * guardia che qualcuno può dimenticare. Il nome del pezzo compare nel tab
+     * Ricambi (S4 blocco 5), dove il permesso è controllato una volta per tutta
+     * la schermata.
+     *
+     * `scaduto` da `Garanzia::isScaduta()` come per la garanzia macchina: una
+     * sola definizione di "scaduta", che qui funziona anche su un model
+     * idratato con due sole colonne.
+     */
+    public static function daGaranziaRicambio(Garanzia $garanzia): self
+    {
+        return new self(
+            tipo: TipoMotivoSemaforo::GaranziaRicambio,
+            scadenza: $garanzia->data_scadenza_effettiva,
+            scaduto: $garanzia->isScaduta(),
+            riferimentoId: $garanzia->id,
+            dettaglio: null,
+        );
+    }
+
+    /**
      * Motivo costruito da una data nuda, senza la riga che la origina.
      *
      * Serve solo a `Semaforo::calcola()`, che riceve due date sciolte e vuole

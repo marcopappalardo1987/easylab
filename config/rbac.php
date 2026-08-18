@@ -19,7 +19,10 @@
 
 return [
 
-    // Catalogo canonico (§4) — 56 permessi.
+    // Catalogo canonico (§4) — 54 permessi. Erano 56 fino a S3-bis: ADR-019 ha
+    // eliminato `letture_contaore.view`/`.create` insieme al contaore. Il numero
+    // è ripetuto nei test (RbacSeederTest, DatabaseSeederTest): se cambia qui
+    // deve cambiare anche là, o uno dei due sta mentendo.
     'permissions' => [
         // 4.1 Anagrafica & asset
         'unita_organizzativa.view', 'unita_organizzativa.create', 'unita_organizzativa.update', 'unita_organizzativa.delete',
@@ -91,22 +94,64 @@ return [
             'qr.scan',
         ]],
 
+        // Tenant: `garanzie.ricambio.*` è suo dal 15 Ago 2026 (ADR-029, deciso il 9), ed è
+        // l'inversione della postura che il progetto portava da Fase 2. Il
+        // divieto («mai al Tenant») non era mai stato deciso davvero: ADR-004 lo
+        // ratificò dichiarandolo «vincolo di privacy già previsto», e da lì
+        // arrivò al set 🔒 e ai test. Poggiava su una premessa mai scritta — che
+        // i ricambi li fornisca EasyLab — che non regge quando il Tenant è
+        // l'intestatario dell'abbonamento e il pezzo sta sulla sua macchina.
+        //
+        // ⚠️ Qui c'è il DEFAULT della piattaforma, non l'ultima parola: con
+        // `teams = false` i permessi di un ruolo sono globali, quindi
+        // l'eccezione del singolo Ente vive altrove — nella colonna
+        // `visibilita_garanzie_ricambio` e in `GaranziaRicambioPolicy`, che
+        // RESTRINGE questo default e non lo allarga mai.
         'Tenant' => ['only' => [
             'unita_organizzativa.view',
             'strumenti.view',
             'interventi.view',
             'garanzie.macchina.view',
+            'garanzie.ricambio.view', 'garanzie.ricambio.manage',
             'ricambi.view',
             'ricambio_utilizzo.view',
+            // `fornitori.view` in sola lettura: ADR-023 e Schema Ruoli nota ⁵
+            // lo davano per approvato il 3 Ago 2026, ma il bootstrap non lo
+            // produceva — il documento affermava un default che la config non
+            // creava, e il riseeding non l'avrebbe aggiunto da solo. Applicato
+            // il 15 Ago 2026 col blocco Fornitore. Il fornitore è un campo
+            // della scheda della SUA macchina, non un dato commerciale di
+            // EasyLab.
+            'fornitori.view',
             'documenti.view', 'documenti.upload', 'documenti.download', 'documenti.export_pdf',
+            // `qr.scan` al Tenant dal 15 Ago 2026: Elenco Funzionalità §4 dice
+            // «il tecnico **o il cliente** inquadra il QR», la matrice diceva
+            // ❌ — e la contraddizione si vedeva nell'uso, perché il cliente
+            // inquadrava l'adesivo sulla propria macchina e prendeva 403 pur
+            // potendo aprire la stessa scheda dal menù. Il QR è una
+            // scorciatoia verso una pagina già autorizzata, non un accesso in
+            // più: `AccessoQr` reindirizza a `strumenti.show`, che resta
+            // gatata e scopata come prima.
+            'qr.scan',
         ]],
 
         // Tecnico: catalogo ricambi solo 'create' (nota ⁴ del doc), niente update/delete.
+        //
+        // `garanzie.ricambio.*` è suo dall'8 Ago 2026 (ADR-027): è la persona che
+        // monta fisicamente il pezzo, quindi la fonte del dato sulla garanzia, e
+        // ogni sua scrittura è tracciata sul canale `audit`. Il divieto che c'era
+        // qui prima non era mai stato deciso — ADR-004 dice «mai al Tenant» e
+        // nomina il solo Tenant; il Tecnico è personale EasyLab. La citazione si
+        // era allargata oltre la fonte passando per Schema Ruoli §4.3 e ADR-016,
+        // ed era finita difesa da un test: da lì in poi la svista era
+        // indistinguibile da una decisione. Resta ristretto agli strumenti che
+        // già vede (portafoglio ∪ assegnazione, ADR-007) — quello è livello 2.
         'Tecnico' => ['only' => [
             'unita_organizzativa.view',
             'strumenti.view',
             'interventi.view', 'interventi.complete',
             'garanzie.macchina.view',
+            'garanzie.ricambio.view', 'garanzie.ricambio.manage',
             'ricambi.view', 'ricambi.create',
             'ricambio_utilizzo.view', 'ricambio_utilizzo.create', 'ricambio_utilizzo.update', 'ricambio_utilizzo.delete',
             'documenti.view', 'documenti.upload', 'documenti.download',
@@ -115,8 +160,21 @@ return [
     ],
 
     // Set bloccato 🔒 (§7) — non modificabile dalla UI Superadmin.
+    //
+    // "Bloccato" dice che la UI non può ridistribuirlo, NON a chi è negato: le
+    // due cose si erano confuse proprio su `garanzie.ricambio.*` (ADR-027).
+    //
+    // Quelle due voci sono USCITE dal set il 15 Ago 2026 (ADR-029): non essendoci
+    // più un divieto assoluto da difendere, tenerle qui avrebbe impedito alla UI
+    // di S6 di cambiare un default che ora È cambiabile per decisione. Il set
+    // torna così a contenere solo ciò che è bloccato per legge, sicurezza o
+    // struttura — e da 9 voci passa a 7.
+    //
+    // Conseguenza da conoscere: l'editor di S6 potrà revocare quei permessi al
+    // ruolo Tenant per TUTTI gli Enti insieme, scavalcando le impostazioni
+    // per-Ente (che restringono, non allargano). È coerente — chi governa la
+    // piattaforma governa il default — ma non è ovvio leggendo il codice.
     'locked' => [
-        'garanzie.ricambio.view', 'garanzie.ricambio.manage',
         'utenti.impersonate',
         'system.logs.view',
         'billing.manage_global', 'billing.lockout',

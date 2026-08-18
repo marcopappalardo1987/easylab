@@ -2,9 +2,8 @@
 
 namespace App\Models\Scopes;
 
-use App\Models\Strumento;
 use App\Support\Tenancy\AccessibleNodes;
-use App\Support\Tenancy\CurrentTenant;
+use App\Support\Tenancy\AccessibleStrumenti;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Scope;
@@ -15,20 +14,17 @@ use Illuminate\Database\Eloquent\Scope;
  * al sotto-albero del Responsabile Reparto si applica INDIRETTAMENTE, via
  * `strumento_id`. In AND col livello 1 (TenantScope sul modello stesso).
  *
- * La subquery gira con `withoutGlobalScopes()` di proposito:
- *  - rompe in anticipo il ciclo con il futuro scope Tecnico su Strumento
- *    (ADR-007, S4: "strumenti con un intervento assegnato a me"), che
- *    interrogherà `interventi` → ricorsione infinita se qui applicassimo gli
- *    scope di Strumento. Stesso motivo per cui NON si usa `whereHas`;
- *  - non eredita SoftDeletingScope: gli interventi di uno strumento cestinato
- *    restano visibili, esattamente come li vede l'Admin (che non ha questo
- *    filtro). Questo scope fa una cosa sola: restringere per nodo.
+ * La subquery vive in `AccessibleStrumenti`, condivisa con
+ * `GaranziaDepartmentScope` (S4 blocco 2) — che deve raggiungere le righe
+ * `soggetto = ricambio` con un salto in più e ha bisogno della stessa
+ * definizione. Lì sono spiegati i due dettagli che la reggono:
+ * `withoutGlobalScopes()` (rompe in anticipo il ciclo col futuro scope Tecnico,
+ * ed è il motivo per cui NON si usa `whereHas`) e il confine Ente riapplicato
+ * a mano dentro la subquery.
  *
- * Il confine Ente è riapplicato DENTRO la subquery invece di delegarlo al
- * TenantScope del chiamante: AccessibleNodes prende le radici assegnate dal
- * pivot `responsabile_unita` senza verificarne il tenant (solo i discendenti
- * sono filtrati per Ente), e senza global scope la subquery perderebbe anche il
- * TenantScope di Strumento. Difesa in profondità su un'area a rischio.
+ * Conseguenza voluta, che vale per i model che usano questo scope: gli
+ * interventi e i ricambi montati su uno strumento cestinato restano visibili,
+ * esattamente come li vede l'Admin, che questo filtro non ce l'ha.
  */
 class DepartmentThroughStrumentoScope implements Scope
 {
@@ -48,10 +44,7 @@ class DepartmentThroughStrumentoScope implements Scope
 
         $builder->whereIn(
             $model->qualifyColumn($model->strumentoColumn()),
-            Strumento::withoutGlobalScopes()
-                ->where('tenant_id', CurrentTenant::id())
-                ->whereIn('unita_organizzativa_id', $ids)
-                ->select('strumenti.id')
+            AccessibleStrumenti::nei($ids)
         );
     }
 }

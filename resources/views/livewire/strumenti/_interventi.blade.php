@@ -1,5 +1,6 @@
 @php
     use App\Enums\StatoIntervento;
+    use App\Enums\TipoIntervento;
     use Illuminate\Support\Facades\Gate;
 
     // Stato di riga a 3 valori (l'enum ne ha 2): colore + simbolo + etichetta,
@@ -25,7 +26,7 @@
 
 <x-ui.card class="!p-0">
     <div class="overflow-x-auto">
-        <table class="w-full text-left text-sm">
+        <table class="tabella-a-card w-full text-left text-sm">
             <thead class="border-b border-neutral-200 text-xs tracking-wide text-neutral-400 uppercase">
                 <tr>
                     <th class="px-4 py-3 font-semibold">Stato</th>
@@ -42,38 +43,75 @@
                 @forelse ($interventi as $i)
                     @php [$variante, $simbolo, $etichetta] = $statoRiga($i); @endphp
                     <tr wire:key="int-{{ $i->id }}">
-                        <td class="px-4 py-3">
+                        <td data-etichetta="Stato" class="px-4 py-3">
                             <x-ui.badge :variant="$variante">
                                 <span aria-hidden="true">{{ $simbolo }}</span> {{ $etichetta }}
                             </x-ui.badge>
                         </td>
-                        <td class="px-4 py-3 text-neutral-600 tabular-nums">
+                        <td data-etichetta="Data" class="px-4 py-3 text-neutral-600 tabular-nums">
                             {{ $i->data_scadenza->format('d/m/Y') }}
                             @if ($i->data_esecuzione)
                                 <span class="block text-xs text-neutral-400">Eseguito il {{ $i->data_esecuzione->format('d/m/Y') }}</span>
                             @endif
                         </td>
-                        <td class="px-4 py-3 text-neutral-600">{{ $i->tipo->label() }}</td>
-                        <td class="px-4 py-3 text-neutral-800">{{ $i->descrizione }}</td>
-                        <td class="px-4 py-3 text-neutral-600">{{ $i->tecnicoLabel() }}</td>
+                        <td data-etichetta="Tipo" class="px-4 py-3 text-neutral-600">
+                            {{ $i->tipo->label() }}
+                            {{-- Il certificato è la PROVA della taratura, e il posto in cui
+                                 l'utente lo cerca è questa riga, non l'archivio dei documenti
+                                 (ADR-009). Se manca, dirlo: «fatto» e «documentato» non sono
+                                 la stessa cosa, e confonderli è ciò che rende inutile una
+                                 taratura in un audit. --}}
+                            @if ($i->tipo === TipoIntervento::TaraturaECertificazione)
+                                @php $certificato = $certificati[$i->id] ?? null; @endphp
+                                <span class="mt-1 block text-xs">
+                                    @if ($certificato)
+                                        @can('documenti.download')
+                                            <a href="{{ route('documenti.download', $certificato) }}"
+                                                class="font-medium text-primary-600 hover:text-primary-700">📄 Certificato</a>
+                                        @else
+                                            <span class="text-neutral-400">📄 Certificato allegato</span>
+                                        @endcan
+                                    @else
+                                        <span class="text-warning-800">Certificato mancante</span>
+                                        @can('documenti.upload')
+                                            <button type="button" wire:click="openCaricaDocumento({{ $i->id }})"
+                                                class="ml-1 font-medium text-primary-600 hover:text-primary-700">Allega</button>
+                                        @endcan
+                                    @endif
+                                </span>
+                            @endif
+                        </td>
+                        <td data-etichetta="Descrizione" class="px-4 py-3 text-neutral-800">
+                            {{ $i->descrizione }}
+                            {{-- Il report sta QUI e non in una colonna propria:
+                                 è un testo lungo e quasi sempre assente, e una
+                                 colonna vuota su ogni riga storica avrebbe
+                                 stretto tutte le altre per niente. Sotto la
+                                 descrizione si legge come ciò che è: il seguito
+                                 di quella riga. --}}
+                            @if ($i->report_fine_lavoro)
+                                <span class="mt-1 block text-xs whitespace-pre-line text-neutral-500">{{ $i->report_fine_lavoro }}</span>
+                            @endif
+                        </td>
+                        <td data-etichetta="Tecnico" class="px-4 py-3 text-neutral-600">{{ $i->tecnicoLabel() }}</td>
                         @if ($mostraAzioni)
-                            <td class="px-4 py-3 text-right whitespace-nowrap text-xs">
+                            <td data-azioni class="px-4 py-3 text-right whitespace-nowrap text-xs max-md:flex max-md:flex-wrap max-md:gap-x-5 max-md:text-sm">
                                 @can('interventi.complete')
                                     @if ($i->stato === StatoIntervento::NonFatto)
                                         <button type="button" wire:click="openCompleta({{ $i->id }})" title="Segna come fatto"
-                                            class="font-medium text-success-600 hover:underline">Fatto</button>
+                                            class="max-md:ml-0 max-md:inline-flex max-md:min-h-11 max-md:items-center font-medium text-success-600 hover:underline">Fatto</button>
                                     @else
                                         <button type="button" wire:click="riapri({{ $i->id }})" title="Riporta a non fatto"
-                                            class="font-medium text-neutral-500 hover:underline">Riapri</button>
+                                            class="max-md:ml-0 max-md:inline-flex max-md:min-h-11 max-md:items-center font-medium text-neutral-500 hover:underline">Riapri</button>
                                     @endif
                                 @endcan
                                 @can('interventi.update')
                                     <button type="button" wire:click="openModificaIntervento({{ $i->id }})"
-                                        class="ml-2 font-medium text-primary-600 hover:underline">Modifica</button>
+                                        class="max-md:ml-0 max-md:inline-flex max-md:min-h-11 max-md:items-center ml-2 font-medium text-primary-600 hover:underline">Modifica</button>
                                 @endcan
                                 @can('interventi.delete')
                                     <button type="button" wire:click="openEliminaIntervento({{ $i->id }})"
-                                        class="ml-2 font-medium text-danger-600 hover:underline">Elimina</button>
+                                        class="max-md:ml-0 max-md:inline-flex max-md:min-h-11 max-md:items-center ml-2 font-medium text-danger-600 hover:underline">Elimina</button>
                                 @endcan
                             </td>
                         @endif

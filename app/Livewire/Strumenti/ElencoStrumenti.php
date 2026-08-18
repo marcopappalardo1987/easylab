@@ -14,6 +14,7 @@ use App\Support\Tenancy\CurrentTenant;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -78,6 +79,14 @@ class ElencoStrumenti extends Component
     private const PER_PAGE = [20, 50, 100];
 
     private const PER_PAGE_DEFAULT = 20;
+
+    /**
+     * Data "più avanti di qualunque scadenza reale", usata al posto del NULL
+     * nell'ordinamento per prossima scadenza (vedi applicaOrdinamento). Un
+     * intervento datato davvero al 31/12/9999 finirebbe in fondo insieme a
+     * quelli senza scadenza: è un'ipotesi dichiarata, non una dimenticanza.
+     */
+    private const SENTINELLA_SCADENZA = '9999-12-31';
 
     /**
      * Colonne ordinabili. Le prime quattro sono colonne di `strumenti`; le
@@ -210,6 +219,41 @@ class ElencoStrumenti extends Component
     }
 
     /**
+     * Garanzie dei pezzi montati sullo strumento della riga corrente (ADR-020),
+     * pronta per essere correlata: chi chiama aggiunge select e confine.
+     *
+     * Il doppio salto e il bypass del privacy scope vivono in
+     * `Garanzia::scopeDeiPezziMontati()` — qui non si riscrive nulla di quella
+     * regola, si aggiunge solo la correlazione con `strumenti`.
+     *
+     * @return Builder<Garanzia>
+     */
+    private function garanzieRicambiDellaRiga(): Builder
+    {
+        return Garanzia::query()->deiPezziMontati()
+            ->whereColumn('ricambio_utilizzo.strumento_id', 'strumenti.id');
+    }
+
+    /**
+     * Id degli strumenti su cui è montato un pezzo con garanzia scaduta o in
+     * scadenza (ADR-020): la terza fonte dell'arancione, per il filtro.
+     *
+     * `whereNotIn` (ramo verde) è sicuro solo perché
+     * `ricambio_utilizzo.strumento_id` è NOT NULL: un solo NULL nella lista
+     * renderebbe UNKNOWN l'intero predicato e il verde non troverebbe più nulla
+     * (è il motivo per cui la gemella sulle garanzie macchina porta un
+     * `whereNotNull` esplicito, dove la colonna è nullable).
+     *
+     * @return Builder<Garanzia>
+     */
+    private function conGaranzieRicambioRilevanti(): Builder
+    {
+        return Garanzia::query()->deiPezziMontati()
+            ->entroSoglia()
+            ->select('ricambio_utilizzo.strumento_id');
+    }
+
+    /**
      * Applica l'ordinamento, incluse le tre colonne derivate.
      *
      * Le derivate diventano sottoquery correlate selezionate come alias, così
@@ -251,6 +295,10 @@ class ElencoStrumenti extends Component
             $garanzie = Garanzia::query()->select(DB::raw('1'))
                 ->whereColumn('strumento_id', 'strumenti.id')
                 ->entroSoglia();
+            // ...e quella di un pezzo montato, con la stessa soglia (ADR-020).
+            $garanzieRicambio = $this->garanzieRicambiDellaRiga()
+                ->select(DB::raw('1'))
+                ->entroSoglia();
 
             $query->orderByRaw(
                 'case'
@@ -259,11 +307,13 @@ class ElencoStrumenti extends Component
                 .' when strumenti.forced_state = ? then 0'
                 .' when exists ('.$aperti->toSql().') then 1'
                 .' when exists ('.$garanzie->toSql().') then 1'
+                .' when exists ('.$garanzieRicambio->toSql().') then 1'
                 .' else 0 end '.$sortDir,
                 array_merge(
                     [StatoSemaforo::Rosso->value, StatoSemaforo::Arancione->value, StatoSemaforo::Verde->value],
                     $aperti->getBindings(),
                     $garanzie->getBindings(),
+                    $garanzieRicambio->getBindings(),
                 ),
             );
 
@@ -271,36 +321,59 @@ class ElencoStrumenti extends Component
         }
 
         if ($sortBy === 'prossima_scadenza') {
-            // Il minimo fra due fonti: interventi aperti e garanzie (ADR-004).
-            // Subquery scalari con MIN aggregato: su zero righe danno NULL, che
-            // è esattamente "nessuna scadenza".
+            // Il minimo fra TRE fonti: interventi aperti, garanzia macchina
+            // (ADR-004) e garanzie dei pezzi montati (ADR-020). Subquery scalari
+            // con MIN aggregato: su zero righe danno NULL, che è esattamente
+            // "nessuna scadenza".
             $minIntervento = Intervento::query()->selectRaw('min(data_scadenza)')
                 ->whereColumn('strumento_id', 'strumenti.id')
                 ->where('stato', StatoIntervento::NonFatto->value);
             $minGaranzia = Garanzia::query()->selectRaw('min(data_scadenza_effettiva)')
                 ->whereColumn('strumento_id', 'strumenti.id');
+            $minGaranziaRicambio = $this->garanzieRicambiDellaRiga()
+                ->selectRaw('min(garanzie.data_scadenza_effettiva)');
 
             $i = '('.$minIntervento->toSql().')';
             $g = '('.$minGaranzia->toSql().')';
+            $r = '('.$minGaranziaRicambio->toSql().')';
             $bi = $minIntervento->getBindings();
             $bg = $minGaranzia->getBindings();
+            $br = $minGaranziaRicambio->getBindings();
 
-            // min(i, g) NULL-safe scritto a mano: LEAST non esiste su SQLite e
-            // su Postgres ignora i NULL in modo diverso da quanto serve qui.
-            // I binding seguono l'ordine TESTUALE dei placeholder.
-            $minExpr = "case when {$i} is null then {$g}"
-                ." when {$g} is null then {$i}"
-                ." when {$i} <= {$g} then {$i}"
-                ." else {$g} end";
-            $minBindings = array_merge($bi, $bg, $bg, $bi, $bi, $bg, $bi, $bg);
+            // min NULL-safe di tre fonti. `LEAST` non esiste su SQLite e su
+            // Postgres tratta i NULL in modo diverso da quanto serve qui,
+            // quindi resta un CASE — ma il CASE a due vie che c'era prima usava
+            // ogni sottoquery 4 volte, e annidarlo per la terza le avrebbe
+            // portate a 16. Con una SENTINELLA al posto del NULL il confronto
+            // torna totale e bastano 3+3+2 occorrenze.
+            //
+            // La sentinella regge su entrambi i driver: su Postgres il
+            // letterale è castato a date, su SQLite le date sono stringhe e il
+            // confronto lessicografico mette comunque '9999-…' in coda a
+            // qualunque 'YYYY-MM-DD 00:00:00'.
+            $si = "coalesce({$i}, '".self::SENTINELLA_SCADENZA."')";
+            $sg = "coalesce({$g}, '".self::SENTINELLA_SCADENZA."')";
+            $sr = "coalesce({$r}, '".self::SENTINELLA_SCADENZA."')";
+
+            // ⚠️ I binding seguono l'ordine TESTUALE dei placeholder:
+            //    A, B, A, C, A, B, C, B, C
+            $minExpr = "case when {$si} <= {$sg} and {$si} <= {$sr} then {$si}"
+                ." when {$sg} <= {$sr} then {$sg}"
+                ." else {$sr} end";
+            $minBindings = array_merge($bi, $bg, $bi, $br, $bi, $bg, $br, $bg, $br);
 
             // Gli strumenti senza scadenze ("—") vanno SEMPRE in fondo, in
             // entrambe le direzioni: sono assenza di dato, non un valore. Serve
             // anche a non dipendere dal driver, perché SQLite ordina i NULL per
-            // primi e Postgres per ultimi.
-            $query->selectRaw("({$minExpr}) as prossima_scadenza", $minBindings)
-                ->orderByRaw("case when ({$minExpr}) is null then 1 else 0 end", $minBindings)
-                ->orderBy('prossima_scadenza', $sortDir);
+            // primi e Postgres per ultimi. Si guarda ai valori GREZZI, non alle
+            // sentinelle: una sola occorrenza per fonte invece di nove.
+            //
+            // Nessun alias selezionato: nessuna vista legge "prossima_scadenza",
+            // serviva solo all'ORDER BY, e tenerlo raddoppierebbe i binding.
+            $query->orderByRaw(
+                "case when coalesce({$i}, {$g}, {$r}) is null then 1 else 0 end",
+                array_merge($bi, $bg, $br),
+            )->orderByRaw("({$minExpr}) {$sortDir}", $minBindings);
 
             return;
         }
@@ -353,24 +426,28 @@ class ElencoStrumenti extends Component
             $conScadenzeRilevanti = Intervento::query()->apertiEntroSoglia()->select('strumento_id');
             $conGaranzieRilevanti = Garanzia::query()->entroSoglia()
                 ->whereNotNull('strumento_id')->select('strumento_id');
+            $conGaranzieRicambioRilevanti = $this->conGaranzieRicambioRilevanti();
 
             // "Forzato se c'è, altrimenti calcolato" anche in SQL: senza il
             // ramo su `forced_state` uno strumento forzato comparirebbe sotto
             // lo stato calcolato, contraddicendo il pallino della sua riga.
-            // L'arancione può venire da un intervento O da una garanzia
-            // (ADR-004/005), quindi il verde è il complemento di ENTRAMBI.
+            // L'arancione può venire da un intervento, da una garanzia macchina
+            // (ADR-004/005) O dalla garanzia di un pezzo montato (ADR-020),
+            // quindi il verde è il complemento di TUTTE E TRE.
             match ($this->stato) {
                 StatoSemaforo::Rosso->value => $query->where('forced_state', StatoSemaforo::Rosso->value),
                 StatoSemaforo::Arancione->value => $query->where(fn ($q) => $q
                     ->where('forced_state', StatoSemaforo::Arancione->value)
                     ->orWhere(fn ($q) => $q->whereNull('forced_state')
                         ->where(fn ($q) => $q->whereIn('id', $conScadenzeRilevanti)
-                            ->orWhereIn('id', $conGaranzieRilevanti)))),
+                            ->orWhereIn('id', $conGaranzieRilevanti)
+                            ->orWhereIn('id', $conGaranzieRicambioRilevanti)))),
                 StatoSemaforo::Verde->value => $query->where(fn ($q) => $q
                     ->where('forced_state', StatoSemaforo::Verde->value)
                     ->orWhere(fn ($q) => $q->whereNull('forced_state')
                         ->whereNotIn('id', $conScadenzeRilevanti)
-                        ->whereNotIn('id', $conGaranzieRilevanti))),
+                        ->whereNotIn('id', $conGaranzieRilevanti)
+                        ->whereNotIn('id', $conGaranzieRicambioRilevanti))),
             };
         }
 
@@ -413,10 +490,31 @@ class ElencoStrumenti extends Component
             ->unique('strumento_id')
             ->keyBy('strumento_id');
 
+        // Terza query costante (ADR-020): la garanzia più vicina fra i pezzi
+        // MONTATI su ogni riga in pagina, letta senza il privacy scope perché
+        // il pallino è un aggregato dovuto a tutti. Solo id e data: il nome del
+        // pezzo non entra nemmeno nel result set.
+        //
+        // Alias `montato_su_id` e non `strumento_id`: su una riga
+        // `soggetto = ricambio` la colonna `garanzie.strumento_id` è NULL per
+        // invariante, e sovrascriverla con l'id della macchina che monta il
+        // pezzo metterebbe in circolo model che mentono su sé stessi.
+        $garanzieRicambioMin = Garanzia::query()->deiPezziMontati()
+            ->whereIn('ricambio_utilizzo.strumento_id', $strumenti->getCollection()->modelKeys())
+            ->orderBy('garanzie.data_scadenza_effettiva')->orderBy('garanzie.id')
+            ->get([
+                'garanzie.id',
+                'garanzie.data_scadenza_effettiva',
+                'ricambio_utilizzo.strumento_id as montato_su_id',
+            ])
+            ->unique('montato_su_id')
+            ->keyBy('montato_su_id');
+
         $semafori = $strumenti->getCollection()->mapWithKeys(fn (Strumento $s) => [
             $s->id => $s->forced_state ?? Semaforo::calcola(
                 $prossimi->get($s->id)?->data_scadenza,
                 $garanzieMin->get($s->id)?->data_scadenza_effettiva,
+                $garanzieRicambioMin->get($s->id)?->data_scadenza_effettiva,
             ),
         ]);
 
@@ -434,6 +532,11 @@ class ElencoStrumenti extends Component
             'semafori' => $semafori,
             'prossimi' => $prossimi,
             'garanzieMin' => $garanzieMin,
+            'garanzieRicambioMin' => $garanzieRicambioMin,
+            // La colonna "Prossima scadenza" è un DETTAGLIO: senza il permesso
+            // l'etichetta non nomina la fonte (ADR-020 + wireframe §1). Il
+            // pallino, che è l'aggregato, non cambia per nessuno.
+            'vedeGaranzieRicambio' => Gate::allows('view', Garanzia::class),
             'enti' => $enti,
             'nodi' => $nodi,
             'percorsi' => $this->percorsi($tuttiNodi),

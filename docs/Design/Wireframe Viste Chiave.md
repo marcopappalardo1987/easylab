@@ -150,13 +150,21 @@ Primo tab e **landing di default** della scheda. Risponde a una domanda sola: *p
 
 **Note del form.** La checkbox "Ricambio effettuato" **non è un campo persistito**: apre e chiude il repeater; la verità è l'esistenza delle righe. Il campo nome è un **autocomplete sul catalogo** (collega-o-crea, ADR-008/022): il codice costruttore non è richiesto. **La scadenza garanzia è obbligatoria per ogni riga** — è il dato che accende il semaforo (ADR-020). Deselezionare la checkbox in modifica **non cancella** righe già salvate: la rimozione è esplicita, riga per riga (`✕`), perché una spunta tolta per sbaglio non deve distruggere storico. Righe e garanzie si salvano **nella stessa transazione** dell'intervento.
 
+*Precisazioni dall'attuazione (9 Ago 2026), tutte emerse dalla prima prova a mano:*
+
+- **Il campo Tecnico è obbligatorio** (🔗 ADR-028): un intervento è sempre di qualcuno. Nel select il segnaposto «— Scegli un assegnatario —» è `disabled` — serve solo perché, aprendo uno dei 4178 interventi storici senza assegnatario, il campo possa mostrare «non ancora scelto» invece del primo tecnico dell'elenco, che sarebbe un'assegnazione fatta da un default.
+- **La Descrizione diventa facoltativa quando ci sono ricambi** e vale «Sostituzione ricambio»: registrare un pezzo non deve costare anche una frase. Senza ricambi resta obbligatoria — un intervento qualunque descritto come una sostituzione sarebbe falso in tabella e in Panoramica.
+- **Riaprendo un intervento che ha già ricambi la checkbox è accesa.** Resta stato di UI e non un campo persistito, ma il suo valore iniziale deve *riflettere* l'esistenza delle righe: spenta, le nascondeva, e chi guardava concludeva che i suoi dati fossero spariti.
+- **«Scad. garanzia» accetta anche date passate** su un inserimento storico: il confine è la data di *montaggio*, non oggi.
+- Il combobox mostra i suggerimenti man mano che si scrive e segnala solo il caso che la lista non può dire, «Nuovo ricambio: verrà creato». Vincoli e trappole del componente: Design System §5.6.
+
 **Contenuto dei tab.**
 - **Panoramica ‹default›:** stato del semaforo **coi motivi**, prossimo/ultimo intervento, garanzie, sintesi anagrafica, statistiche della macchina (§2.0, ADR-024).
 - **Anagrafica:** modello, parametri tecnici, data installazione, ubicazione corrente, **fornitore** (uno, obbligatorio nel form — ADR-023), storico spostamenti (`spostamenti.view`).
 - **Interventi:** lista attività passate (fatto/non fatto) + future pianificate; spunta "Fatto" (`interventi.complete`); fonte di verità del semaforo (ADR-005). Tipologie chiuse da ADR-021.
 - **Ricambi:** ricambi montati (catalogo + autocomplete sul **nome**, ADR-008/022); riga collegata all'intervento che l'ha generata; scadenza garanzia del pezzo ‹solo con `garanzie.ricambio.view`›; ricerca incrociata "dov'è montato".
 - **Documenti:** allegati su bucket privato B2 (ADR-009/025); upload/download solo autenticato; export PDF.
-- **Garanzie ‹solo Admin/EasyLab›:** garanzia macchina + garanzie ricambio (motore sdoppiato, ADR-004). **Tab nascosto a Tenant e Tecnico.** *Rettifica S3: il tab è in realtà visibile in sola lettura anche a Tenant/Tecnico, che hanno `garanzie.macchina.view`; a essere nascoste sono le **righe** `soggetto = ricambio`, per scope.* ~~Sotto-sezione "Letture contaore"~~ — **rimossa** (ADR-019).
+- **Garanzie ‹solo Admin/EasyLab›:** garanzia macchina + garanzie ricambio (motore sdoppiato, ADR-004). **Tab nascosto a Tenant e Tecnico.** *Rettifica S3: il tab è in realtà visibile in sola lettura anche a Tenant/Tecnico, che hanno `garanzie.macchina.view`; a essere nascoste sono le **righe** `soggetto = ricambio`, per scope.* *Seconda rettifica, 8 Ago 2026 (ADR-027): quelle righe sono nascoste al **solo Tenant**. Il Tecnico le vede e le gestisce — è chi monta il pezzo — con ogni scrittura tracciata sul canale `audit`.* ~~Sotto-sezione "Letture contaore"~~ — **rimossa** (ADR-019).
 
 **Note.** Il pulsante "Forza semaforo" compare solo con `semaforo.force`. Le righe garanzia-ricambio sono filtrate da `garanzie.ricambio.view` (ADR-004) — ma **contribuiscono comunque al pallino** mostrato in testa alla scheda (ADR-020). Mobile: i tab diventano un menù `▼` o scroll orizzontale.
 
@@ -191,6 +199,10 @@ Interfaccia sul campo, mobile-first: scansiona QR → vedi storico → chiudi in
 └───────────────────────┘     └───────────────────────┘
    schermata iniziale            dopo scansione/selezione
 ```
+
+> **Rettifica del 17 Ago 2026 (S4 blocco 10).** Questa vista **non è stata costruita come schermata separata**, e il motivo è nei documenti stessi: §1, §2 e §5 prevedono già il responsive («tabella → lista di card», «i tab diventano un menù ▼ o scroll orizzontale», «albero in drawer ☰»), e 🔗 ADR-003 esiste per affermare che la scheda vive **in un posto solo, con una sola catena di autorizzazione**. La schermata di destra qui sotto *è* la scheda §2 resa mobile: righe che diventano card, azioni a tutta larghezza, nessun markup duplicato. Resta nuova la sola schermata di **sinistra** — QR e «I miei interventi» — che non esiste altrove. Conseguenza voluta: `/q/{token}` continua a portare **tutti** su `strumenti.show`, senza diramare per ruolo, e ADR-003 resta intatto invece di essere derogato.
+
+> **Terza rettifica, stessa data.** La nota «Niente garanzie ricambio» e il rimando al «nodo di permessi di §4.4 ancora da sciogliere» sono **superati da 🔗 ADR-027** (8 Ago 2026): il Tecnico gestisce le garanzie dei pezzi che monta — è la fonte del dato — e il controllo è la traccia sul canale `audit`, non la cecità. Il tab Ricambi della scheda gliele mostra.
 
 **Note.** Accesso post-QR via URL firmata → login se necessario → scheda **solo se autorizzato** (mai dati senza auth, ADR-003). Il tecnico vede solo strumenti in portafoglio ∪ assegnazione (ADR-007); ogni accesso loggato. Niente garanzie ricambio. Azioni disponibili filtrate per permesso (`interventi.complete`, `ricambio_utilizzo.create`, `documenti.upload`). L'azione "⏱ Lettura contaore" è **rimossa** (ADR-019). "+ Aggiungi ricambio" chiede **nome e scadenza garanzia**, come nel form desktop (ADR-022) — con il nodo di permessi di §4.4 dello Schema Ruoli ancora da sciogliere.
 

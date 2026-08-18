@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Enums\SoggettoGaranzia;
 use App\Models\Garanzia;
+use App\Models\RicambioUtilizzo;
 use App\Models\Strumento;
 use App\Support\Semaforo;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -41,6 +42,32 @@ class GaranziaFactory extends Factory
             'strumento_id' => $strumento->id,
             'ricambio_utilizzo_id' => null,
         ]);
+    }
+
+    /**
+     * Garanzia del singolo pezzo montato (ERD §6.1 — ADR-004/022). Prende una
+     * riga `ricambio_utilizzo` VERA e non un id libero: dall'8 Ago 2026 la FK
+     * esiste, e un intero inventato viola il vincolo su entrambi i driver.
+     */
+    public function forRicambio(RicambioUtilizzo $utilizzo): static
+    {
+        return $this->state(fn () => [
+            'tenant_id' => $utilizzo->tenant_id,
+            'soggetto' => SoggettoGaranzia::Ricambio,
+            'strumento_id' => null,
+            'ricambio_utilizzo_id' => $utilizzo->id,
+        ]);
+    }
+
+    /**
+     * Forma "a data" di ADR-022: la scadenza è dichiarata, non derivata dai
+     * mesi. Passa dal metodo di dominio perché `data_scadenza_dichiarata` è
+     * fuori da `$fillable` — e perché è quello ad azzerare `durata_mesi`,
+     * senza cui l'XOR di `normalizzaScadenza()` fallirebbe.
+     */
+    public function scadenzaDichiarata(string $data): static
+    {
+        return $this->afterMaking(fn (Garanzia $garanzia) => $garanzia->fissaScadenzaDichiarata($data));
     }
 
     /** Già finita: pesa sul semaforo come uno scaduto-non-fatto. */

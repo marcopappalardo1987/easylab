@@ -128,10 +128,20 @@ Header `bg-neutral-50 text-neutral-600 text-sm`, righe con `divide-y divide-neut
 `inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium`. Colori dai token semantici (semaforo §4, stato cliente, piano, 🔒 lockout/bloccato).
 
 ### 5.5 Tab (scheda strumento)
-Barra orizzontale, tab attivo `border-b-2 border-primary-600 text-primary-700`, inattivo `text-neutral-600`. Tab nascosti per permesso (es. **Garanzie** assente per Tenant/Tecnico — ADR-004). **Mobile:** scroll orizzontale o `select ▼`.
+Barra orizzontale, tab attivo `border-b-2 border-primary-600 text-primary-700`, inattivo `text-neutral-600`. Tab nascosti per permesso (es. **Ricambi** assente per chi non ha `ricambi.view`). *Corretto l'8 Ago 2026: l'esempio diceva «**Garanzie** assente per Tenant/Tecnico — ADR-004», ed era sbagliato due volte. Il tab Garanzie è visibile in sola lettura anche a Tenant e Tecnico, che hanno `garanzie.macchina.view` (già così da S3); e il vincolo di ADR-004 riguarda le **righe** `soggetto = ricambio`, applicato per scope, mai il tab — per il solo Tenant dopo ADR-027. Un tab nascosto e una riga filtrata sono due meccanismi diversi: confonderli è ciò che ha prodotto l'errore corretto da ADR-027.* **Mobile:** scroll orizzontale o `select ▼`.
 
 ### 5.6 Form & input
 `rounded-md border-neutral-200 focus:border-primary-600 focus:ring-primary-600`. Label `text-sm font-medium text-neutral-800`. Errori `text-danger-600 text-sm`. Autocomplete ricambi (ADR-008/022) come combobox con creazione "al volo", su **nome** del pezzo. Le **righe ripetitore** del form intervento (wireframe §2.1) riusano lo stesso combobox: ogni riga è `nome` + `data`, con `[ ✕ ]` per rimuoverla e `[ + Aggiungi ricambio ]` in coda.
+
+> **`x-ui.combobox`, realizzato in S4 blocco 3.** Due scelte da conoscere prima di riusarlo.
+>
+> **Alpine non scrive mai il valore.** Il dropdown è renderizzato dal server e ogni suggerimento è un `<button wire:click>` vero; Alpine apre/chiude, evidenzia, e su Invio *clicca* il bottone già evidenziato. Esiste quindi un solo percorso di selezione — testabile con Livewire — invece di una seconda implementazione in JS che nessun test vedrebbe; e senza JavaScript il campo resta usabile a click. Chi lo riuserà (tab Ricambi, vista mobile) erediti questa forma: è ciò che rende il componente verificabile.
+>
+> **Primi `aria-*` del progetto**, ed è una scelta: `role="combobox"`/`listbox`/`option`, `aria-expanded`, `aria-controls`, `aria-activedescendant`. Il DS finora non li menzionava (c'erano solo `role="dialog"` nella modale e gli `sr-only` dei glifi), ma un combobox senza di essi è, per uno screen reader, una casella di testo con del rumore accanto. Lo stato «＋ Nuovo ricambio: verrà creato» segue la regola §1/§4: glifo + testo, mai solo colore. C'era anche un «🔗 Collegato», rimosso il 9 Ago: col dropdown visibile ripeteva ciò che le opzioni mostrano già. **Un messaggio di stato dice ciò che la lista non può dire, non ciò che la lista mostra.**
+
+> ⚠️ **Regola generale del componente, imparata rompendola.** Lo **stato Alpine può solo NASCONDERE ciò che il server ha deciso di mostrare, mai il contrario.** La prima stesura teneva la visibilità del dropdown in un flag `aperto`: digitando, Livewire rifà il render dopo il debounce, il nodo viene rimpiazzato e `x-data` si reinizializza — il flag tornava `false` a ogni battuta e **la lista non compariva mai**, mentre il messaggio di stato, renderizzato dal server, si vedeva benissimo. È lo stesso principio già adottato per la selezione («Alpine non scrive mai il valore»), che alla visibilità non era stato applicato. Vale per chiunque riusi il combobox o ne scriva uno nuovo.
+>
+> ⚠️ **Ciò che vive in Alpine non è coperto dai test** (i test Livewire non lo eseguono): tastiera, click-outside, aria dinamici, 44px reali, sopravvivenza dello stato al morph. Sono elencati per nome nel docblock di `ComboboxRicambiTest` e si verificano a mano; il browser test è un debito dichiarato. Il fallback a click rende **silenzioso** ogni fallimento JS: è il motivo per cui la verifica manuale non è facoltativa.
 
 ### 5.7 Navigazione
 - **Top bar:** logo, contesto (Ente/ruolo), 🔔 notifiche, menù utente `▼`. Altezza `h-14`.

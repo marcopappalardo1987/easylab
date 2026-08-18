@@ -17,13 +17,25 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
 
         @livewireStyles
+
+        {{-- Stili per-pagina: serve alle regole di STAMPA, che sono specifiche
+             del foglio e non hanno senso nel bundle di tutta l'app (@page,
+             per esempio, è globale e non si può accendere per una sola vista
+             da Tailwind). Prima uso: l'etichetta QR. --}}
+        @stack('styles')
     </head>
-    <body class="h-full bg-neutral-50 font-sans text-neutral-800 antialiased">
+    {{-- In STAMPA restano solo i contenuti: sidebar, top bar e banner di
+         impersonation portano `print:hidden`. La regola sta nel layout e non
+         nelle singole pagine perché vale per tutte — l'etichetta QR (ADR-003) è
+         solo la prima, e i report PDF di S5/S7 avranno lo stesso bisogno.
+         Il fondo torna bianco: il grigio dell'app si stampa come una campitura
+         che consuma toner e non dice niente. --}}
+    <body class="h-full bg-neutral-50 font-sans text-neutral-800 antialiased print:bg-white">
         <div x-data="{ sidebarOpen: false }" class="min-h-full">
 
             {{-- Banner impersonation persistente (Design System §5.8) --}}
             @if (app('impersonate')->isImpersonating())
-                <div class="flex items-center justify-between gap-3 bg-warning-500 px-4 py-2 text-sm text-neutral-900">
+                <div class="flex items-center justify-between gap-3 bg-warning-500 px-4 py-2 text-sm text-neutral-900 print:hidden">
                     <span>Stai impersonando <strong>{{ $user->name }}</strong></span>
                     <a href="{{ route('impersonate.leave') }}"
                        class="rounded-md bg-neutral-900/10 px-3 py-1 font-medium hover:bg-neutral-900/20">
@@ -39,7 +51,7 @@
                      class="fixed inset-0 z-30 bg-neutral-900/40 md:hidden"></div>
 
                 {{-- Sidebar (fissa su desktop, drawer su mobile) --}}
-                <aside class="fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col border-r border-neutral-200 bg-white transition-transform duration-200 md:static md:min-h-screen md:translate-x-0"
+                <aside class="fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col border-r border-neutral-200 bg-white transition-transform duration-200 md:static md:min-h-screen md:translate-x-0 print:hidden"
                        :class="sidebarOpen && 'translate-x-0'">
                     <div class="flex h-14 items-center gap-2 border-b border-neutral-200 px-4">
                         <span class="flex h-8 w-8 items-center justify-center rounded-md bg-primary-50 text-primary-600">
@@ -72,6 +84,24 @@
                                 Strumenti
                             </x-app.nav-link>
                         @endcan
+                        @can('fornitori.view')
+                            <x-app.nav-link :href="route('fornitori.index')" :active="request()->routeIs('fornitori.*')">
+                                <svg class="h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" /></svg>
+                                Fornitori
+                            </x-app.nav-link>
+                        @endcan
+                        @can('interventi.view')
+                            <x-app.nav-link :href="route('campo.index')" :active="request()->routeIs('campo.*')">
+                                <svg class="h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" /></svg>
+                                Campo
+                            </x-app.nav-link>
+                        @endcan
+                        @can('ricambi.view')
+                            <x-app.nav-link :href="route('ricambi.index')" :active="request()->routeIs('ricambi.*')">
+                                <svg class="h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437 1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008Z" /></svg>
+                                Ricambi
+                            </x-app.nav-link>
+                        @endcan
 
                         <p class="px-3 pt-4 pb-1 text-xs font-semibold tracking-wide text-neutral-400 uppercase">Prossimamente</p>
                         <x-app.nav-link :disabled="true">Interventi</x-app.nav-link>
@@ -79,10 +109,21 @@
                 </aside>
 
                 {{-- Colonna contenuto --}}
-                <div class="flex min-h-screen flex-1 flex-col">
+                {{-- ⚠️ `min-w-0` non è decorativo, ed è la riga che rende mobile
+                     l'intera applicazione (S4 blocco 10). Un flex item ha
+                     `min-width: auto`, quindi si RIFIUTA di restringersi sotto la
+                     larghezza intrinseca del proprio contenuto: senza questa
+                     classe la colonna cresceva fino alla tabella più larga della
+                     pagina — 503px su un telefono da 390 — e a scorrere in
+                     orizzontale era il documento intero, header compreso.
+                     Conseguenza meno ovvia: gli `overflow-x-auto` che avvolgono
+                     le tabelle non entravano MAI in funzione, perché il loro
+                     contenitore aveva sempre spazio a sufficienza. C'erano tutti
+                     e non servivano a niente. --}}
+                <div class="flex min-h-screen min-w-0 flex-1 flex-col">
 
                     {{-- Top bar (Design System §5.7) --}}
-                    <header class="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-neutral-200 bg-white px-4 shadow-sm">
+                    <header class="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-neutral-200 bg-white px-4 shadow-sm print:hidden">
                         <div class="flex items-center gap-2">
                             <button type="button" @click="sidebarOpen = true"
                                     class="-ml-1 flex h-10 w-10 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-100 md:hidden"

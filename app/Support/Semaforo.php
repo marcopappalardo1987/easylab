@@ -18,6 +18,11 @@ use Carbon\CarbonInterface;
  * (<= oggi+soglia) collassano nello stesso confronto — non esiste una seconda
  * copia della regola che possa divergere.
  *
+ * **ADR-020.** Le fonti "garanzia" sono due — macchina e pezzi montati — ma il
+ * motore non lo sa: riceve candidati e confronta scadenze. È il segno che il
+ * refactor di ADR-024 ha fatto il proprio lavoro, perché il blocco 4 di S4 ha
+ * aggiunto una fonte senza toccare la regola.
+ *
  * **ADR-024.** Il motore restituisce una `DiagnosiSemaforo` (stato + motivi):
  * finora sapeva dire *se* accendere l'arancione ma non *perché*, e con le
  * cause sparse fra i tab quella era l'informazione che mancava all'utente.
@@ -65,11 +70,17 @@ final class Semaforo
      * (non_fatto) dello strumento: se è nel passato c'è uno scaduto-non-fatto,
      * se è entro la soglia è imminente — in entrambi i casi Arancione.
      *
-     * $scadenzaGaranzia = min(data_scadenza_effettiva) delle garanzie
+     * $scadenzaGaranzia = min(data_scadenza_effettiva) delle garanzie MACCHINA
      * (ADR-004) — una garanzia scaduta o imminente accende comunque
      * l'Arancione, mai il Rosso.
      *
-     * Prende due date sciolte e non i model, perché il calcolo bulk
+     * $scadenzaGaranziaRicambio = idem per le garanzie dei pezzi MONTATI sullo
+     * strumento (ADR-020, S4 blocco 4): stessa scala e stessa soglia, nessuna
+     * seconda costante. È un terzo parametro e non un secondo minimo fuso col
+     * precedente perché la colonna "Prossima scadenza" deve poter dire da quale
+     * delle due fonti viene la data — e con permessi diversi.
+     *
+     * Prende date sciolte e non i model, perché il calcolo bulk
      * dell'elenco (una query per pagina) ha solo quelle: i motivi che ne
      * costruisce sono quindi anonimi e vengono scartati, resta lo stato.
      *
@@ -81,6 +92,7 @@ final class Semaforo
     public static function calcola(
         ?CarbonInterface $prossimaScadenza,
         ?CarbonInterface $scadenzaGaranzia = null,
+        ?CarbonInterface $scadenzaGaranziaRicambio = null,
     ): StatoSemaforo {
         $candidati = [];
 
@@ -90,6 +102,10 @@ final class Semaforo
 
         if ($scadenzaGaranzia !== null) {
             $candidati[] = MotivoSemaforo::anonimo(TipoMotivoSemaforo::GaranziaMacchina, $scadenzaGaranzia);
+        }
+
+        if ($scadenzaGaranziaRicambio !== null) {
+            $candidati[] = MotivoSemaforo::anonimo(TipoMotivoSemaforo::GaranziaRicambio, $scadenzaGaranziaRicambio);
         }
 
         return self::diagnostica(...$candidati)->stato;

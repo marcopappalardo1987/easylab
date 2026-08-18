@@ -1,8 +1,10 @@
 <?php
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Contracts\ReachesStrumento;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Schema;
 
 use function PHPUnit\Framework\assertTrue;
 
@@ -48,6 +50,36 @@ it('uses BelongsToTenant on every business model', function () {
         assertTrue(
             in_array(BelongsToTenant::class, class_uses_recursive($class), true),
             "{$class} non usa BelongsToTenant (isolamento mancante)"
+        );
+    }
+});
+
+/**
+ * Seconda rete, ADR-030: chi sa raggiungere uno strumento deve **dichiararlo**.
+ *
+ * Dimenticare `ReachesStrumento` su un modello nuovo con `strumento_id` non apre
+ * una falla — quel modello resta visibile al Tecnico per il solo portafoglio,
+ * quindi fail-closed — ma gli toglie in SILENZIO un accesso legittimo: chi ha un
+ * intervento assegnato non vedrebbe, poniamo, le letture contaore della macchina
+ * su cui sta lavorando. È il tipo di difetto che nessuno segnala come bug perché
+ * somiglia a «non c'è niente», e per questo va colto qui.
+ *
+ * Si guarda la COLONNA e non il trait: `Garanzia` non usa
+ * `BelongsToOrgNodeThroughStrumento` (allo strumento arriva per due strade) ma il
+ * contratto lo implementa lo stesso, e un controllo sul trait la mancherebbe.
+ */
+it('declares ReachesStrumento on every model that carries a strumento_id', function () {
+    foreach (businessModels() as $class) {
+        $model = new $class;
+
+        if (! Schema::hasColumn($model->getTable(), 'strumento_id')) {
+            continue;
+        }
+
+        assertTrue(
+            $model instanceof ReachesStrumento,
+            "{$class} ha `strumento_id` ma non dichiara ReachesStrumento: il Tecnico "
+            .'non raggiungerà le sue righe per assegnazione (ADR-030).'
         );
     }
 });

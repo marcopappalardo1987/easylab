@@ -2,7 +2,11 @@
 
 namespace App\Livewire\Concerns;
 
+use App\Models\Fornitore;
 use App\Models\Strumento;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 
 /**
  * Form condiviso dello Strumento (create in Albero, edit in SchedaStrumento).
@@ -35,9 +39,43 @@ trait ManagesStrumentoForm
         $this->parametri = array_values($this->parametri);
     }
 
-    protected function strumentoFormRules(): array
+    /**
+     * Fornitori selezionabili per un Ente (ADR-023): **una sola definizione**,
+     * usata dal select del form e dalla validazione al salvataggio.
+     *
+     * È il precedente di `SchedaStrumento::assegnabili()`, e la ragione è la
+     * stessa: se la whitelist del select e il controllo al save fossero due
+     * query diverse, un `fornitore_id` forgiato dal browser passerebbe il
+     * secondo pur non comparendo nel primo — e le due copie potrebbero
+     * divergere alla prima modifica.
+     *
+     * `$correnteId` riammette il fornitore già associato anche se cestinato:
+     * senza, modificare una macchina il cui fornitore è stato cestinato
+     * fallirebbe la validazione su un campo che l'utente non ha toccato.
+     *
+     * @return Builder<Fornitore>
+     */
+    protected function fornitoriSelezionabili(int $tenantId, ?int $correnteId = null): Builder
+    {
+        return Fornitore::withTrashed()
+            ->where('tenant_id', $tenantId)
+            ->where(fn (Builder $q) => $q->whereNull('deleted_at')
+                ->when($correnteId !== null, fn (Builder $q) => $q->orWhere('id', $correnteId)))
+            ->orderBy('ragione_sociale');
+    }
+
+    protected function strumentoFormRules(?int $tenantId = null, ?int $correnteId = null): array
     {
         return [
+            // Obbligatorio nel FORM, nullable in schema (ADR-023): l'obbligo
+            // riguarda chi inserisce a mano, non le righe storiche né l'import.
+            // La regola è condizionata al permesso: un ruolo che il campo non lo
+            // vede nemmeno non può essere bloccato da un campo che non ha.
+            'strumentoForm.fornitore_id' => Gate::allows('fornitori.view')
+                ? ['required', 'integer', Rule::exists('fornitori', 'id')->where(
+                    fn ($q) => $q->where('tenant_id', $tenantId)
+                )]
+                : ['nullable'],
             'strumentoForm.nome' => ['required', 'string', 'max:255'],
             'strumentoForm.modello' => ['nullable', 'string', 'max:255'],
             'strumentoForm.matricola' => ['nullable', 'string', 'max:255'],
@@ -50,7 +88,7 @@ trait ManagesStrumentoForm
 
     protected function resetStrumentoForm(): void
     {
-        $this->strumentoForm = ['nome' => '', 'modello' => '', 'matricola' => '', 'data_installazione' => ''];
+        $this->strumentoForm = ['nome' => '', 'modello' => '', 'matricola' => '', 'data_installazione' => '', 'fornitore_id' => null];
         $this->parametri = [];
         $this->resetValidation();
     }
@@ -62,6 +100,7 @@ trait ManagesStrumentoForm
             'modello' => $strumento->modello,
             'matricola' => $strumento->matricola,
             'data_installazione' => $strumento->data_installazione?->format('Y-m-d') ?? '',
+            'fornitore_id' => $strumento->fornitore_id,
         ];
 
         $this->parametri = collect($strumento->parametri_tecnici ?? [])
@@ -86,6 +125,7 @@ trait ManagesStrumentoForm
             'modello' => $this->strumentoForm['modello'] ?: null,
             'matricola' => $this->strumentoForm['matricola'] ?: null,
             'data_installazione' => $this->strumentoForm['data_installazione'] ?: null,
+            'fornitore_id' => $this->strumentoForm['fornitore_id'] ?: null,
             'parametri_tecnici' => $parametri === [] ? null : $parametri,
         ];
     }

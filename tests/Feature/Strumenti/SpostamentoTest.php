@@ -3,6 +3,7 @@
 use App\Enums\TipoSpostamento;
 use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Strumenti\SchedaStrumento;
+use App\Models\Fornitore;
 use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
@@ -21,6 +22,11 @@ beforeEach(function () {
 
     $this->admin = User::factory()->create(['tenant_id' => $this->ente->id, 'two_factor_confirmed_at' => now()]);
     $this->admin->assignRole('Admin');
+
+    // Il fornitore è obbligatorio nel form dal 15 Ago 2026 (ADR-023): i casi che
+    // creano una macchina dall'anagrafica devono sceglierne uno. L'obbligo vive
+    // nella validazione e non in schema — le righe storiche restano senza.
+    $this->fornitore = Fornitore::factory()->forTenant($this->ente)->create();
 });
 
 // --- Provenienza esterna (ingresso) alla creazione ---
@@ -29,6 +35,7 @@ it('records an ingresso movement when a strumento is created with external prove
     Livewire::actingAs($this->admin)->test(Albero::class)
         ->call('open', $this->dept1->id)
         ->call('addStrumento')
+        ->set('strumentoForm.fornitore_id', $this->fornitore->id)
         ->set('strumentoForm.nome', 'Microscopio')
         ->set('provenienza', 'Ospedale San Paolo')
         ->call('saveStrumento');
@@ -47,6 +54,7 @@ it('does not record a movement when no provenance is given', function () {
     Livewire::actingAs($this->admin)->test(Albero::class)
         ->call('open', $this->dept1->id)
         ->call('addStrumento')
+        ->set('strumentoForm.fornitore_id', $this->fornitore->id)
         ->set('strumentoForm.nome', 'Bilancia')
         ->call('saveStrumento');
 

@@ -4,8 +4,10 @@ namespace App\Models;
 
 use App\Enums\StatoIntervento;
 use App\Enums\TipoIntervento;
+use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Concerns\BelongsToOrgNodeThroughStrumento;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Contracts\ReachesStrumento;
 use App\Support\Semaforo;
 use Carbon\CarbonInterface;
 use Database\Factories\InterventoFactory;
@@ -13,12 +15,15 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Attività/intervento su uno strumento (ERD §5.2 — ADR-005/007/009): la fonte
- * di verità del semaforo. Una taratura è un intervento `tipo = taratura`
- * (ADR-009). Visibile anche al ruolo Tenant.
+ * di verità del semaforo. Una taratura è un intervento
+ * `tipo = taratura_e_certificazione` (ADR-009; il valore `taratura` è stato
+ * rimappato da ADR-021 il 3 Ago 2026). Visibile anche al ruolo Tenant.
  *
  * Non ha collocazione propria nell'albero: eredita la restrizione di reparto
  * dallo strumento (BelongsToOrgNodeThroughStrumento). NON usare BelongsToOrgNode
@@ -35,10 +40,31 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * eventi). L'invariante `interventi.tenant_id == strumenti.tenant_id` regge la
  * sicurezza di DepartmentThroughStrumentoScope: va preservata.
  */
-class Intervento extends Model
+class Intervento extends Model implements ReachesStrumento
 {
     /** @use HasFactory<InterventoFactory> */
-    use BelongsToOrgNodeThroughStrumento, BelongsToTenant, HasFactory, SoftDeletes;
+    /**
+     * **Audit (ADR-027): il trait, e deliberatamente nient'altro.**
+     *
+     * Niente `attributiDerivatiTracciati()`: su `Garanzia` quell'hook serve
+     * perché `data_scadenza_effettiva` — il campo che pilota il semaforo — sta
+     * FUORI da `$fillable`. Qui tutto ciò che decide qualcosa (`stato`,
+     * `data_esecuzione`, `data_scadenza`, `tipo`, `tecnico_id`) è già
+     * assegnabile, quindi già tracciato: aggiungerlo «per simmetria»
+     * duplicherebbe colonne e basta.
+     *
+     * Niente `nomeDominio()`: il default dà «intervento», che è il sostantivo
+     * giusto.
+     *
+     * Niente `activity()` esplicite, e il criterio è quello di ADR-027 letto
+     * per esteso: le esplicite servono quando l'informazione che conta **non è
+     * una colonna** — in `Strumento::forzaSemaforo()` è il fatto che il forzato
+     * SCAVALCA uno stato calcolato che in tabella non esiste. Qui invece
+     * chiudere un intervento È scrivere `stato` e `data_esecuzione`: l'elenco
+     * dei campi cambiati dice già tutto, e una riga esplicita in più
+     * significherebbe due righe per un gesto solo.
+     */
+    use AuditsDomainWrites, BelongsToOrgNodeThroughStrumento, BelongsToTenant, HasFactory, SoftDeletes;
 
     protected $table = 'interventi';
 
@@ -52,6 +78,7 @@ class Intervento extends Model
         'data_scadenza',
         'stato',
         'data_esecuzione',
+        'report_fine_lavoro',
     ];
 
     protected $attributes = [
@@ -84,13 +111,122 @@ class Intervento extends Model
     /**
      * Spunta "Fatto" (permesso `interventi.complete`). Senza data esplicita
      * l'esecuzione è oggi.
+     *
+     * Allinea anche la data di montaggio dei ricambi registrati su questo
+     * intervento: vedi `allineaRicambiAllaEsecuzione()`.
      */
-    public function segnaFatto(?CarbonInterface $data = null): bool
+    public function segnaFatto(?CarbonInterface $data = null, ?string $report = null): bool
     {
         $this->stato = StatoIntervento::Fatto;
         $this->data_esecuzione = $data;
 
-        return $this->save();
+        // Il report si scrive solo se arriva: `riapri()` non lo cancella e una
+        // ri-chiusura senza nota non deve azzerare quella scritta prima. È lo
+        // stesso principio per cui riaprire non riporta indietro le date di
+        // montaggio — ciò che una persona ha scritto non si perde per effetto
+        // collaterale di un altro gesto.
+        if ($report !== null) {
+            $this->report_fine_lavoro = trim($report) ?: null;
+        }
+
+        return DB::transaction(function (): bool {
+            $salvato = $this->save();
+            $this->allineaRicambiAllaEsecuzione();
+
+            return $salvato;
+        });
+    }
+
+    /**
+     * Un pezzo è montato quando l'intervento viene ESEGUITO, non quando lo si
+     * registra (ADR-022).
+     *
+     * Il servizio che crea le righe non può saperlo: su un intervento
+     * pianificato `data_esecuzione` è NULL e ripiega su oggi, così un ricambio
+     * annotato in anticipo risultava «montato» giorni prima che qualcuno lo
+     * toccasse. La data vera si conosce solo qui, alla chiusura — quindi è qui
+     * che si scrive.
+     *
+     * Sta nel model e non nel componente perché `segnaFatto()` è **l'unica
+     * via** per chiudere un intervento (mai update by-query, vedi il docblock
+     * della classe): ogni chiamante presente e futuro — la scheda oggi, la
+     * vista mobile del tecnico domani — eredita l'allineamento senza doverlo
+     * ricordare.
+     *
+     * ⚠️ La `data_inizio` della garanzia segue il montaggio, ma **solo se
+     * resta prima della scadenza dichiarata**: il model esige quel confine, e
+     * spostare l'inizio oltre una scadenza ravvicinata farebbe esplodere la
+     * chiusura di un intervento per colpa di un refuso in una riga ricambio.
+     * In quel caso la garanzia si lascia com'è: un dato informativo incoerente
+     * è meno grave di un'operazione che non si può più completare. La scadenza
+     * — l'unica grandezza che pilota il semaforo — non è toccata in nessun caso.
+     *
+     * `riapri()` NON riporta indietro le date: un pezzo montato resta montato,
+     * e riaprire un intervento significa "c'è ancora da fare", non "non è mai
+     * successo".
+     *
+     * ✅ **Deciso il 15 Ago 2026** (tab Ricambi), al posto del rinvio che stava
+     * qui: la data di montaggio è ora editabile, e una riga corretta a mano
+     * porta `data_manuale = true`. Questo metodo **la salta**. Delle tre uscite
+     * possibili è l'unica che non perde silenziosamente il lavoro di una
+     * persona: allineare solo le righe NULL avrebbe reso la chiusura incapace
+     * di correggere una data automatica sbagliata, e lasciar vincere
+     * l'automatismo avrebbe fatto sparire una correzione senza dirlo.
+     *
+     * **La regola dell'allineamento non vive più qui**: sta in
+     * `RicambioUtilizzo::fissaMontaggio()`, che questo metodo chiama. Era
+     * `protected`, quindi esercitabile solo chiudendo un intervento — e la
+     * correzione dal tab avrebbe avuto bisogno della stessa regola, cioè di
+     * una seconda copia dello stesso confine.
+     */
+    protected function allineaRicambiAllaEsecuzione(): void
+    {
+        $esecuzione = $this->data_esecuzione;
+
+        if ($esecuzione === null) {
+            return;
+        }
+
+        $this->ricambiUtilizzi()->where('data_manuale', false)->get()
+            ->each(fn (RicambioUtilizzo $utilizzo) => $utilizzo->fissaMontaggio($esecuzione));
+    }
+
+    /**
+     * Pianifica la taratura successiva a partire da questa (ADR-009, 15 Ago 2026).
+     *
+     * **Non è una quarta fonte di scadenze, ed è la ragione per cui si è scelta
+     * questa forma**: produce un intervento ORDINARIO, che il semaforo sa già
+     * contare da S3. Far pilotare il semaforo dalla scadenza del certificato
+     * avrebbe voluto dire nove punti d'ingresso, due dentro l'espressione SQL
+     * più fragile del progetto.
+     *
+     * Chiude il limite dichiarato dal blocco precedente: finché nulla creava la
+     * taratura successiva, «la taratura alimenta il semaforo» era vero per
+     * quella da fare e falso per quella fatta — cioè per l'unica che ha un
+     * certificato.
+     *
+     * La periodicità è un INPUT e non un default nascosto: nessun documento del
+     * progetto la quantifica, e inventare «12 mesi» in codice avrebbe prodotto
+     * scadenze plausibili e non volute su un parco di migliaia di macchine. La
+     * chiede la modale, ogni volta, a chi sta chiudendo il lavoro.
+     *
+     * Nasce assegnata allo stesso tecnico (ADR-028: un intervento è sempre
+     * assegnato) e con la stessa descrizione: chi la troverà fra un anno deve
+     * riconoscerla come la prosecuzione di questa.
+     */
+    public function pianificaTaraturaSuccessiva(int $mesi): self
+    {
+        $partenza = $this->data_esecuzione ?? today();
+
+        return self::create([
+            'tenant_id' => $this->tenant_id,
+            'strumento_id' => $this->strumento_id,
+            'descrizione' => $this->descrizione,
+            'tipo' => TipoIntervento::TaraturaECertificazione,
+            'stato' => StatoIntervento::NonFatto,
+            'data_scadenza' => $partenza->copy()->addMonths($mesi),
+            'tecnico_id' => $this->tecnico_id,
+        ]);
     }
 
     /**
@@ -186,5 +322,26 @@ class Intervento extends Model
     public function tecnico(): BelongsTo
     {
         return $this->belongsTo(User::class, 'tecnico_id');
+    }
+
+    /**
+     * Pezzi montati durante questo intervento (ERD §7.2 — ADR-022), il più
+     * recente in alto.
+     *
+     * È anche l'idioma con cui si risolve una riga da rimuovere:
+     * `$intervento->ricambiUtilizzi()->findOrFail($id)` riapplica TenantScope e
+     * il livello 2 e vincola `intervento_id`, quindi copre in un colpo altro
+     * tenant, fuori sotto-albero e id appartenente a un altro intervento.
+     */
+    public function ricambiUtilizzi(): HasMany
+    {
+        return $this->hasMany(RicambioUtilizzo::class, 'intervento_id')
+            // ⚠️ NULL = «non ancora montato», e va IN CIMA: è la riga che
+            // aspetta qualcosa, non la più vecchia. Il CASE è esplicito perché
+            // SQLite ordina i NULL per primi e Postgres per ultimi — senza,
+            // l'ordine cambierebbe fra locale e produzione (trappola nota).
+            ->orderByRaw('case when data is null then 0 else 1 end')
+            ->orderByDesc('data')
+            ->orderByDesc('id');
     }
 }

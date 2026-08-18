@@ -11,6 +11,10 @@
 > 4. **Ricambi registrati dal form intervento**, nome libero e garanzia obbligatoria per riga (ADR-022) → §7.1/§7.2.
 > 5. **Fornitore uno per macchinario** (ADR-023) → §5.1 (`fornitore_id`) e **§7.3 riscritta**: il pivot `fornitore_strumento` non si crea.
 > 6. **Tab Panoramica** con i motivi del semaforo (ADR-024) → §5.1 campi derivati: il motore restituisce una diagnosi, non solo uno stato. Nessuna tabella nuova.
+>
+> **Revisione del 9 Agosto 2026 (S4 blocco 3 — attuazione di ADR-022).** §6.1 acquista `data_scadenza_dichiarata` e `durata_mesi` torna nullable: la garanzia del pezzo si esprime con la **data** che l'operatore ha davanti, non con una durata in mesi che la sposterebbe. Vincolo «esattamente una delle due», `data_scadenza_effettiva` resta derivata al 100%.
+>
+> **Revisione dell'8 Agosto 2026 (S4 blocco 1 — implementazione di §7.1/§7.2).** Due dettagli di schema corretti scrivendo le migration, entrambi motivati nelle rispettive sezioni: `ricambio_utilizzo` acquista **`deleted_at`** (§7.2) perché la FK di una `garanzie` soft-deleted renderebbe impraticabile la cancellazione fisica; `(tenant_id, nome_normalizzato)` diventa **UNIQUE parziale** (§7.1) perché ADR-022 la chiama "chiave" e una chiave senza vincolo non difende nulla. Nessun ADR nuovo: sono conseguenze di vincoli già decisi.
 
 ---
 
@@ -98,7 +102,10 @@ Utente della piattaforma. Auth/2FA via Jetstream/Fortify (ADR-012). Non tutti gl
 | `name` | string | |
 | `email` | string unique | |
 | `password` | string | |
-| `tenant_id` | bigint nullable, FK → `unita_organizzativa.id` | NULL per utenti piattaforma (Developer/Superadmin/Tecnico); valorizzato per Admin/Responsabile/Tenant. |
+| `tenant_id` | bigint nullable, FK → `unita_organizzativa.id` | Valorizzato per Admin/Responsabile/Tenant **e per Developer/Superadmin**, che 🔗 ADR-018 ha reso tenant-bound (l'accesso cross-tenant passa solo dall'impersonazione). NULL per il **Tecnico esterno** (staff EasyLab), che accede per portafoglio ∪ assegnazione; valorizzato per il **Tecnico interno**, dipendente del laboratorio, dove però non è un criterio di accesso ma una difesa in profondità — 🔗 ADR-030. |
+
+> **Revisione del 17 Ago 2026 (S4 blocco 9).** Questa riga diceva «NULL per utenti piattaforma (Developer/Superadmin/Tecnico)» ed era falsa in due punti su tre: per Developer e Superadmin da 🔗 ADR-018, che li ha vincolati al proprio Ente, e per il Tecnico da 🔗 ADR-030, che ne riconosce due forme. Restava vera solo per il tecnico esterno, ed è il tipo di riga che si legge come specifica e nel frattempo ha smesso di descrivere il sistema.
+
 | `two_factor_secret` / `two_factor_recovery_codes` | text nullable | 2FA (Fortify). |
 | `is_active` | boolean | Abilitazione (provisioning/lockout — ADR-012/013). |
 | timestamps, `deleted_at` | | soft delete. |
@@ -227,7 +234,7 @@ Cuore manutentivo. Le **tarature e certificazioni** sono interventi `tipo = tara
 | `id` | bigint PK | |
 | `tenant_id` / `reseller_id` | scoping | |
 | `strumento_id` | bigint FK → `strumenti.id` | |
-| `tecnico_id` | bigint nullable FK → `users.id` | Assegnatario (grant puntuale al tecnico — ADR-007). |
+| `tecnico_id` | bigint **nullable** FK → `users.id` | Assegnatario (grant puntuale al tecnico — ADR-007). **Obbligatorio nel form, nullable nello schema** (9 Ago 2026): un intervento è sempre di qualcuno, ma sul DB di sviluppo 4178 righe su 20672 non hanno assegnatario e una FK NOT NULL le renderebbe non salvabili — costringendo a inventare un tecnico pur di farle passare. È la stessa divergenza di `strumenti.fornitore_id` (ADR-023), e si scrive qui perché è ciò che il prossimo lettore scambia per una dimenticanza. Conseguenza voluta: le righe storiche restano com'è finché nessuno le tocca, ma **modificarne una obbliga a scegliere**. Il vincolo è nel form perché il campo dipende dal permesso `interventi.assign`: un meta-test congela che ogni ruolo con `interventi.create` abbia anche `.assign`, così la regola non può essere aggirata da una modifica alla matrice. |
 | `descrizione` | text | |
 | `tipo` | enum: `manutenzione_ordinaria` \| `manutenzione_straordinaria` \| `manutenzione_full_risk` \| `taratura_e_certificazione` \| `altro` | Elenco fissato dal cliente (ADR-021). "Taratura e certificazione" è **una voce sola**. Colonna `string` senza CHECK: il vincolo vive nell'enum PHP. |
 | `data_scadenza` | date | Passata (storico) o futura (pianificata). Alimenta il semaforo e l'"email del futuro". |
@@ -277,11 +284,16 @@ Garanzia del macchinario **e** del singolo ricambio, normalizzate in `data_scade
 | `strumento_id` | bigint nullable FK → `strumenti.id` | Valorizzato se `soggetto = macchina`. |
 | `ricambio_utilizzo_id` | bigint nullable FK → `ricambio_utilizzo.id` | Valorizzato se `soggetto = ricambio` (il pezzo specifico montato, non il catalogo — ADR-008). |
 | `data_inizio` | date | |
-| `durata_mesi` | integer | Durata in mesi. **NOT NULL** dopo ADR-019: è l'unica forma di garanzia rimasta. |
-| **`data_scadenza_effettiva`** | date | **Campo guida** di semaforo/notifiche = `data_inizio + durata_mesi`. Derivata: ricalcolata nell'hook `saving`, fuori da `$fillable`. |
+| `durata_mesi` | integer **nullable** | Durata in mesi: la forma di ADR-019, usata dalla garanzia macchina. Nullable dal 9 Ago 2026 perché è **una delle due** forme di input — vedi il vincolo qui sotto. |
+| `data_scadenza_dichiarata` | date **nullable** | La scadenza scritta dall'operatore: la forma di ADR-022, usata dalla garanzia del pezzo montato. Come `data_scadenza_effettiva`, è **fuori da `$fillable`** — si valorizza solo dai metodi di dominio `fissaScadenzaDichiarata()` / `fissaDurata()`, che azzerano sempre l'altro lato. |
+| **`data_scadenza_effettiva`** | date | **Campo guida** di semaforo/notifiche. Derivata al 100%, ricalcolata nell'hook `saving` e fuori da `$fillable`: `durata_mesi !== null ? data_inizio + durata_mesi : data_scadenza_dichiarata`. |
 | timestamps, `deleted_at` | | soft delete. |
 
 > **Solo garanzie a data (ADR-019).** Le colonne `tipo_scadenza`, `soglia_ore` e `data_scadenza_prevista` sono **rimosse**: la garanzia a ore era un fraintendimento del briefing di scoping. Migration distruttiva → prima il backfill di `durata_mesi` sulle righe oggi `tipo_scadenza = ore`, poi il drop.
+>
+> **Due forme di input, una sola di output** (ADR-022, 9 Ago 2026 — *estende* ADR-019, non lo riapre: la garanzia a ore resta morta e la garanzia continua a scadere solo a data). Vincolo: **esattamente uno fra `durata_mesi` e `data_scadenza_dichiarata`**, imposto in `Garanzia::normalizzaScadenza()`. Il NOT NULL su `durata_mesi` non è stato indebolito, è stato **spostato di livello**: dalla colonna alla coppia.
+>
+> **Perché una colonna di input e non `data_scadenza_effettiva` scrivibile.** L'operatore che monta un pezzo conosce la scadenza, non i mesi, e convertirla in interi la sposterebbe di giorni su un dato contrattuale che accende l'arancione a 30 — l'errore già misurato dal backfill di ADR-019, là accettato una volta su righe storiche, qui sistematico su ogni pezzo. Ma il campo guida è inattaccabile per **due** ragioni, non una: è fuori da `$fillable` **e** l'hook lo riscrive incondizionatamente. Leggerlo come input avrebbe distrutto la seconda, e nessun docblock l'avrebbe ricostruita: la falla non si chiude con una guardia, si chiude non aprendola.
 >
 > **Privacy (ADR-004).** Le garanzie con `soggetto = ricambio` sono **visibili solo a EasyLab/Admin**, mai al Tenant. Vincolo applicato via Policy + Global Scope sul ruolo, non via colonna.
 >
@@ -308,9 +320,11 @@ Voce normalizzata, riutilizzabile e ricercabile; cresce incrementalmente via aut
 | `descrizione` | string nullable | |
 | timestamps, `deleted_at` | | soft delete (per merge doppioni — V1.1). |
 
-**Indici:** `tenant_id`, `(tenant_id, nome_normalizzato)` per autocomplete/ricerca e collega-o-crea, `(tenant_id, codice)` per la ricerca per codice.
+**Indici:** `tenant_id`, `(tenant_id, nome_normalizzato)` **UNIQUE parziale** `WHERE deleted_at IS NULL` per autocomplete/ricerca e collega-o-crea, `(tenant_id, codice)` per la ricerca per codice.
 
 > **Perché una colonna normalizzata e non una funzione in query.** Il collega-o-crea confronta a ogni salvataggio: con un `LOWER(TRIM(...))` in WHERE l'indice non verrebbe usato, e la regola di normalizzazione finirebbe scritta in due posti (PHP e SQL) liberi di divergere.
+>
+> **Perché UNIQUE e non un indice semplice** (deciso in S4 blocco 1, 8 Ago 2026 — questa riga diceva solo "indicizzata"). ADR-022 chiama `(tenant_id, nome normalizzato)` «la chiave pratica del catalogo»: una chiave che nessun vincolo difende è un'affermazione, non una garanzia, e un futuro errore di normalizzazione produrrebbe doppioni **in silenzio** — la degradazione della ricerca incrociata che ADR-008 esiste per impedire. **Parziale** perché una voce cestinata non deve bloccare la ricreazione (il merge doppioni cestina per mestiere), e perché la variante ovvia `unique(tenant_id, nome_normalizzato, deleted_at)` non vincolerebbe nulla fra righe vive: su Postgres come su SQLite due NULL non sono uguali nel confronto di unicità. Va scritto con un `DB::statement` — lo schema builder di Laravel non esprime indici parziali — e la stessa SQL vale su entrambi i driver. ⚠️ Su SQLite il predicato **non sopravvive** a una ricostruzione della tabella (`compileIndexes()` legge solo nome/colonne/unicità da `pragma_index_list`): chi in futuro farà un `Schema::table('ricambi', …)` con `foreign`/`change` si ritroverà un unique totale.
 
 ### 7.2 `ricambio_utilizzo` (associazione macchina↔ricambio↔intervento)
 Registra "questo pezzo è montato su questa macchina". Base della **ricerca incrociata** (dato un `ricambio_id` → tutti gli strumenti/laboratori dove è usato).
@@ -322,11 +336,15 @@ Registra "questo pezzo è montato su questa macchina". Base della **ricerca incr
 | `strumento_id` | bigint FK → `strumenti.id` | |
 | `ricambio_id` | bigint FK → `ricambi.id` | Voce di catalogo. |
 | `intervento_id` | bigint nullable FK → `interventi.id` | Intervento in cui è stato montato (visibile anche dal tab "Ricambi"). Valorizzato per le righe create dal form intervento (ADR-022); nullable per gli inserimenti diretti dal tab Ricambi. |
-| `quantita` | integer default 1 | |
-| `data` | date | |
-| timestamps | | |
+| `quantita` | integer default 1 | Il form intervento scrive sempre 1 (wireframe §2.1 non chiede la quantità): due pezzi uguali sullo stesso intervento sono un refuso, e il caso vero si registra dal tab Ricambi. `>= 1` imposta nel model e **non** con `unsignedInteger` — SQLite ignora l'unsigned, quindi il vincolo esisterebbe solo su Postgres. |
+| `data` | date **nullable** | **Quando il pezzo è stato montato**, cioè la `data_esecuzione` dell'intervento. **NULL finché l'intervento è pianificato**: il pezzo non è ancora stato montato, e qualunque data sarebbe un'affermazione falsa — la riga comparirebbe in ogni ricerca per periodo (§7.2 è la base della ricerca incrociata). `Intervento::segnaFatto()` la riempie alla chiusura, insieme alla `data_inizio` della garanzia. ⚠️ Una prima stesura ci scriveva *oggi* come segnaposto correggendolo poi alla chiusura: non basta — correggere a valle un valore inventato a monte non lo rende vero, e fino a quel momento la scheda dichiarava «montato il \<oggi\>». Gli ordinamenti su questa colonna portano un CASE esplicito che mette i NULL **in cima** (sono le righe che aspettano qualcosa): senza, l'ordine cambierebbe fra SQLite e Postgres. |
+| timestamps, `deleted_at` | | soft delete — vedi la nota qui sotto. |
 
 > La garanzia del singolo pezzo (§6) punta a questa riga, non al catalogo generico (ADR-008), ed è **obbligatoria** per le righe create dal form intervento (ADR-022): è il dato che accende il semaforo (ADR-020). L'obbligo è di flusso, non di schema — nello schema resta una relazione 1-0..1, perché una riga può nascere prima della sua garanzia dentro la stessa transazione.
+>
+> **Perché il soft delete** (aggiunto in S4 blocco 1, 8 Ago 2026 — questa tabella aveva i soli `timestamps`). Il motivo è meccanico: `garanzie` ha soft delete e la FK `garanzie.ricambio_utilizzo_id` non ha `onDelete`, quindi una garanzia cestinata resta **fisicamente in tabella** con la propria FK valorizzata, e un DELETE fisico dell'utilizzo violerebbe il vincolo. Senza `deleted_at`, la correzione dal tab Ricambi dovrebbe fare `forceDelete()` della garanzia — cioè buttare via la rete di sicurezza che `garanzie` ha di proposito — e la terza via è chiusa dall'invariante «esattamente uno fra `strumento_id` e `ricambio_utilizzo_id`», che vieta di azzerare la FK.
+>
+> **Conseguenza per chi legge queste righe altrove:** una riga cestinata non esiste per nessuna lettura di dominio, **semaforo compreso** — un pezzo smontato per errore non deve accendere l'arancione. In particolare la subquery del doppio salto (ADR-020) gira con `withoutGlobalScopes()`, che rimuove anche `SoftDeletingScope`: deve quindi portarsi un `deleted_at is null` esplicito.
 **Indici:** `tenant_id`, `strumento_id`, `ricambio_id`, `intervento_id`.
 
 ### 7.3 `fornitori` (Funzionalità §2 — ADR-023)
@@ -418,7 +436,7 @@ Legenda: ✅ pieno · ⚠️ ristretto (per sotto-albero/portafoglio/proprietà)
 - **Scoping:** indice su `tenant_id` in **tutte** le tabelle di business; `reseller_id` dove utile alle query reseller (V1.1).
 - **Albero:** `unita_organizzativa(parent_id)` e `(tenant_id)` per le query di sotto-albero ricorsive.
 - **Semaforo/notifiche:** `interventi(strumento_id, stato, data_scadenza)`; `garanzie(data_scadenza_effettiva)`; per il doppio salto delle garanzie ricambio (ADR-020) servono `garanzie(ricambio_utilizzo_id)` e `ricambio_utilizzo(strumento_id)` — entrambi già previsti, ma qui diventano **caldi**: li attraversa una query per pagina dell'elenco strumenti.
-- **Autocomplete ricambi:** `ricambi(tenant_id, nome_normalizzato)` (chiave del collega-o-crea, ADR-022) e `ricambi(tenant_id, codice)`.
+- **Autocomplete ricambi:** `ricambi(tenant_id, nome_normalizzato)` — **UNIQUE parziale** `where deleted_at is null`, quindi è insieme il vincolo della chiave del collega-o-crea (ADR-022) e l'indice che ne serve la lettura: il `deleted_at is null` emesso da `SoftDeletes` è esattamente il predicato dell'indice, e un secondo indice non-unique sarebbe ridondante. Più `ricambi(tenant_id, codice)`.
 - **Ricerca incrociata:** `ricambio_utilizzo(ricambio_id)`, `ricambio_utilizzo(strumento_id)`.
 - **QR:** `strumenti(qr_token)` unique.
 - **Documenti morph:** `documenti(documentabile_type, documentabile_id)`.
@@ -444,12 +462,16 @@ Legenda: ✅ pieno · ⚠️ ristretto (per sotto-albero/portafoglio/proprietà)
 | **ADR-013** Lockout insoluto | `is_locked`/`locked_*` sul nodo ente. |
 | **ADR-014** Obsolescenza | `unita_organizzativa.soglia_obsolescenza_anni` + `strumenti.data_installazione`. |
 | **ADR-015** Spostamenti / trasferimenti | `spostamenti_strumento` (append-only) + update `tenant_id`/ubicazione. |
-| **ADR-019** Garanzie solo a data | `garanzie` perde `tipo_scadenza`/`soglia_ore`/`data_scadenza_prevista`; `durata_mesi` diventa NOT NULL; tabella `letture_contaore` soppressa. |
+| **ADR-019** Garanzie solo a data | `garanzie` perde `tipo_scadenza`/`soglia_ore`/`data_scadenza_prevista`; tabella `letture_contaore` soppressa. `durata_mesi` divenne NOT NULL, ed è tornata nullable con ADR-022 (§6.1): il vincolo è ora sulla coppia. |
 | **ADR-020** Garanzia ricambio nel semaforo | nessuna colonna nuova: cambia la **query** del semaforo (unione col doppio salto `garanzie → ricambio_utilizzo → strumenti`, senza il privacy scope). |
 | **ADR-021** Tipologie di intervento | `interventi.tipo` — nuovo elenco + migration di rimappatura dei valori storici. |
 | **ADR-022** Ricambi dall'intervento | `ricambi.nome`/`nome_normalizzato` (+ `codice` nullable); `ricambio_utilizzo.intervento_id` valorizzato; garanzia `soggetto = ricambio` obbligatoria per riga. |
 | **ADR-023** Fornitore 1-N | `strumenti.fornitore_id` (+ indice); `fornitori` con `tenant_id`; pivot `fornitore_strumento` **non creato**. |
 | **ADR-024** Tab Panoramica | Nessuna tabella: il campo derivato `diagnosi_semaforo` (§5.1) sostituisce il solo stato. |
+| **ADR-025** Documenti su B2 | Nessuna colonna: `documenti.path` (§8.1) punta a un bucket privato invece che al disco locale — il provider è un dettaglio di `.env`. |
+| **ADR-026** Download mediati dall'app | Nessuna colonna: rotta firmata + Policy sul model `Documento`. |
+| **ADR-027** Tracciabilità delle scritture | Nessuna tabella nuova: `activity_log` (§9) sul canale `audit`, via il trait `AuditsDomainWrites`. Il permesso `garanzie.ricambio.*` passa al Tecnico (§10). |
+| **ADR-028** Intervento sempre assegnato | Nessuna modifica di schema: `interventi.tecnico_id` **resta nullable** (§5.2) e l'obbligo vive nel form, come per `strumenti.fornitore_id`. |
 
 ---
 

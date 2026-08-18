@@ -2,12 +2,15 @@
     $arrow = fn ($col) => $sortBy === $col ? ($sortDir === 'asc' ? '↑' : '↓') : '';
 
     // Colonna "Prossima scadenza" (wireframe §1): la più vicina fra il prossimo
-    // intervento aperto e la prossima garanzia (ADR-004). "Scaduto" viene dai
-    // model (isScaduto/isScaduta) — definizione canonica, mai riscritta qui.
+    // intervento aperto, la garanzia macchina (ADR-004) e la garanzia di un
+    // pezzo montato (ADR-020). "Scaduto" viene dai model (isScaduto/isScaduta)
+    // — definizione canonica, mai riscritta qui.
     //
-    // Nota S4: qui si mostra il DETTAGLIO, non l'aggregato del pallino. Quando
-    // esisteranno garanzie ricambio raggiungibili dallo strumento, questa
-    // colonna dovrà filtrarle per `garanzie.ricambio.view`.
+    // ⚠️ Qui si mostra il DETTAGLIO, non l'aggregato del pallino: senza
+    // `garanzie.ricambio.view` l'etichetta della garanzia ricambio degrada a
+    // «Garanzia tra N gg», che è la dicitura del wireframe. La riga NON si
+    // esclude e la data non si nasconde — è informazione sul bene del Tenant;
+    // a essere protetta è la fonte, cioè l'esistenza del pezzo sostituito.
     $etichettaScadenza = function (string $tipo, $data, bool $scaduta) {
         if ($scaduta) {
             return $tipo.' — scaduta';
@@ -18,21 +21,48 @@
         return $giorni === 0 ? $tipo.' — oggi' : "{$tipo} tra {$giorni} gg";
     };
 
-    $scadenzaLabel = function ($prossimo, $garanzia) use ($etichettaScadenza) {
-        // A parità di data vince l'intervento: porta con sé il tipo (Taratura e
-        // certificazione, Manutenzione…), più informativo del generico "Garanzia".
-        $vinceGaranzia = $garanzia !== null
-            && ($prossimo === null || $garanzia->data_scadenza_effettiva->lt($prossimo->data_scadenza));
+    $scadenzaLabel = function ($prossimo, $garanzia, $garanziaRicambio, bool $vedeRicambi) use ($etichettaScadenza) {
+        // Ordine a parità di data: intervento, garanzia macchina, garanzia
+        // ricambio. L'intervento vince perché porta con sé il tipo (Taratura e
+        // certificazione, Manutenzione…), più informativo di "Garanzia"; fra le
+        // due garanzie vince quella macchina, che si può nominare a chiunque.
+        $candidati = [];
 
-        if ($vinceGaranzia) {
-            return $etichettaScadenza('Garanzia', $garanzia->data_scadenza_effettiva, $garanzia->isScaduta());
+        if ($prossimo !== null) {
+            $candidati[] = [
+                $prossimo->data_scadenza,
+                fn () => $etichettaScadenza($prossimo->tipo->label(), $prossimo->data_scadenza, $prossimo->isScaduto()),
+            ];
         }
 
-        if ($prossimo === null) {
+        if ($garanzia !== null) {
+            $candidati[] = [
+                $garanzia->data_scadenza_effettiva,
+                fn () => $etichettaScadenza('Garanzia', $garanzia->data_scadenza_effettiva, $garanzia->isScaduta()),
+            ];
+        }
+
+        if ($garanziaRicambio !== null) {
+            $candidati[] = [
+                $garanziaRicambio->data_scadenza_effettiva,
+                fn () => $etichettaScadenza(
+                    $vedeRicambi ? 'Garanzia ricambio' : 'Garanzia',
+                    $garanziaRicambio->data_scadenza_effettiva,
+                    $garanziaRicambio->isScaduta(),
+                ),
+            ];
+        }
+
+        if ($candidati === []) {
             return '—';
         }
 
-        return $etichettaScadenza($prossimo->tipo->label(), $prossimo->data_scadenza, $prossimo->isScaduto());
+        // Da PHP 8.0 `usort` è STABILE: a parità di data resta davanti chi è
+        // stato aggiunto per primo, ed è così che la precedenza qui sopra si
+        // realizza senza un secondo criterio di confronto.
+        usort($candidati, fn ($a, $b) => $a[0]->getTimestamp() <=> $b[0]->getTimestamp());
+
+        return $candidati[0][1]();
     };
 @endphp
 
@@ -156,10 +186,11 @@
                             @php
                                 $prossimo = $prossimi[$s->id] ?? null;
                                 $garanzia = $garanzieMin[$s->id] ?? null;
-                                $inRitardo = $prossimo?->isScaduto() || $garanzia?->isScaduta();
+                                $garanziaRicambio = $garanzieRicambioMin[$s->id] ?? null;
+                                $inRitardo = $prossimo?->isScaduto() || $garanzia?->isScaduta() || $garanziaRicambio?->isScaduta();
                             @endphp
                             <td class="px-4 py-3 whitespace-nowrap {{ $inRitardo ? 'font-medium text-warning-800' : 'text-neutral-600' }}">
-                                {{ $scadenzaLabel($prossimo, $garanzia) }}
+                                {{ $scadenzaLabel($prossimo, $garanzia, $garanziaRicambio, $vedeGaranzieRicambio) }}
                             </td>
                         </tr>
                     @empty

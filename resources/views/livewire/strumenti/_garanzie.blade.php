@@ -26,7 +26,7 @@
     </div>
 
     <div class="overflow-x-auto">
-        <table class="w-full text-left text-sm">
+        <table class="tabella-a-card w-full text-left text-sm">
             <thead class="border-b border-neutral-200 text-xs tracking-wide text-neutral-400 uppercase">
                 <tr>
                     <th class="px-4 py-3 font-semibold">Stato</th>
@@ -42,18 +42,18 @@
                 @forelse ($garanzie as $g)
                     @php [$variante, $simbolo, $etichetta] = $statoGaranzia($g); @endphp
                     <tr wire:key="gar-{{ $g->id }}">
-                        <td class="px-4 py-3">
+                        <td data-etichetta="Stato" class="px-4 py-3">
                             <x-ui.badge :variant="$variante">
                                 <span aria-hidden="true">{{ $simbolo }}</span> {{ $etichetta }}
                             </x-ui.badge>
                         </td>
-                        <td class="px-4 py-3 tabular-nums text-neutral-600">{{ $g->data_inizio->format('d/m/Y') }}</td>
-                        <td class="px-4 py-3 text-neutral-600">{{ $g->durata_mesi }} mesi</td>
-                        <td class="px-4 py-3 font-medium tabular-nums text-neutral-800">
+                        <td data-etichetta="Inizio" class="px-4 py-3 tabular-nums text-neutral-600">{{ $g->data_inizio->format('d/m/Y') }}</td>
+                        <td data-etichetta="Durata" class="px-4 py-3 text-neutral-600">{{ $g->durata_mesi }} mesi</td>
+                        <td data-etichetta="Scadenza effettiva" class="px-4 py-3 font-medium tabular-nums text-neutral-800">
                             {{ $g->data_scadenza_effettiva->format('d/m/Y') }}
                         </td>
                         @can('garanzie.macchina.manage')
-                            <td class="px-4 py-3 text-right whitespace-nowrap">
+                            <td data-azioni class="px-4 py-3 text-right whitespace-nowrap max-md:flex max-md:flex-wrap max-md:gap-x-5 max-md:text-sm">
                                 <button type="button" wire:click="openModificaGaranzia({{ $g->id }})"
                                     class="text-xs font-medium text-primary-600 hover:text-primary-700">Modifica</button>
                                 <button type="button" wire:click="openEliminaGaranzia({{ $g->id }})"
