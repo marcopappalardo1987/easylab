@@ -6,10 +6,12 @@ use App\Enums\TipoUnitaOrganizzativa;
 use App\Models\Account;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
+use App\Notifications\InvitoUtente;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Throwable;
 
 /**
  * Bootstrap di un tenant: crea il nodo Ente radice, il suo Account (ADR-032) e
@@ -39,6 +41,14 @@ use Illuminate\Support\Str;
  *
  * Il limite di Enti per piano («chi paga di più gestisce più Enti») si farà
  * rispettare QUI quando il piano esisterà — cioè col blocco Cashier.
+ *
+ * **L'Admin nuovo viene invitato, non gli si consegna una password** (ADR-012):
+ * senza `--admin-password` nasce con un tappo random di 64 caratteri che
+ * nessuno vede, `email_verified_at` a null, e riceve una mail con un link
+ * firmato di 7 giorni per scegliere la propria. Rilanciare lo stesso comando su
+ * un invitato che non ha ancora attivato **reinvia** l'invito: non serve un
+ * comando a parte. `--admin-password` resta per il lavoro in locale e per i
+ * test, e conserva il comportamento storico.
  */
 class ProvisionTenant extends Command
 {
@@ -56,7 +66,14 @@ class ProvisionTenant extends Command
         $nome = $this->argument('nome');
         $adminEmail = $this->option('admin-email') ?: Str::slug($nome).'-admin@example.test';
         $adminName = $this->option('admin-name') ?: "Admin {$nome}";
-        $generatedPassword = $this->option('admin-password') ?: Str::password(16);
+
+        // Senza `--admin-password` l'utente nasce **invitato**: la password è un
+        // tappo di 64 caratteri che nessuno vedrà mai — non un segreto da
+        // custodire — e la password vera la scelge lui dal link firmato
+        // (ADR-012). Con l'opzione resta il comportamento storico, utile in
+        // locale e nei test.
+        $passwordEsplicita = $this->option('admin-password');
+        $passwordIniziale = $passwordEsplicita ?: Str::password(64);
 
         // Risoluzione PRIMA di scrivere qualunque cosa.
         $accountEsistente = null;
@@ -88,7 +105,7 @@ class ProvisionTenant extends Command
             }
         }
 
-        [$ente, $admin, $account, $accountNuovo] = DB::transaction(function () use ($nome, $adminEmail, $adminName, $generatedPassword, $accountEsistente) {
+        [$ente, $admin, $account, $accountNuovo] = DB::transaction(function () use ($nome, $adminEmail, $adminName, $passwordIniziale, $passwordEsplicita, $accountEsistente) {
             $account = $accountEsistente ?? Account::create(['ragione_sociale' => $nome]);
 
             $ente = UnitaOrganizzativa::create([
@@ -105,8 +122,7 @@ class ProvisionTenant extends Command
                 ['email' => $adminEmail],
                 [
                     'name' => $adminName,
-                    'password' => Hash::make($generatedPassword),
-                    'email_verified_at' => now(),
+                    'password' => Hash::make($passwordIniziale),
                 ],
             );
 
@@ -114,8 +130,21 @@ class ProvisionTenant extends Command
             // sull'utente appena nato: riscriverlo a uno esistente lo
             // strapperebbe al suo Ente per effetto collaterale — l'Ente nuovo
             // lo raggiunge con lo switcher.
+            //
+            // ⚠️ `email_verified_at` sta anch'esso fuori dal Fillable, e va
+            // scritto QUI: passarlo a `firstOrCreate` non funzionava — il
+            // mass-assignment lo scartava in silenzio, e ogni utente creato dal
+            // provisioning restava non verificato contro l'intenzione di chi
+            // l'aveva scritto. Difetto latente trovato dai test dell'invito.
+            //
+            // Con `--admin-password` l'utente è subito utilizzabile (verificato:
+            // la password la conosce chi l'ha passata); senza, resta a null ed è
+            // il click sul link d'invito a fare la verifica (ADR-012).
             if ($admin->wasRecentlyCreated) {
-                $admin->forceFill(['tenant_id' => $ente->id])->save();
+                $admin->forceFill([
+                    'tenant_id' => $ente->id,
+                    'email_verified_at' => $passwordEsplicita ? now() : null,
+                ])->save();
             }
 
             if (! $admin->hasRole('Admin')) {
@@ -130,8 +159,24 @@ class ProvisionTenant extends Command
         $this->info("Ente «{$nome}» creato (id {$ente->id}).");
         $this->info("Account: «{$account->ragione_sociale}» (id {$account->id}, ".($accountNuovo ? 'nuovo' : 'esistente').').');
         $this->info("Admin: {$adminEmail}".($admin->wasRecentlyCreated ? '' : ' (utente esistente: resta sul suo Ente, il nuovo si raggiunge con lo switcher)'));
-        if ($admin->wasRecentlyCreated && ! $this->option('admin-password')) {
-            $this->warn("Password generata: {$generatedPassword}");
+
+        // L'invito parte **fuori dalla transazione**: una mail spedita per una
+        // transazione poi rollbackata manderebbe qualcuno su un link che non
+        // porta a nulla. E parte solo se c'è qualcuno da invitare — questa
+        // unica condizione copre per costruzione i tre casi: utente nuovo senza
+        // password (invito), utente già attivo agganciato a una sede nuova
+        // (niente: la password ce l'ha), utente invitato in un giro precedente
+        // e mai attivato (reinvio, che è il rilancio dello stesso comando).
+        if ($passwordEsplicita === null && $admin->email_verified_at === null) {
+            try {
+                $admin->notify(new InvitoUtente($nome));
+                $this->info("Invito inviato a {$adminEmail} (valido ".InvitoUtente::GIORNI_VALIDITA.' giorni).');
+            } catch (Throwable $e) {
+                // Il provisioning È riuscito: le scritture sono committate. Un
+                // SMTP giù non deve far sembrare fallito ciò che c'è a DB —
+                // basta rilanciare lo stesso comando per reinviare.
+                $this->warn("Invito NON inviato ({$e->getMessage()}): rilanciare lo stesso comando per riprovare.");
+            }
         }
 
         return self::SUCCESS;
