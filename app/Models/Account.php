@@ -38,11 +38,22 @@ class Account extends Model
      *
      * `is_locked`/`locked_at`/`locked_reason` restano FUORI, come `forced_*`
      * su Strumento (ADR-005) e `visibilita_garanzie_ricambio` (ADR-029): il
-     * lockout sarà un gesto con un metodo dedicato (blocco ADR-013), non un
-     * campo che un form può forgiare. Quando quel gesto nascerà, la traccia
-     * passerà da `attributiDerivatiTracciati()` — non da `activity()` a mano,
-     * che violerebbe la regola «o il trait o le esplicite, mai entrambi».
+     * lockout è un gesto coi suoi metodi (`blocca()`/`sblocca()`, ADR-013),
+     * non un campo che un form può forgiare. La traccia passa da
+     * `attributiDerivatiTracciati()` — non da `activity()` a mano, che
+     * violerebbe la regola «o il trait o le esplicite, mai entrambi».
      */
+    /**
+     * Come `visibilita_garanzie_ricambio` su UnitaOrganizzativa: il default di
+     * colonna si applica all'INSERT, quindi un'istanza appena creata avrebbe
+     * `is_locked` a null finché qualcuno non la rilegge — e sia la guardia di
+     * `blocca()` sia l'`old` della riga di audit leggerebbero null invece di
+     * false.
+     */
+    protected $attributes = [
+        'is_locked' => false,
+    ];
+
     protected $fillable = [
         'ragione_sociale',
         'partita_iva',
@@ -63,6 +74,58 @@ class Account extends Model
     protected function nomeDominio(): string
     {
         return 'account';
+    }
+
+    /**
+     * Le colonne del lockout contano per l'audit benché fuori-fillable: sono
+     * quelle che decidono l'accesso di tutti gli utenti degli Enti
+     * dell'account. Senza, la riga di `blocca()`/`sblocca()` non registrerebbe
+     * nulla (`dontLogEmptyChanges`): l'audit vedrebbe il gesto sparire.
+     *
+     * @return list<string>
+     */
+    protected function attributiDerivatiTracciati(): array
+    {
+        return ['is_locked', 'locked_at', 'locked_reason'];
+    }
+
+    /**
+     * Il lockout per insoluto (ADR-013): chiude la navigazione a tutti gli
+     * utenti degli Enti dell'account (middleware `account.lockout`) e lo
+     * switcher verso le sue sedi.
+     *
+     * Idempotente come no-op, non come riscrittura: su un account già bloccato
+     * non si tocca `locked_at` — documenta QUANDO è iniziato l'insoluto, che è
+     * il dato che conta in un sollecito — e non si produce una seconda riga di
+     * audit. `void` e non `bool`, a differenza di `passaAllEnte()`: qui non
+     * c'è una guardia il cui esito vada comunicato — chi arriva qui (il
+     * comando console oggi, la UI S6 dietro `billing.lockout` domani) ha già
+     * il diritto di farlo.
+     */
+    public function blocca(string $motivo): void
+    {
+        if ($this->is_locked) {
+            return;
+        }
+
+        $this->forceFill([
+            'is_locked' => true,
+            'locked_at' => now(),
+            'locked_reason' => $motivo,
+        ])->save();
+    }
+
+    public function sblocca(): void
+    {
+        if (! $this->is_locked) {
+            return;
+        }
+
+        $this->forceFill([
+            'is_locked' => false,
+            'locked_at' => null,
+            'locked_reason' => null,
+        ])->save();
     }
 
     /**
