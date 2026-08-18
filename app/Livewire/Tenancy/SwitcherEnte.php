@@ -70,19 +70,14 @@ class SwitcherEnte extends Component
     }
 
     /**
-     * Le sedi degli account di cui l'utente è membro, esclusi gli account in
-     * lockout. Query servita dall'unique (user_id, account_id) del pivot.
+     * La stessa domanda della pagina /bloccato («dove posso ancora andare?»),
+     * la stessa risposta: la query vive in User::sediRaggiungibili() (ADR-013).
      *
      * @return Builder<UnitaOrganizzativa>
      */
     private function sedi()
     {
-        $user = $this->user();
-
-        return UnitaOrganizzativa::withoutGlobalScopes()
-            ->where('tipo', 'ente')
-            ->whereNull('deleted_at')
-            ->whereIn('account_id', $user->accounts()->where('is_locked', false)->select('accounts.id'));
+        return $this->user()->sediRaggiungibili();
     }
 
     /**

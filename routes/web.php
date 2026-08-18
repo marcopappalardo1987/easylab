@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\AccessoQr;
 use App\Http\Controllers\EsportaStoricoPdf;
+use App\Http\Controllers\FugaDaLockout;
+use App\Http\Controllers\PaginaBloccato;
 use App\Http\Controllers\ScaricaDocumento;
 use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Campo\Home as CampoHome;
@@ -108,4 +110,13 @@ Route::middleware(['signed', 'auth', 'can:qr.scan'])->group(function () {
 // Fuori dal gruppo two-factor.enforce così la rotta di uscita resta sempre raggiungibile.
 Route::middleware('auth')->group(function () {
     Route::impersonate();
+
+    // Lockout (ADR-013): la pagina di stato e la fuga verso una sede sana
+    // stanno FUORI dal gruppo protetto per COLLOCAZIONE, non per un'esclusione
+    // `routeIs` nel middleware — quella non varrebbe sugli update Livewire,
+    // questa non ha buchi. `{ente}` è un id nudo: il route-model binding
+    // passerebbe dal TenantScope del bloccato (fail-closed → 404 sistematico).
+    Route::get('/bloccato', PaginaBloccato::class)->name('bloccato');
+    Route::post('/bloccato/passa/{ente}', FugaDaLockout::class)
+        ->whereNumber('ente')->name('bloccato.passa');
 });

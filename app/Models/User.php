@@ -8,6 +8,7 @@ use App\Support\AuditLog;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -132,6 +133,28 @@ class User extends Authenticatable
     public function accounts(): BelongsToMany
     {
         return $this->belongsToMany(Account::class, 'account_user')->withTimestamps();
+    }
+
+    /**
+     * Le sedi (nodi ente) ancora raggiungibili dall'utente: quelle degli
+     * account di cui è membro, esclusi gli account in lockout (ADR-013) e gli
+     * enti cestinati. Servita dall'unique (user_id, account_id) del pivot.
+     *
+     * Vive qui e non nei chiamanti perché lo switcher in top bar e la pagina
+     * `/bloccato` rispondono alla STESSA domanda — «dove posso ancora
+     * andare?» — e due copie della query sarebbero due risposte libere di
+     * divergere al primo bugfix. `withoutGlobalScopes` per la ragione di
+     * `ente()` qui sopra: le sedi di un account sono per definizione fuori dal
+     * tenant corrente, e il confine lo dà il pivot, non un filtro.
+     *
+     * @return Builder<UnitaOrganizzativa>
+     */
+    public function sediRaggiungibili(): Builder
+    {
+        return UnitaOrganizzativa::withoutGlobalScopes()
+            ->where('tipo', TipoUnitaOrganizzativa::Ente->value)
+            ->whereNull('deleted_at')
+            ->whereIn('account_id', $this->accounts()->where('is_locked', false)->select('accounts.id'));
     }
 
     /**
