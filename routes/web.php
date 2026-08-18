@@ -7,6 +7,7 @@ use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Campo\Home as CampoHome;
 use App\Livewire\Fornitori\ElencoFornitori;
 use App\Livewire\Ricambi\RicercaRicambi;
+use App\Livewire\Settings\PreferenzeNotifiche;
 use App\Livewire\Settings\TwoFactorAuthentication;
 use App\Livewire\Strumenti\ElencoStrumenti;
 use App\Livewire\Strumenti\ImportStrumenti;
@@ -75,6 +76,10 @@ Route::middleware(['auth', 'two-factor.enforce'])->group(function () {
         ->middleware(['can:strumenti.view', 'can:documenti.export_pdf'])
         ->name('strumenti.storico-pdf');
     Route::get('/settings/security', TwoFactorAuthentication::class)->name('settings.security');
+    // Nessun `can:`: qui si governa la propria casella di posta, non un dato
+    // dell'Ente (ADR-011). Un permesso significherebbe che qualcuno può
+    // impedirti di opporti agli invii.
+    Route::get('/settings/notifiche', PreferenzeNotifiche::class)->name('settings.notifiche');
 });
 
 /*

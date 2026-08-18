@@ -43,6 +43,11 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'tenant_id' => 'integer',
+            // Opt-out dal digest email delle scadenze (ADR-011). Fuori
+            // dall'attributo Fillable di proposito: si scrive solo dalle
+            // preferenze dell'utente, mai per mass-assignment — la stessa
+            // postura di `visibilita_garanzie_ricambio` (ADR-029).
+            'riceve_email_scadenze' => 'boolean',
         ];
     }
 

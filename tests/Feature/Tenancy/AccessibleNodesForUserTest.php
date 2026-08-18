@@ -23,7 +23,7 @@ beforeEach(function () {
     $this->dept2 = UnitaOrganizzativa::factory()->dipartimento()->under($this->ente)->create();
 });
 
-function responsabileDi(int $tenantId, array $nodi): User
+function responsabileConNodi(int $tenantId, array $nodi): User
 {
     $user = User::factory()->create(['tenant_id' => $tenantId]);
     $user->assignRole('Responsabile Reparto');
@@ -33,7 +33,7 @@ function responsabileDi(int $tenantId, array $nodi): User
 }
 
 it('returns the assigned subtree without an authenticated user', function () {
-    $resp = responsabileDi($this->ente->id, [$this->dept1->id]);
+    $resp = responsabileConNodi($this->ente->id, [$this->dept1->id]);
 
     // Nessun actingAs: è la condizione dello scheduler.
     expect(AccessibleNodes::forUser($resp))
@@ -41,7 +41,7 @@ it('returns the assigned subtree without an authenticated user', function () {
 });
 
 it('answers exactly like forCurrentUser does for the same user', function () {
-    $resp = responsabileDi($this->ente->id, [$this->dept1->id, $this->dept2->id]);
+    $resp = responsabileConNodi($this->ente->id, [$this->dept1->id, $this->dept2->id]);
 
     $daConsole = AccessibleNodes::forUser($resp);
 
@@ -58,7 +58,7 @@ it('returns null for a user without department restriction', function () {
 });
 
 it('is fail-safe for a Responsabile with no assignments', function () {
-    $resp = responsabileDi($this->ente->id, []);
+    $resp = responsabileConNodi($this->ente->id, []);
 
     expect(AccessibleNodes::forUser($resp))->toBe([]);
 });

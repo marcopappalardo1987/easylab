@@ -161,6 +161,7 @@
                                         <p class="truncate text-xs text-neutral-500">{{ $user->email }}</p>
                                     </div>
                                     <a href="{{ route('settings.security') }}" class="block px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50">Sicurezza</a>
+                                    <a href="{{ route('settings.notifiche') }}" class="block px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50">Notifiche</a>
                                     <form method="POST" action="{{ route('logout') }}">
                                         @csrf
                                         <button type="submit" class="block w-full px-4 py-2.5 text-left text-sm text-danger-600 hover:bg-neutral-50">Esci</button>

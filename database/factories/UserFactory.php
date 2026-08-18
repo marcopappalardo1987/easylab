@@ -30,6 +30,12 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
+            // Ripete il default della colonna (ADR-011) di proposito: `create()`
+            // non rilegge i default dal DB, quindi senza questa riga il model
+            // appena costruito avrebbe l'attributo a null e sembrerebbe un
+            // utente che si è opposto alle email — un falso negativo che i test
+            // pagherebbero senza capire perché.
+            'riceve_email_scadenze' => true,
         ];
     }
 
