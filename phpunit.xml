@@ -22,6 +22,17 @@
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
+        <!--
+            ⚠️ Queste righe valgono solo se la variabile NON è già
+            nell'ambiente: PHPUnit non sovrascrive ciò che trova, e la CI
+            esporta CACHE_STORE=redis e QUEUE_CONNECTION=redis per i servizi
+            del job — vincono loro. Nemmeno `force="true"` basta (Laravel non
+            legge le env dal repository che PHPUnit modifica). La neutralità
+            dell'infrastruttura è quindi imposta a runtime in
+            `tests/TestCase.php::setUp()`, che agisce sulla config: queste
+            restano come default per chi legge il file e per l'esecuzione da
+            un ambiente pulito.
+        -->
         <env name="CACHE_STORE" value="array"/>
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>

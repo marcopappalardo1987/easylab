@@ -2,11 +2,14 @@
 
 use App\Http\Controllers\AccessoQr;
 use App\Http\Controllers\EsportaStoricoPdf;
+use App\Http\Controllers\FugaDaLockout;
+use App\Http\Controllers\PaginaBloccato;
 use App\Http\Controllers\ScaricaDocumento;
 use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Campo\Home as CampoHome;
 use App\Livewire\Fornitori\ElencoFornitori;
 use App\Livewire\Ricambi\RicercaRicambi;
+use App\Livewire\Settings\PreferenzeNotifiche;
 use App\Livewire\Settings\TwoFactorAuthentication;
 use App\Livewire\Strumenti\ElencoStrumenti;
 use App\Livewire\Strumenti\ImportStrumenti;
@@ -22,7 +25,10 @@ Route::redirect('/', '/login');
 
 // Area autenticata. Il middleware two-factor.enforce forza il 2FA sui ruoli
 // privilegiati (si auto-esclude da settings.security per consentirne l'attivazione).
-Route::middleware(['auth', 'two-factor.enforce'])->group(function () {
+// `account.lockout` PRIMA di `two-factor.enforce`: un Admin bloccato e senza
+// 2FA deve finire su /bloccato, non sul setup della sicurezza — la condizione
+// più forte parla per prima (ADR-013).
+Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(function () {
     Route::view('/dashboard', 'dashboard')->name('dashboard');
     Route::get('/anagrafica', Albero::class)
         ->middleware('can:unita_organizzativa.view')
@@ -75,6 +81,10 @@ Route::middleware(['auth', 'two-factor.enforce'])->group(function () {
         ->middleware(['can:strumenti.view', 'can:documenti.export_pdf'])
         ->name('strumenti.storico-pdf');
     Route::get('/settings/security', TwoFactorAuthentication::class)->name('settings.security');
+    // Nessun `can:`: qui si governa la propria casella di posta, non un dato
+    // dell'Ente (ADR-011). Un permesso significherebbe che qualcuno può
+    // impedirti di opporti agli invii.
+    Route::get('/settings/notifiche', PreferenzeNotifiche::class)->name('settings.notifiche');
 });
 
 /*
@@ -95,6 +105,9 @@ Route::middleware(['auth', 'two-factor.enforce'])->group(function () {
  * impersonazione: chi scansiona in reparto col telefono non deve trovarsi
  * bloccato da un setup che riguarda i ruoli privilegiati.
  */
+// Niente `account.lockout` qui, e non è un buco: questa rotta traduce solo
+// token → id e REINDIRIZZA a `strumenti.show`, che sta nel gruppo protetto —
+// il bloccato rimbalza lì (ADR-013).
 Route::middleware(['signed', 'auth', 'can:qr.scan'])->group(function () {
     Route::get('/q/{token}', AccessoQr::class)->name('qr.strumento');
 });
@@ -103,4 +116,13 @@ Route::middleware(['signed', 'auth', 'can:qr.scan'])->group(function () {
 // Fuori dal gruppo two-factor.enforce così la rotta di uscita resta sempre raggiungibile.
 Route::middleware('auth')->group(function () {
     Route::impersonate();
+
+    // Lockout (ADR-013): la pagina di stato e la fuga verso una sede sana
+    // stanno FUORI dal gruppo protetto per COLLOCAZIONE, non per un'esclusione
+    // `routeIs` nel middleware — quella non varrebbe sugli update Livewire,
+    // questa non ha buchi. `{ente}` è un id nudo: il route-model binding
+    // passerebbe dal TenantScope del bloccato (fail-closed → 404 sistematico).
+    Route::get('/bloccato', PaginaBloccato::class)->name('bloccato');
+    Route::post('/bloccato/passa/{ente}', FugaDaLockout::class)
+        ->whereNumber('ente')->name('bloccato.passa');
 });

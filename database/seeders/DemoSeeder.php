@@ -8,6 +8,7 @@ use App\Enums\StatoSemaforo;
 use App\Enums\TipoIntervento;
 use App\Enums\TipoSpostamento;
 use App\Enums\TipoUnitaOrganizzativa;
+use App\Models\Account;
 use App\Models\Fornitore;
 use App\Models\Garanzia;
 use App\Models\Intervento;
@@ -158,9 +159,19 @@ class DemoSeeder extends Seeder
             $esistenti = UnitaOrganizzativa::withoutGlobalScopes()
                 ->where('tipo', TipoUnitaOrganizzativa::Ente->value)->get();
 
-            foreach ($esistenti->merge($this->creaEnti()) as $ente) {
+            // I due Enti demo condividono UN account (ADR-032): senza, il DB
+            // dimostrativo sarebbe tutto 1:1 e lo switcher fra sedi non si
+            // vedrebbe mai funzionare — stessa ragione per cui esiste un
+            // tecnico esterno per Ente. firstOrCreate: il seeder è additivo.
+            $gruppoDemo = Account::firstOrCreate(['ragione_sociale' => 'Gruppo Sanitario Demo']);
+
+            foreach ($esistenti as $ente) {
                 $this->command?->info("Ente «{$ente->nome}»:");
                 $this->popolaEnte($ente);
+            }
+            foreach ($this->creaEnti() as $ente) {
+                $this->command?->info("Ente «{$ente->nome}»:");
+                $this->popolaEnte($ente, $gruppoDemo);
             }
         });
 
@@ -191,11 +202,13 @@ class DemoSeeder extends Seeder
         });
     }
 
-    private function popolaEnte(UnitaOrganizzativa $ente): void
+    private function popolaEnte(UnitaOrganizzativa $ente, ?Account $condiviso = null): void
     {
         $nodi = $this->creaAlberatura($ente);
         $utenti = $this->creaUtenti($ente);
         $tecnici = $utenti['tecnici'];
+
+        $this->creaAccount($ente, $utenti['admin'], $condiviso);
 
         $fornitori = $this->creaFornitori($ente);
         $strumentiIds = $this->creaStrumenti($ente, $nodi, $fornitori);
@@ -266,12 +279,36 @@ class DemoSeeder extends Seeder
         return ['admin' => $admin, 'tecnici' => $tecnici];
     }
 
+    /**
+     * L'account dell'Ente (ADR-032), con l'Admin fra i membri.
+     *
+     * Gli Enti preesistenti arrivano già agganciati dal backfill della
+     * migration: si usa quello. Per i nuovi: l'account condiviso del gruppo
+     * demo se c'è, altrimenti un 1:1 sulla ragione sociale (firstOrCreate,
+     * disciplina di creaFornitori: rilanciare il seeder non moltiplica nulla).
+     */
+    private function creaAccount(UnitaOrganizzativa $ente, User $admin, ?Account $condiviso): void
+    {
+        $account = $ente->account
+            ?? $condiviso
+            ?? Account::firstOrCreate(['ragione_sociale' => $ente->nome]);
+
+        if ($ente->account_id === null) {
+            $ente->forceFill(['account_id' => $account->id])->saveQuietly();
+        }
+
+        $account->aggiungiMembro($admin);
+    }
+
     private function utente(string $nome, string $email, ?int $tenantId, string $ruolo): User
     {
         $utente = User::updateOrCreate(
             ['email' => $email],
-            ['name' => $nome, 'password' => Hash::make('password'), 'tenant_id' => $tenantId, 'email_verified_at' => now()],
+            ['name' => $nome, 'password' => Hash::make('password'), 'email_verified_at' => now()],
         );
+        // Fuori dal Fillable da ADR-032 (l'unica via applicativa è lo
+        // switcher): il seeder, come il provisioning, passa dal forceFill.
+        $utente->forceFill(['tenant_id' => $tenantId])->save();
         $utente->syncRoles([$ruolo]);
 
         return $utente;
@@ -736,7 +773,22 @@ class DemoSeeder extends Seeder
 
         $this->verificaRicambiUtilizzo();
 
-        $this->command?->info('Invarianti verificati: stato/data_esecuzione, tenant allineati, ricambi montati coerenti.');
+        // ADR-032: nessun Ente resta senza account, nessun account del seeder
+        // senza membri, nessun nodo non-ente con un account addosso.
+        $entiSenzaAccount = UnitaOrganizzativa::withoutGlobalScopes()
+            ->where('tipo', TipoUnitaOrganizzativa::Ente->value)->whereNull('account_id')->count();
+        $accountSenzaMembri = Account::doesntHave('membri')->count();
+        $nodiConAccount = UnitaOrganizzativa::withoutGlobalScopes()
+            ->where('tipo', '!=', TipoUnitaOrganizzativa::Ente->value)->whereNotNull('account_id')->count();
+
+        if ($entiSenzaAccount || $accountSenzaMembri || $nodiConAccount) {
+            throw new \RuntimeException(
+                "Invarianti ADR-032 violati — enti senza account: {$entiSenzaAccount}, ".
+                "account senza membri: {$accountSenzaMembri}, nodi non-ente con account: {$nodiConAccount}"
+            );
+        }
+
+        $this->command?->info('Invarianti verificati: stato/data_esecuzione, tenant allineati, ricambi montati coerenti, account agganciati.');
     }
 
     /**
@@ -790,6 +842,8 @@ class DemoSeeder extends Seeder
                 ['ricambio_utilizzo', RicambioUtilizzo::withoutGlobalScopes()->count()],
                 ['fornitori', Fornitore::withoutGlobalScopes()->count()],
                 ['strumenti senza fornitore', Strumento::withoutGlobalScopes()->whereNull('fornitore_id')->count()],
+                ['accounts', Account::count()],
+                ['account_user', DB::table('account_user')->count()],
                 ['users', User::count()],
             ]
         );

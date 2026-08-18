@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnforceAccountLockout;
 use App\Http\Middleware\EnsureTwoFactorIsEnabled;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -14,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
+            'account.lockout' => EnforceAccountLockout::class,
             'two-factor.enforce' => EnsureTwoFactorIsEnabled::class,
         ]);
     })

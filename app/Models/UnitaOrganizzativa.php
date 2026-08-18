@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use RuntimeException;
 
 /**
  * Nodo dell'albero organizzativo del cliente (ERD §4.1 — ADR-006/015).
@@ -59,6 +60,11 @@ class UnitaOrganizzativa extends Model
      * fuori, l'unica via è `fissaVisibilitaGaranzieRicambio()`, che è anche il
      * punto in cui il controllo del ruolo è esercitato. Stesso principio delle
      * colonne `forced_*` di Strumento e di `data_scadenza_effettiva` su Garanzia.
+     *
+     * Fuori anche `account_id` (ADR-032): dice a quale rapporto commerciale
+     * appartiene l'Ente, e lo scrivono solo provisioning e backfill, mai un
+     * form. Un Admin che potesse forgiarlo sposterebbe il proprio Ente sotto
+     * l'abbonamento di qualcun altro.
      */
     protected function casts(): array
     {
@@ -133,6 +139,33 @@ class UnitaOrganizzativa extends Model
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(self::class, 'tenant_id');
+    }
+
+    /**
+     * L'account intestatario (ADR-032) — valorizzato solo sul nodo `ente`.
+     * `Account` non è tenant-scoped, quindi nessun bypass serve.
+     */
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(Account::class, 'account_id');
+    }
+
+    /**
+     * Primo `booted()` di questo model, per un invariante che a DB non può
+     * stare: «`account_id` vive solo sul nodo ente» sarebbe un CHECK, ma
+     * SQLite non ha ADD CONSTRAINT e la migration ramificherebbe per driver.
+     * Qui la guardia vale per CRUD, console e seeder insieme (il backfill di
+     * schema passa dal query builder e tocca per costruzione solo righe ente).
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $nodo): void {
+            if ($nodo->account_id !== null && $nodo->tipo !== TipoUnitaOrganizzativa::Ente) {
+                throw new RuntimeException(
+                    "account_id appartiene solo ai nodi ente (ADR-032): il nodo «{$nodo->nome}» è {$nodo->tipo->value}."
+                );
+            }
+        });
     }
 
     public function responsabili(): BelongsToMany

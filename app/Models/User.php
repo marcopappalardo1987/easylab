@@ -3,9 +3,12 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\TipoUnitaOrganizzativa;
+use App\Support\AuditLog;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -15,7 +18,13 @@ use Lab404\Impersonate\Models\Impersonate;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'password', 'tenant_id'])]
+// `tenant_id` NON è fillable da ADR-032: è il dato su cui poggia l'intero
+// scoping (ADR-018), e la sua unica via di riscrittura è `passaAllEnte()` —
+// controllata, verificata sull'appartenenza all'account e auditata. Un form
+// che potesse forgiarlo sposterebbe una persona in un altro tenant per
+// mass-assignment. Provisioning e seeder usano forceFill, come per il nodo
+// ente. Stessa postura di `riceve_email_scadenze` qui sotto.
+#[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes'])]
 class User extends Authenticatable
 {
@@ -43,6 +52,11 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'tenant_id' => 'integer',
+            // Opt-out dal digest email delle scadenze (ADR-011). Fuori
+            // dall'attributo Fillable di proposito: si scrive solo dalle
+            // preferenze dell'utente, mai per mass-assignment — la stessa
+            // postura di `visibilita_garanzie_ricambio` (ADR-029).
+            'riceve_email_scadenze' => 'boolean',
         ];
     }
 
@@ -109,6 +123,107 @@ class User extends Authenticatable
     public function unitaResponsabili(): BelongsToMany
     {
         return $this->belongsToMany(UnitaOrganizzativa::class, 'responsabile_unita')->withTimestamps();
+    }
+
+    /**
+     * Gli account di cui l'utente è membro (ERD §4.3 — ADR-032): i rapporti
+     * commerciali che amministra. Forma di `portafoglioClienti()`. `Account`
+     * non è tenant-scoped, quindi qui nessun bypass serve.
+     */
+    public function accounts(): BelongsToMany
+    {
+        return $this->belongsToMany(Account::class, 'account_user')->withTimestamps();
+    }
+
+    /**
+     * Le sedi (nodi ente) ancora raggiungibili dall'utente: quelle degli
+     * account di cui è membro, esclusi gli account in lockout (ADR-013) e gli
+     * enti cestinati. Servita dall'unique (user_id, account_id) del pivot.
+     *
+     * Vive qui e non nei chiamanti perché lo switcher in top bar e la pagina
+     * `/bloccato` rispondono alla STESSA domanda — «dove posso ancora
+     * andare?» — e due copie della query sarebbero due risposte libere di
+     * divergere al primo bugfix. `withoutGlobalScopes` per la ragione di
+     * `ente()` qui sopra: le sedi di un account sono per definizione fuori dal
+     * tenant corrente, e il confine lo dà il pivot, non un filtro.
+     *
+     * @return Builder<UnitaOrganizzativa>
+     */
+    public function sediRaggiungibili(): Builder
+    {
+        return UnitaOrganizzativa::withoutGlobalScopes()
+            ->where('tipo', TipoUnitaOrganizzativa::Ente->value)
+            ->whereNull('deleted_at')
+            ->whereIn('account_id', $this->accounts()->where('is_locked', false)->select('accounts.id'));
+    }
+
+    /**
+     * Lo switcher (ADR-032 punto 4): l'unica via di riscrittura di
+     * `users.tenant_id`, che è fuori dal Fillable proprio perché tutto passi
+     * di qui.
+     *
+     * Non è il «selettore di tenant» che ADR-018 ha scartato: quello apriva un
+     * secondo percorso verso dati ALTRUI, questo naviga fra Enti dello stesso
+     * account — il confine che lì andava protetto qui non esiste. E non è un
+     * permesso RBAC: il confine reale non è «può switchare» ma «verso quale
+     * Ente», cioè un dato (l'appartenenza in `account_user`) — un permesso
+     * direbbe la metà sbagliata della frase (gerarchia di ADR-029: la
+     * condizione vive dove vive il dato).
+     *
+     * Guardie fail-closed a `return false`, senza eccezioni: la UI non offre
+     * mai bersagli illegittimi, e chi prova a mano non merita un messaggio
+     * diagnostico. ADR-018 resta intatto: una richiesta = un tenant — lo
+     * switch avviene FRA le richieste, mai durante.
+     */
+    public function passaAllEnte(UnitaOrganizzativa $ente): bool
+    {
+        // Difesa in profondità (forma del tenant_id del tecnico interno,
+        // ADR-030): un non-ente non può avere account_id — invariante in
+        // UnitaOrganizzativa::booted() — quindi il check di appartenenza qui
+        // sotto basterebbe. Ma se quell'invariante si allentasse, o il dato
+        // arrivasse corrotto da fuori Eloquent, un tenant_id puntato su un
+        // dipartimento romperebbe lo scoping in modi silenziosi. Un test la
+        // esercita corrompendo il dato apposta.
+        if ($ente->tipo !== TipoUnitaOrganizzativa::Ente) {
+            return false;
+        }
+
+        // L'appartenenza: un account di cui sono membro possiede quell'Ente.
+        if ($ente->account_id === null || ! $this->accounts()->whereKey($ente->account_id)->exists()) {
+            return false;
+        }
+
+        // Un account in lockout (ADR-013) non fa entrare in nessuno dei suoi
+        // Enti: lo switcher è un ingresso nuovo e nasce già chiuso. Il
+        // middleware sulla navigazione ordinaria arriva col suo blocco.
+        if ($this->accounts()->whereKey($ente->account_id)->where('is_locked', true)->exists()) {
+            return false;
+        }
+
+        // Durante l'impersonazione il tenant seguito è quello dell'impersonato
+        // (CurrentTenant segue Auth::user()): riscriverglielo sarebbe una
+        // modifica permanente fatta «per suo conto».
+        if (app('impersonate')->isImpersonating()) {
+            return false;
+        }
+
+        $precedente = $this->tenant_id;
+        $this->forceFill(['tenant_id' => $ente->id])->save();
+
+        // Audit a mano (User è esente dal trait — ADR-027: o l'uno o le altre):
+        // è l'attraversamento di un confine, come l'impersonazione e l'accesso
+        // tecnico, e va potuto ricostruire chi, da dove, verso dove.
+        activity(AuditLog::NAME)
+            ->causedBy($this)
+            ->performedOn($this)
+            ->withProperties([
+                'da_tenant_id' => $precedente,
+                'a_tenant_id' => $ente->id,
+                'account_id' => $ente->account_id,
+            ])
+            ->log('Ente attivo cambiato');
+
+        return true;
     }
 
     /**

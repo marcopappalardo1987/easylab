@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Enums\TipoUnitaOrganizzativa;
+use App\Models\Account;
 use App\Models\UnitaOrganizzativa;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -36,6 +37,20 @@ class UnitaOrganizzativaFactory extends Factory
             'parent_id' => null,
         ])->afterCreating(function (UnitaOrganizzativa $node) {
             $node->forceFill(['tenant_id' => $node->id])->saveQuietly();
+        });
+    }
+
+    /**
+     * Aggancia il nodo (ente) a un account (ADR-032). Opt-in e non automatico
+     * dentro `ente()`: centinaia di test creano Enti senza che l'account
+     * c'entri, e una riga `accounts` implicita per ciascuno sarebbe rumore.
+     * `account_id` è fuori dal fillable: si scrive col forceFill, come il
+     * tenant_id qui sopra.
+     */
+    public function perAccount(Account $account): static
+    {
+        return $this->afterCreating(function (UnitaOrganizzativa $node) use ($account) {
+            $node->forceFill(['account_id' => $account->id])->saveQuietly();
         });
     }
 

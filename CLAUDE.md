@@ -11,6 +11,7 @@ Regole:
 - **Mai** `php artisan test` / `vendor/bin/pest` con `DB_CONNECTION` o `DB_DATABASE` sovrascritti verso `easylab`.
 - I test girano su **SQLite in memoria** (forzato da `phpunit.xml`): basta `php artisan test`, senza variabili d'ambiente.
 - Per riprodurre un comportamento **specifico di Postgres** (es. confronti fra date, dove SQLite ha semantiche diverse) usare **`DB_DATABASE=easylab_test`**, mai il DB di sviluppo.
+- ⚠️ **Ogni comando manuale verso `easylab_test` deve portare anche `CACHE_STORE=array`.** Redis è **condiviso** fra i due database, e la cache dei permessi di spatie (`spatie.permission.cache`) salva gli **id** di ruoli e permessi: un `db:seed` o un check di permesso eseguito contro `easylab_test` con la cache di default scrive nella chiave condivisa gli id del DB di test, e da quel momento **l'app di sviluppo nega tutto a tutti** (menù vuoti, 403 ovunque) pur avendo il proprio DB intatto. È già successo il 18 Ago 2026: il Superadmin «non vedeva più nulla» dopo un seeding di prova su `easylab_test`. Rimedio: `php artisan permission:cache-reset` (dal contesto di sviluppo). `php artisan test` non c'entra: `phpunit.xml` forza già `CACHE_STORE=array`.
 - **Mai** `migrate:fresh`, `migrate:refresh`, `db:wipe` o `migrate:rollback` senza che l'utente li abbia chiesti esplicitamente. `php artisan migrate` (solo in avanti) è sicuro.
 
 ## Attenzione: SQLite e Postgres non si comportano allo stesso modo sulle date
