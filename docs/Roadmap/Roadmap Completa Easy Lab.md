@@ -601,6 +601,7 @@ gantt
 - [ ] `[CORE]` Due modelli: **Free (omaggiato)** e **SaaS a pagamento**. 🔗 ADR-002
 - [ ] `[CORE]` **Onboarding doppio**: provisioning (invito da EasyLab/Admin) + self-signup pubblico con verifica email/pagamento. 🔗 ADR-012
 - [ ] `[CORE]` **Blocco automatico insoluti** = **lockout totale** del tenant; dati conservati lato Superadmin. 🔗 ADR-013
+  > *Parte manuale + enforcement **attuate il 18 Ago 2026** (🔗 ADR-013, note di attuazione): gesto `blocca()/sblocca()` auditato, comando `easylab:lockout`, middleware persistente anche sugli update Livewire, pagina `/bloccato` con fuga verso le sedi sane, bypass in impersonazione = salvaguardia GDPR. Suite a **765 verdi**, cinque mutazioni catturate. La casella resta aperta per ciò che dice: il blocco **automatico** sul pagamento fallito, che arriva col webhook del blocco Cashier.*
 - [ ] `[CORE]` Raccolta **dati fiscali** in anagrafica (P.IVA, Cod. Fiscale, PEC/Cod. SDI) — predisposizione e-invoicing futuro. 🔗 ADR-010
 - [ ] `[CORE]` **Stripe Hosted Billing Portal** per fatture/metodi di pagamento self-service. 🔗 Tech Stack §4
 - [ ] `[STRETCH]` Template email brandizzati per tenant.

@@ -502,7 +502,7 @@ Legenda: ✅ pieno · ⚠️ ristretto (per sotto-albero/portafoglio/proprietà)
 | **ADR-010** E-invoicing → futuro | dati fiscali sul nodo ente (predisposizione). |
 | **ADR-011** Notifiche email + in-app | `notifications` (Laravel, senza `tenant_id` — §9) + **`avvisi_scadenza`** (§5.5, memoria anti-duplicati dello scheduler) + `users.riceve_email_scadenze` (opt-out, §3.1). |
 | **ADR-012** Onboarding doppio | `users.is_active` + flussi auth (no tabella nuova). |
-| **ADR-013** Lockout insoluto | `is_locked`/`locked_*` sul nodo ente. |
+| **ADR-013** Lockout insoluto | `is_locked`/`locked_*` su **`accounts`** (§4.3 — spostati lì da ADR-032; questa riga diceva «sul nodo ente» quando le colonne erano solo documentate). Attuato il 18 Ago 2026: gesto + middleware `account.lockout`, nessuna colonna in più. |
 | **ADR-014** Obsolescenza | `unita_organizzativa.soglia_obsolescenza_anni` + `strumenti.data_installazione`. |
 | **ADR-015** Spostamenti / trasferimenti | `spostamenti_strumento` (append-only) + update `tenant_id`/ubicazione. |
 | **ADR-019** Garanzie solo a data | `garanzie` perde `tipo_scadenza`/`soglia_ore`/`data_scadenza_prevista`; tabella `letture_contaore` soppressa. `durata_mesi` divenne NOT NULL, ed è tornata nullable con ADR-022 (§6.1): il vincolo è ora sulla coppia. |

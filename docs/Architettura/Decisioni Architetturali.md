@@ -313,7 +313,14 @@ Il volume gioca a favore: il digest è **una email al giorno per destinatario e 
 
 **ADR-013 — Blocco per insoluto: lockout totale**
 
-*Stato: Accettata. **Integrata da ADR-032** (18 Ago 2026): l'insoluto è dell'**Account** — `is_locked`/`locked_*` nascono su `accounts` e il lockout blocca **tutti** gli Enti dell'account. La salvaguardia GDPR qui sotto vale invariata, per tutti gli Enti coinvolti.*
+*Stato: Accettata. **Integrata da ADR-032** (18 Ago 2026): l'insoluto è dell'**Account** — `is_locked`/`locked_*` nascono su `accounts` e il lockout blocca **tutti** gli Enti dell'account. La salvaguardia GDPR qui sotto vale invariata, per tutti gli Enti coinvolti. **Attuata lo stesso giorno nella parte manuale + enforcement**; l'innesco automatico sul pagamento fallito arriva col blocco Cashier (webhook Stripe → `Account::blocca()`).*
+
+***Note di attuazione (18 Ago 2026):***
+- *Il gesto è `Account::blocca(motivo)`/`sblocca()` — idempotente come no-op (`locked_at` documenta QUANDO è iniziato l'insoluto e non si riscrive), auditato dal trait via `attributiDerivatiTracciati()`. La leva è `easylab:lockout {account} [--sblocca] --motivo=`; la UI arriva in S6 con la dashboard, dietro `billing.lockout` (set 🔒, oggi dichiarato e non consumato).*
+- *L'enforcement è il middleware `account.lockout` sul gruppo protetto, **prima** del 2FA (la condizione più forte parla per prima), e — prima registrazione del progetto — **persistente per Livewire**: senza, ogni azione Livewire (cioè quasi tutte le scritture) aggirerebbe il blocco, perché `/livewire/update` non passa dai middleware di pagina.*
+- *Il bloccato finisce su **`/bloccato`** (guest-layout, fuori dal gruppo per collocazione): messaggio generico + logout + **fuga verso le sedi sane** dei suoi altri account, servita da `User::sediRaggiungibili()` — la stessa query dello switcher. `locked_reason` **non si mostra al bloccato**: è un'annotazione operativa interna (solleciti, riferimenti), il suo destinatario è la dashboard S6.*
+- ***Il bypass in impersonazione È l'attuazione della salvaguardia GDPR qui sopra**: il Superadmin impersona, assiste ed esporta anche in lockout, e ogni passo è già tracciato; il membro reale resta fuori (controprova nei test).*
+- *Il **Tecnico esterno** (`tenant_id` null) non è toccato dal middleware — scelta V1: il lockout ferma il cliente moroso, non l'assistenza che serve le macchine (ADR-030). Il punto d'innesto, se si cambiasse idea, è uno solo. `users.is_active` (ADR-012) resta un interruttore distinto: spegne una persona, non un contratto.*
 
 **Decisione.** Tenant bloccato per insoluto/abbonamento scaduto → **lockout totale**: nessun accesso finché non regolarizza. I dati restano conservati lato Superadmin. Leva di pagamento forte.
 
