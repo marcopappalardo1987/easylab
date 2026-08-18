@@ -56,7 +56,8 @@ APP_URL=
 DB_CONNECTION=pgsql DB_HOST= DB_PORT=5432 DB_DATABASE= DB_USERNAME= DB_PASSWORD=
 REDIS_HOST= REDIS_PASSWORD= REDIS_PORT=6379
 QUEUE_CONNECTION=redis  CACHE_STORE=redis
-MAIL_MAILER=smtp MAIL_HOST= MAIL_PORT= MAIL_USERNAME= MAIL_PASSWORD=   # ADR-011
+MAIL_MAILER=smtp MAIL_HOST= MAIL_PORT= MAIL_USERNAME= MAIL_PASSWORD=   # ADR-011 — server di posta INTERNO
+MAIL_FROM_ADDRESS= MAIL_FROM_NAME="Easy Lab"                          # dominio EasyLab, allineato a SPF/DKIM
 FILESYSTEM_DISK=s3                                                    # 🔗 ADR-025 (Backblaze B2)
 AWS_ACCESS_KEY_ID= AWS_SECRET_ACCESS_KEY=       # Application Key B2 limitata AL SINGOLO bucket
 AWS_DEFAULT_REGION=eu-central-003               # Amsterdam — regione UE (GDPR)
@@ -66,6 +67,12 @@ STRIPE_KEY= STRIPE_SECRET= STRIPE_WEBHOOK_SECRET=                     # S5, Cash
 **Segreti:** mai nel repo. In locale `.env`; su Laravel Cloud → variabili d'ambiente dell'ambiente. Stripe in **modalità test** su staging, **live** solo in produzione; **bucket B2 separati** per staging e produzione, così un test non tocca mai i documenti dei clienti.
 
 > Le chiavi B2 usano i nomi `AWS_*` perché è il driver S3 standard di Laravel puntato a un endpoint diverso: non c'è nulla di Amazon coinvolto.
+
+> **Posta in uscita — server interno** (🔗 ADR-011, deciso il 18 Ago 2026). Niente servizio transazionale: le email partono dal mailserver di EasyLab via SMTP autenticato. In locale resta `MAIL_MAILER=log` e le email finiscono in `storage/logs/laravel.log`.
+>
+> ⚠️ **Da fare sul dominio prima del primo invio a un cliente reale**, perché senza il promemoria arriva nello spam ed è come non averlo mandato: **SPF** (autorizza l'IP di uscita), **DKIM** (firma il messaggio), **DMARC** (dice ai destinatari cosa fare se i primi due falliscono) e **PTR/reverse DNS** dell'IP. `MAIL_FROM_ADDRESS` deve stare sullo stesso dominio che quei record coprono, o l'allineamento DMARC fallisce anche con SPF e DKIM validi.
+>
+> Il primo avvio dello scheduler va fatto con `easylab:notifica-scadenze --senza-invio`: la procedura è in §3.1.
 
 ### 2.2 Provisioning base (da eseguire con i tuoi account)
 - **Laravel Cloud:** collega GitHub, crea gli ambienti staging e produzione in **regione UE**, provisiona Postgres e Redis gestiti, configura worker di coda e scheduler. Deploy da Git, niente server da amministrare.
@@ -80,6 +87,16 @@ STRIPE_KEY= STRIPE_SECRET= STRIPE_WEBHOOK_SECRET=                     # S5, Cash
 - **Staging:** merge su `main` → deploy automatico di Laravel Cloud (migrazioni incluse). Obiettivo roadmap S1: "push → staging" verde.
 - **Produzione:** deploy **promosso** dopo verifica su staging, mai automatico. Migrazioni in deploy con `--force`.
 - ⚠️ **Migration distruttive:** il progetto ne ha già in storia (drop di colonne e tabelle popolate, 🔗 ADR-019). Su un deploy automatico girano senza che nessuno guardi: **backup del database verificato prima di promuovere in produzione**, e revisione umana della migration secondo la Policy di Code Review (area rossa).
+
+### 3.1 Prima attivazione dello scheduler scadenze (S5 — 🔗 ADR-011)
+
+Da fare **una volta sola**, nell'ordine, quando le notifiche vanno in un ambiente che ha già dati:
+
+1. `php artisan easylab:notifica-scadenze --senza-invio` — registra gli avvisi **senza notificare nessuno**. Salta questo passo e la prima email conterrà *tutte* le scadenze già aperte: sulla base demo erano **1306 righe**, sul database di sviluppo ci sono 3297 interventi entro soglia. Il comando avvisa dei cambi di stato, e al primo giro non ha memoria: senza questo passo tutto è un cambio.
+2. Verificare SPF/DKIM/DMARC e `MAIL_FROM_ADDRESS` (§2.1) — prima che parta la prima email vera, non dopo.
+3. Attivare **scheduler** e **worker di coda** nell'ambiente Laravel Cloud (🔗 ADR-025): il cron è già nel codice (`routes/console.php`), non serve alcun crontab.
+
+Dal giorno dopo il digest manda solo le novità.
 
 ---
 

@@ -272,7 +272,17 @@ Attuando la voce è emerso il buco che ADR-009 non copriva: chiusa una taratura,
 
 **Decisione.** In V1 le notifiche ("email del futuro" e alert) usano **email via SMTP** + **notifiche in-app** nella dashboard. Niente push (web/mobile) in V1: l'app è web-responsive, non nativa; le push si valuteranno più avanti.
 
-**Conseguenze.** Invio email accodato sulle code Redis (già nello stack). Provider SMTP da definire (es. Postmark/SES/Mailgun o SMTP standard). Le notifiche in-app implicano una tabella `notifications` (notifiche di Laravel) consultabile dall'utente.
+**Conseguenze.** Invio email accodato sulle code Redis (già nello stack). ~~Provider SMTP da definire (es. Postmark/SES/Mailgun o SMTP standard).~~ → **Deciso da Marco il 18 Ago 2026: SMTP standard su server di posta interno**, vedi sotto. Le notifiche in-app implicano una tabella `notifications` (notifiche di Laravel) consultabile dall'utente.
+
+**Il canale di uscita: SMTP interno, non un servizio di invio transazionale** *(deciso il 18 Ago 2026, chiude il «da definire» qui sopra)*.
+
+Le email escono dal **server di posta di EasyLab**, via SMTP autenticato. Non si adotta Postmark/SES/Mailgun. Il codice non cambia di una riga — Laravel parla SMTP e il mailer è già solo configurazione (`MAIL_MAILER=smtp` + host/porta/credenziali, Setup Ambienti §2.1) — ma tre conseguenze sono operative e vanno sapute:
+
+- ✅ **Nessun sub-responsabile in più per le email.** Con un servizio terzo, ogni indirizzo e ogni contenuto di notifica sarebbero passati da un fornitore esterno, da elencare come sub-processor e da coprire con un DPA. Restando interno il dato non lascia il perimetro: il registro dei trattamenti si accorcia invece di allungarsi. *(Se il mailserver è ospitato presso un fornitore terzo, quel fornitore resta sub-responsabile: cambia il nome sulla riga, non l'adempimento.)*
+- ⚠️ **La recapitabilità diventa responsabilità nostra**: **SPF, DKIM e DMARC** sul dominio mittente sono la differenza fra un promemoria letto e uno nella cartella spam. Un servizio transazionale li avrebbe portati in dote; qui vanno configurati e verificati prima del primo invio a un cliente reale. Vale anche il PTR/reverse DNS dell'IP di uscita.
+- ⚠️ **Nessun rilevamento automatico dei rimbalzi.** Un indirizzo che non esiste più non si segnala da solo: l'utente risulta avvisato e non lo è. Non serve risolverlo ora — il volume è un digest al giorno per persona — ma è la ragione per cui, se un domani servisse sapere *chi ha davvero ricevuto*, si tornerà a valutare un servizio transazionale. La decisione è quindi reversibile e per un motivo preciso, non per ripensamento.
+
+Il volume gioca a favore: il digest è **una email al giorno per destinatario e per Ente**, e solo nei giorni in cui qualcosa cambia — non una per scadenza. Un server interno regge questo profilo senza throttling; sarebbe stato un altro discorso con la forma «una email per scadenza», scartata anche per questo.
 
 **Attuazione (18 Ago 2026).**
 
@@ -284,7 +294,7 @@ Attuando la voce è emerso il buco che ADR-009 non copriva: chiusa una taratura,
 - ⚠️ **Il primo avvio su dati esistenti va fatto con `--senza-invio`.** Alla prima esecuzione il comando non ha memoria, quindi ogni scadenza già aperta è un cambio mai notificato: sul solo database di sviluppo sono **3297 interventi entro soglia**, e sulla base demo la prima email sarebbe stata di **1306 righe**. L'opzione popola il log in silenzio; dal giorno dopo arrivano solo le novità. È il primo passo del deploy, non una scorciatoia di sviluppo.
 - **Opt-out solo per l'email** (`users.riceve_email_scadenze`, default attivo, pagina `/settings/notifiche`): è il diritto di opposizione del registro T4. Le notifiche in-app restano sempre, perché sono la copia di ciò che l'utente vede comunque entrando e non un invio verso l'esterno. La preferenza si legge **sul worker al momento dell'invio**, così chi la spegne dopo l'accodamento è comunque rispettato.
 - **La campanella non fa polling.** La posta arriva una volta al giorno: un `wire:poll` sarebbe circa millequattrocento richieste al giorno per utente per un evento quotidiano. Il conteggio si aggiorna al cambio pagina; quando le notifiche diventeranno frequenti (S6) il polling sarà una riga.
-- **Il provider SMTP resta da scegliere** — il codice usa il mailer configurato, e in locale `MAIL_MAILER=log`. Restano aperti anche `MAIL_FROM_ADDRESS` reale e il **DPA col provider** (registro §5), precondizione al primo invio verso indirizzi di clienti.
+- **Il canale è lo SMTP interno** (deciso il 18 Ago 2026, sopra): il codice usa il mailer configurato e in locale resta `MAIL_MAILER=log`. Prima del primo invio a indirizzi reali servono `MAIL_FROM_ADDRESS` del dominio EasyLab e i record **SPF/DKIM/DMARC**; il DPA per le email non serve più.
 - ⚠️ **Il template usa il markdown di Laravel, non ancora un layout nostro**: nella parte *testo semplice* dell'email le tabelle restano in forma markdown grezza, e il piè di pagina è quello del framework («All rights reserved», in inglese). Si sistemano insieme allo `[STRETCH]` dei template brandizzati per tenant, che è la sede giusta: pubblicare ora le viste del pacchetto per una riga di footer significherebbe farlo due volte.
 
 ---

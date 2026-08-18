@@ -73,7 +73,7 @@ Già previste dall'architettura (mappate agli ADR):
 ## 5. Documenti da produrre (prima del go-live S7)
 
 - [ ] **Informativa privacy** (clienti e utenti finali) — versione cliente + versione tecnico.
-- [ ] **DPA** EasyLab ↔ clienti (art. 28) + raccolta DPA sub-responsabili (**Laravel Cloud**, **Backblaze B2**, SMTP, Stripe). ⚠️ Quello con Backblaze serve **prima dei primi documenti reali**, non prima del go-live.
+- [ ] **DPA** EasyLab ↔ clienti (art. 28) + raccolta DPA sub-responsabili (**Laravel Cloud**, **Backblaze B2**, Stripe). ⚠️ Quello con Backblaze serve **prima dei primi documenti reali**, non prima del go-live. ~~SMTP~~ **non serve più (18 Ago 2026)**: le email escono dal **server di posta interno** di EasyLab (🔗 ADR-011), quindi indirizzi e contenuti delle notifiche non passano da un fornitore esterno e non c'è un sub-responsabile da elencare. *(Se il mailserver fosse ospitato presso terzi, quel fornitore andrebbe elencato: cambia il nome, non l'adempimento.)*
 - [ ] **Registro dei trattamenti** definitivo (da §2, con tempi di conservazione validati).
 - [ ] **Elenco sub-processor** pubblicato/aggiornabile.
 - [ ] **Procedura data breach** (notifica entro 72h) e **procedura richieste interessati**.
