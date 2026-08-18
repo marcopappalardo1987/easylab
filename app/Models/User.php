@@ -3,6 +3,8 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\TipoUnitaOrganizzativa;
+use App\Support\AuditLog;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -15,7 +17,13 @@ use Lab404\Impersonate\Models\Impersonate;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'password', 'tenant_id'])]
+// `tenant_id` NON è fillable da ADR-032: è il dato su cui poggia l'intero
+// scoping (ADR-018), e la sua unica via di riscrittura è `passaAllEnte()` —
+// controllata, verificata sull'appartenenza all'account e auditata. Un form
+// che potesse forgiarlo sposterebbe una persona in un altro tenant per
+// mass-assignment. Provisioning e seeder usano forceFill, come per il nodo
+// ente. Stessa postura di `riceve_email_scadenze` qui sotto.
+#[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes'])]
 class User extends Authenticatable
 {
@@ -114,6 +122,78 @@ class User extends Authenticatable
     public function unitaResponsabili(): BelongsToMany
     {
         return $this->belongsToMany(UnitaOrganizzativa::class, 'responsabile_unita')->withTimestamps();
+    }
+
+    /**
+     * Gli account di cui l'utente è membro (ERD §4.3 — ADR-032): i rapporti
+     * commerciali che amministra. Forma di `portafoglioClienti()`. `Account`
+     * non è tenant-scoped, quindi qui nessun bypass serve.
+     */
+    public function accounts(): BelongsToMany
+    {
+        return $this->belongsToMany(Account::class, 'account_user')->withTimestamps();
+    }
+
+    /**
+     * Lo switcher (ADR-032 punto 4): l'unica via di riscrittura di
+     * `users.tenant_id`, che è fuori dal Fillable proprio perché tutto passi
+     * di qui.
+     *
+     * Non è il «selettore di tenant» che ADR-018 ha scartato: quello apriva un
+     * secondo percorso verso dati ALTRUI, questo naviga fra Enti dello stesso
+     * account — il confine che lì andava protetto qui non esiste. E non è un
+     * permesso RBAC: il confine reale non è «può switchare» ma «verso quale
+     * Ente», cioè un dato (l'appartenenza in `account_user`) — un permesso
+     * direbbe la metà sbagliata della frase (gerarchia di ADR-029: la
+     * condizione vive dove vive il dato).
+     *
+     * Guardie fail-closed a `return false`, senza eccezioni: la UI non offre
+     * mai bersagli illegittimi, e chi prova a mano non merita un messaggio
+     * diagnostico. ADR-018 resta intatto: una richiesta = un tenant — lo
+     * switch avviene FRA le richieste, mai durante.
+     */
+    public function passaAllEnte(UnitaOrganizzativa $ente): bool
+    {
+        if ($ente->tipo !== TipoUnitaOrganizzativa::Ente) {
+            return false;
+        }
+
+        // L'appartenenza: un account di cui sono membro possiede quell'Ente.
+        if ($ente->account_id === null || ! $this->accounts()->whereKey($ente->account_id)->exists()) {
+            return false;
+        }
+
+        // Un account in lockout (ADR-013) non fa entrare in nessuno dei suoi
+        // Enti: lo switcher è un ingresso nuovo e nasce già chiuso. Il
+        // middleware sulla navigazione ordinaria arriva col suo blocco.
+        if ($this->accounts()->whereKey($ente->account_id)->where('is_locked', true)->exists()) {
+            return false;
+        }
+
+        // Durante l'impersonazione il tenant seguito è quello dell'impersonato
+        // (CurrentTenant segue Auth::user()): riscriverglielo sarebbe una
+        // modifica permanente fatta «per suo conto».
+        if (app('impersonate')->isImpersonating()) {
+            return false;
+        }
+
+        $precedente = $this->tenant_id;
+        $this->forceFill(['tenant_id' => $ente->id])->save();
+
+        // Audit a mano (User è esente dal trait — ADR-027: o l'uno o le altre):
+        // è l'attraversamento di un confine, come l'impersonazione e l'accesso
+        // tecnico, e va potuto ricostruire chi, da dove, verso dove.
+        activity(AuditLog::NAME)
+            ->causedBy($this)
+            ->performedOn($this)
+            ->withProperties([
+                'da_tenant_id' => $precedente,
+                'a_tenant_id' => $ente->id,
+                'account_id' => $ente->account_id,
+            ])
+            ->log('Ente attivo cambiato');
+
+        return true;
     }
 
     /**

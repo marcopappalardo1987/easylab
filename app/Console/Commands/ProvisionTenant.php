@@ -44,10 +44,16 @@ class ProvisionTenant extends Command
             [
                 'name' => $adminName,
                 'password' => Hash::make($generatedPassword),
-                'tenant_id' => $ente->id,
                 'email_verified_at' => now(),
             ],
         );
+
+        // `tenant_id` è fuori dal Fillable (ADR-032): si scrive col forceFill,
+        // e SOLO sull'utente appena nato — riscriverlo a uno esistente
+        // significherebbe strapparlo al suo Ente per effetto collaterale.
+        if ($admin->wasRecentlyCreated) {
+            $admin->forceFill(['tenant_id' => $ente->id])->save();
+        }
 
         if (! $admin->hasRole('Admin')) {
             $admin->assignRole('Admin');

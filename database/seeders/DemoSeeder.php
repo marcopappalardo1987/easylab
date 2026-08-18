@@ -270,8 +270,11 @@ class DemoSeeder extends Seeder
     {
         $utente = User::updateOrCreate(
             ['email' => $email],
-            ['name' => $nome, 'password' => Hash::make('password'), 'tenant_id' => $tenantId, 'email_verified_at' => now()],
+            ['name' => $nome, 'password' => Hash::make('password'), 'email_verified_at' => now()],
         );
+        // Fuori dal Fillable da ADR-032 (l'unica via applicativa è lo
+        // switcher): il seeder, come il provisioning, passa dal forceFill.
+        $utente->forceFill(['tenant_id' => $tenantId])->save();
         $utente->syncRoles([$ruolo]);
 
         return $utente;
