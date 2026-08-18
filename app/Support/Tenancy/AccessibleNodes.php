@@ -29,7 +29,25 @@ class AccessibleNodes
     {
         $user = Auth::user();
 
-        if (! $user instanceof User || ! $user->isDepartmentScoped()) {
+        return $user instanceof User ? self::forUser($user) : null;
+    }
+
+    /**
+     * Stessa risposta di `forCurrentUser()`, per un utente qualunque invece che
+     * per quello autenticato.
+     *
+     * Estratta in S5 per lo scheduler delle scadenze (ADR-011): il comando gira
+     * in console, dove `Auth::user()` è null, e deve comunque sapere quali nodi
+     * competono a ciascun Responsabile per non mandargli in email macchine di
+     * reparti che in app non vedrebbe. Il criterio è quello — uno solo, in un
+     * posto solo: se qui e nel digest divergessero, l'email diventerebbe il
+     * canale che scavalca lo scope.
+     *
+     * @return list<int>|null
+     */
+    public static function forUser(User $user): ?array
+    {
+        if (! $user->isDepartmentScoped()) {
             return null;
         }
 

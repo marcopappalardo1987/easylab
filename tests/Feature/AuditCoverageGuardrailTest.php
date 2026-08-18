@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\AvvisoScadenza;
 use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Documento;
 use App\Models\Fornitore;
@@ -26,6 +27,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 /** Modelli di business che NON usano il trait, ciascuno col proprio perché. */
 const ESENZIONI = [
+    AvvisoScadenza::class => 'log tecnico dello scheduler (ADR-011), non un gesto di una persona: tracciarlo sarebbe l\'audit di un log. Ruota a 24 mesi per conto suo.',
     Strumento::class => 'logga a mano: i suoi gesti (forzaSemaforo/rimuoviForzatura) hanno un messaggio che vale più dell\'elenco dei campi, e le colonne forced_* sono fuori da $fillable (ADR-005/027).',
     UnitaOrganizzativa::class => 'logga a mano la sola scrittura che conta — la visibilità garanzie ricambio (ADR-029). Il resto dell\'anagrafica non è tracciato: ADR-027 §3, «il resto quando serve».',
     User::class => 'identità e sessioni, già coperte da AuditLogSubscriber su un altro canale (login, 2FA, impersonation).',
