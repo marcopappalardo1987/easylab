@@ -109,7 +109,7 @@ Utente della piattaforma. Auth/2FA via Jetstream/Fortify (ADR-012). Non tutti gl
 | `name` | string | |
 | `email` | string unique | |
 | `password` | string | |
-| `tenant_id` | bigint nullable, FK → `unita_organizzativa.id` | Valorizzato per Admin/Responsabile/Tenant **e per Developer/Superadmin**, che 🔗 ADR-018 ha reso tenant-bound (l'accesso cross-tenant passa solo dall'impersonazione). NULL per il **Tecnico esterno** (staff EasyLab), che accede per portafoglio ∪ assegnazione; valorizzato per il **Tecnico interno**, dipendente del laboratorio, dove però non è un criterio di accesso ma una difesa in profondità — 🔗 ADR-030. Con 🔗 ADR-032 (da attuare in S5) resta **uno solo per volta**, ma diventa riscrivibile dallo **switcher** fra gli Enti del proprio account: azione dedicata e auditata, la colonna esce da `$fillable`. |
+| `tenant_id` | bigint nullable, FK → `unita_organizzativa.id` | Valorizzato per Admin/Responsabile/Tenant **e per Developer/Superadmin**, che 🔗 ADR-018 ha reso tenant-bound (l'accesso cross-tenant passa solo dall'impersonazione). NULL per il **Tecnico esterno** (staff EasyLab), che accede per portafoglio ∪ assegnazione; valorizzato per il **Tecnico interno**, dipendente del laboratorio, dove però non è un criterio di accesso ma una difesa in profondità — 🔗 ADR-030. Con 🔗 ADR-032 (attuata il 18 Ago 2026) resta **uno solo per volta**, ma è riscrivibile dallo **switcher** fra gli Enti del proprio account (`User::passaAllEnte()`): azione dedicata e auditata, e la colonna è **fuori da `$fillable`** — quella è l'unica via. |
 
 > **Revisione del 17 Ago 2026 (S4 blocco 9).** Questa riga diceva «NULL per utenti piattaforma (Developer/Superadmin/Tecnico)» ed era falsa in due punti su tre: per Developer e Superadmin da 🔗 ADR-018, che li ha vincolati al proprio Ente, e per il Tecnico da 🔗 ADR-030, che ne riconosce due forme. Restava vera solo per il tecnico esterno, ed è il tipo di riga che si legge come specifica e nel frattempo ha smesso di descrivere il sistema.
 
@@ -156,7 +156,7 @@ Nodo dell'organizzazione del cliente. Il nodo radice (`tipo = ente`) **è** il t
 | `id` | bigint PK | |
 | `tenant_id` | bigint FK → `unita_organizzativa.id` | = id del nodo *ente* radice. Sul nodo ente coincide col proprio `id` (popolato dopo l'insert). Permette di filtrare per tenant senza risalire l'albero. |
 | `reseller_id` | bigint nullable | NULL in V1 (ADR-002). |
-| `account_id` | bigint nullable, FK → `accounts.id` | **Solo sul nodo `ente`** (NULL sugli altri): l'account intestatario del rapporto commerciale (🔗 ADR-032, §4.3 — da attuare in S5; backfill 1:1 sugli Enti esistenti). Convive con `reseller_id`: un account resta rivendibile. |
+| `account_id` | bigint nullable, FK → `accounts.id` | **Solo sul nodo `ente`** (NULL sugli altri — invariante in `booted()`, primo del model: un CHECK a DB ramificherebbe per driver): l'account intestatario (🔗 ADR-032, §4.3, attuata il 18 Ago 2026 con backfill 1:1). Fuori da `$fillable`: lo scrivono solo provisioning e backfill. Convive con `reseller_id`: un account resta rivendibile. |
 | `parent_id` | bigint nullable, self FK | NULL per il nodo ente; altrimenti il nodo padre. |
 | `tipo` | enum: `ente` \| `dipartimento` \| `sottolaboratorio` | Estendibile (profondità libera). |
 | `nome` | string | |
@@ -194,7 +194,7 @@ L'azienda "similare a EasyLab" che ripropone la piattaforma ai propri clienti. V
 
 **Indici:** `stripe_connect_account_id`.
 
-### 4.3 `accounts` (livello piattaforma — ADR-032, **da attuare in S5**)
+### 4.3 `accounts` (livello piattaforma — ADR-032, **attuata il 18 Ago 2026**; le colonne Cashier arrivano col blocco Stripe)
 L'intestatario del rapporto commerciale: il cliente che paga EasyLab e possiede **N Enti** (rapporto A). Vive sopra gli Enti, fuori dall'albero, come `resellers` — ma è un *cliente con più sedi*, non un merchant terzo. Il limite di Enti è un attributo del piano e si fa rispettare **al provisioning**, non nello scope.
 
 | Colonna | Tipo | Note |
@@ -218,7 +218,7 @@ I membri che amministrano il rapporto commerciale (condizione della Policy dietr
 | `user_id` | bigint FK → `users.id` | |
 | timestamps | | |
 
-*Unique* `(account_id, user_id)`. Lo **switcher** fra gli Enti dei propri account (ADR-032 punto 4) verifica l'appartenenza qui e riscrive `users.tenant_id` in modo auditato — una richiesta vede sempre un solo tenant, lo scoping (ADR-018) non cambia.
+*Unique* `(user_id, account_id)` — con `user_id` in **testa**, come `tecnico_cliente` mette il tecnico: il percorso caldo è «gli account dell'utente X», letto dallo switcher in top bar a ogni pagina. *(Questa sezione nasceva con l'ordine opposto: corretto attuando, il percorso caldo comanda.)* Più `index(account_id)` per la direzione opposta e per la FK su Postgres. Lo **switcher** fra gli Enti dei propri account (ADR-032 punto 4) verifica l'appartenenza qui e riscrive `users.tenant_id` in modo auditato (`Ente attivo cambiato`, canale audit) — una richiesta vede sempre un solo tenant, lo scoping (ADR-018) non cambia.
 
 ---
 
@@ -518,7 +518,7 @@ Legenda: ✅ pieno · ⚠️ ristretto (per sotto-albero/portafoglio/proprietà)
 | **ADR-029** Visibilità garanzie ricambio per-Ente | `unita_organizzativa.visibilita_garanzie_ricambio` (§4.1, solo nodo ente), fuori `$fillable`; il vincolo di scrittura vive in `GaranziaRicambioPolicy`. |
 | **ADR-030** Tecnico interno/esterno | Nessuna tabella nuova: le due forme sono distinte da `users.tenant_id` (NULL = esterno); la regola vive in `TenantScope`/`AccessoTecnico` + contratto `ReachesStrumento`. |
 | **ADR-031** PDF con dompdf | Nessuna tabella: il PDF si genera al volo e non si archivia (niente righe in `documenti`). |
-| **ADR-032** Account sopra l'Ente | `accounts` + pivot `account_user` (§4.3) + `unita_organizzativa.account_id` (§4.1); dati fiscali, lockout e colonne Cashier nascono su `accounts`. `tenant_id` e scoping invariati; `users.tenant_id` riscritto solo dallo switcher. **Da attuare in S5.** |
+| **ADR-032** Account sopra l'Ente | `accounts` + pivot `account_user` (§4.3) + `unita_organizzativa.account_id` (§4.1); dati fiscali e lockout nascono su `accounts` (le colonne Cashier arrivano col blocco Stripe). `tenant_id` e scoping invariati; `users.tenant_id` riscritto solo dallo switcher. **Attuata il 18 Ago 2026** (backfill 1:1 incluso). |
 
 ---
 

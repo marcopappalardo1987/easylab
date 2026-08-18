@@ -154,6 +154,13 @@ class User extends Authenticatable
      */
     public function passaAllEnte(UnitaOrganizzativa $ente): bool
     {
+        // Difesa in profondità (forma del tenant_id del tecnico interno,
+        // ADR-030): un non-ente non può avere account_id — invariante in
+        // UnitaOrganizzativa::booted() — quindi il check di appartenenza qui
+        // sotto basterebbe. Ma se quell'invariante si allentasse, o il dato
+        // arrivasse corrotto da fuori Eloquent, un tenant_id puntato su un
+        // dipartimento romperebbe lo scoping in modi silenziosi. Un test la
+        // esercita corrompendo il dato apposta.
         if ($ente->tipo !== TipoUnitaOrganizzativa::Ente) {
             return false;
         }

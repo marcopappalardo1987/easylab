@@ -833,7 +833,13 @@ Fino a S4 la contraddizione non costava nulla, perché il Tecnico non vedeva nie
 
 **ADR-032 — L'intestatario dell'abbonamento è un Account sopra l'Ente; `tenant_id` non si tocca**
 
-*Stato: Accettata (18 Ago 2026) — scioglie il punto 🚩 della roadmap S5 («un utente Tenant può avere N Enti», segnalato da Marco il 9 Ago 2026 e confermato il 17 Ago 2026, conferma che aveva già escluso gli Enti gerarchici). Non supera nessuna decisione precedente: ADR-006 e ADR-018 restano validi alla lettera. Chiude i rimandi lasciati aperti da ADR-029 e ADR-030. Da attuare in S5, insieme a Cashier.*
+*Stato: Accettata (18 Ago 2026) — scioglie il punto 🚩 della roadmap S5 («un utente Tenant può avere N Enti», segnalato da Marco il 9 Ago 2026 e confermato il 17 Ago 2026, conferma che aveva già escluso gli Enti gerarchici). Non supera nessuna decisione precedente: ADR-006 e ADR-018 restano validi alla lettera. Chiude i rimandi lasciati aperti da ADR-029 e ADR-030. **Fondamenta attuate lo stesso giorno** (schema, backfill 1:1, provisioning `--account=`, switcher in top bar — suite a 739); le colonne Cashier, il middleware di lockout e l'onboarding restano ai punti S5 successivi.*
+
+***Note di attuazione (18 Ago 2026):***
+- *La unique del pivot è `(user_id, account_id)` — l'ERD nasceva con l'ordine opposto — perché il percorso caldo è «gli account dell'utente X», letto dallo switcher a ogni pagina (stesso ragionamento di `tecnico_cliente`).*
+- *Nel backfill i membri sono gli **Admin del tenant** (fallback: i Superadmin; altrimenti account senza membri, con warning nel log): l'invariante «ogni account ha ≥1 membro» vale da qui in avanti, non retroattivamente, e vive in `Account::rimuoviMembro()`.*
+- *La guardia `tipo = ente` dello switcher è **difesa in profondità** (forma ADR-030): il check di appartenenza basterebbe finché l'invariante «account_id solo sui nodi ente» regge — un test la esercita corrompendo il dato apposta, perché la prima stesura della prova di mutazione l'aveva trovata non provabile.*
+- *Lo switcher rifiuta gli account in **lockout** già oggi: le colonne nascono con questo blocco e un ingresso nuovo nasce chiuso; il middleware sulla navigazione ordinaria resta al punto ADR-013.*
 
 **Contesto.** Il requisito è di business: chi paga di più gestisce più Enti, e i piani si tarano su quel numero. Il modello attuale non ci arriva, e non per una dimenticanza ma per tre decisioni esplicite: il `tenant_id` punta all'Ente top-level (🔗 ADR-006), ogni utente è legato a **un solo** Ente senza bypass per nessun ruolo (🔗 ADR-018), e il modello di incasso del 14 Giu 2026 mette **l'Ente** come pagatore del rapporto A. La conseguenza si tocca con mano perfino da console: `easylab:provision-tenant`, rilanciato con l'email di un Admin esistente, **ignora** il secondo Ente invece di agganciarglielo (`User::firstOrCreate` trova l'utente e scarta il `tenant_id` nuovo) — oggi «un utente con due Enti» non è esprimibile nemmeno volendo.
 

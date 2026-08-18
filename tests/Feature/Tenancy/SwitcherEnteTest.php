@@ -7,6 +7,7 @@ use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Support\AuditLog;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\Models\Activity;
 
 /**
@@ -97,6 +98,25 @@ it('refuses a non-ente node', function () {
     $this->actingAs($this->membro);
 
     expect($this->membro->passaAllEnte($dipartimento))->toBeFalse()
+        ->and($this->membro->fresh()->tenant_id)->toBe($this->enteA->id)
+        ->and(switchAudit())->toBeNull();
+});
+
+it('refuses a non-ente node even if it somehow carries an account_id', function () {
+    // La guardia sul tipo è DIFESA IN PROFONDITÀ (stessa forma del tenant_id
+    // del tecnico interno, ADR-030): normalmente un non-ente non può avere
+    // account_id (invariante in booted()), quindi il check sull'appartenenza
+    // basterebbe. Ma se un domani quell'invariante si allentasse — o il dato si
+    // corrompesse da fuori Eloquent, come qui — lo switcher non deve comunque
+    // poter puntare il tenant di qualcuno su un dipartimento. Senza questo
+    // test, la mutazione che toglie la guardia sopravviveva.
+    $dipartimento = UnitaOrganizzativa::factory()->dipartimento()->under($this->enteB)->create();
+    DB::table('unita_organizzativa')
+        ->where('id', $dipartimento->id)
+        ->update(['account_id' => $this->account->id]);
+    $this->actingAs($this->membro);
+
+    expect($this->membro->passaAllEnte($dipartimento->fresh()))->toBeFalse()
         ->and($this->membro->fresh()->tenant_id)->toBe($this->enteA->id)
         ->and(switchAudit())->toBeNull();
 });
