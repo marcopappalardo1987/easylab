@@ -65,7 +65,10 @@ erDiagram
 
     UNITA_ORGANIZZATIVA ||--o{ UNITA_ORGANIZZATIVA : "parent_id (albero)"
     UNITA_ORGANIZZATIVA ||--o{ STRUMENTI : "ubicazione"
-    UNITA_ORGANIZZATIVA ||--o{ SUBSCRIPTIONS : "abbonamento (ente)"
+    ACCOUNTS ||--o{ UNITA_ORGANIZZATIVA : "account_id (ente — ADR-032, S5)"
+    ACCOUNTS ||--o{ ACCOUNT_USER : "membri"
+    USERS ||--o{ ACCOUNT_USER : "amministra l'account"
+    ACCOUNTS ||--o{ SUBSCRIPTIONS : "abbonamento (Cashier)"
     RESELLERS ||--o{ UNITA_ORGANIZZATIVA : "reseller_id (V1.1)"
 
     STRUMENTI ||--o{ INTERVENTI : "ha attività"
@@ -102,7 +105,7 @@ Utente della piattaforma. Auth/2FA via Jetstream/Fortify (ADR-012). Non tutti gl
 | `name` | string | |
 | `email` | string unique | |
 | `password` | string | |
-| `tenant_id` | bigint nullable, FK → `unita_organizzativa.id` | Valorizzato per Admin/Responsabile/Tenant **e per Developer/Superadmin**, che 🔗 ADR-018 ha reso tenant-bound (l'accesso cross-tenant passa solo dall'impersonazione). NULL per il **Tecnico esterno** (staff EasyLab), che accede per portafoglio ∪ assegnazione; valorizzato per il **Tecnico interno**, dipendente del laboratorio, dove però non è un criterio di accesso ma una difesa in profondità — 🔗 ADR-030. |
+| `tenant_id` | bigint nullable, FK → `unita_organizzativa.id` | Valorizzato per Admin/Responsabile/Tenant **e per Developer/Superadmin**, che 🔗 ADR-018 ha reso tenant-bound (l'accesso cross-tenant passa solo dall'impersonazione). NULL per il **Tecnico esterno** (staff EasyLab), che accede per portafoglio ∪ assegnazione; valorizzato per il **Tecnico interno**, dipendente del laboratorio, dove però non è un criterio di accesso ma una difesa in profondità — 🔗 ADR-030. Con 🔗 ADR-032 (da attuare in S5) resta **uno solo per volta**, ma diventa riscrivibile dallo **switcher** fra gli Enti del proprio account: azione dedicata e auditata, la colonna esce da `$fillable`. |
 
 > **Revisione del 17 Ago 2026 (S4 blocco 9).** Questa riga diceva «NULL per utenti piattaforma (Developer/Superadmin/Tecnico)» ed era falsa in due punti su tre: per Developer e Superadmin da 🔗 ADR-018, che li ha vincolati al proprio Ente, e per il Tecnico da 🔗 ADR-030, che ne riconosce due forme. Restava vera solo per il tecnico esterno, ed è il tipo di riga che si legge come specifica e nel frattempo ha smesso di descrivere il sistema.
 
@@ -148,6 +151,7 @@ Nodo dell'organizzazione del cliente. Il nodo radice (`tipo = ente`) **è** il t
 | `id` | bigint PK | |
 | `tenant_id` | bigint FK → `unita_organizzativa.id` | = id del nodo *ente* radice. Sul nodo ente coincide col proprio `id` (popolato dopo l'insert). Permette di filtrare per tenant senza risalire l'albero. |
 | `reseller_id` | bigint nullable | NULL in V1 (ADR-002). |
+| `account_id` | bigint nullable, FK → `accounts.id` | **Solo sul nodo `ente`** (NULL sugli altri): l'account intestatario del rapporto commerciale (🔗 ADR-032, §4.3 — da attuare in S5; backfill 1:1 sugli Enti esistenti). Convive con `reseller_id`: un account resta rivendibile. |
 | `parent_id` | bigint nullable, self FK | NULL per il nodo ente; altrimenti il nodo padre. |
 | `tipo` | enum: `ente` \| `dipartimento` \| `sottolaboratorio` | Estendibile (profondità libera). |
 | `nome` | string | |
@@ -157,18 +161,12 @@ Nodo dell'organizzazione del cliente. Il nodo radice (`tipo = ente`) **è** il t
 **Campi presenti solo sul nodo `ente`** (= tenant; nullable sugli altri nodi):
 | Colonna | Tipo | Note |
 |---|---|---|
-| `partita_iva` | string nullable | Dati fiscali (ADR-010, predisposizione e-invoicing). |
-| `codice_fiscale` | string nullable | |
-| `pec` | string nullable | |
-| `codice_destinatario_sdi` | string nullable | |
-| `is_locked` | boolean default false | Lockout insoluto (ADR-013). |
-| `locked_at` | datetime nullable | |
-| `locked_reason` | string nullable | |
 | `soglia_obsolescenza_anni` | integer default 10 | Soglia obsolescenza configurabile (ADR-014). |
+| `visibilita_garanzie_ricambio` | string NOT NULL default `modifica` | Tre stati `nascosta` \| `lettura` \| `modifica` (ADR-029, attuata il 15 Ago 2026). Fuori da `$fillable`: si scrive solo via `fissaVisibilitaGaranzieRicambio()`. *(Riga aggiunta il 18 Ago 2026: la colonna era a DB da nove giorni ma questa tabella non la elencava.)* |
 
-> **Scelta documentata.** I campi billing/fiscali/lockout vivono sul nodo `ente` per semplicità V1 (un solo posto, niente join in più). Se in V1.1 l'attivazione Rivenditori complica il billing, si potrà estrarre una tabella `tenants` 1-1 col nodo ente senza toccare le altre relazioni (puntano già a `tenant_id`).
+> **Scelta documentata — sciolta da 🔗 ADR-032 (18 Ago 2026).** Questa nota prevedeva i campi billing/fiscali/lockout sul nodo `ente` «per semplicità V1», con la possibilità di estrarre più avanti una tabella 1-1. Nessuna di quelle colonne è mai nata a DB, e la tabella prenotata è arrivata **prima** dei dati: è `accounts` (§4.3) — che però è 1-N e non 1-1, perché un account copre N Enti. Dati fiscali (ADR-010) e lockout (ADR-013) nascono direttamente lì. Restano sul nodo `ente` solo le impostazioni della *sede*: la soglia di obsolescenza e la visibilità garanzie ricambio.
 
-**Indici:** `tenant_id`, `parent_id`, `reseller_id`, `(tipo)`.
+**Indici:** `tenant_id`, `parent_id`, `reseller_id`, `account_id`, `(tipo)`.
 
 ### 4.2 `resellers` (livello piattaforma — V1.1, ADR-002)
 L'azienda "similare a EasyLab" che ripropone la piattaforma ai propri clienti. Vive **sopra** gli Enti, al livello piattaforma (non dentro l'albero di un tenant). È il target di `reseller_id`. **Tabella definita ma non popolata in V1** (`reseller_id = NULL` ovunque); creata fin da subito per evitare migrazioni distruttive in V1.1.
@@ -187,9 +185,35 @@ L'azienda "similare a EasyLab" che ripropone la piattaforma ai propri clienti. V
 | `stripe_connect_status` | enum nullable: `non_connesso` \| `connesso` \| `revocato` | Stato della connessione OAuth. |
 | timestamps, `deleted_at` | | soft delete. |
 
-> **Modello di incasso (ADR-002, aggiornamento 14 Giu 2026).** Tre rapporti: **A** Ente diretto → EasyLab (Cashier); **B** Rivenditore → EasyLab quota fissa (Cashier, questa tabella); **C** Ente del rivenditore → Rivenditore, via **Stripe Connect Standard + direct charges** sul connected account del rivenditore (SDK Stripe con `stripe_account`, **non** Cashier), `application_fee = 0`. Solo A è in V1; B e C sono V1.1.
+> **Modello di incasso (ADR-002, aggiornamento 14 Giu 2026).** Tre rapporti: **A** Ente diretto → EasyLab (Cashier); **B** Rivenditore → EasyLab quota fissa (Cashier, questa tabella); **C** Ente del rivenditore → Rivenditore, via **Stripe Connect Standard + direct charges** sul connected account del rivenditore (SDK Stripe con `stripe_account`, **non** Cashier), `application_fee = 0`. Solo A è in V1; B e C sono V1.1. Con 🔗 ADR-032 il pagatore del rapporto A non è più il singolo Ente ma il suo **account** (§4.3).
 
 **Indici:** `stripe_connect_account_id`.
+
+### 4.3 `accounts` (livello piattaforma — ADR-032, **da attuare in S5**)
+L'intestatario del rapporto commerciale: il cliente che paga EasyLab e possiede **N Enti** (rapporto A). Vive sopra gli Enti, fuori dall'albero, come `resellers` — ma è un *cliente con più sedi*, non un merchant terzo. Il limite di Enti è un attributo del piano e si fa rispettare **al provisioning**, non nello scope.
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `id` | bigint PK | Target di `unita_organizzativa.account_id` (solo nodi `ente`). |
+| `ragione_sociale` | string | |
+| `partita_iva` / `codice_fiscale` | string nullable | Dati fiscali (ADR-010): l'intestatario della fattura è chi paga. |
+| `pec` / `codice_destinatario_sdi` | string nullable | Doppia semantica privato/PA (avvertenza in ADR-002). |
+| `is_locked` | boolean default false | Lockout insoluto (ADR-013): blocca **tutti** gli Enti dell'account. |
+| `locked_at` / `locked_reason` | datetime / string nullable | |
+| colonne Cashier (`stripe_id`, `pm_type`, `pm_last_four`, `trial_ends_at`) | | L'account è il customer Stripe; qui vive il trait `Billable` (§9). |
+| timestamps, `deleted_at` | | soft delete. |
+
+#### `account_user` (pivot — ADR-032)
+I membri che amministrano il rapporto commerciale (condizione della Policy dietro `billing.manage_own`). Gemello per forma di `tecnico_cliente` (§3.3). Alla nascita una riga sola — chi ha sottoscritto; invariante applicativo: **ogni account ha sempre almeno un membro**.
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `id` | bigint PK | |
+| `account_id` | bigint FK → `accounts.id` | |
+| `user_id` | bigint FK → `users.id` | |
+| timestamps | | |
+
+*Unique* `(account_id, user_id)`. Lo **switcher** fra gli Enti dei propri account (ADR-032 punto 4) verifica l'appartenenza qui e riscrive `users.tenant_id` in modo auditato — una richiesta vede sempre un solo tenant, lo scoping (ADR-018) non cambia.
 
 ---
 
@@ -398,7 +422,7 @@ Allegato **polimorfico** a Strumento o Intervento. Upload su **Backblaze B2** (b
 
 Non ridisegnate: gestite dalle librerie standard, citate per completezza.
 
-- **Cashier (Stripe) — account EasyLab** — colonne Stripe su `users`/nodo ente (`stripe_id`, `pm_type`, `pm_last_four`, `trial_ends_at`) + tabelle `subscriptions`, `subscription_items`. Copre i rapporti **A** (Ente diretto → EasyLab) e **B** (Rivenditore → EasyLab, su `resellers`). Il piano distingue **Free (omaggiato)** e **SaaS a pagamento** (ADR-002). Il fallimento pagamento/scadenza → `is_locked` sul nodo ente/reseller (ADR-013). E-invoicing SDI fuori V1 (ADR-010): si raccolgono solo i dati fiscali (§4.1/§4.2).
+- **Cashier (Stripe) — account EasyLab** — colonne Stripe su **`accounts`** (`stripe_id`, `pm_type`, `pm_last_four`, `trial_ends_at` — 🔗 ADR-032, che ha chiuso l'ambiguità «`users`/nodo ente» di questa riga) + tabelle `subscriptions`, `subscription_items`. Copre i rapporti **A** (account con N Enti → EasyLab, §4.3) e **B** (Rivenditore → EasyLab, su `resellers`). Il piano distingue **Free (omaggiato)** e **SaaS a pagamento** (ADR-002) e porta il **limite di Enti** come attributo. Il fallimento pagamento/scadenza → `is_locked` su `accounts`/`resellers` (ADR-013): il lockout dell'account blocca tutti i suoi Enti. E-invoicing SDI fuori V1 (ADR-010): si raccolgono solo i dati fiscali (§4.3/§4.2).
 - **Stripe Connect — account del Rivenditore (V1.1, rapporto C)** — il rivenditore incassa dai propri Enti sul **proprio** connected account ("Standard" + direct charges); integrazione via SDK Stripe con `stripe_account` (**non** Cashier), `application_fee = 0`. Stato della connessione su `resellers.stripe_connect_account_id`/`stripe_connect_status` (§4.2). I fondi non transitano mai da EasyLab (ADR-002, aggiornamento 14 Giu 2026).
 - **Notifiche (Laravel)** — tabella `notifications` per le notifiche **in-app**; le email "del futuro" sono inviate via SMTP accodate su Redis (ADR-011). Nessuna push in V1.
 - **Audit (spatie/laravel-activitylog)** — tabella `activity_log`. Abilitata sui modelli/azioni sensibili: **forzature semaforo** (chi/quando/motivo), **accessi tecnici cross-tenant** (ADR-007), **impersonation** (Superadmin/Developer), **lockout** e trasferimenti cross-tenant (ADR-013/015).
@@ -472,6 +496,10 @@ Legenda: ✅ pieno · ⚠️ ristretto (per sotto-albero/portafoglio/proprietà)
 | **ADR-026** Download mediati dall'app | Nessuna colonna: rotta firmata + Policy sul model `Documento`. |
 | **ADR-027** Tracciabilità delle scritture | Nessuna tabella nuova: `activity_log` (§9) sul canale `audit`, via il trait `AuditsDomainWrites`. Il permesso `garanzie.ricambio.*` passa al Tecnico (§10). |
 | **ADR-028** Intervento sempre assegnato | Nessuna modifica di schema: `interventi.tecnico_id` **resta nullable** (§5.2) e l'obbligo vive nel form, come per `strumenti.fornitore_id`. |
+| **ADR-029** Visibilità garanzie ricambio per-Ente | `unita_organizzativa.visibilita_garanzie_ricambio` (§4.1, solo nodo ente), fuori `$fillable`; il vincolo di scrittura vive in `GaranziaRicambioPolicy`. |
+| **ADR-030** Tecnico interno/esterno | Nessuna tabella nuova: le due forme sono distinte da `users.tenant_id` (NULL = esterno); la regola vive in `TenantScope`/`AccessoTecnico` + contratto `ReachesStrumento`. |
+| **ADR-031** PDF con dompdf | Nessuna tabella: il PDF si genera al volo e non si archivia (niente righe in `documenti`). |
+| **ADR-032** Account sopra l'Ente | `accounts` + pivot `account_user` (§4.3) + `unita_organizzativa.account_id` (§4.1); dati fiscali, lockout e colonne Cashier nascono su `accounts`. `tenant_id` e scoping invariati; `users.tenant_id` riscritto solo dallo switcher. **Da attuare in S5.** |
 
 ---
 
