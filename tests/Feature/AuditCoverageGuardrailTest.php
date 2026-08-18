@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Account;
 use App\Models\AvvisoScadenza;
 use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Documento;
@@ -35,6 +36,10 @@ const ESENZIONI = [
 
 /** Il sostantivo atteso nella descrizione, per ogni modello che usa il trait. */
 const SOSTANTIVI = [
+    // Aggiunto il 18 Ago 2026 col blocco Account (ADR-032) — terzo blocco
+    // consecutivo in cui il meta-test ferma la suite appena il model nasce e
+    // presenta la scelta invece di lasciarla dimenticare.
+    Account::class => 'Creazione account',
     // Aggiunto il 15 Ago 2026 col blocco Fornitore, e non a mano: è stato il
     // meta-test a fermare la suite appena il model è nato. È il lavoro per cui
     // esiste — la scelta «trait o esenzione» si presenta invece di poter essere

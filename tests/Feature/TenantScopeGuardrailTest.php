@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Account;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Contracts\ReachesStrumento;
 use App\Models\User;
@@ -16,9 +17,15 @@ use function PHPUnit\Framework\assertTrue;
  * nell'albero, matrice ERD §10) e non è verificabile qui.
  */
 
-// Modelli esentati: User è l'identità di auth, non un dato tenant-scoped.
+// Modelli esentati, ciascuno col proprio perché — due nature diverse:
+//  - User è l'identità di auth, non un dato tenant-scoped;
+//  - Account (ADR-032) è il primo modello di PIATTAFORMA: vive sopra i tenant
+//    come `resellers` (che un modello non ce l'ha), e scoparlo al tenant
+//    corrente negherebbe la sua ragione d'essere — possiede N Enti. È il
+//    pattern per i futuri modelli di questo livello.
 const NON_TENANT_MODELS = [
     User::class,
+    Account::class,
 ];
 
 function businessModels(): array
