@@ -132,6 +132,21 @@ it('sends nothing on a second run in the same day', function () {
     expect(AvvisoScadenza::count())->toBe(1);
 });
 
+it('fills the log without notifying anyone, for the first run on existing data', function () {
+    Intervento::factory()->forStrumento($this->strumento)
+        ->create(['data_scadenza' => today()->addDays(10)->toDateString()]);
+
+    $this->artisan('easylab:notifica-scadenze', ['--senza-invio' => true])->assertSuccessful();
+
+    Notification::assertNothingSent();
+    expect(AvvisoScadenza::count())->toBe(1);
+
+    // E il giorno dopo il silenzio continua: la scadenza è già stata registrata,
+    // quindi non è più una novità. È tutto il punto dell'opzione.
+    scheduler();
+    Notification::assertNothingSent();
+});
+
 it('only warns once for something that was already expired when created', function () {
     Intervento::factory()->forStrumento($this->strumento)
         ->create(['data_scadenza' => today()->subMonths(3)->toDateString()]);

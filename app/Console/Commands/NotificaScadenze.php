@@ -56,10 +56,21 @@ use Illuminate\Support\Facades\DB;
  * 2026: Admin, Responsabile di reparto e Tecnico assegnato), quindi
  * l'impostazione per-Ente di ADR-029 non entra in gioco: nessun destinatario è
  * il ruolo che quella regola protegge.
+ *
+ * **⚠️ `--senza-invio` è obbligatorio al primo avvio su dati esistenti.** Il
+ * comando avvisa dei *cambi di stato*, ma alla prima esecuzione non ha memoria:
+ * ogni scadenza già aperta è un cambio mai notificato, e un Ente vero ne ha
+ * migliaia (3297 interventi entro soglia sul solo database di sviluppo, contati
+ * il 18 Ago 2026). La prima email sarebbe illeggibile e verrebbe classificata
+ * come spam nel momento peggiore, cioè quando il prodotto si presenta. Con
+ * l'opzione il log si popola in silenzio e dal giorno dopo arrivano solo le
+ * novità vere — che è ciò che il digest promette. Non è una scorciatoia di
+ * sviluppo: è il primo passo del deploy, e va scritto nella procedura.
  */
 class NotificaScadenze extends Command
 {
-    protected $signature = 'easylab:notifica-scadenze';
+    protected $signature = 'easylab:notifica-scadenze
+        {--senza-invio : Registra gli avvisi senza notificare nessuno (primo avvio)}';
 
     protected $description = 'Invia il digest giornaliero delle scadenze (interventi e garanzie) a chi le segue';
 
@@ -108,7 +119,7 @@ class NotificaScadenze extends Command
             }
         });
 
-        $destinatari = $this->destinatari($ente->id, $righe);
+        $destinatari = $this->option('senza-invio') ? [] : $this->destinatari($ente->id, $righe);
 
         foreach ($destinatari as ['utente' => $utente, 'righe' => $sue]) {
             $utente->notify(new DigestScadenze($ente->id, $ente->nome, $sue));
@@ -116,12 +127,13 @@ class NotificaScadenze extends Command
 
         $scadute = $this->conteggio($righe, TransizioneAvviso::Scaduta);
         $this->info(sprintf(
-            'Ente «%s»: %d avvisi (%d scaduti, %d imminenti) a %d destinatari.',
+            'Ente «%s»: %d avvisi (%d scaduti, %d imminenti) a %d destinatari.%s',
             $ente->nome,
             count($righe),
             $scadute,
             count($righe) - $scadute,
             count($destinatari),
+            $this->option('senza-invio') ? ' [solo registrazione]' : '',
         ));
     }
 

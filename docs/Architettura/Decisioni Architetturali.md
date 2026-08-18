@@ -268,11 +268,24 @@ Attuando la voce è emerso il buco che ADR-009 non copriva: chiusa una taratura,
 
 **ADR-011 — Canali di notifica V1: email (SMTP) + in-app, no push**
 
-*Stato: Accettata*
+*Stato: Accettata — **attuata il 18 Ago 2026** (S5, primo blocco). Attuandola sono emerse tre cose che la decisione non poteva prevedere, tutte annotate sotto: la forma dell'invio (digest e non una email per scadenza), il fatto che in console **nessuno scope protegge più nulla**, e la necessità di un primo avvio silenzioso.*
 
 **Decisione.** In V1 le notifiche ("email del futuro" e alert) usano **email via SMTP** + **notifiche in-app** nella dashboard. Niente push (web/mobile) in V1: l'app è web-responsive, non nativa; le push si valuteranno più avanti.
 
 **Conseguenze.** Invio email accodato sulle code Redis (già nello stack). Provider SMTP da definire (es. Postmark/SES/Mailgun o SMTP standard). Le notifiche in-app implicano una tabella `notifications` (notifiche di Laravel) consultabile dall'utente.
+
+**Attuazione (18 Ago 2026).**
+
+- **Un digest giornaliero per Ente, non una email per scadenza.** Un laboratorio con venti garanzie in scadenza riceverebbe venti messaggi nello stesso minuto, che è il modo più rapido per far finire il mittente fra lo spam. Il digest riporta i soli **cambi di stato** del giorno; nei giorni in cui non cambia nulla non parte niente.
+- **Destinatari:** Admin dell'Ente (tutto), Responsabile Reparto (il proprio sotto-albero, con lo stesso criterio dell'applicazione), Tecnico assegnato (i soli interventi suoi). Il ruolo `Tenant` **non** è destinatario, quindi l'impostazione di 🔗 ADR-029 non entra in gioco. Chi rientra da più canali riceve una notifica sola.
+- **Il tecnico esterno riceve un digest per ciascun Ente** (🔗 ADR-030), mai un documento unico: mescolare in una email i dati di due clienti farebbe con la posta ciò che il global scope impedisce nell'applicazione.
+- ⚠️ **In console i global scope si ritirano** (`CurrentTenant::shouldScope()` è false): `TenantScope`, `DepartmentScope` e **anche `GaranziaRicambioPrivacyScope`. Isolamento e privacy del digest vivono quindi nel codice del comando** — `where('tenant_id')` espliciti, sotto-albero riapplicato a mano, e per il ricambio nessuna guardia ma una **select che non legge il nome del pezzo**. Ognuna ha il proprio test negativo, verificato per mutazione.
+- **L'anti-duplicati è una tabella, `avvisi_scadenza`**, con `(riferimento, transizione, data_scadenza)` unico. La data nella chiave non è ridondanza: è ciò che distingue un duplicato da una **proroga**, che merita un avviso nuovo. Ruota a 24 mesi, ed è la «rotazione» che il registro dei trattamenti (T4) dichiarava senza ancora averla.
+- ⚠️ **Il primo avvio su dati esistenti va fatto con `--senza-invio`.** Alla prima esecuzione il comando non ha memoria, quindi ogni scadenza già aperta è un cambio mai notificato: sul solo database di sviluppo sono **3297 interventi entro soglia**, e sulla base demo la prima email sarebbe stata di **1306 righe**. L'opzione popola il log in silenzio; dal giorno dopo arrivano solo le novità. È il primo passo del deploy, non una scorciatoia di sviluppo.
+- **Opt-out solo per l'email** (`users.riceve_email_scadenze`, default attivo, pagina `/settings/notifiche`): è il diritto di opposizione del registro T4. Le notifiche in-app restano sempre, perché sono la copia di ciò che l'utente vede comunque entrando e non un invio verso l'esterno. La preferenza si legge **sul worker al momento dell'invio**, così chi la spegne dopo l'accodamento è comunque rispettato.
+- **La campanella non fa polling.** La posta arriva una volta al giorno: un `wire:poll` sarebbe circa millequattrocento richieste al giorno per utente per un evento quotidiano. Il conteggio si aggiorna al cambio pagina; quando le notifiche diventeranno frequenti (S6) il polling sarà una riga.
+- **Il provider SMTP resta da scegliere** — il codice usa il mailer configurato, e in locale `MAIL_MAILER=log`. Restano aperti anche `MAIL_FROM_ADDRESS` reale e il **DPA col provider** (registro §5), precondizione al primo invio verso indirizzi di clienti.
+- ⚠️ **Il template usa il markdown di Laravel, non ancora un layout nostro**: nella parte *testo semplice* dell'email le tabelle restano in forma markdown grezza, e il piè di pagina è quello del framework («All rights reserved», in inglese). Si sistemano insieme allo `[STRETCH]` dei template brandizzati per tenant, che è la sede giusta: pubblicare ora le viste del pacchetto per una riga di footer significherebbe farlo due volte.
 
 ---
 

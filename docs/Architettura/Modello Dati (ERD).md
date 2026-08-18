@@ -88,6 +88,10 @@ erDiagram
 
     USERS ||--o{ SPOSTAMENTI_STRUMENTO : "eseguito_da"
     UNITA_ORGANIZZATIVA ||--o{ SPOSTAMENTI_STRUMENTO : "da/a nodo"
+
+    INTERVENTI ||--o{ AVVISI_SCADENZA : "avviso inviato (morph)"
+    GARANZIE ||--o{ AVVISI_SCADENZA : "avviso inviato (morph)"
+    USERS ||--o{ NOTIFICATIONS : "posta in-app (notifiable)"
 ```
 
 > Nota: `roles`, `permissions`, `model_has_roles` (spatie), `subscriptions`/`subscription_items` (Cashier), `notifications` e `activity_log` sono tabelle dei pacchetti — citate ma non ridisegnate (§7–§9).
@@ -111,6 +115,7 @@ Utente della piattaforma. Auth/2FA via Jetstream/Fortify (ADR-012). Non tutti gl
 
 | `two_factor_secret` / `two_factor_recovery_codes` | text nullable | 2FA (Fortify). |
 | `is_active` | boolean | Abilitazione (provisioning/lockout — ADR-012/013). |
+| `riceve_email_scadenze` | boolean default true | Opt-out dal digest email (🔗 ADR-011, 18 Ago 2026) = diritto di opposizione del registro T4. Riguarda **solo l'email**: le notifiche in-app restano sempre. Fuori dall'attributo `Fillable`, come `visibilita_garanzie_ricambio` (ADR-029): si scrive solo da `/settings/notifiche`. |
 | timestamps, `deleted_at` | | soft delete. |
 
 **Ruoli** (spatie/laravel-permission): `Developer`, `Superadmin`, `Admin`, `Responsabile Reparto`, `Tenant`, `Tecnico`. Le tabelle `roles`/`permissions`/`model_has_roles`/`model_has_permissions`/`role_has_permissions` sono gestite dal pacchetto (ADR-006).
@@ -293,6 +298,20 @@ Cuore manutentivo. Le **tarature e certificazioni** sono interventi `tipo = tara
 
 > Il trasferimento aggiorna `strumenti.unita_organizzativa_id` e — se cross-tenant — `strumenti.tenant_id`; lo **storico interventi resta legato allo strumento** e segue la macchina (continuità manutentiva, ADR-015). Il log completo resta visibile solo a EasyLab/Superadmin.
 
+### 5.5 `avvisi_scadenza` (memoria dello scheduler — ADR-011, attuata il 18 Ago 2026)
+Log degli avvisi già inviati: risponde all'unica domanda che il comando giornaliero pone a ogni giro, «di questa scadenza ho già avvisato?». Senza, il digest ripeterebbe le stesse righe finché la scadenza resta aperta.
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `id` | bigint PK | |
+| `tenant_id` | bigint indexed | Denormalizzato benché ricavabile dal riferimento: lo scheduler gira in console, dove i global scope **non filtrano**, e averlo sulla riga rende l'isolamento verificabile sul log stesso. |
+| `riferimento_type` / `riferimento_id` | morph → `Intervento` \| `Garanzia` | Le due sole fonti di scadenza del dominio (le tarature sono interventi, ADR-009; l'obsolescenza non è un motivo, ADR-024). |
+| `transizione` | enum: `imminente` \| `scaduta` | Il *cambio* di stato, non lo stato: ogni scadenza attraversa entrambe le transizioni una volta sola. |
+| `data_scadenza` | date | Fotografia della scadenza avvisata. |
+| `created_at` | timestamp | Solo creazione: una riga di log non si aggiorna mai. |
+
+*Unique* `(riferimento_type, riferimento_id, transizione, data_scadenza)` — nome `avvisi_scadenza_unico`. **La data fa parte della chiave**: è ciò che distingue un duplicato da una **proroga**, che è un'altra scadenza e merita un avviso nuovo, senza bisogno di logiche di invalidazione. **Indici:** `tenant_id`, morph. **Rotazione:** 24 mesi via `model:prune` (registro trattamenti T4).
+
 ---
 
 ## 6. Garanzie (motore sdoppiato — ADR-004/019/020)
@@ -424,7 +443,7 @@ Non ridisegnate: gestite dalle librerie standard, citate per completezza.
 
 - **Cashier (Stripe) — account EasyLab** — colonne Stripe su **`accounts`** (`stripe_id`, `pm_type`, `pm_last_four`, `trial_ends_at` — 🔗 ADR-032, che ha chiuso l'ambiguità «`users`/nodo ente» di questa riga) + tabelle `subscriptions`, `subscription_items`. Copre i rapporti **A** (account con N Enti → EasyLab, §4.3) e **B** (Rivenditore → EasyLab, su `resellers`). Il piano distingue **Free (omaggiato)** e **SaaS a pagamento** (ADR-002) e porta il **limite di Enti** come attributo. Il fallimento pagamento/scadenza → `is_locked` su `accounts`/`resellers` (ADR-013): il lockout dell'account blocca tutti i suoi Enti. E-invoicing SDI fuori V1 (ADR-010): si raccolgono solo i dati fiscali (§4.3/§4.2).
 - **Stripe Connect — account del Rivenditore (V1.1, rapporto C)** — il rivenditore incassa dai propri Enti sul **proprio** connected account ("Standard" + direct charges); integrazione via SDK Stripe con `stripe_account` (**non** Cashier), `application_fee = 0`. Stato della connessione su `resellers.stripe_connect_account_id`/`stripe_connect_status` (§4.2). I fondi non transitano mai da EasyLab (ADR-002, aggiornamento 14 Giu 2026).
-- **Notifiche (Laravel)** — tabella `notifications` per le notifiche **in-app**; le email "del futuro" sono inviate via SMTP accodate su Redis (ADR-011). Nessuna push in V1.
+- **Notifiche (Laravel)** — tabella `notifications` per le notifiche **in-app**, **creata il 18 Ago 2026** con lo stub standard; le email "del futuro" sono inviate via SMTP accodate su Redis (ADR-011). Nessuna push in V1. ⚠️ **È l'unica tabella del progetto senza `tenant_id`**, e per scelta: una riga appartiene a una *persona* (`notifiable`), non a un Ente — il contesto Ente vive nel payload (`data.ente_id`). Timbrarla col tenant la farebbe sparire dalla campanella appena lo switcher di 🔗 ADR-032 cambia sede all'utente, che nel frattempo è la stessa persona con la stessa posta. Rotazione a 12 mesi (`routes/console.php`). La memoria anti-duplicati **non** sta qui ma in `avvisi_scadenza` (§5.5): è per-scadenza, mentre queste righe sono per-destinatario.
 - **Audit (spatie/laravel-activitylog)** — tabella `activity_log`. Abilitata sui modelli/azioni sensibili: **forzature semaforo** (chi/quando/motivo), **accessi tecnici cross-tenant** (ADR-007), **impersonation** (Superadmin/Developer), **lockout** e trasferimenti cross-tenant (ADR-013/015).
 
 ---
@@ -481,7 +500,7 @@ Legenda: ✅ pieno · ⚠️ ristretto (per sotto-albero/portafoglio/proprietà)
 | **ADR-008** Catalogo ricambi | `ricambi` + `ricambio_utilizzo`. |
 | **ADR-009** Tarature come Attività | `interventi.tipo = taratura` + `documenti` morph. |
 | **ADR-010** E-invoicing → futuro | dati fiscali sul nodo ente (predisposizione). |
-| **ADR-011** Notifiche email + in-app | tabella `notifications` (Laravel). |
+| **ADR-011** Notifiche email + in-app | `notifications` (Laravel, senza `tenant_id` — §9) + **`avvisi_scadenza`** (§5.5, memoria anti-duplicati dello scheduler) + `users.riceve_email_scadenze` (opt-out, §3.1). |
 | **ADR-012** Onboarding doppio | `users.is_active` + flussi auth (no tabella nuova). |
 | **ADR-013** Lockout insoluto | `is_locked`/`locked_*` sul nodo ente. |
 | **ADR-014** Obsolescenza | `unita_organizzativa.soglia_obsolescenza_anni` + `strumenti.data_installazione`. |
