@@ -3,6 +3,7 @@
 use App\Http\Controllers\AccessoQr;
 use App\Http\Controllers\EsportaStoricoPdf;
 use App\Http\Controllers\FugaDaLockout;
+use App\Http\Controllers\ImpostaPasswordInvito;
 use App\Http\Controllers\PaginaBloccato;
 use App\Http\Controllers\ScaricaDocumento;
 use App\Livewire\Anagrafica\Albero;
@@ -105,6 +106,25 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
  * impersonazione: chi scansiona in reparto col telefono non deve trovarsi
  * bloccato da un setup che riguarda i ruoli privilegiati.
  */
+/*
+ * Invito: l'utente creato dal provisioning imposta la propria password
+ * (ADR-012). Fuori da ogni gruppo protetto perché l'invitato NON è
+ * autenticato — non conosce la password che ha in pancia.
+ *
+ * `signed` davanti a tutto, come nel QR (ADR-003): la firma copre l'id e la
+ * scadenza, quindi manometterli invalida l'URL prima del route-model binding.
+ * `guest` perché chi è già dentro non ha niente da impostare: viene rimandato
+ * alla dashboard invece di vedere un form fuori contesto. Il `throttle` sta
+ * solo sul POST — la firma è già il gate, il limite serve contro il
+ * martellamento della validazione.
+ */
+Route::middleware(['signed', 'guest'])->group(function () {
+    Route::get('/invito/{user}', [ImpostaPasswordInvito::class, 'mostra'])
+        ->whereNumber('user')->name('invito.mostra');
+    Route::post('/invito/{user}', [ImpostaPasswordInvito::class, 'imposta'])
+        ->whereNumber('user')->middleware('throttle:6,1')->name('invito.imposta');
+});
+
 // Niente `account.lockout` qui, e non è un buco: questa rotta traduce solo
 // token → id e REINDIRIZZA a `strumenti.show`, che sta nel gruppo protetto —
 // il bloccato rimbalza lì (ADR-013).
