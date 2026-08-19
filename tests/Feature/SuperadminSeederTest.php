@@ -8,33 +8,10 @@ use Database\Seeders\RolesAndPermissionsSeeder;
 use Database\Seeders\SuperadminSeeder;
 use Illuminate\Support\Facades\Hash;
 
-/**
- * `env()` legge $_SERVER/$_ENV prima di getenv(): un `putenv()` da solo non
- * scavalcherebbe il valore che phpunit.xml (o il .env) ha già messo lì.
- */
-function ambiente(string $chiave, ?string $valore): void
-{
-    if ($valore === null) {
-        unset($_ENV[$chiave], $_SERVER[$chiave]);
-        putenv($chiave);
-
-        return;
-    }
-
-    $_ENV[$chiave] = $_SERVER[$chiave] = $valore;
-    putenv("{$chiave}={$valore}");
-}
-
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
-    ambiente('SUPERADMIN_EMAIL', 'direzione@easylab.test');
-    ambiente('SUPERADMIN_PASSWORD', 'segreto-di-prova');
-});
-
-afterEach(function () {
-    ambiente('SUPERADMIN_EMAIL', '');
-    ambiente('SUPERADMIN_PASSWORD', '');
-    ambiente('SUPERADMIN_NAME', null);
+    config()->set('easylab.piattaforma.superadmin.email', 'direzione@easylab.test');
+    config()->set('easylab.piattaforma.superadmin.password', 'segreto-di-prova');
 });
 
 it('creates the Superadmin with its own platform Account and Ente', function () {
@@ -64,8 +41,8 @@ it('binds the Superadmin to a tenant, so the fail-closed scope does not blank it
 });
 
 it('creates nothing when the environment variables are missing', function () {
-    ambiente('SUPERADMIN_EMAIL', null);
-    ambiente('SUPERADMIN_PASSWORD', null);
+    config()->set('easylab.piattaforma.superadmin.email', null);
+    config()->set('easylab.piattaforma.superadmin.password', null);
 
     $this->seed(SuperadminSeeder::class);
 
@@ -75,7 +52,7 @@ it('creates nothing when the environment variables are missing', function () {
 });
 
 it('creates nothing when only the password is missing', function () {
-    ambiente('SUPERADMIN_PASSWORD', '');
+    config()->set('easylab.piattaforma.superadmin.password', '');
 
     $this->seed(SuperadminSeeder::class);
 
@@ -85,7 +62,7 @@ it('creates nothing when only the password is missing', function () {
 it('is idempotent and refreshes the password instead of duplicating', function () {
     $this->seed(SuperadminSeeder::class);
 
-    ambiente('SUPERADMIN_PASSWORD', 'password-nuova');
+    config()->set('easylab.piattaforma.superadmin.password', 'password-nuova');
     $this->seed(SuperadminSeeder::class);
 
     expect(User::where('email', 'direzione@easylab.test')->count())->toBe(1)

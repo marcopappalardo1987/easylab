@@ -6,7 +6,7 @@ use Database\Seeders\DatabaseSeeder;
 it('provisions the developer account with the Developer role', function () {
     $this->seed(DatabaseSeeder::class);
 
-    $developer = User::where('email', env('DEVELOPER_EMAIL', 'info@advisionplus.com'))->first();
+    $developer = User::where('email', config('easylab.piattaforma.developer.email'))->first();
 
     expect($developer)->not->toBeNull();
     expect($developer->hasRole('Developer'))->toBeTrue();

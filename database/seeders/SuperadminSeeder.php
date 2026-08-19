@@ -34,34 +34,33 @@ use Illuminate\Support\Facades\Hash;
  */
 class SuperadminSeeder extends Seeder
 {
-    /** Ragione sociale dell'Account e nome dell'Ente di piattaforma. */
-    private const NOME = 'EasyLab';
-
     public function run(): void
     {
-        $email = env('SUPERADMIN_EMAIL');
-        $password = env('SUPERADMIN_PASSWORD');
+        $email = config('easylab.piattaforma.superadmin.email');
+        $password = config('easylab.piattaforma.superadmin.password');
+        $nomeEnte = config('easylab.piattaforma.superadmin.ente');
 
         if (blank($email) || blank($password)) {
             $this->command?->warn(
                 'SUPERADMIN_EMAIL/SUPERADMIN_PASSWORD assenti: Superadmin non creato. '.
-                'Impostarle nell\'ambiente e rilanciare `db:seed --class=SuperadminSeeder`.'
+                'Impostarle nell\'ambiente, RIDISTRIBUIRE (la config è cachata in build) '.
+                'e rilanciare `db:seed --class=SuperadminSeeder`.'
             );
 
             return;
         }
 
-        DB::transaction(function () use ($email, $password) {
-            $account = Account::firstOrCreate(['ragione_sociale' => self::NOME]);
+        DB::transaction(function () use ($email, $password, $nomeEnte) {
+            $account = Account::firstOrCreate(['ragione_sociale' => $nomeEnte]);
 
             $ente = UnitaOrganizzativa::where('tipo', TipoUnitaOrganizzativa::Ente)
-                ->where('nome', self::NOME)
+                ->where('nome', $nomeEnte)
                 ->first();
 
             if ($ente === null) {
                 $ente = UnitaOrganizzativa::create([
                     'tipo' => TipoUnitaOrganizzativa::Ente,
-                    'nome' => self::NOME,
+                    'nome' => $nomeEnte,
                     'parent_id' => null,
                 ]);
 
@@ -76,7 +75,7 @@ class SuperadminSeeder extends Seeder
             $superadmin = User::updateOrCreate(
                 ['email' => $email],
                 [
-                    'name' => env('SUPERADMIN_NAME', 'Direzione EasyLab'),
+                    'name' => config('easylab.piattaforma.superadmin.nome'),
                     'password' => Hash::make($password),
                 ],
             );
@@ -97,7 +96,7 @@ class SuperadminSeeder extends Seeder
 
             $account->aggiungiMembro($superadmin);
 
-            $this->command?->info("Superadmin: {$email} sull'Ente «".self::NOME."» (id {$ente->id}).");
+            $this->command?->info("Superadmin: {$email} sull'Ente «{$nomeEnte}» (id {$ente->id}).");
         });
     }
 }

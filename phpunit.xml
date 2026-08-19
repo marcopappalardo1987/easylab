@@ -40,7 +40,8 @@
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
-        <!-- Il SuperadminSeeder legge queste due dall'ambiente: neutralizzate
+        <!-- Il SuperadminSeeder le legge da config/easylab.php, che a sua volta
+             le prende dall'ambiente: neutralizzate
              qui, o la suite creerebbe il Superadmin in locale (dove il .env le
              ha) e non in CI, che è la divergenza locale/CI di sempre. I test
              che lo riguardano se le impostano da sé. -->
