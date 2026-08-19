@@ -301,7 +301,14 @@ Il volume gioca a favore: il digest è **una email al giorno per destinatario e 
 
 **ADR-012 — Onboarding: provisioning + self-signup (entrambi)**
 
-*Stato: Accettata. **Integrata da ADR-032** (18 Ago 2026): il self-signup crea **account + primo Ente + primo membro** in un colpo; il provisioning aggancia l'Ente a un account esistente o ne crea uno (`easylab:provision-tenant --account=`).*
+*Stato: Accettata. **Integrata da ADR-032** (18 Ago 2026): il self-signup crea **account + primo Ente + primo membro** in un colpo; il provisioning aggancia l'Ente a un account esistente o ne crea uno (`easylab:provision-tenant --account=`). **Metà provisioning attuata lo stesso giorno** (invito via email + set password); il self-signup aspetta Cashier, perché la sua condizione d'ingresso è la verifica del pagamento.*
+
+***Note di attuazione della metà provisioning (18 Ago 2026):***
+- *Il link d'invito è una **URL firmata temporanea** (7 giorni) su una pagina dedicata, **non** il flusso di reset password di Fortify: quello esiste già stilizzato, ma il broker `users` scade in **60 minuti** e Fortify valida i token con quello — un invito morto in un'ora non è un invito. È il precedente del QR (🔗 ADR-003), con `signed` davanti a tutto perché manomettere id o scadenza invalidi l'URL **prima** del route-model binding.*
+- *Lo stato «invitato» **non è una colonna**: è `email_verified_at IS NULL` con una password random di 64 caratteri mai comunicata. Il click sul link e la scelta della password **sono** la verifica della casella. ⚠️ **`users.is_active` non è mai nata** (l'ERD la documentava come se esistesse): un terzo stato sarebbe stata la terza sorgente di verità su «questo utente può entrare?». L'euristica regge finché `Features::updateProfileInformation()` resta spenta — è l'unico percorso che potrebbe azzerare `email_verified_at` a un utente vero, e va rivisto quando la si accenderà.*
+- *L'invito parte **fuori dalla transazione** e in modo **sincrono** (nessun `ShouldQueue`): in console un worker di coda può non esserci, e una notifica accodata direbbe «inviato» a un invito fermo in Redis. SMTP giù → il provisioning è comunque riuscito e il comando lo dichiara. **Reinviare = rilanciare lo stesso comando** su chi non ha ancora attivato: nessun comando in più.*
+- *Nessun auto-login dopo il set: l'Admin è un ruolo 2FA-required, e la catena invito → password → login → 2FA è il flusso giusto.*
+- *⚠️ Difetto latente emerso attuando: `email_verified_at` **non è nel `Fillable`** di `User`, quindi il `firstOrCreate` del provisioning lo scartava in silenzio — ogni Admin creato restava non verificato contro l'intenzione del codice. Ora si scrive con `forceFill`, come `tenant_id`.*
 
 **Decisione.** Convivono due flussi di ingresso:
 - **Provisioning gestito** da EasyLab/Admin per i clienti "Free / chiavi in mano" (creazione Ente + utente admin, invito via email, set password).
@@ -874,7 +881,7 @@ Il precedente indica la strada: il **Tecnico esterno** (🔗 ADR-030) è già og
 - *`Billable` sul nodo ente:* è la scelta implicita di oggi, e con N Enti significherebbe N abbonamenti per lo stesso cliente — esattamente il problema da cui questo ADR nasce.
 
 **Conseguenze.**
-- **Schema (da attuare in S5, col punto Cashier):** tabella `accounts` (dati fiscali, lockout, colonne Cashier), pivot `account_user`, colonna `unita_organizzativa.account_id` (nullable, backfill 1:1, poi vincolabile). Tutte migrazioni **additive**. La «Scelta documentata» di ERD §4.1 si scioglie così: la tabella 1-1 lì prenotata diventa l'account — che però è 1-N, ed è tutta la differenza.
+- **Schema — attuato il 18 Ago 2026** (le sole colonne Cashier restano al blocco Stripe): tabella `accounts` (dati fiscali, lockout), pivot `account_user`, colonna `unita_organizzativa.account_id` (nullable, backfill 1:1 eseguito; resta nullable perché d'ora in poi la valorizza il provisioning). Tutte migrazioni **additive**. La «Scelta documentata» di ERD §4.1 si scioglie così: la tabella 1-1 lì prenotata diventa l'account — che però è 1-N, ed è tutta la differenza.
 - **Lo switcher è l'unico punto nuovo che tocca la tenancy** — non lo scope, ma il dato su cui lo scope si appoggia. Area rossa della Policy di Code Review: servono **test negativi** (il non-membro non switcha; il membro non switcha verso un Ente fuori dai propri account; l'account in lockout non fa entrare nessuno dei suoi Enti), non solo il caso felice.
 - **Nessun test esistente cambia affermazione**: le suite lavorano con `actingAs` a tenant fisso per richiesta, e lo switcher avviene *fra* le richieste. È la verifica che la forma (b) non avrebbe mai potuto passare.
 - ⚠️ **L'amministrazione degli account è cross-tenant per natura** e quindi, per ADR-018, vive in viste **esplicitamente non-scopate** gate da permessi di piattaforma: la sede è la Dashboard Superadmin di S6, come per il controllo di ADR-029. Fino ad allora, console.
