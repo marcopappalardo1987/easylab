@@ -9,15 +9,17 @@
 ## 1. Repository (S0.5)
 
 - **Hosting:** GitHub, repository **privato** `easylab` (o org dedicata). Accesso minimo necessario.
-- **Default branch:** `main` — **protetto** (no push diretto; merge solo via Pull Request con CI verde).
+- **Default branch:** `main` = **produzione**, **protetto** (no push diretto; merge solo via Pull Request con CI verde). Il ramo su cui si lavora è **`staging`** (§1.1), che conviene proteggere allo stesso modo: è lui a ricevere le PR di tutti i giorni.
 - **Struttura monorepo-light:** app Laravel alla radice; la cartella `docs/` (questa documentazione) versionata insieme al codice.
 - **`.gitignore`:** quello standard generato dall'installer Laravel (in S1) + aggiunte: `/.env*` (tranne `.env.example`), `/storage/*.key`, `/public/build`, file IDE.
 
-### 1.1 Strategia di branch (GitHub Flow leggero, adatto a solo+AI)
-- `main` = sempre deployabile; ogni merge su `main` → **deploy automatico su staging** (§3).
-- `feature/<breve-descrizione>` = branch a vita breve per ogni task; PR verso `main`.
+### 1.1 Strategia di branch — **rivista il 19 Ago 2026**
+- **`staging`** = il ramo di lavoro; ogni push → **deploy automatico sull'ambiente di staging** (§3).
+- **`main`** = **produzione**. Ci si arriva solo con una PR di **promozione** da `staging`, dopo la verifica sull'ambiente. Mai un commit diretto.
+- `feature/<breve-descrizione>` = branch a vita breve per ogni task; **PR verso `staging`**.
 - `fix/<...>`, `chore/<...>`, `docs/<...>` per le altre nature di lavoro.
-- **Produzione:** non da branch separato ma da **release taggata** (`v*`) o deploy manuale promosso da staging (§3). Niente long-lived `develop`.
+
+> *La versione precedente di questa sezione diceva «`main` = sempre deployabile → deploy automatico su staging» e «niente long-lived `develop`»: un ramo solo, con la produzione promossa da release taggata. Con `staging` la promozione diventa **un merge visibile e revisionabile** invece di un gesto sul pannello — e il codice che va in produzione è, per costruzione, quello che qualcuno ha già visto girare.*
 
 ### 1.2 Convenzioni di commit (Conventional Commits)
 Formato: `<tipo>(<scope opz.>): <descrizione imperativa>`.
@@ -84,8 +86,17 @@ STRIPE_KEY= STRIPE_SECRET= STRIPE_WEBHOOK_SECRET=                     # S5, Cash
 
 ## 3. Pipeline di deploy
 
-- **Staging:** merge su `main` → deploy automatico di Laravel Cloud (migrazioni incluse). Obiettivo roadmap S1: "push → staging" verde.
-- **Produzione:** deploy **promosso** dopo verifica su staging, mai automatico. Migrazioni in deploy con `--force`.
+**Dal 19 Ago 2026 i rami sono due**, e la differenza è quella fra «provare» e «pubblicare»:
+
+| Ramo | Ambiente | Come ci si arriva |
+|---|---|---|
+| `staging` | **staging** — deploy automatico a ogni push | `feature/<descrizione>` → PR verso `staging` (CI obbligatoria verde) |
+| `main` | **produzione** — deploy **promosso**, mai automatico | PR di promozione `staging` → `main`, dopo la verifica sull'ambiente di staging |
+
+- Mai un commit diretto su `main`: ciò che è in produzione è passato da staging, e questo è l'unico modo per poterlo affermare.
+- La CI (`.github/workflows/ci.yml`) gira su **entrambi** i rami — aggiungerlo è stata la prima conseguenza pratica del ramo nuovo: senza, le PR verso staging sarebbero passate senza rete.
+- Migrazioni in deploy con `--force` su tutti e due gli ambienti.
+- ⚠️ **Staging deve avere risorse SUE**: database, Redis, **bucket B2 separato** e Stripe in modalità test. Un ambiente di prova che scrive sui dati veri non è un ambiente di prova — ed è la stessa lezione dell'incidente del 18 Ago, quando Redis condiviso fra `easylab` ed `easylab_test` ha avvelenato la cache dei permessi del database di sviluppo.
 - ⚠️ **Migration distruttive:** il progetto ne ha già in storia (drop di colonne e tabelle popolate, 🔗 ADR-019). Su un deploy automatico girano senza che nessuno guardi: **backup del database verificato prima di promuovere in produzione**, e revisione umana della migration secondo la Policy di Code Review (area rossa).
 
 ### 3.1 Prima attivazione dello scheduler scadenze (S5 — 🔗 ADR-011)
@@ -98,6 +109,49 @@ Da fare **una volta sola**, nell'ordine, quando le notifiche vanno in un ambient
 
 Dal giorno dopo il digest manda solo le novità.
 
+### 3.2 Comandi di deploy (Laravel Cloud) — cosa gira a ogni release
+
+Da configurare come **deploy/release commands** dell'ambiente, nell'ordine:
+
+```bash
+php artisan migrate --force            # solo in avanti; mai fresh/refresh/rollback
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+php artisan event:cache
+php artisan queue:restart              # ⚠️ vedi sotto
+```
+
+⚠️ **`queue:restart` non è opzionale.** I worker tengono in memoria il codice con cui sono partiti: senza questo comando, dopo un deploy continuano a eseguire le notifiche con la versione **precedente** dell'applicazione, e il sintomo — una mail vecchia mandata da codice nuovo — è fra i più difficili da diagnosticare. Il worker esce alla fine del job in corso e il supervisore lo riavvia aggiornato.
+
+*(`storage:link` non serve: i documenti stanno su Backblaze B2, 🔗 ADR-025.)*
+
+### 3.3 Comandi una-tantum, alla nascita di un ambiente
+
+Nell'ordine, dopo il primo deploy riuscito:
+
+```bash
+php artisan db:seed --class=RolesAndPermissionsSeeder --force   # bootstrap RBAC
+php artisan easylab:provision-tenant "EasyLab" --admin-email=…  # primo Ente + Superadmin/Admin
+php artisan easylab:notifica-scadenze --senza-invio             # §3.1: obbligatorio
+```
+
+Poi, dal pannello Laravel Cloud: attivare **scheduler** e **queue worker**.
+
+⚠️ Il seeder RBAC è un **bootstrap, non una sincronizzazione**: dal primo seeding in poi la fonte di verità è il DB (🔗 ADR-016 §7). Rilanciarlo dopo aver toccato `config/rbac.php` va fatto sapendo che `firstOrCreate` non rimuove i permessi tolti dalla config — vanno cancellati a mano — e che le personalizzazioni fatte dalla UI di S6 non vanno perse: si confronta ruolo per ruolo **prima**.
+
+### 3.4 Comandi di manutenzione, quando servono
+
+```bash
+php artisan permission:cache-reset                    # dopo OGNI modifica a ruoli/permessi
+php artisan easylab:lockout {account} --motivo="…"    # blocco per insoluto (ADR-013)
+php artisan easylab:lockout {account} --sblocca
+php artisan easylab:provision-tenant "Sede" --account={id}   # sede nuova su account esistente
+php artisan schedule:list                             # verifica che i cron siano quelli attesi
+```
+
+Il resto gira da sé: il digest delle scadenze alle 06:00 di Roma, la rotazione di `avvisi_scadenza` (24 mesi) e delle `notifications` (12 mesi) alle 03:30/03:35.
+
 ---
 
 ## 4. CI — GitHub Actions (S0.7)
@@ -105,7 +159,7 @@ Dal giorno dopo il digest manda solo le novità.
 Scheletro reale in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). Si attiva quando l'app Laravel atterra in S1 (prima non c'è codice da lint/testare).
 
 **Cosa fa lo scheletro:**
-1. Trigger su `push` e `pull_request` verso `main`.
+1. Trigger su `push` e `pull_request` verso `staging` e `main` (dal 19 Ago 2026: il ramo di lavoro è staging, e senza il suo trigger le PR passerebbero senza rete).
 2. Servizi: **PostgreSQL** + **Redis** (per i feature/isolation test).
 3. Step: checkout → setup PHP 8.3 → `composer install` → copia `.env` → `key:generate` → **lint (Pint)** → **test (Pest)**.
 4. La PR non è mergeabile se il job fallisce (branch protection §1).

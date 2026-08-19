@@ -25,7 +25,8 @@ Su SQLite le colonne `date` sono memorizzate come stringhe `'YYYY-MM-DD 00:00:00
 - **Multi-tenancy** (ADR-001/006/018): nessun ruolo bypassa i global scope; scoping fail-closed. Ogni nuovo modello di business usa `BelongsToTenant` — un meta-test lo verifica.
 - **Test**: Pest, descrizioni in inglese e fixture in italiano. Per le aree "rosse" della Policy di Code Review (autorizzazioni, tenancy, migrazioni) servono **test negativi**, non solo il caso felice.
 - **Prova di mutazione**: dopo aver scritto una guardia, verificarla rompendo il codice apposta e controllando che il test giusto diventi rosso. Assicurarsi che la mutazione sia stata **davvero applicata** (un `assert` che il pattern esista): è già capitato di "verificare" con replace che non sostituivano nulla.
-- **Commit**: Conventional Commits con lo sprint come scope (`feat(s3): ...`). Branch `feature/<descrizione>`, PR verso `main`.
+- **Commit**: Conventional Commits con lo sprint come scope (`feat(s3): ...`). Branch `feature/<descrizione>`, **PR verso `staging`**.
+- **Branch (dal 19 Ago 2026)**: `staging` è il ramo di lavoro, **`main` è produzione**. Si lavora su `feature/*` → PR verso `staging`; in `main` ci si arriva solo **promuovendo** staging con una PR dedicata, dopo la verifica sull'ambiente di staging. Mai un commit diretto su `main`.
 
 ## Verifiche prima di dire "fatto"
 
