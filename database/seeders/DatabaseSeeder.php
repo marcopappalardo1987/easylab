@@ -32,5 +32,10 @@ class DatabaseSeeder extends Seeder
         );
 
         $developer->syncRoles(['Developer']);
+
+        // Superadmin di piattaforma col proprio Account/Ente: sta in un seeder
+        // a parte perché ha bisogno dei ruoli già seminati e perché salta da
+        // solo quando le sue variabili d'ambiente non ci sono.
+        $this->call(SuperadminSeeder::class);
     }
 }
