@@ -57,7 +57,8 @@ APP_KEY=            # php artisan key:generate
 APP_URL=
 DB_CONNECTION=pgsql DB_HOST= DB_PORT=5432 DB_DATABASE= DB_USERNAME= DB_PASSWORD=
 REDIS_HOST= REDIS_PASSWORD= REDIS_PORT=6379
-QUEUE_CONNECTION=redis  CACHE_STORE=redis   # ⚠️ con una managed queue di Cloud, QUEUE_CONNECTION lo imposta la piattaforma a `cloud` — vedi §3.3
+CACHE_STORE=redis
+QUEUE_CONNECTION=redis      # ⚠️ SOLO in locale. Su Cloud con una managed queue NON va impostata: vedi §2.1.1
 MAIL_MAILER=smtp MAIL_HOST= MAIL_PORT= MAIL_USERNAME= MAIL_PASSWORD=   # ADR-011 — server di posta INTERNO
 MAIL_FROM_ADDRESS= MAIL_FROM_NAME="Easy Lab"                          # dominio EasyLab, allineato a SPF/DKIM
 FILESYSTEM_DISK=s3                                                    # 🔗 ADR-025 (Backblaze B2)
@@ -66,6 +67,20 @@ AWS_DEFAULT_REGION=eu-central-003               # Amsterdam — regione UE (GDPR
 AWS_BUCKET= AWS_ENDPOINT=https://s3.eu-central-003.backblazeb2.com
 STRIPE_KEY= STRIPE_SECRET= STRIPE_WEBHOOK_SECRET=                     # S5, Cashier
 ```
+#### 2.1.1 ⚠️ `QUEUE_CONNECTION` su Cloud: **non impostarla a mano**
+
+Quando si crea una **managed queue**, Laravel Cloud inietta da sé `QUEUE_CONNECTION=cloud` nell'ambiente. Ma la documentazione di Cloud avverte che **le variabili custom hanno la priorità su quelle iniettate**: lasciare `QUEUE_CONNECTION=redis` fra le variabili dell'ambiente significa che **vince quella**, i job continuano ad andare su Redis, e la managed queue resta lì a non ricevere niente — senza un errore da nessuna parte, perché per Laravel è una configurazione perfettamente valida.
+
+Regola pratica:
+
+| Dove | `QUEUE_CONNECTION` |
+|---|---|
+| locale (`.env`) | `redis` (o `sync` per lavorare senza worker) |
+| Cloud **con** managed queue | **assente** dalle variabili custom — la mette la piattaforma |
+| Cloud **senza** managed queue (background process `queue:work`) | `redis`, impostata a mano |
+
+Il sintomo di aver sbagliato è muto: il digest non arriva a nessuno e la dashboard delle code resta vuota. Il primo controllo, in quel caso, è proprio l'elenco delle variabili dell'ambiente.
+
 **Segreti:** mai nel repo. In locale `.env`; su Laravel Cloud → variabili d'ambiente dell'ambiente. Stripe in **modalità test** su staging, **live** solo in produzione; **bucket B2 separati** per staging e produzione, così un test non tocca mai i documenti dei clienti.
 
 > Le chiavi B2 usano i nomi `AWS_*` perché è il driver S3 standard di Laravel puntato a un endpoint diverso: non c'è nulla di Amazon coinvolto.
