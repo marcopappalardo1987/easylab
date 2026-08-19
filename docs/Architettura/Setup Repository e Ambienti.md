@@ -57,7 +57,7 @@ APP_KEY=            # php artisan key:generate
 APP_URL=
 DB_CONNECTION=pgsql DB_HOST= DB_PORT=5432 DB_DATABASE= DB_USERNAME= DB_PASSWORD=
 REDIS_HOST= REDIS_PASSWORD= REDIS_PORT=6379
-QUEUE_CONNECTION=redis  CACHE_STORE=redis
+QUEUE_CONNECTION=redis  CACHE_STORE=redis   # ⚠️ con una managed queue di Cloud, QUEUE_CONNECTION lo imposta la piattaforma a `cloud` — vedi §3.3
 MAIL_MAILER=smtp MAIL_HOST= MAIL_PORT= MAIL_USERNAME= MAIL_PASSWORD=   # ADR-011 — server di posta INTERNO
 MAIL_FROM_ADDRESS= MAIL_FROM_NAME="Easy Lab"                          # dominio EasyLab, allineato a SPF/DKIM
 FILESYSTEM_DISK=s3                                                    # 🔗 ADR-025 (Backblaze B2)
@@ -109,34 +109,52 @@ Da fare **una volta sola**, nell'ordine, quando le notifiche vanno in un ambient
 
 Dal giorno dopo il digest manda solo le novità.
 
-### 3.2 Comandi di deploy (Laravel Cloud) — cosa gira a ogni release
+### 3.2 Comandi su Laravel Cloud — **build ≠ deploy**, e la differenza conta
 
-Da configurare come **deploy/release commands** dell'ambiente, nell'ordine:
+Laravel Cloud separa due fasi, e metterci il comando sbagliato non dà errore: semplicemente **non fa nulla**. I *build commands* girano mentre si costruisce l'immagine e ciò che scrivono resta; i *deploy commands* girano appena prima che la release vada live, e **le modifiche al filesystem che fanno NON vengono conservate**. Una `config:cache` messa fra i deploy commands genera una cache che viene buttata via subito dopo.
+
+**Build commands** — dipendenze, asset e tutte le cache di ottimizzazione:
 
 ```bash
-php artisan migrate --force            # solo in avanti; mai fresh/refresh/rollback
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-php artisan event:cache
-php artisan queue:restart              # ⚠️ vedi sotto
+composer install --no-dev && npm run build && php artisan optimize
 ```
 
-⚠️ **`queue:restart` non è opzionale.** I worker tengono in memoria il codice con cui sono partiti: senza questo comando, dopo un deploy continuano a eseguire le notifiche con la versione **precedente** dell'applicazione, e il sintomo — una mail vecchia mandata da codice nuovo — è fra i più difficili da diagnosticare. Il worker esce alla fine del job in corso e il supervisore lo riavvia aggiornato.
+*(`optimize` racchiude config, route, view ed event cache: una riga invece di quattro.)*
 
-*(`storage:link` non serve: i documenti stanno su Backblaze B2, 🔗 ADR-025.)*
+**Deploy commands** — solo ciò che tocca il database:
+
+```bash
+php artisan migrate --force
+```
+
+⚠️ **Comandi che su Cloud NON vanno messi**, perché la piattaforma li gestisce da sé o perché fanno danno (elenco della documentazione ufficiale):
+
+| Comando | Perché no |
+|---|---|
+| `queue:restart` | I worker sono **riavviati automaticamente a ogni deploy**. Su un VPS con Supervisor sarebbe indispensabile — qui è rumore. |
+| `horizon:terminate` | Idem, gestito dalla piattaforma. |
+| `optimize:clear` | Svuota le cache a runtime e «può causare comportamenti inattesi, specie legati alle code». |
+| `storage:link` | Il symlink non sopravvive: le modifiche dei deploy commands non persistono. E a noi non serve — i documenti stanno su B2 (🔗 ADR-025). |
 
 ### 3.3 Comandi una-tantum, alla nascita di un ambiente
 
-Nell'ordine, dopo il primo deploy riuscito:
+Si eseguono dal tab **«Commands»** dell'ambiente (comandi non interattivi, massimo 30 minuti), **non** dai deploy commands: girano una volta sola e non a ogni release.
 
 ```bash
 php artisan db:seed --class=RolesAndPermissionsSeeder --force   # bootstrap RBAC
-php artisan easylab:provision-tenant "EasyLab" --admin-email=…  # primo Ente + Superadmin/Admin
+php artisan easylab:provision-tenant "EasyLab" --admin-email=…  # primo Ente + Admin (riceve l'invito)
 php artisan easylab:notifica-scadenze --senza-invio             # §3.1: obbligatorio
 ```
 
-Poi, dal pannello Laravel Cloud: attivare **scheduler** e **queue worker**.
+Poi, dal canvas dell'ambiente: **scheduler** (impostazione dell'App compute cluster — nessun crontab da scrivere, il cron è già in `routes/console.php`) e i **worker delle code**.
+
+⚠️ **Sulle code, una scelta da fare consapevolmente.** Se si usa una **managed queue** di Cloud, la piattaforma imposta da sé `QUEUE_CONNECTION=cloud` e **ogni job dispacciato senza connessione esplicita finisce lì**, anche quelli che oggi ADR-011 immagina su Redis. È la strada raccomandata (worker isolati dal traffico web, failed job visibili in dashboard, autoscaling fino a zero) e richiede `aws/aws-sdk-php`, che nel nostro `composer.json` arriva già come dipendenza di `league/flysystem-aws-s3-v3`. L'alternativa è un *background process* `queue:work` sull'App cluster, che tiene `QUEUE_CONNECTION=redis` ma fa competere le code col traffico web.
+
+⚠️ **Scale to zero e code non vanno d'accordo** sull'App cluster: l'ambiente si risveglia da solo per i task pianificati e per i job, ma se un job è ancora in corso quando scade il *sleep timeout* l'App cluster si ferma e il job viene interrotto. Con le managed queue il problema non si pone (girano su compute dedicata).
+
+⚠️ **Il nostro scheduler usa `onOneServer()` e `withoutOverlapping()`**: entrambi si appoggiano alla **cache condivisa**. Su Cloud vanno bene finché `CACHE_STORE` punta al KV Store (Valkey/Redis) dell'ambiente; con una cache locale al singolo replica non farebbero il loro lavoro, e con più repliche il digest partirebbe più volte.
+
+*Nota minore ma vera:* `APP_MAINTENANCE_DRIVER=file` (il default del nostro `.env.example`) su Cloud non è consistente fra repliche — `php artisan down` spegnerebbe una replica sola. Per la produzione: `APP_MAINTENANCE_DRIVER=cache` con `APP_MAINTENANCE_STORE=database`.
 
 ⚠️ Il seeder RBAC è un **bootstrap, non una sincronizzazione**: dal primo seeding in poi la fonte di verità è il DB (🔗 ADR-016 §7). Rilanciarlo dopo aver toccato `config/rbac.php` va fatto sapendo che `firstOrCreate` non rimuove i permessi tolti dalla config — vanno cancellati a mano — e che le personalizzazioni fatte dalla UI di S6 non vanno perse: si confronta ruolo per ruolo **prima**.
 
