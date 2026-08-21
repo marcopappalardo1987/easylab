@@ -2,7 +2,9 @@
 
 namespace App\Livewire\Piattaforma;
 
+use App\Livewire\Piattaforma\Concerns\AmministraAccount;
 use App\Livewire\Piattaforma\Concerns\ElencaClienti;
+use App\Livewire\Piattaforma\Concerns\FissaVisibilitaSede;
 use App\Livewire\Piattaforma\Concerns\OffreImpersonazione;
 use App\Support\Piattaforma\MetrichePiattaforma;
 use Illuminate\Contracts\View\View;
@@ -52,7 +54,7 @@ use Livewire\Component;
 #[Layout('components.layouts.app')]
 class Cabina extends Component
 {
-    use ElencaClienti, OffreImpersonazione;
+    use AmministraAccount, ElencaClienti, FissaVisibilitaSede, OffreImpersonazione;
 
     public function render(): View
     {

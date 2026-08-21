@@ -422,6 +422,16 @@ Il volume gioca a favore: il digest è **una email al giorno per destinatario e 
 
 ---
 
+> ⚠️ **Attuazione in UI — due interruttori, e uno solo si tocca** *(21 Ago 2026, S6 blocco G)*
+>
+> La cabina di regia mostra i due lockout come **due badge distinti** e li filtra **separatamente**. Fonderli in un badge unico o in un filtro «bloccato» rifarebbe in interfaccia il difetto che la separazione delle due colonne esiste per impedire: chi cerca gli insoluti non vuole trovare chi è chiuso per contenzioso, e riaprire un contenzioso non deve far rientrare chi non ha pagato.
+>
+> **Il blocco Stripe è in sola lettura.** `sbloccaPerStripe()` non è esposto in nessuna superficie, e non è una dimenticanza: il suo inverso è un **evento di pagamento**. Un umano che dichiarasse «ha pagato» verrebbe smentito dal webhook successivo, e nel frattempo il cliente sarebbe rientrato senza pagare. Un guardrail cerca quella chiamata sui **token** di tutto `app/`, con un'allowlist nominata sul solo `StripeWebhookController` — e verifica che il file in allowlist la contenga davvero, così la voce non resta un permesso aperto su qualcosa che non esiste più.
+>
+> **`locked_reason` si legge nella cabina**, mai su `/bloccato`. La pagina che il cliente vede resta muta di proposito; il motivo serve a chi riapre il caso mesi dopo, ed è per questo che è **obbligatorio** al momento del blocco. Un lockout senza motivo diventa un cliente dimenticato.
+
+---
+
 **ADR-018 — Nessun ruolo bypassa il Global Scope: Superadmin/Developer tenant-bound, accesso cross-tenant solo via impersonazione**
 
 *Stato: Accettata (29 Giu 2026) — supera il punto di ADR-001 secondo cui Superadmin/Developer bypassano lo scope.*
@@ -789,7 +799,7 @@ Dettagli di configurazione: `AWS_ENDPOINT` vuole lo schema **`https://`** (il pa
 
 **ADR-029 — La visibilità delle garanzie ricambio al Tenant è un'impostazione dell'Ente, non un divieto**
 
-*Stato: Accettata (9 Ago 2026) — **supera il vincolo di privacy di ADR-004** (e con esso la voce corrispondente del set 🔒 di ADR-016). **Attuata il 15 Ago 2026** (S4 blocco 5). Attuandola sono emerse due cose che la decisione non poteva prevedere: il vincolo di scrittura **non è esprimibile con un permesso** (spatie concede prima che l'impostazione sia letta) ed è finito nella **prima Policy del progetto**; e un permesso nudo rimasto in una vista — la Panoramica — scavalcava l'impostazione, trovato da un test e non rileggendo il codice.*
+*Stato: Accettata (9 Ago 2026) — **supera il vincolo di privacy di ADR-004** (e con esso la voce corrispondente del set 🔒 di ADR-016). **Attuata il 15 Ago 2026** (S4 blocco 5) e **completata il 21 Ago 2026** (S6 blocco G): l'impostazione si cambia ora **per ogni sede della piattaforma** dalla cabina di regia, chiudendo la consegna che l'attuazione aveva lasciato aperta — il Superadmin è tenant-bound (🔗 ADR-018) e dal form dell'anagrafica ne vedeva un Ente solo, quindi per tutti gli altri si passava dalla console. Il gate è **`roles.manage`** e non `unita_organizzativa.update`, che ce l'ha anche l'Admin dell'Ente: è una clausola del rapporto commerciale, non un'impostazione di anagrafica. ⚠️ *La prima consegna della `select` era muta — mostrava sempre «Nascoste» perché la colonna non era nel `select` della query, e il default vero è «modifica»: avrebbe detto che un cliente non vede le garanzie mentre le vedeva e le modificava. Trovato dal confronto fra due agenti, non da un test: tutti i test asserivano sul database.* Attuandola sono emerse due cose che la decisione non poteva prevedere: il vincolo di scrittura **non è esprimibile con un permesso** (spatie concede prima che l'impostazione sia letta) ed è finito nella **prima Policy del progetto**; e un permesso nudo rimasto in una vista — la Panoramica — scavalcava l'impostazione, trovato da un test e non rileggendo il codice.*
 
 **Contesto.** Dal documento di Fase 2 in poi il progetto ha portato una regola sola: «le garanzie sui ricambi restano visibili solo a EasyLab/Admin, mai al Tenant». ADR-004 la ratifica dichiarandola «vincolo di privacy **già previsto**» — cioè la eredita senza motivarla —, lo Schema Ruoli la irrigidisce mettendo `garanzie.ricambio.*` nel set 🔒, il registro GDPR la giustifica a posteriori come minimizzazione, e ADR-020 ci costruisce sopra la distinzione fra aggregato (il pallino, dovuto a tutti) e dettaglio (la riga, negata al Tenant).
 

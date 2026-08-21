@@ -245,7 +245,21 @@
                                      non ha sessione né permessi. Un candidato → link diretto;
                                      più d'uno → si sceglie, perché «il primo» sarebbe una
                                      decisione presa dall'ordinamento di una query. --}}
-                                @php $candidati = $candidatiPerAccount[$cliente->id] ?? collect(); @endphp
+                                @php
+                                    $candidati = $candidatiPerAccount[$cliente->id] ?? collect();
+                                    // Il trattino vale per la **cella**, non per una sola leva:
+                                    // dentro il ramo dell'impersonazione finiva accanto ai due
+                                    // pulsanti delle altre, dicendo «niente da fare qui» proprio
+                                    // dove c'erano due cose da fare.
+                                    $qualcosaDaFare = ($candidati->isNotEmpty() && auth()->user()->can('utenti.impersonate'))
+                                        || auth()->user()->can('lockout', $cliente)
+                                        || auth()->user()->can('manage', $cliente);
+                                @endphp
+
+                                @unless ($qualcosaDaFare)
+                                    <span class="text-xs text-neutral-400" title="Nessuna leva disponibile">—</span>
+                                @endunless
+
                                 @can('utenti.impersonate')
 
                                     @if ($candidati->count() === 1)
@@ -275,6 +289,22 @@
                                          anche per chi non ha il permesso. --}}
                                     <span class="text-xs text-neutral-400">—</span>
                                 @endcan
+
+                                @can('lockout', $cliente)
+                                    <button type="button" wire:click="apriLockout({{ $cliente->id }})"
+                                            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-100"
+                                            title="{{ $cliente->locked_at ? 'Riapri la porta' : 'Blocca per insoluto' }}">
+                                        <span aria-hidden="true">🔒</span> Lockout
+                                    </button>
+                                @endcan
+
+                                @can('manage', $cliente)
+                                    <button type="button" wire:click="apriFiscali({{ $cliente->id }})"
+                                            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-100"
+                                            title="Dati fiscali">
+                                        <span aria-hidden="true">🧾</span> Dati
+                                    </button>
+                                @endcan
                             </td>
                         </tr>
 
@@ -289,8 +319,25 @@
                                         <div wire:key="sede-{{ $sede->id }}"
                                              class="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200 py-2 last:border-0">
                                             <span class="text-sm text-neutral-800">{{ $sede->nome }}</span>
-                                            <span class="text-xs tabular-nums text-neutral-500">
-                                                {{ number_format($strumentiPerSede[$sede->id] ?? 0, 0, ',', '.') }} strumenti
+                                            <span class="flex flex-wrap items-center gap-3">
+                                                <span class="text-xs tabular-nums text-neutral-500">
+                                                    {{ number_format($strumentiPerSede[$sede->id] ?? 0, 0, ',', '.') }} strumenti
+                                                </span>
+
+                                                {{-- Clausola di contratto, non impostazione di
+                                                     anagrafica: il gate è `roles.manage`, che
+                                                     l'Admin dell'Ente non ha (ADR-029). --}}
+                                                @can('roles.manage')
+                                                    <label class="flex items-center gap-2 text-xs text-neutral-600">
+                                                        <span>Garanzie ricambio</span>
+                                                        <select wire:change="fissaVisibilita({{ $sede->id }}, $event.target.value)"
+                                                                class="rounded-md border-neutral-300 py-1 text-xs shadow-sm focus:border-primary-500 focus:ring-primary-500">
+                                                            @foreach ($this->statiVisibilita() as $stato)
+                                                                <option value="{{ $stato->value }}" @selected($sede->visibilita_garanzie_ricambio === $stato)>{{ $stato->label() }}</option>
+                                                            @endforeach
+                                                        </select>
+                                                    </label>
+                                                @endcan
                                             </span>
                                         </div>
                                     @empty
@@ -353,6 +400,106 @@
             @endif
         @endif
     @endcan
+
+    @php $inLavorazione = $this->accountAperto(); @endphp
+
+    @if ($inLavorazione && $pannello === 'lockout')
+        <x-ui.modal :title="'Lockout — '.$inLavorazione->ragione_sociale" close="chiudiPannello">
+            {{-- ⚠️ **Due interruttori e mai uno.** Quello di Stripe è in sola
+                 lettura: il suo inverso è un evento di pagamento, e un umano che
+                 dichiarasse «ha pagato» verrebbe smentito dal webhook successivo
+                 — nel frattempo il cliente sarebbe rientrato senza pagare
+                 (ADR-013). Il gesto inverso non è esposto in nessuna forma, e un
+                 test cerca la chiamata sui token del sorgente. --}}
+            <div class="rounded-md border border-neutral-200 p-3">
+                <p class="text-sm font-medium text-neutral-900">Blocco automatico (Stripe)</p>
+                @if ($inLavorazione->stripe_locked_at)
+                    <p class="mt-1 text-sm text-danger-700">
+                        Chiuso dal webhook il {{ $inLavorazione->stripe_locked_at->format('d/m/Y H:i') }}@if ($inLavorazione->stripe_lock_reason) — {{ $inLavorazione->stripe_lock_reason }}@endif
+                    </p>
+                    <p class="mt-1 text-xs text-neutral-500">
+                        Si riapre da sé al primo pagamento riuscito. Non c'è un pulsante, ed è voluto.
+                    </p>
+                @else
+                    <p class="mt-1 text-sm text-neutral-600">Nessun insoluto in corso.</p>
+                @endif
+            </div>
+
+            <div class="mt-4 rounded-md border border-neutral-200 p-3">
+                <p class="text-sm font-medium text-neutral-900">Blocco manuale</p>
+
+                @if ($inLavorazione->locked_at)
+                    {{-- Il motivo si legge **qui**: `/bloccato` è muta di proposito,
+                         quindi questo è il solo posto dove ritrovarlo fra sei mesi. --}}
+                    <p class="mt-1 text-sm text-danger-700">
+                        Chiuso il {{ $inLavorazione->locked_at->format('d/m/Y H:i') }}@if ($inLavorazione->locked_reason) — {{ $inLavorazione->locked_reason }}@endif
+                    </p>
+
+                    <button type="button" wire:click="sbloccaAccount"
+                            class="mt-3 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700">
+                        Riapri la porta
+                    </button>
+
+                    @if ($inLavorazione->stripe_locked_at)
+                        <p class="mt-2 text-xs text-warning-800">
+                            ⚠️ L'insoluto Stripe resta acceso: l'account resterà chiuso comunque.
+                        </p>
+                    @endif
+                @else
+                    <label for="motivo-lockout" class="mt-3 block text-sm font-medium text-neutral-800">Motivo</label>
+                    <input id="motivo-lockout" type="text" wire:model="motivoLockout"
+                           placeholder="Fattura 2026/114 scaduta da 60 giorni"
+                           class="mt-1 block w-full rounded-md border-neutral-300 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500">
+                    @error('motivoLockout')
+                        <p class="mt-1 text-sm text-danger-600">{{ $message }}</p>
+                    @enderror
+                    <p class="mt-1 text-xs text-neutral-500">
+                        Non lo vedrà il cliente: la pagina di blocco è muta. Lo leggerà chi riapre questo caso fra sei mesi.
+                    </p>
+
+                    <button type="button" wire:click="bloccaAccount"
+                            class="mt-3 rounded-md bg-danger-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-danger-700">
+                        Chiudi la porta
+                    </button>
+                @endif
+            </div>
+        </x-ui.modal>
+    @endif
+
+    @if ($inLavorazione && $pannello === 'fiscali')
+        <x-ui.modal :title="'Dati fiscali — '.$inLavorazione->ragione_sociale" close="chiudiPannello">
+            <div class="space-y-3">
+                @foreach ([
+                    'ragione_sociale' => 'Ragione sociale',
+                    'partita_iva' => 'Partita IVA',
+                    'codice_fiscale' => 'Codice fiscale',
+                    'pec' => 'PEC',
+                    'codice_destinatario_sdi' => 'Codice destinatario SDI',
+                ] as $campo => $etichetta)
+                    <div wire:key="fisc-{{ $campo }}">
+                        <label for="fisc-{{ $campo }}" class="block text-sm font-medium text-neutral-800">{{ $etichetta }}</label>
+                        <input id="fisc-{{ $campo }}" type="text" wire:model="fiscali.{{ $campo }}"
+                               class="mt-1 block w-full rounded-md border-neutral-300 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500">
+                        @error('fiscali.'.$campo)
+                            <p class="mt-1 text-sm text-danger-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+                @endforeach
+            </div>
+
+            <p class="mt-3 text-xs text-neutral-500">
+                Il codice destinatario è di 6 caratteri per la Pubblica Amministrazione, 7 per i privati.
+                I dati si riallineano a Stripe alla prossima operazione di fatturazione, non da qui.
+            </p>
+
+            <div class="mt-4 flex justify-end gap-2">
+                <button type="button" wire:click="chiudiPannello"
+                        class="rounded-md px-3 py-1.5 text-sm font-medium text-neutral-600 hover:bg-neutral-100">Annulla</button>
+                <button type="button" wire:click="salvaFiscali"
+                        class="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700">Salva</button>
+            </div>
+        </x-ui.modal>
+    @endif
 
     <div class="mt-4 flex flex-wrap items-center justify-between gap-2">
         <p class="text-xs text-neutral-500">

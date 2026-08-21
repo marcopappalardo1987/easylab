@@ -262,7 +262,21 @@ trait ElencaClienti
             ->where('tipo', TipoUnitaOrganizzativa::Ente)
             ->whereIn('account_id', $ids)
             ->orderBy('nome')
-            ->get(['id', 'account_id', 'nome'])
+            // ⚠️ `visibilita_garanzie_ricambio` è **indispensabile**, non decorativa: la
+            // `select` dell'espansione la legge per marcare l'opzione corrente. Senza,
+            // il model esce da `newFromBuilder()` con `setRawAttributes()`, che spazza
+            // via il default dichiarato in `$attributes`; l'accessor entra comunque nel
+            // cast e restituisce `null`, senza errori. Nessuna `<option>` porta
+            // `selected` e il browser mostra la **prima**, che è «Nascoste» — mentre il
+            // default vero è `Modifica`. La cabina direbbe «questo cliente non vede le
+            // garanzie» di un cliente che le vede e le modifica, e chi volesse
+            // *imporre* «Nascoste» la troverebbe già selezionata, non toccherebbe nulla,
+            // e la clausola non verrebbe mai scritta.
+            //
+            // *Era stata tolta come «colonna che nessuno legge» quando ancora nessuno la
+            // leggeva: il blocco successivo l'ha resa necessaria, e il difetto è passato
+            // fra due revisioni.*
+            ->get(['id', 'account_id', 'nome', 'visibilita_garanzie_ricambio'])
             ->groupBy('account_id');
 
         $perSede = VistaPiattaforma::strumenti()
