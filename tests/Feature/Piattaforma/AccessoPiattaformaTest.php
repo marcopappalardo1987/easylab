@@ -4,6 +4,7 @@ use App\Livewire\Piattaforma\Cabina;
 use App\Models\Account;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
+use App\Support\Piattaforma\RiepilogoPiattaforma;
 use App\Support\Rbac;
 use App\Support\Tenancy\VistaPiattaforma;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -96,7 +97,7 @@ it('lets in whoever holds the platform permission', function (string $ruolo) {
         ->assertOk()
         // Il **corpo**, non la parola «Piattaforma»: quella la stampa anche la
         // sidebar, quindi svuotare la cabina lascerebbe il test verde.
-        ->assertSee('sulla piattaforma');
+        ->assertSee('Ricavo mensile');
 })->with(RUOLI_CON_PIATTAFORMA);
 
 it('shows the way in on the dashboard to whoever can walk it', function () {
@@ -119,10 +120,14 @@ it('counts sedi across every tenant, which is what proves the boundary was cross
     $altro = Account::factory()->create(['ragione_sociale' => 'Lab Bianchi']);
     UnitaOrganizzativa::factory()->ente()->perAccount($altro)->create();
 
+    // Si asserisce sull'**oggetto** e non sul markup: un `assertSee('2')` su una
+    // pagina con quattro numeri passerebbe per il motivo sbagliato, e cambiare
+    // una label renderebbe rosso un test che parla di confini.
     Livewire::actingAs(($this->utente)('Superadmin'))
         ->test(Cabina::class)
-        ->assertSee('2 clienti')     // EasyLab esclusa: sarebbero 3 col metodo sbagliato
-        ->assertSee('2 sedi');       // l'altra è di un tenant che nessuna schermata mostra
+        ->assertViewHas('riepilogo', fn (RiepilogoPiattaforma $r) => $r->clienti === 2   // EasyLab esclusa: 3 col metodo sbagliato
+            && $r->sedi === 2                                                            // l'altra è di un tenant che nessuna schermata mostra
+        );
 });
 
 it('keeps the hand-written role lists honest against the matrix', function () {

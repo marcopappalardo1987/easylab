@@ -137,9 +137,28 @@ it('never lets a write be chained onto the platform view', function () {
             iterator_to_array(new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir)))
         )->filter(fn ($f) => $f->isFile() && str_ends_with($f->getFilename(), '.php'))->map->getPathname());
 
-    $scritture = '/VistaPiattaforma::\\w+\\(\\)\\s*(->\\w+\\([^)]*\\)\\s*)*->(update|delete|forceDelete|increment|decrement|truncate|upsert|insert)\\(/';
+    // ⚠️ **Si tokenizza, non si cerca col regex sul testo grezzo.** Il pattern
+    // precedente saltava gli argomenti con `[^)]*\)`, che non attraversa una
+    // parentesi **dentro una stringa** — forma introdotta il giorno dopo da
+    // `MetrichePiattaforma` con `selectRaw('… count(*) …')`. Verificato: una
+    // scrittura scritta così passava indisturbata. È lo stesso buco già
+    // corretto su `BypassNudiGuardrailTest`, dove bastava uno spazio: un
+    // guardrail aggirabile da come si formatta un argomento è peggio di
+    // nessun guardrail, perché sembra coprire.
+    $scritture = ['update', 'delete', 'forceDelete', 'increment', 'decrement', 'truncate', 'upsert', 'insert'];
 
-    $colpevoli = $sorgenti->filter(fn (string $f) => preg_match($scritture, file_get_contents($f)) === 1)->values();
+    $colpevoli = $sorgenti->filter(function (string $f) use ($scritture) {
+        $token = collect(token_get_all(file_get_contents($f)))
+            ->reject(fn ($t) => is_array($t) && in_array($t[0], [T_COMMENT, T_DOC_COMMENT, T_WHITESPACE, T_CONSTANT_ENCAPSED_STRING], true))
+            ->map(fn ($t) => is_array($t) ? $t[1] : $t)
+            ->implode('');
+
+        // Tolte stringhe e spazi la catena è lineare: la porta, e prima del `;`
+        // uno dei metodi di scrittura.
+        return collect($scritture)->contains(
+            fn (string $m) => preg_match('/VistaPiattaforma::\w+\(\)[^;]*->'.$m.'\(/', $token) === 1
+        );
+    })->values();
 
     expect($colpevoli)->toBeEmpty(
         'La vista di piattaforma è per LEGGERE: un update/delete concatenato le passa attraverso senza '.

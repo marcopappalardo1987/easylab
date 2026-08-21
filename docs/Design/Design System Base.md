@@ -196,6 +196,12 @@ Touch target minimo **44×44px** (campo mobile). Bottoni full-width su mobile ne
 ### 5.2 Card / superfici
 `bg-white rounded-lg shadow-sm border border-neutral-200 p-4 md:p-6`. KPI card: numero `text-3xl font-semibold`, label `text-sm text-neutral-600`, eventuale dot semaforo.
 
+> **Realizzata il 21 Ago 2026** come `x-ui.stat-tile` (props `label`, `valore`, `dettaglio`), costruita **sopra `x-ui.card`** invece di ripeterne le classi: la superficie è una decisione sola, e duplicarla qui vorrebbe dire che il giorno in cui cambia il bordo delle card questa resta indietro.
+>
+> Il terzo slot, `dettaglio`, non era nella specifica ed è stato aggiunto per una ragione che vale la pena scrivere: **un totale senza il suo contesto è la cifra che poi viene citata da sola**. «Ricavo mensile 588 €» diventa un dato di bilancio in una riunione; «588 € · a listino · 2 clienti bloccati» no. Vale per ogni numero aggregato, non solo per quello.
+>
+> ⚠️ Gli importi si formattano con `number_format` e **non** con `Number::currency()`: quest'ultimo richiede `ext-intl`, che è presente in locale ma **non è installata dalla CI** (`.github/workflows/ci.yml` monta `pdo_pgsql, redis, mbstring, bcmath`). Sarebbe verde sulla macchina e rossa in pipeline — la divergenza che `phpunit.xml` esiste per estirpare.
+
 ### 5.3 Tabella dati
 Header `bg-neutral-50 text-neutral-600 text-sm`, righe con `divide-y divide-neutral-200`, hover `hover:bg-neutral-50`, riga cliccabile → scheda. Prima colonna = dot semaforo. **Mobile:** la tabella collassa in lista di card (label:valore).
 

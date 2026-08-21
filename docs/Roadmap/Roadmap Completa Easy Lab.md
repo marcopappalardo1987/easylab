@@ -672,7 +672,15 @@ gantt
   >
   > ⚠️ E **sei test negativi non giravano affatto**: i dataset erano closure che leggevano la matrice RBAC per aggiornarsi da soli, ma i closure dei dataset si risolvono prima che Laravel sia avviato — dataset vuoto, test scartato, 9 casi eseguiti invece di 15. Il reporter diceva «failed» senza elencare fallimenti, ed è l'unico segnale che c'era.
   >
-  > Restano di questo punto: KPI e tabella clienti, con l'espansione nelle sedi.
+  > - **I quattro KPI, MRR compreso** (blocco D): `MetrichePiattaforma` in **tre statement costanti**, `x-ui.stat-tile` realizzata (Design System §5.2). L'MRR è **a listino**: include i bloccati (ADR-013 — il lockout è una porta chiusa, non una disdetta) col «di cui fermi per insoluto» accanto, e include i trial per decisione dichiarata.
+  >
+  > ⚠️ **Il confronto sul blocco D ha trovato la cifra sbagliata che il blocco esisteva per evitare**: «Sedi» e «Strumenti» contavano anche EasyLab, perché il filtro sull'account di piattaforma stava nella porta ma i due conteggi non passavano dagli account. Sul database di sviluppo la pagina avrebbe detto «Sedi 7» con una sede di nessun cliente e «Strumenti 5.105» di cui **1.217 — il 24% —** non di nessuno, sotto l'etichetta «macchine di tutti i clienti». La migration del blocco A lo aveva scritto per esteso («falserebbe tutti e quattro i KPI») e il blocco ne aveva coperti due. La correzione lega sedi e strumenti alla **stessa** nozione di cliente, e chiude gratis anche il caso opposto: un account cestinato lasciava le sue sedi nei totali per sempre.
+  >
+  > Altri quattro: il «di cui» dei clienti **non sommava** al numero sopra (un piano dismesso spariva dalla frase ma restava nel totale); il contatore dei bloccati mostrava **teste** su una tile che parla di euro; l'avviso giallo era **bianco**, perché `bg-warning-50` e `border-warning-300` non esistono nel CSS compilato; e il conteggio delle query misurava «quante query citano una tabella» invece di «quanti statement», quindi le sottoquery lo falsavano.
+  >
+  > *Due guardrail sono stati irrobustiti perché ciechi alla forma introdotta il giorno stesso: quello anti-scrittura sulla porta non attraversava una parentesi dentro una stringa (`selectRaw('count(*)')`), e il test che lega numeri ed etichette passava per una classe CSS (`max-w-7xl` contiene un 7).*
+  >
+  > Restano di questo punto: la tabella clienti, con l'espansione nelle sedi.
   - 📦 **Consegna da S4 (15 Ago 2026, 🔗 ADR-029)**: qui va portato il controllo della **visibilità garanzie ricambio per Ente**. Oggi vive nel form dell'anagrafica, ma il Superadmin è tenant-bound (🔗 ADR-018) e ne vede un Ente solo: per gli altri l'impostazione si cambia da console. È questa la vista che interroga la piattaforma senza scoping, quindi è qui che il controllo diventa usabile davvero.
 - [ ] `[CORE]` **User Impersonation** con UI 1-click + **banner persistente** di ripristino; ogni impersonation loggata. 🔗 ADR (Superadmin)/activitylog
 - [ ] `[CORE]` **Editor permessi ruolo** (UI Superadmin): matrice ruolo×permesso editabile a runtime, set bloccato 🔒 in sola lettura, modifiche loggate. 🔗 ADR-016, `../Architettura/Schema Ruoli e Permessi.md` §7

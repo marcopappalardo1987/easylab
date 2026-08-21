@@ -2,8 +2,7 @@
 
 namespace App\Livewire\Piattaforma;
 
-use App\Enums\TipoUnitaOrganizzativa;
-use App\Support\Tenancy\VistaPiattaforma;
+use App\Support\Piattaforma\MetrichePiattaforma;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -53,15 +52,14 @@ class Cabina extends Component
 {
     public function render(): View
     {
-        // Due numeri e non uno, e il secondo è quello che dimostra qualcosa:
-        // `accounts()` non attraversa alcuno scope (Account è modello di
-        // piattaforma), mentre `enti()` toglie `TenantScope` per nome — quindi
-        // è il conteggio delle **sedi** a provare che il confine è stato
-        // attraversato davvero. Contare solo gli account sarebbe stato un
-        // numero che anche una query nuda di un Tenant qualunque restituisce.
+        // Un solo oggetto e non quattro chiamate sparse: i numeri nascono dalla
+        // stessa passata, quindi restano d'accordo fra loro. È anche ciò che
+        // attraversa `porta()` — il conteggio delle **sedi** è la prova che il
+        // confine è stato passato davvero, perché `accounts()` da solo non
+        // attraversa alcuno scope (Account è modello di piattaforma) e lo stesso
+        // numero lo darebbe una query nuda di un Tenant qualunque.
         return view('livewire.piattaforma.cabina', [
-            'clienti' => VistaPiattaforma::accounts()->count(),
-            'sedi' => VistaPiattaforma::enti()->where('tipo', TipoUnitaOrganizzativa::Ente)->count(),
+            'riepilogo' => MetrichePiattaforma::riepilogo(),
         ]);
     }
 }
