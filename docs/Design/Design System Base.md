@@ -205,6 +205,12 @@ Touch target minimo **44×44px** (campo mobile). Bottoni full-width su mobile ne
 ### 5.3 Tabella dati
 Header `bg-neutral-50 text-neutral-600 text-sm`, righe con `divide-y divide-neutral-200`, hover `hover:bg-neutral-50`, riga cliccabile → scheda. Prima colonna = dot semaforo. **Mobile:** la tabella collassa in lista di card (label:valore).
 
+> **Intestazione ordinabile** (S6, cabina di regia). Il `<th>` porta `aria-sort` (`ascending`/`descending`/`none`) e un `<button wire:click>` con la freccia `▲`/`▼` sulla sola colonna attiva.
+>
+> ⚠️ **La freccia legge l'ordinamento *effettivo*, mai la property.** `sortBy` e `sortDir` arrivano dal browser — via `#[Url]`, quindi senza passare dagli hook — e il componente li ri-valida contro una whitelist a ogni render. Se la vista leggesse le property, `?sortBy=password` mostrerebbe la freccia su una colonna mentre l'elenco è ordinato per un'altra: una bugia piccola, e per questo credibile. Il valore sanificato si espone con un metodo (`ordinamentoEffettivo()`), non con una seconda copia della whitelist in Blade — due copie divergono, e il giorno in cui divergono nessuno se ne accorge.
+>
+> **Deviazione ammessa dalla modalità card**: le viste da scrivania con riga espandibile (cabina di regia, elenco strumenti) restano a scorrimento orizzontale. Va **dichiarata nel template**, con la ragione, e i `<td>` devono comunque avere **un solo figlio diretto** — così la conversione resta possibile invece di diventare una riscrittura.
+
 ### 5.4 Badge / pill
 `inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium`. Colori dai token semantici (semaforo §4, stato cliente, piano, 🔒 lockout/bloccato).
 

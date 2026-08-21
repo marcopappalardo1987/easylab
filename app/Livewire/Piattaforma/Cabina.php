@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Piattaforma;
 
+use App\Livewire\Piattaforma\Concerns\ElencaClienti;
 use App\Support\Piattaforma\MetrichePiattaforma;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
@@ -50,6 +51,8 @@ use Livewire\Component;
 #[Layout('components.layouts.app')]
 class Cabina extends Component
 {
+    use ElencaClienti;
+
     public function render(): View
     {
         // Un solo oggetto e non quattro chiamate sparse: i numeri nascono dalla
@@ -58,8 +61,15 @@ class Cabina extends Component
         // confine è stato passato davvero, perché `accounts()` da solo non
         // attraversa alcuno scope (Account è modello di piattaforma) e lo stesso
         // numero lo darebbe una query nuda di un Tenant qualunque.
+        $clienti = $this->clienti();
+        $dettagli = $this->dettagliDellaPagina($clienti->getCollection());
+
         return view('livewire.piattaforma.cabina', [
             'riepilogo' => MetrichePiattaforma::riepilogo(),
+            'clienti' => $clienti,
+            'sediPerAccount' => $dettagli['sedi'],
+            'strumentiPerAccount' => $dettagli['strumenti'],
+            'strumentiPerSede' => $dettagli['perSede'],
         ]);
     }
 }

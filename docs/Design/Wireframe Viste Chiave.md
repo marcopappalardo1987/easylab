@@ -208,34 +208,55 @@ Interfaccia sul campo, mobile-first: scansiona QR → vedi storico → chiudi in
 
 ---
 
-## 4. Dashboard Superadmin (EasyLab)
+## 4. Cabina di regia della piattaforma (Superadmin) — `/piattaforma`
 
-Cabina di regia: numeri globali, clienti, impersonation, gestione permessi. 🔗 ADR-001, Funzionalità §2.
+Numeri globali, clienti, impersonazione, le leve amministrative. 🔗 ADR-001, ADR-013, ADR-018, ADR-032, Funzionalità §2.
+
+> **Riscritto il 21 Ago 2026 (S6).** La stesura precedente elencava **un Ente per riga** con le colonne Piano e Stato ed è **antecedente ad ADR-032**: da quella decisione piano, lockout e dati fiscali appartengono all'**Account**, e un Account può avere N Enti. Una tabella per Ente ripeterebbe gli stessi valori su ogni riga dello stesso cliente, e soprattutto suggerirebbe che si possa bloccare un Ente — cosa che non esiste: a essere chiuso è il contratto. Cambiano anche l'etichetta «🧪 Laboratori» → **Sedi** (sono nodi di tipo Ente, non laboratori) e `[👁 Impersona]`, che bersaglia **una persona**, non un contratto.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Easy Lab · SUPERADMIN                                       🔔   👤 EasyLab ▼│
+│ Easy Lab · Piattaforma                                      🔔   👤 EasyLab ▼│
 ├──────────────────────────────────────────────────────────────────────────┤
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐      │
-│  │ 💶 MRR       │ │ 🏢 Clienti   │ │ 🧪 Laboratori│ │ 🔧 Strumenti │      │
-│  │  € 4.250 /m  │ │   37 (2 🔒)  │ │     128      │ │    3.412     │      │
+│  │ Ricavo mensile│ │ Clienti     │ │ Sedi         │ │ Strumenti    │      │
+│  │   € 4.250     │ │     37      │ │     128      │ │    3.412     │      │
+│  │ a listino ·   │ │ 12 Free ·   │ │ Enti dei     │ │ Macchine di  │      │
+│  │ € 98 fermi    │ │ 25 SaaS·2 🔒│ │ clienti      │ │ tutti i clienti│    │
 │  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘      │
 │                                                                            │
-│  Clienti                       🔍 Cerca…   [ + Nuovo cliente (provision) ] │
+│  🔍 Cerca…                    Piano [Tutti ▼]   Stato [Tutti ▼]           │
 │  ┌────────────────────────────────────────────────────────────────────┐  │
-│  │ Ente              │ Piano    │ Stato    │ Strum. │ Azioni            │  │
+│  │ Cliente          │ Piano │ Stato        │ Sedi │ Strum. │ Azioni    │  │
 │  ├────────────────────────────────────────────────────────────────────┤  │
-│  │ Osp. San Giovanni │ SaaS     │ ✅ Attivo│  124   │ [👁 Impersona][⚙] │  │
-│  │ Lab Rossi srl     │ Free     │ ✅ Attivo│   46   │ [👁 Impersona][⚙] │  │
-│  │ Clinica Aurora    │ SaaS     │ 🔒 Lockout│  88   │ [👁 Impersona][⚙] │  │
+│  │ ▸ Osp. San Giovanni│ SaaS │ ✅ Attivo   │ 3/∞  │  124   │ [👁][⚙]  │  │
+│  │   P.IVA 01234567890│      │              │      │        │           │  │
+│  │ ▾ Lab Rossi srl   │ Free  │ ✅ Attivo   │ 1/1  │   46   │ [👁][⚙]  │  │
+│  │ ┌──────────────────────────────────────────────────────────────┐   │  │
+│  │ │ Laboratorio San Raffaele                        46 strumenti │   │  │
+│  │ └──────────────────────────────────────────────────────────────┘   │  │
+│  │ ▸ Clinica Aurora  │ SaaS  │ 🔒 A mano   │ 2/∞  │   88   │ [👁][⚙]  │  │
+│  │ ▸ Poliamb. Nord   │ SaaS  │ 🔒 Insoluto │ 1/∞  │   31   │ [👁][⚙]  │  │
 │  └────────────────────────────────────────────────────────────────────┘  │
-│                                                                            │
-│  Strumenti laterali:                                                       │
-│   [ 🛡 Permessi ruoli ]  [ 📜 Audit log ]  [ 💳 Billing/Stripe ]           │
+│                                              ‹ 1 2 3 ›   [ 20 per pagina ]│
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Note.** `[👁 Impersona]` richiede `utenti.impersonate`; avvia sessione con **banner persistente** di ripristino, loggata (ADR/activitylog). `[ + Nuovo cliente ]` = `tenants.provision` (onboarding + Free chiavi in mano). Riga in `🔒 Lockout` = insoluto (ADR-013): dati conservati e consultabili solo qui. `[ 🛡 Permessi ruoli ]` → vista §4.1.
+**La riga è l'Account, e si espande nelle sue sedi.** L'espansione **non costa query**: le sedi della pagina sono già caricate, perché servono anche alla colonna Sedi (`n / max` del piano, `∞` se il piano non pone limite). Anti-N+1 col pattern di `ElencoStrumenti`: si pagina prima, poi si fa `whereIn` sugli id di pagina — **quattro query costanti** fra un cliente e dodici — conteggio di paginazione, pagina, sedi, strumenti — sette con i tre dei KPI, e c'è un test che congela la costanza.
+
+**Due badge di lockout, mai uno solo** (ADR-013). `🔒 A mano` e `🔒 Insoluto` sono sorgenti **ortogonali**: `is_locked` significa «almeno una accesa», e fonderle in un unico badge — o in un unico filtro — ricrea esattamente il difetto che la separazione esiste per impedire, cioè un pagamento riuscito che riapre una porta chiusa per contenzioso. Per la stessa ragione il filtro Stato ha **tre** voci e non due.
+
+**Chi non compare.** L'account di **EasyLab** (`accounts.di_piattaforma`), che è un fornitore di sé stesso e falserebbe tutti e quattro i KPI — sul database di sviluppo pesava 1.217 strumenti su 5.105. E i **cestinati**: account, sedi e strumenti soft-deleted restano fuori da ogni numero e da ogni riga, ricerca per nome di sede compresa.
+
+**Un piano fuori catalogo non fa esplodere la pagina.** `accounts.piano` è una stringa senza CHECK: basta dismettere un codice dal catalogo perché delle righe restino orfane. Valgono **0 €** nel ricavo, si mostrano con un badge `fuori catalogo` e un avviso sopra la tabella — perché questa è l'unica schermata da cui quel dato si ripara, e morire proprio lì sarebbe il modo peggiore di segnalarlo.
+
+**Il ricavo è a listino, non incassato.** Somma i prezzi di catalogo (`config/easylab.php`) dei contratti in essere, **lockout compresi** — un blocco è una porta chiusa, non una disdetta — con accanto il «di cui» di quanto non si sta incassando. La verità contabile resta Stripe, e i due possono divergere per una promo o un prezzo storico.
+
+**Filtri in query string** (`#[Url]`): una vista filtrata si manda per link, che è come si chiede aiuto su un cliente. `sortBy`, `sortDir` e `perPage` sono ri-validati contro una whitelist **a ogni render** e non solo negli hook, perché per quella strada arrivano dal browser senza passare da `updatingXxx()`.
+
+**Note sulle azioni.** `[👁]` = impersonazione, richiede `utenti.impersonate`, bersaglia **un membro** dell'account (link diretto se ce n'è uno solo, scelta se sono più d'uno) e avvia una sessione con **banner persistente** che dice entrambi i nomi. `[⚙]` = le leve amministrative: lockout manuale con motivo obbligatorio, visibilità delle garanzie ricambio per sede, dati fiscali. `[ + Nuovo cliente ]` = `tenants.provision` (onboarding + Free chiavi in mano). Il **lockout da Stripe è in sola lettura**: il suo inverso è un evento di pagamento, e un umano che dichiarasse «pagato» verrebbe smentito dal webhook successivo.
+
+**Stato di attuazione (S6).** KPI, tabella, filtri ed espansione sono in produzione di codice; impersonazione UI, leve e `[ 🛡 Permessi ruoli ]` → §4.1 arrivano nei blocchi successivi dello stesso sprint.
 
 ### 4.1 Editor Permessi Ruolo ‹sub-vista, `roles.manage`› — 🔗 ADR-016
 

@@ -51,7 +51,12 @@ final class MetrichePiattaforma
         $mrrBloccatoCent = 0;
 
         foreach ($righe as $riga) {
-            // Cast espliciti: Postgres restituisce gli aggregati come stringhe.
+            // Cast espliciti. La motivazione originale — «Postgres restituisce
+            // gli aggregati come stringhe» — è invecchiata: su PHP 8.4 il driver
+            // rende `count(*)` come intero nativo, verificato eseguendo. Restano
+            // perché il tipo di ritorno di un aggregato dipende dal driver e
+            // dalla sua configurazione, non dalla query: qui una stringa
+            // silenziosa diventerebbe una somma di denaro sbagliata.
             $totale = (int) $riga->totale;
             $clienti += $totale;
             $bloccati += (int) $riga->bloccati;
