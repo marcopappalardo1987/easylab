@@ -194,7 +194,7 @@ L'azienda "similare a EasyLab" che ripropone la piattaforma ai propri clienti. V
 
 **Indici:** `stripe_connect_account_id`.
 
-### 4.3 `accounts` (livello piattaforma — ADR-032, **attuata il 18 Ago 2026**; le colonne Cashier arrivano col blocco Stripe)
+### 4.3 `accounts` (livello piattaforma — ADR-032, **attuata il 18 Ago 2026**; colonne Cashier e piano dal **21 Ago 2026**)
 L'intestatario del rapporto commerciale: il cliente che paga EasyLab e possiede **N Enti** (rapporto A). Vive sopra gli Enti, fuori dall'albero, come `resellers` — ma è un *cliente con più sedi*, non un merchant terzo. Il limite di Enti è un attributo del piano e si fa rispettare **al provisioning**, non nello scope.
 
 | Colonna | Tipo | Note |
@@ -203,9 +203,12 @@ L'intestatario del rapporto commerciale: il cliente che paga EasyLab e possiede 
 | `ragione_sociale` | string | |
 | `partita_iva` / `codice_fiscale` | string nullable | Dati fiscali (ADR-010): l'intestatario della fattura è chi paga. |
 | `pec` / `codice_destinatario_sdi` | string nullable | Doppia semantica privato/PA (avvertenza in ADR-002). |
-| `is_locked` | boolean default false | Lockout insoluto (ADR-013): blocca **tutti** gli Enti dell'account. |
-| `locked_at` / `locked_reason` | datetime / string nullable | |
-| colonne Cashier (`stripe_id`, `pm_type`, `pm_last_four`, `trial_ends_at`) | | L'account è il customer Stripe; qui vive il trait `Billable` (§9). |
+| `is_locked` | boolean default false | Lockout insoluto (ADR-013): blocca **tutti** gli Enti dell'account. Vale «almeno una delle due sorgenti è accesa». |
+| `locked_at` / `locked_reason` | datetime / string nullable | Sorgente **manuale** (`easylab:lockout`). |
+| `stripe_locked_at` / `stripe_lock_reason` | datetime / string nullable | Sorgente **automatica** (webhook). Separate dalle precedenti perché i gesti sono idempotenti come no-op: con un motivo solo, un pagamento riuscito riaprirebbe un blocco messo a mano per contenzioso (ADR-013, note 21 Ago). Annotazione interna: non si mostra al bloccato. |
+| `piano` | string default `'free'` indicizzata | Codice del piano a catalogo (`config/easylab.php` → `App\Support\Piani`). **Unica fonte del piano**: non si deduce da `subscribed()`, perché il Free non ha subscription. Fuori `$fillable`, scritta solo da `Account::cambiaPiano()`. |
+| `stripe_id` | string nullable **unique** | Il customer Stripe. UNIQUE e non solo indicizzata: è l'**unico** filtro che protegge l'handler del webhook, dove nessuno scope è attivo. NULL su un account Free, che un customer non ce l'ha. |
+| `pm_type` / `pm_last_four` / `trial_ends_at` | string / string(4) / timestamp nullable | Scritte da Cashier. `trial_ends_at` **castata a datetime**, o `onGenericTrial()` chiama `isFuture()` su una stringa. |
 | timestamps, `deleted_at` | | soft delete. |
 
 #### `account_user` (pivot — ADR-032)
@@ -441,7 +444,7 @@ Allegato **polimorfico** a Strumento o Intervento. Upload su **Backblaze B2** (b
 
 Non ridisegnate: gestite dalle librerie standard, citate per completezza.
 
-- **Cashier (Stripe) — account EasyLab** — colonne Stripe su **`accounts`** (`stripe_id`, `pm_type`, `pm_last_four`, `trial_ends_at` — 🔗 ADR-032, che ha chiuso l'ambiguità «`users`/nodo ente» di questa riga) + tabelle `subscriptions`, `subscription_items`. Copre i rapporti **A** (account con N Enti → EasyLab, §4.3) e **B** (Rivenditore → EasyLab, su `resellers`). Il piano distingue **Free (omaggiato)** e **SaaS a pagamento** (ADR-002) e porta il **limite di Enti** come attributo. Il fallimento pagamento/scadenza → `is_locked` su `accounts`/`resellers` (ADR-013): il lockout dell'account blocca tutti i suoi Enti. E-invoicing SDI fuori V1 (ADR-010): si raccolgono solo i dati fiscali (§4.3/§4.2).
+- **Cashier (Stripe) — account EasyLab** — colonne Stripe su **`accounts`** (`stripe_id`, `pm_type`, `pm_last_four`, `trial_ends_at` — 🔗 ADR-032, che ha chiuso l'ambiguità «`users`/nodo ente» di questa riga) + tabelle `subscriptions`, `subscription_items`. Copre i rapporti **A** (account con N Enti → EasyLab, §4.3) e **B** (Rivenditore → EasyLab, su `resellers`). Il piano distingue **Free (omaggiato)** e **SaaS a pagamento** (ADR-002) e porta il **limite di Enti** come attributo. Il fallimento pagamento/scadenza → `is_locked` su `accounts`/`resellers` (ADR-013): il lockout dell'account blocca tutti i suoi Enti. E-invoicing SDI fuori V1 (ADR-010): si raccolgono solo i dati fiscali (§4.3/§4.2). ⚠️ **Attuato il 21 Ago 2026**: la FK è **`account_id`** e non `user_id` — la decide `getForeignKey()` del Billable — quindi le migration del pacchetto (che scrivono su `users`) NON sono state pubblicate; le nostre includono già le colonne `meter_*` che il pacchetto aggiunge nel 2025. Nessun `tenant_id`, nessun model in `app/Models/` (i due meta-test lo vedrebbero e gli chiederebbero `BelongsToTenant`).
 - **Stripe Connect — account del Rivenditore (V1.1, rapporto C)** — il rivenditore incassa dai propri Enti sul **proprio** connected account ("Standard" + direct charges); integrazione via SDK Stripe con `stripe_account` (**non** Cashier), `application_fee = 0`. Stato della connessione su `resellers.stripe_connect_account_id`/`stripe_connect_status` (§4.2). I fondi non transitano mai da EasyLab (ADR-002, aggiornamento 14 Giu 2026).
 - **Notifiche (Laravel)** — tabella `notifications` per le notifiche **in-app**, **creata il 18 Ago 2026** con lo stub standard; le email "del futuro" sono inviate via SMTP accodate su Redis (ADR-011). Nessuna push in V1. ⚠️ **È l'unica tabella del progetto senza `tenant_id`**, e per scelta: una riga appartiene a una *persona* (`notifiable`), non a un Ente — il contesto Ente vive nel payload (`data.ente_id`). Timbrarla col tenant la farebbe sparire dalla campanella appena lo switcher di 🔗 ADR-032 cambia sede all'utente, che nel frattempo è la stessa persona con la stessa posta. Rotazione a 12 mesi (`routes/console.php`). La memoria anti-duplicati **non** sta qui ma in `avvisi_scadenza` (§5.5): è per-scadenza, mentre queste righe sono per-destinatario.
 - **Audit (spatie/laravel-activitylog)** — tabella `activity_log`. Abilitata sui modelli/azioni sensibili: **forzature semaforo** (chi/quando/motivo), **accessi tecnici cross-tenant** (ADR-007), **impersonation** (Superadmin/Developer), **lockout** e trasferimenti cross-tenant (ADR-013/015).

@@ -87,6 +87,8 @@ Risorse derivate dall'ERD §3–§9. Questo è l'elenco canonico che il seeder S
 
 ### 4.6 Billing & tenancy (piattaforma)
 - `billing.manage_own` — portale Stripe del proprio abbonamento.
+
+> 🔒 **`billing.manage_own` non si usa mai nudo** (dal 21 Ago 2026): è la condizione *necessaria*, e la condizione «membro dell'account» vive in `App\Policies\AccountPolicy::manage` (🔗 ADR-032). Con `teams = false` i permessi sono globali, quindi `authorize('billing.manage_own')` concederebbe a qualunque Admin su **qualunque** account. L'ability ha nome diverso dal permesso perché il `Gate::before` di spatie concede appena il permesso esiste sul ruolo — un'ability omonima non verrebbe mai raggiunta. Un guardrail nei test vieta la stringa nuda fuori dalla Policy.
 - `billing.manage_global` — gestione piani/abbonamenti di tutti i clienti (🔗 ADR-002).
 - `billing.lockout` — blocco/sblocco insoluti (🔗 ADR-013).
 - `tenants.view_all` — dashboard globale clienti + MRR.
