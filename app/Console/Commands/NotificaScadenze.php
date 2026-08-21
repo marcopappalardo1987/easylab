@@ -87,6 +87,12 @@ class NotificaScadenze extends Command
         // `whereDoesntHave` e NON `whereNotIn(...)`: su un Ente con
         // `account_id` NULL — legittimo, fail-open come nel middleware — il
         // `NOT IN` darebbe UNKNOWN e lo escluderebbe in silenzio.
+        // ⚠️ Query cross-tenant SENZA `VistaPiattaforma` (S6), e deve restare così:
+        // quella porta chiede `Gate::authorize`, che senza utente nega sempre —
+        // farla passare di qui manderebbe lo scheduler notturno in
+        // AuthorizationException, e il sintomo sarebbe un digest che non arriva.
+        // In console il confine non c'è già: TenantScope non si applica quando
+        // manca un utente, quindi la query nuda è la forma corretta.
         $enti = UnitaOrganizzativa::query()
             ->where('tipo', TipoUnitaOrganizzativa::Ente->value)
             ->whereDoesntHave('account', fn ($query) => $query->where('is_locked', true))
