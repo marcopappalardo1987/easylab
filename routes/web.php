@@ -9,6 +9,7 @@ use App\Http\Controllers\ScaricaDocumento;
 use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Campo\Home as CampoHome;
 use App\Livewire\Fornitori\ElencoFornitori;
+use App\Livewire\Piattaforma\Cabina;
 use App\Livewire\Ricambi\RicercaRicambi;
 use App\Livewire\Settings\PreferenzeNotifiche;
 use App\Livewire\Settings\TwoFactorAuthentication;
@@ -81,6 +82,18 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     Route::get('/strumenti/{strumento}/storico.pdf', EsportaStoricoPdf::class)
         ->middleware(['can:strumenti.view', 'can:documenti.export_pdf'])
         ->name('strumenti.storico-pdf');
+    // 🔴 La cabina di regia (S6): l'unica schermata che guarda oltre il proprio
+    // Ente. Il nome è `piattaforma` e non `superadmin` perché il progetto evita
+    // di legare le rotte a un nome di ruolo — il permesso dice chi entra, e la
+    // matrice è modificabile a runtime (ADR-016). Stessa scelta di `/campo`.
+    //
+    // DENTRO il gruppo protetto, e non fuori: il Superadmin è un utente
+    // tenant-bound con un account proprio (ADR-018 + SuperadminSeeder), quindi
+    // se quell'account fosse in lockout deve vedere /bloccato come chiunque, e
+    // il 2FA è obbligatorio per il suo ruolo.
+    Route::get('/piattaforma', Cabina::class)
+        ->middleware('can:tenants.view_all')
+        ->name('piattaforma.index');
     Route::get('/settings/security', TwoFactorAuthentication::class)->name('settings.security');
     // Nessun `can:`: qui si governa la propria casella di posta, non un dato
     // dell'Ente (ADR-011). Un permesso significherebbe che qualcuno può

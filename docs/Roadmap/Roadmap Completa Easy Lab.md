@@ -666,6 +666,12 @@ gantt
   >
   > *Lezione di processo, coerente con quella del giro su staging: chi scrive il codice scrive anche i test sul flusso che ha immaginato. Serve qualcuno — o qualcosa — che interroghi ciò che non è stato immaginato.*
   >
+  > - **La rotta `/piattaforma` e il guscio della cabina** (blocco C): pagina che non mostra ancora nulla ma è **già gatata**, voce di sidebar, card in dashboard — e via la card «Prossimamente» che diceva il falso da tre sprint. Costruire la guardia prima della vista è ciò che la rende dimostrabile: l'ordine opposto mette il gate addosso a una pagina già scritta, e la prova diventa «non sembra rotto».
+  >
+  > ⚠️ **Il confronto sul blocco C ha corretto il modello di minaccia**, che era sbagliato in **entrambe** le direzioni: il `can:` di rotta *arriva* anche sugli update Livewire (`Authorize` è fra i middleware persistenti del pacchetto), e `Livewire::test()` *non* prova quella strada (i middleware sono disabilitati per le richieste finte). Il risultato era archiviare come «ridondante» la sola guardia che copre un'azione che non renderizza — cioè tutte quelle dei blocchi successivi. Ora c'è un POST reale a `/livewire/update` che lo congela.
+  >
+  > ⚠️ E **sei test negativi non giravano affatto**: i dataset erano closure che leggevano la matrice RBAC per aggiornarsi da soli, ma i closure dei dataset si risolvono prima che Laravel sia avviato — dataset vuoto, test scartato, 9 casi eseguiti invece di 15. Il reporter diceva «failed» senza elencare fallimenti, ed è l'unico segnale che c'era.
+  >
   > Restano di questo punto: KPI e tabella clienti, con l'espansione nelle sedi.
   - 📦 **Consegna da S4 (15 Ago 2026, 🔗 ADR-029)**: qui va portato il controllo della **visibilità garanzie ricambio per Ente**. Oggi vive nel form dell'anagrafica, ma il Superadmin è tenant-bound (🔗 ADR-018) e ne vede un Ente solo: per gli altri l'impostazione si cambia da console. È questa la vista che interroga la piattaforma senza scoping, quindi è qui che il controllo diventa usabile davvero.
 - [ ] `[CORE]` **User Impersonation** con UI 1-click + **banner persistente** di ripristino; ogni impersonation loggata. 🔗 ADR (Superadmin)/activitylog

@@ -15,11 +15,24 @@
                 <p class="mt-3 text-sm font-medium text-primary-600">Vai alle impostazioni &rarr;</p>
             </a>
 
-            {{-- Placeholder funzionalità future --}}
-            <div class="rounded-lg border border-dashed border-neutral-200 bg-neutral-50 p-6">
-                <h2 class="font-semibold text-neutral-600">Prossimamente</h2>
-                <p class="mt-1 text-sm text-neutral-400">Anagrafica, strumenti e semaforo arriveranno dagli sprint successivi.</p>
-            </div>
+            {{-- 🔴 Cabina di regia (S6), gatata blocco per blocco e non una volta
+                 sola in testa alla pagina: chi non ha il permesso non deve
+                 nemmeno sapere che la pagina esiste. --}}
+            @can('tenants.view_all')
+                <a href="{{ route('piattaforma.index') }}"
+                   class="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm transition hover:border-primary-600">
+                    <h2 class="font-semibold text-neutral-900">🏢 Piattaforma</h2>
+                    <p class="mt-1 text-sm text-neutral-600">I clienti di EasyLab, le loro sedi e lo stato dei contratti.</p>
+                    <p class="mt-3 text-sm font-medium text-primary-600">Vai alla cabina di regia &rarr;</p>
+                </a>
+            @endcan
+
+            {{-- La card «Prossimamente — anagrafica, strumenti e semaforo
+                 arriveranno dagli sprint successivi» è stata tolta il 21 Ago
+                 2026: erano arrivati da tre sprint, e la dashboard continuava a
+                 dire il contrario a ogni accesso. Le dashboard per ruolo sono
+                 un punto successivo di S6; qui è stata rimossa una bugia, non
+                 costruita una vista. --}}
         </div>
     </div>
 </x-layouts.app>
