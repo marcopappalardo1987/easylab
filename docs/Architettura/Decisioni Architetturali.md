@@ -888,3 +888,26 @@ Il precedente indica la strada: il **Tecnico esterno** (🔗 ADR-030) è già og
 - ⚠️ **`users.is_active` (ADR-012) e il lockout dell'account sono due interruttori diversi** e non vanno fusi: il primo spegne una persona, il secondo un contratto. Il middleware di lockout deve guardare l'account dell'Ente corrente, non l'utente.
 - 🔗 Chiude i rimandi di **ADR-029** (l'intestatario dell'impostazione è l'account) e **ADR-030** (il portafoglio riletto: resta per-Ente). Dà a **ADR-010/012/013** l'intestatario che aspettavano; **ADR-002** resta intatto, coi rivenditori dall'altra parte del confine.
 - Il nome del ruolo `Tenant` comincia a stare stretto — indica la persona di *un* Ente, mentre «tenant» resta l'Ente stesso (ADR-006). Non si rinomina nulla oggi: è un debito di nomenclatura, annotato qui perché il prossimo lettore non lo scambi per un concetto nuovo.
+
+---
+
+**ADR-033 — Il primary è il blu del marchio; il teal dello Sprint 0 decade**
+
+*Stato: Accettata (21 Ago 2026) — decisa da Marco dopo la consegna dei file di brand in `docs/Design/assets/`. **Documentale, non ancora attuata**: `docs/Design/Design System Base.md` §2 e §6 e il campione `docs/Design/design-system.html` sono allineati al blu; `resources/css/app.css` porta ancora i token teal. Il restyling è un intervento a parte. Nessuna decisione precedente viene superata: ADR-005 (semaforo) e ADR-014 (obsolescenza) restano validi alla lettera, e i loro colori non cambiano di un grado.*
+
+**Contesto.** Il Design System nasce allo Sprint 0 (task S0.4) quando il logo non esisteva ancora, e sceglie un primary **teal** `#0D9488` per ragioni di tono — «affidabile, lab/medicale». Il 20 Ago 2026 arrivano i file di marchio definitivi: `Logo-EasyLab.svg` è **blu**, costruito su due soli colori, `#06589C` e `#2997D4`, legati da un gradiente sulla curva della «y». Da quel momento l'applicazione e il proprio marchio sono di due colori diversi, e il documento che dovrebbe essere il contratto dei colori descrive un colore che il brand non usa.
+
+**Decisione.** La scala `primary` si deriva dal marchio, con `primary-400` e `primary-600` **ancorati agli hex reali del file** e non interpolati. Il teal esce dal progetto. Tutto il resto della palette — semaforo, neutri, accenti — resta invariato: cambia l'identità, non il significato degli stati.
+
+**Perché non solo una sostituzione di hex.**
+- **`info-500` non può restare un secondo blu.** Nasceva `#2563EB` perché col brand teal un blu informativo non somigliava a niente. Col brand blu i due sarebbero **simili senza essere uguali**, che è il caso peggiore: chi guarda non sa se la differenza voglia dire qualcosa. Il token resta — `x-ui.badge` espone la variante `info` — ma diventa un alias di `primary-600`. *Si toglie un colore, non se ne aggiunge uno.*
+- **`primary-400` non è un colore da testo**: su bianco fa 3.24:1. È il colore del marchio, e serve a bordi, riempimenti dei grafici e testo su fondo scuro. Il gradiente d'identità non va mai dietro a un paragrafo.
+- **I grafici usano un gradino diverso dal badge** (§2.5 del DS): un riempimento di superficie deve staccarsi dal fondo di almeno 3:1 e il gradino chiaro non ci arriva. Stessa famiglia, gradino scelto per il lavoro.
+
+**Conseguenze e trappole.**
+- ⚠️ **Nessun test si accorgerà mai di questa decisione**, né della sua attuazione, né di una sua attuazione sbagliata: la suite non guarda i colori. La verifica è **visiva e manuale**. È la stessa forma dell'errore già pagato due volte dal progetto — le migration non applicate al DB di sviluppo, `config/rbac.php` non riseminato: *ciò che non vive nello schema non viene allineato da un comando.*
+- ⚠️ **Fino all'attuazione, `app.css` e il Design System dicono due cose diverse, e lo dicono apposta.** Lo scarto è dichiarato in testa al DS. Chi lo incontra non ha trovato un bug; chi lo «corregge» di sorpresa fa un restyling non verificato.
+- **Il PDF dello storico non è toccato**: ha colori scritti a mano (dompdf non vede Tailwind), ma sono neutri più `#15803d` e `#b91c1c` — nessun primary. Verificato il 21 Ago 2026. Le viste di autenticazione usano `primary-50/600/700`, cioè token, e si ridipingono da sole.
+- **Due difetti trovati misurando, non guardando**, corretti nel DS con la stessa decisione: il **placeholder era a `neutral-400`** (2.56:1 su bianco, sotto AA) e va a `neutral-500`; la scala neutra era **rada**, e `app.blade.php` usava già un `text-neutral-500` inesistente nel tema, che ricadeva in silenzio sulla scala di default di Tailwind. Un token assente non dà errore: dà un colore diverso.
+- **Il §6 del DS mostrava un `tailwind.config.js`** rimasto dallo Sprint 1 e mai aggiornato al passaggio a Tailwind v4 CSS-first. Chi lo avesse seguito alla lettera avrebbe creato un file che Tailwind ignora, senza nessun errore.
+- 🔗 **`components/brand-logo.blade.php` punta ancora al logo vecchio** (`public/brand/easy-lab-continuity.svg`) e non è usato da nessuna parte: `app.blade.php` disegna a mano un'icona a becher. Il file nuovo va in `public/brand/` e il layout va agganciato al componente. ⚠️ Un `<img src>` **non** eredita le variabili CSS della pagina: o il logo si inlinea, o servono due file per i due fondi.

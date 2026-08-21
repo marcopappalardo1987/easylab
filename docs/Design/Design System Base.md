@@ -2,7 +2,19 @@
 
 *Fondamenta visive della V1: palette, tipografia, spaziature, stati semaforo e componenti Tailwind. Traduce in token e regole concrete i wireframe di `Wireframe Viste Chiave.md` ed è il **contratto** per la configurazione Tailwind dello Sprint 1 e per i componenti Livewire/Blade degli sprint successivi. Impostazione **mobile-first**.*
 
-> **Stato:** bozza di Sprint 0 (task S0.4). Da approvare prima di configurare Tailwind (S1).
+> **Stato (21 Ago 2026).** Documento **normativo**: è qui che si decide, ed è questo file che i docblock
+> citano per numero di sezione (`Design System §4` compare in `Strumento.php`, in `x-ui.semaforo`, nel PDF
+> dello storico e nei test). **La numerazione delle sezioni non si cambia.**
+>
+> Il **campione visivo** è `design-system.html`, in questa stessa cartella: si apre col doppio click, non
+> richiede toolchain, e mostra montato ciò che qui è descritto. Regola per non far divergere i due:
+> **qui le regole e il perché, lì la dimostrazione.** Se un componente si può *mostrare*, si mostra lì e qui
+> se ne cita solo il vincolo.
+>
+> ⚠️ **`resources/css/app.css` non è ancora allineato a questo documento.** La palette qui sotto è il blu del
+> marchio (§2.1); i token in esecuzione sono ancora il teal dello Sprint 0. È uno scarto **noto e voluto**: il
+> restyling è un intervento a parte, con la sua verifica visiva. Fino ad allora, chi legge un colore in
+> `app.css` e uno qui **non ha trovato un bug**. 🔗 ADR-033.
 
 ---
 
@@ -17,17 +29,31 @@
 
 ## 2. Palette colori
 
-### 2.1 Brand / Primary (Teal)
-Identità Easy Lab: affidabile, "lab/medicale". Usata per azioni primarie, link, elementi attivi.
+### 2.1 Brand / Primary (Blu del marchio) — 🔗 ADR-033
+Derivata dal logo: `primary-400` e `primary-600` **non sono interpolati**, sono i due hex presi da
+`assets/Logo-EasyLab.svg`. Il resto della scala è costruito attorno a loro.
 
 | Token | Hex | Uso |
 |---|---|---|
-| `primary-50` | `#F0FDFA` | sfondi tenui, hover leggeri |
-| `primary-100` | `#CCFBF1` | badge/sfondi |
-| `primary-500` | `#14B8A6` | accenti |
-| `primary-600` | `#0D9488` | **bottoni primari**, link |
-| `primary-700` | `#0F766E` | hover bottone primario |
-| `primary-900` | `#134E4A` | testo su sfondo chiaro brand |
+| `primary-50` | `#EFF7FC` | sfondi tenui, hover leggeri |
+| `primary-100` | `#D6EAF7` | badge/sfondi |
+| `primary-200` | `#AFD6EF` | bordi accento; logo su fondo scuro |
+| `primary-300` | `#7FBDE4` | testo brand su fondo scuro |
+| `primary-400` | `#2997D4` | **azzurro del logo**: accenti, bordi, riempimenti dei grafici |
+| `primary-500` | `#1878B8` | stati intermedi |
+| `primary-600` | `#06589C` | **blu del logo**: bottoni primari, link |
+| `primary-700` | `#054880` | hover bottone primario |
+| `primary-800` | `#063A66` | superfici brand scure |
+| `primary-900` | `#072F52` | testo su sfondo chiaro brand |
+| `primary-950` | `#041D33` | header scuri |
+
+> ⚠️ **`primary-400` non è un colore da testo.** Su bianco fa **3.24:1**: sta sotto il 4.5:1 del corpo
+> testo. Si usa per bordi, riempimenti dei grafici e testo su fondo scuro. Il gradiente del marchio
+> (`primary-600 → primary-400`) vale per superfici d'identità — icona app, login — e **mai** dietro a un
+> paragrafo, perché il contrasto cambia lungo la superficie.
+>
+> *Fino al 20 Ago 2026 questa scala era un **teal** (`#0D9488`), scelto allo Sprint 0 quando il logo non
+> esisteva ancora. Marchio e interfaccia erano di due colori diversi.*
 
 ### 2.2 Neutri (Slate)
 Testo, bordi, sfondi, superfici.
@@ -37,10 +63,21 @@ Testo, bordi, sfondi, superfici.
 | `neutral-50` | `#F8FAFC` | sfondo pagina |
 | `neutral-100` | `#F1F5F9` | superfici/card secondarie |
 | `neutral-200` | `#E2E8F0` | bordi, divisori |
-| `neutral-400` | `#94A3B8` | testo disabilitato, placeholder |
+| `neutral-300` | `#CBD5E1` | bordi marcati, contorno dei campi |
+| `neutral-400` | `#94A3B8` | **solo elementi non testuali**: icone decorative, separatori |
+| `neutral-500` | `#64748B` | **placeholder**, testo terziario |
 | `neutral-600` | `#475569` | testo secondario |
+| `neutral-700` | `#334155` | testo su fondo tenue |
 | `neutral-800` | `#1E293B` | testo primario |
 | `neutral-900` | `#0F172A` | titoli, header scuro |
+| `neutral-950` | `#020617` | fondi scuri pieni |
+
+> **Corretto il 21 Ago 2026: il placeholder era a `neutral-400`, cioè 2.56:1 su bianco — sotto AA.**
+> Va a `neutral-500` (**4.76:1**). `neutral-400` resta, ma smette di poter portare testo.
+>
+> La scala era volutamente rada e i gradini `300/500/700/950` mancavano. Non è pedanteria: `app.blade.php`
+> usava già `text-neutral-500`, che non esistendo nel tema **ricadeva in silenzio sulla scala di default di
+> Tailwind** invece che su questa. Un token assente non dà errore, dà un colore diverso.
 
 ### 2.3 Stati semaforo (semantici) — 🔗 ADR-005
 Colori dedicati allo stato strumento; **non** riusare il rosso/verde generico per altro.
@@ -55,11 +92,49 @@ Colori dedicati allo stato strumento; **non** riusare il rosso/verde generico pe
 
 | Token | Hex | Uso |
 |---|---|---|
-| `info-500` | `#2563EB` | notifiche informative, link secondari |
+| `info-500` | = `primary-600` | notifiche informative, link secondari |
 | `obsolete-500` | `#7C3AED` | badge "Obsoleto" (distinto dal semaforo, ADR-014) |
 | `locked-500` | `#64748B` | stato lockout/insoluto e permessi 🔒 (ADR-013/016) |
 
-> **Contrasto.** Testo su sfondo ≥ 4.5:1 (WCAG AA). Bottoni primari: testo bianco su `primary-600`. Le coppie badge in §2.3 rispettano AA.
+> **`info` non è più un secondo blu.** Nasceva `#2563EB` quando il brand era teal: un blu informativo aveva
+> senso perché non somigliava a niente. Col brand blu, `#2563EB` e `#06589C` sarebbero **simili senza essere
+> uguali** — il caso peggiore, quello in cui chi guarda non sa se la differenza voglia dire qualcosa. Il
+> token resta perché `x-ui.badge` espone la variante `info`; il colore diventa un alias di `primary-600`.
+>
+> **`locked-500` è invece identico a `neutral-500` di proposito**, e va bene così: il grigio del lockout
+> *deve* essere il grigio neutro. Il nome separato serve a dichiarare l'intenzione (ADR-013), non a
+> introdurre un colore in più.
+
+### 2.5 Colori dei grafici — 🔗 ADR-005
+
+Il pallino in tabella e il segmento nel grafico appartengono alla **stessa famiglia ma non allo stesso
+gradino**: un riempimento di superficie deve staccarsi dal fondo di almeno 3:1, e il gradino chiaro non ci
+arriva.
+
+| Ruolo | Tema chiaro | Tema scuro |
+|---|---|---|
+| Verde | `#15803D` | `#15803D` |
+| Arancione | `#CA8A04` | `#C47F0F` |
+| Rosso | `#B91C1C` | `#DC2626` |
+| Obsoleto | `#7C3AED` | `#8B5CF6` |
+| Brand | `#06589C` | `#2997D4` |
+
+Le due terne sono state **verificate con uno strumento**, non a occhio (banda di luminosità OKLCH, soglia di
+croma, separazione per protanopia/deuteranopia/tritanopia, contrasto sulla superficie). Coppia peggiore in
+tema chiaro: verde↔arancione a ΔE 9,9. In tema scuro scende a **ΔE 6,9**, sotto la soglia di sicurezza, ed è
+legittima **solo** perché ogni voce porta anche glifo ed etichetta (§4). *La regola di ADR-005 è ciò che
+rende usabile la palette, non un adempimento accanto ad essa.*
+
+**Mai due assi Y.** Due grandezze di scala diversa vogliono due grafici, o un indice a base comune: un
+doppio asse permette di far dire al grafico qualunque cosa scegliendo le scale.
+
+> **Contrasto.** Testo su sfondo ≥ 4.5:1 (WCAG AA); elementi **non testuali** (pallini, bordi, riempimenti)
+> ≥ 3:1. Bottoni primari: bianco su `primary-600` = **7.29:1**. Le coppie badge in §2.3 rispettano AA.
+>
+> ⚠️ **Il pallino arancione su bianco fa 2.15:1, e non può fare di meglio restando arancione.** Non è un
+> difetto da correggere alzando il gradino — un arancione più scuro non è più arancione. È l'aritmetica che
+> rende §4 obbligatorio: la forma e la parola portano ciò che quel colore non può portare. Le coppie
+> misurate, ricalcolate dagli hex, sono in `design-system.html` §2.
 
 ---
 
@@ -131,7 +206,7 @@ Header `bg-neutral-50 text-neutral-600 text-sm`, righe con `divide-y divide-neut
 Barra orizzontale, tab attivo `border-b-2 border-primary-600 text-primary-700`, inattivo `text-neutral-600`. Tab nascosti per permesso (es. **Ricambi** assente per chi non ha `ricambi.view`). *Corretto l'8 Ago 2026: l'esempio diceva «**Garanzie** assente per Tenant/Tecnico — ADR-004», ed era sbagliato due volte. Il tab Garanzie è visibile in sola lettura anche a Tenant e Tecnico, che hanno `garanzie.macchina.view` (già così da S3); e il vincolo di ADR-004 riguarda le **righe** `soggetto = ricambio`, applicato per scope, mai il tab — per il solo Tenant dopo ADR-027. Un tab nascosto e una riga filtrata sono due meccanismi diversi: confonderli è ciò che ha prodotto l'errore corretto da ADR-027.* **Mobile:** scroll orizzontale o `select ▼`.
 
 ### 5.6 Form & input
-`rounded-md border-neutral-200 focus:border-primary-600 focus:ring-primary-600`. Label `text-sm font-medium text-neutral-800`. Errori `text-danger-600 text-sm`. Autocomplete ricambi (ADR-008/022) come combobox con creazione "al volo", su **nome** del pezzo. Le **righe ripetitore** del form intervento (wireframe §2.1) riusano lo stesso combobox: ogni riga è `nome` + `data`, con `[ ✕ ]` per rimuoverla e `[ + Aggiungi ricambio ]` in coda.
+`rounded-md border-neutral-300 focus:border-primary-600 focus:ring-primary-600`. Label `text-sm font-medium text-neutral-800`. **Placeholder `text-neutral-500`** (§2.2: a `neutral-400` era sotto AA). Errori `text-danger-600 text-sm`, con `aria-invalid` e `aria-describedby` — non il solo bordo rosso. L'etichetta è **sempre visibile**: un placeholder non è un'etichetta, sparisce appena si scrive. Autocomplete ricambi (ADR-008/022) come combobox con creazione "al volo", su **nome** del pezzo. Le **righe ripetitore** del form intervento (wireframe §2.1) riusano lo stesso combobox: ogni riga è `nome` + `data`, con `[ ✕ ]` per rimuoverla e `[ + Aggiungi ricambio ]` in coda.
 
 > **`x-ui.combobox`, realizzato in S4 blocco 3.** Due scelte da conoscere prima di riusarlo.
 >
@@ -158,24 +233,85 @@ Barra fissa in alto, alto contrasto `bg-warning-500 text-neutral-900`, testo "St
 
 ---
 
-## 6. Esempio di mappatura nel tema Tailwind (indicativo per S1)
+## 6. Mappatura nel tema Tailwind
 
-Solo riferimento per il task S1 "Tailwind via Vite" — il codice si scrive in S1.
+Il progetto è su **Tailwind v4, CSS-first**: `tailwind.config.js` **non esiste** e non va creato. I token
+vivono in un blocco `@theme` dentro `resources/css/app.css`.
 
-```js
-// tailwind.config.js → theme.extend.colors
-colors: {
-  primary:  { 50:'#F0FDFA',100:'#CCFBF1',500:'#14B8A6',600:'#0D9488',700:'#0F766E',900:'#134E4A' },
-  neutral:  { 50:'#F8FAFC',100:'#F1F5F9',200:'#E2E8F0',400:'#94A3B8',600:'#475569',800:'#1E293B',900:'#0F172A' },
-  success:  { 100:'#DCFCE7',500:'#16A34A',600:'#15803D' },
-  warning:  { 100:'#FEF3C7',500:'#F59E0B',800:'#92400E' },
-  danger:   { 100:'#FEE2E2',500:'#DC2626',600:'#B91C1C' },
-  info:     { 500:'#2563EB' },
-  obsolete: { 500:'#7C3AED' },
-  locked:   { 500:'#64748B' },
+*Fino al 21 Ago 2026 questa sezione mostrava un `tailwind.config.js` con `theme.extend.colors`, rimasto dallo
+Sprint 1 e mai aggiornato al passaggio a v4. Chi lo avesse seguito alla lettera avrebbe creato un file che
+Tailwind ignora — senza nessun errore.*
+
+```css
+/* resources/css/app.css */
+@theme {
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+
+    /* Brand / Primary — 400 e 600 sono gli hex del logo (§2.1) */
+    --color-primary-50:  #eff7fc;
+    --color-primary-100: #d6eaf7;
+    --color-primary-200: #afd6ef;
+    --color-primary-300: #7fbde4;
+    --color-primary-400: #2997d4;
+    --color-primary-500: #1878b8;
+    --color-primary-600: #06589c;
+    --color-primary-700: #054880;
+    --color-primary-800: #063a66;
+    --color-primary-900: #072f52;
+    --color-primary-950: #041d33;
+
+    /* Neutri (Slate) — completati: 300, 500, 700, 950 mancavano (§2.2) */
+    --color-neutral-50:  #f8fafc;
+    --color-neutral-100: #f1f5f9;
+    --color-neutral-200: #e2e8f0;
+    --color-neutral-300: #cbd5e1;
+    --color-neutral-400: #94a3b8;
+    --color-neutral-500: #64748b;
+    --color-neutral-600: #475569;
+    --color-neutral-700: #334155;
+    --color-neutral-800: #1e293b;
+    --color-neutral-900: #0f172a;
+    --color-neutral-950: #020617;
+
+    /* Stati semaforo — ADR-005, invariati */
+    --color-success-50:  #f0fdf4;
+    --color-success-100: #dcfce7;
+    --color-success-500: #16a34a;
+    --color-success-600: #15803d;
+    --color-success-700: #166534;
+    --color-warning-50:  #fffbeb;
+    --color-warning-100: #fef3c7;
+    --color-warning-500: #f59e0b;
+    --color-warning-600: #d97706;
+    --color-warning-800: #92400e;
+    --color-danger-50:   #fef2f2;
+    --color-danger-100:  #fee2e2;
+    --color-danger-500:  #dc2626;
+    --color-danger-600:  #b91c1c;
+    --color-danger-800:  #991b1b;
+
+    /* Accenti — info è un alias del brand, non un secondo blu (§2.4) */
+    --color-info-500: var(--color-primary-600);
+    --color-obsolete-50:  #f5f3ff;
+    --color-obsolete-100: #ede9fe;
+    --color-obsolete-500: #7c3aed;
+    --color-obsolete-700: #6d28d9;
+    --color-locked-100: #e2e8f0;
+    --color-locked-500: #64748b;
+    --color-locked-700: #334155;
+
+    /* Grafici — §2.5 */
+    --color-chart-verde:     #15803d;
+    --color-chart-arancione: #ca8a04;
+    --color-chart-rosso:     #b91c1c;
+    --color-chart-obsoleto:  #7c3aed;
+    --color-chart-brand:     #06589c;
 }
-// fontFamily.sans = ['Inter','system-ui','sans-serif']
 ```
+
+⚠️ **Questo blocco non è ancora in `app.css`**: vedi lo Stato in testa al documento e ADR-033. Quando ci
+andrà: `npm run build`, e poi la verifica **visiva** — nessun test guarda i colori.
 
 ---
 
@@ -184,5 +320,8 @@ colors: {
 - [ ] Stato semaforo con colore **+** icona **+** etichetta (§4).
 - [ ] Solo token di colore/spazio (niente hex inline).
 - [ ] Azioni/tab filtrati per permesso (`../Architettura/Schema Ruoli e Permessi.md`).
-- [ ] Contrasto testo ≥ AA; touch target ≥ 44px sulle azioni mobile.
-- [ ] Tabelle con fallback a card su mobile.
+- [ ] Contrasto testo ≥ 4.5:1; elementi **non testuali** ≥ 3:1 (§2.5); touch target ≥ 44px sulle azioni mobile.
+- [ ] Tabelle con `tabella-a-card`: ogni `<td>` porta `data-etichetta` uguale al proprio `<th>`, la cella
+      delle azioni porta `data-azioni`, e una cella su **due righe** va avvolta in un solo figlio — in
+      modalità card il `<td>` diventa flex, e ogni figlio diretto finirebbe affiancato agli altri.
+- [ ] Componente cercato prima in `design-system.html`: se là c'è già, si riusa invece di riscriverlo.
