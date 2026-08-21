@@ -17,6 +17,17 @@ Questa è la cabina di regia commerciale e operativa del proprietario originario
 - **Blocco Automatico Insoluti:** Gestione e visualizzazione del blocco automatico dell'accesso per i tenant/admin a cui scade l'abbonamento o fallisce il pagamento.
 - **Tutte le funzionalità del Admin** sono integrate nel superadmin
 
+> **Stato di attuazione al 21 Ago 2026 (S6).** La cabina di regia è su `/piattaforma`. Realizzati: **Dashboard Globale** (clienti, sedi, strumenti, MRR — quest'ultimo **a listino, non incassato**: la verità contabile resta Stripe), tabella clienti con espansione nelle sedi, **impersonazione** con banner che dice entrambi i nomi, **lockout** manuale, **dati fiscali**, **visibilità garanzie ricambio** per sede, e l'erogazione **Free «chiavi in mano»** dal form invece che dal terminale.
+>
+> ⚠️ **Tre voci di questo elenco vanno lette con una correzione, non alla lettera.**
+> 1. *«Vista generale su tutti i clienti»* — la riga è di un'unità sbagliata: dopo 🔗 **ADR-032** l'unità del contratto è l'**Account**, non l'Ente, e un Account può avere N sedi. La tabella elenca clienti, non laboratori.
+> 2. *«Blocco Automatico Insoluti»* — sono **due sorgenti ortogonali** (🔗 ADR-013): quella automatica la scrive il webhook Stripe e **si riapre da sé** al pagamento (non ha un pulsante, ed è voluto), quella manuale la scrive una persona con un motivo obbligatorio. Un interruttore unico rifarebbe il difetto che la separazione esiste per impedire.
+> 3. *«Gestione Rivenditori/Admin»* — **fuori da V1** (🔗 ADR-002: solo il rapporto A, EasyLab incassa; niente Stripe Connect). È nel backlog V1.1.
+>
+> **Ancora da fare in S6**: vista **Audit log**, **editor permessi ruolo**, e le dashboard dedicate agli altri ruoli.
+
+
+
 **3. Dashboard Admin (Proprietari che si abbonano)**
 
 Questi sono i clienti che acquistano il SaaS per operare in autonomia sui propri laboratori o per gestire i propri clienti terzi. Agiscono come un "piccolo EasyLab" limitato al proprio recinto.

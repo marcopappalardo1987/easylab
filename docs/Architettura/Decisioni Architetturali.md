@@ -443,7 +443,7 @@ Il volume gioca a favore: il digest è **una email al giorno per destinatario e 
 
 **ADR-018 — Nessun ruolo bypassa il Global Scope: Superadmin/Developer tenant-bound, accesso cross-tenant solo via impersonazione**
 
-*Stato: Accettata (29 Giu 2026) — supera il punto di ADR-001 secondo cui Superadmin/Developer bypassano lo scope.*
+*Stato: Accettata (29 Giu 2026) — supera il punto di ADR-001 secondo cui Superadmin/Developer bypassano lo scope. **Attuata la vista aggregata il 21 Ago 2026** (S6): la cabina di regia `/piattaforma` esiste e non è un'eccezione a questa decisione, è la sua applicazione — **una porta sola e nominata**, `App\Support\Tenancy\VistaPiattaforma`, che toglie `TenantScope` e `DepartmentScope` **per nome** (mai nudi: il nudo porta via anche il soft delete) e chiede `tenants.view_all`. Nessun builder di piattaforma nasce fuori di lì, e un meta-test vieta di aggiungerne di nudi. Il Superadmin resta tenant-bound in **ogni altra** schermata, e l'accesso ai dati di un cliente resta l'impersonazione. ⚠️ L'ERD §3 ha continuato a dire «bypass del Global Scope» fino a quel giorno, cioè per due mesi: corretto lì.*
 
 **Contesto.** ADR-001 prevedeva che Superadmin (EasyLab) e Developer **bypassassero** il Global Scope, vedendo i dati di *tutti* i tenant in un'unica vista (motivazione: dashboard globali/MRR). All'atto pratico questo significa che il fornitore vede di default i dati dei clienti — debole sul piano GDPR (minimizzazione/necessità) e fonte di confusione UX (Enti di clienti diversi mescolati nella stessa schermata). Chiarimento del modello di business: EasyLab **non possiede** gli Enti dei clienti; ogni Ente è un tenant a sé col proprio Admin.
 

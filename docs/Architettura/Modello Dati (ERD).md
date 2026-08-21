@@ -45,7 +45,7 @@ Tre scelte lasciate aperte dagli ADR e fissate qui (vedi roadmap S0):
 **Global Scope per ruolo** (applicato via trait Eloquent riusabile, ADR-001):
 - **Tenant** → `WHERE tenant_id = <ente dell'utente>` (+ filtro reparto se Responsabile, vedi §6).
 - **Reseller/Admin** → `WHERE reseller_id = <id reseller>` (in V1, essendo `reseller_id = NULL`, l'Admin diretto è gestito come Superadmin-limitato sul proprio tenant).
-- **Superadmin / Developer** → bypass del Global Scope (dashboard globali, MRR — ADR-001).
+- **Superadmin / Developer** → ⚠️ **nessun bypass**, e questa riga diceva il contrario fino al 21 Ago 2026. 🔗 **ADR-018** è esplicito: *nessun ruolo* scavalca il Global Scope, Superadmin e Developer compresi, che restano **tenant-bound** come chiunque — l'accesso cross-tenant è l'**impersonazione**. Le viste aggregate (KPI, MRR, elenco clienti) passano da **una porta sola e nominata**, `App\Support\Tenancy\VistaPiattaforma`, che toglie `TenantScope` e `DepartmentScope` **per nome** e chiede `tenants.view_all`. *La riga vecchia descriveva l'intenzione di ADR-001, scritta prima che ADR-018 la superasse: una fonte di verità che dice «bypass» è precisamente ciò che rende ragionevole scriverne uno.*
 - **Tecnico** → unione di due insiemi (ADR-007), vedi §6.
 
 **Legenda tipi.** `string` = varchar; `text` = testo lungo; `json` = colonna JSON/JSONB; `enum` = colonna stringa con valori vincolati (in Laravel: `string` + cast/validazione, o enum nativo DB); `date` / `datetime` = temporali.

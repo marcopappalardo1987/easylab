@@ -57,7 +57,9 @@ Evitiamo di reinventare la ruota. Ecco le librerie standard dell'ecosistema Lara
 
 L'ambiente dove "vivrà" l'applicazione, ottimizzato per zero pensieri lato sistemistico.
 
-- **Piattaforma applicativa:** **Laravel Cloud** — deploy da Git, Postgres e Redis/Valkey gestiti, worker di coda e scheduler inclusi (🔗 ADR-025). *Sostituisce l'assunzione iniziale "Laravel Forge su droplet DigitalOcean", che era un default mai eseguito.*
+- **Piattaforma applicativa:** **Laravel Cloud** — deploy da Git, Postgres e Redis/Valkey gestiti (🔗 ADR-025). *Sostituisce l'assunzione iniziale "Laravel Forge su droplet DigitalOcean", che era un default mai eseguito.*
+
+  ⚠️ **Code e scheduler non sono «inclusi», e questa riga lo diceva fino al 21 Ago 2026.** Sono **risorse da creare per ambiente**, a consumo, e non si ereditano da un ambiente all'altro. Lo scheduler è un interruttore sull'App cluster; per le code ci sono tre strade — **managed queue** (compute dedicata, scale-to-zero, $0 a riposo: la nostra scelta), **background process** sull'App cluster (che però impedisce lo scale-to-zero e fa competere i job col traffico web), **worker cluster** (piano Growth). ⛔ Il runner dei **Comandi** non è nessuna delle tre: un `queue:work` lanciato da lì è un container effimero che non sopravvive al deploy. Dettagli e trappole in `Setup Repository e Ambienti.md` §2.1.1.
 - **Storage documenti:** **Backblaze B2** (S3-compatible), bucket privato in **regione UE** — Amsterdam `eu-central-003` (🔗 ADR-025/009).
 - **Versionamento:** GitHub o GitLab (Repository privato per il codice sorgente).
 
