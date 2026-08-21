@@ -47,6 +47,16 @@
              che lo riguardano se le impostano da sé. -->
         <env name="SUPERADMIN_EMAIL" value=""/>
         <env name="SUPERADMIN_PASSWORD" value=""/>
+        <!-- Stessa ragione, blocco Cashier. E qui non è un'ipotesi: il `.env`
+             di sviluppo ha STRIPE_WEBHOOK_SECRET valorizzato mentre in CI è
+             vuoto, quindi senza queste righe il test «senza segreto la firma
+             non si può verificare» direbbe cose diverse a seconda di chi lo
+             lancia. I test che hanno bisogno di un segreto se lo impostano da
+             sé con config(). -->
+        <env name="STRIPE_KEY" value=""/>
+        <env name="STRIPE_SECRET" value=""/>
+        <env name="STRIPE_WEBHOOK_SECRET" value=""/>
+        <env name="STRIPE_PRICE_SAAS" value=""/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
