@@ -65,6 +65,30 @@ class Piani
     }
 
     /**
+     * Il prezzo di **listino** del piano, in centesimi interi.
+     *
+     * Alimenta l'MRR della dashboard di piattaforma (S6). Centesimi e non
+     * euro-float: un totale su decine di clienti in virgola mobile accumula
+     * errore, e nessuno rilegge la riga che lo fa.
+     *
+     * ⚠️ È il listino, non l'incassato: lo stesso prezzo vive su Stripe e i due
+     * possono divergere (promozioni, prezzi storici, modifiche in dashboard).
+     * Il commento in `config/easylab.php` lo dice per esteso, e la pagina che
+     * mostra l'MRR lo ripete a chi legge.
+     *
+     * Come gli altri getter, **lancia** su un piano fuori catalogo. Chi lo
+     * consuma in una vista aggregata non deve però propagare l'eccezione: la
+     * dashboard di piattaforma itera su `codici()` e raccoglie il resto in una
+     * voce «piano sconosciuto», perché è l'unica schermata da cui si
+     * ripareprebbe un `accounts.piano` corrotto — e morire proprio lì sarebbe
+     * il modo peggiore di segnalarlo.
+     */
+    public static function prezzoMensileCent(string $piano): int
+    {
+        return (int) self::attributo($piano, 'prezzo_mensile_cent');
+    }
+
+    /**
      * Un piano **omaggiato**: nessun customer Stripe, nessuna subscription
      * (ADR-002 — il Free è a fronte di un contratto di manutenzione fisico,
      * fatturato fuori dal software).
@@ -121,6 +145,18 @@ class Piani
             );
         }
 
-        return $definizione[$chiave] ?? null;
+        // `array_key_exists` e non `?? null`: `null` è un valore **dichiarato**
+        // legittimo (`stripe_price` del Free, `max_enti` illimitato), mentre una
+        // chiave **assente** è un piano scritto a metà. Confonderli è come il
+        // `?? 0` che questa classe rifiuta in ogni suo getter: trasformerebbe un
+        // catalogo incompleto in un piano da zero euro, in silenzio, dentro una
+        // somma di denaro. Trovato dal confronto sul blocco A di S6.
+        if (! array_key_exists($chiave, $definizione)) {
+            throw new InvalidArgumentException(
+                "Il piano «{$piano}» non dichiara «{$chiave}»: il catalogo in config/easylab.php è incompleto."
+            );
+        }
+
+        return $definizione[$chiave];
     }
 }

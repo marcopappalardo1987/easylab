@@ -75,6 +75,11 @@ class Account extends Model
     protected $attributes = [
         'is_locked' => false,
         'piano' => 'free',
+        // Stessa ragione delle due sopra, e l'ha trovata il suo test: senza,
+        // un'istanza fresca leggerebbe `null` e un conteggio scritto come
+        // «escludi i di_piattaforma» si comporterebbe in modo diverso a
+        // seconda che il model venga dal DB o dalla memoria.
+        'di_piattaforma' => false,
     ];
 
     protected $fillable = [
@@ -89,6 +94,7 @@ class Account extends Model
     {
         return [
             'is_locked' => 'boolean',
+            'di_piattaforma' => 'boolean',
             'locked_at' => 'datetime',
             'stripe_locked_at' => 'datetime',
             // Non decorativo: `ManagesSubscriptions::onGenericTrial()` fa
@@ -121,6 +127,11 @@ class Account extends Model
             'stripe_locked_at',
             'stripe_lock_reason',
             'piano',
+            // Decide se l'account **esiste commercialmente**: sparire dai
+            // conteggi è un effetto grande quanto un lockout, e una colonna con
+            // quell'effetto senza traccia sarebbe l'unica del gruppo. Oggi la
+            // scrive solo il seeder; domani una leva di console o una UI.
+            'di_piattaforma',
         ];
     }
 
@@ -238,6 +249,23 @@ class Account extends Model
         }
 
         $this->forceFill(['piano' => $piano])->save();
+    }
+
+    /**
+     * Quanto vale questo account al mese, a **listino**, in centesimi.
+     *
+     * Esiste come metodo e non come chiamata inline perché è il posto dove
+     * domani entrerebbe uno sconto per-account, e perché `$attributes` dà a
+     * un'istanza fresca un `piano` valido — quindi non lancia mai su un model
+     * appena costruito.
+     *
+     * ⚠️ Somma di questi valori = MRR **a listino**, non incassato: un account
+     * in lockout continua a valere il suo piano finché il contratto non finisce
+     * (ADR-013 — il blocco è una porta chiusa, non una disdetta).
+     */
+    public function valoreMensileCent(): int
+    {
+        return Piani::prezzoMensileCent($this->piano);
     }
 
     /**

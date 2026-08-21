@@ -53,6 +53,14 @@ class SuperadminSeeder extends Seeder
         DB::transaction(function () use ($email, $password, $nomeEnte) {
             $account = Account::firstOrCreate(['ragione_sociale' => $nomeEnte]);
 
+            // Questo account è EasyLab, non un cliente: la cabina di regia (S6)
+            // lo esclude da tutti i KPI, o «Clienti: 13» quando ce ne sono 12.
+            // `forceFill` perché la colonna sta fuori da `$fillable`, e fuori
+            // dall'`if` perché il seeder è rieseguibile: su un ambiente dove
+            // l'account esisteva già dal backfill 1:1 di ADR-032, il flag va
+            // messo comunque.
+            $account->forceFill(['di_piattaforma' => true])->save();
+
             $ente = UnitaOrganizzativa::where('tipo', TipoUnitaOrganizzativa::Ente)
                 ->where('nome', $nomeEnte)
                 ->first();

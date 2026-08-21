@@ -47,6 +47,16 @@ class AccountFactory extends Factory
         ]);
     }
 
+    /**
+     * L'account che è EasyLab stessa, non un cliente: la cabina di regia lo
+     * esclude da tutti i KPI. Le factory girano unguarded, quindi il
+     * fuori-fillable di `di_piattaforma` non le riguarda.
+     */
+    public function diPiattaforma(): static
+    {
+        return $this->state(fn () => ['di_piattaforma' => true]);
+    }
+
     /** Account sul piano a pagamento: più di un Ente, e un customer Stripe. */
     public function saas(): static
     {

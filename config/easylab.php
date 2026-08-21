@@ -38,6 +38,37 @@ return [
     |
     | `env()` DENTRO config/ è legittimo ed è il posto giusto: la lezione del
     | 19 Ago (qui sotto) vieta di leggerla FUORI da config/, non qui.
+    |
+    | 💶 `prezzo_mensile_cent` è il LISTINO, in centesimi interi e mai float
+    | (un MRR su decine di clienti in float accumula errore, ed è la riga che
+    | nessuno rilegge). Il Free dichiara 0 invece di ometterlo: `null`
+    | significherebbe «non lo so», e in un totale la differenza conta.
+    |
+    | ⚠️ Questo prezzo vive ANCHE su Stripe (`stripe_price`) e i due possono
+    | divergere — una promozione, un prezzo storico rimasto su un cliente, una
+    | modifica fatta in dashboard. Il numero qui è quello di listino: l'MRR che
+    | ne esce è «contratti in essere a listino», NON «incassato». La verità
+    | contabile resta Stripe; la dashboard Superadmin è la cabina di regia, non
+    | il bilancio — e lo dice anche in pagina, per non farsi citare in una
+    | riunione al posto di un estratto conto.
+    |
+    | Non `env()` come il price id: il prezzo è un parametro di PRODOTTO e deve
+    | cambiare con un commit visibile, come `max_enti`.
+    |
+    | 🚧 **I 4900 sono un segnaposto**, scelto il 21 Ago 2026 per far girare il
+    | flusso su staging, e vanno sostituiti col listino vero. Su Stripe i Price
+    | sono **immutabili**: cambiare cifra significa crearne uno nuovo e
+    | aggiornare `STRIPE_PRICE_SAAS`, non modificare quello esistente.
+    |
+    | ⚠️ **Nulla in questo repository può accorgersi se questo numero e il Price
+    | su Stripe divergono**: il price id vive nell'ambiente, l'importo qui, e i
+    | due non si incontrano mai. Un test non può parlare con Stripe. L'unico
+    | posto dove il confronto sarebbe possibile è un comando che legga il Price
+    | e confronti `unit_amount` e `currency` — oggi non esiste, ed è la ragione
+    | per cui questa riga dice «a listino» e non «incassato».
+    |
+    | La **valuta** non è qui: è `cashier.currency` (EUR). Le due devono restare
+    | d'accordo, e nessun meccanismo lo garantisce.
     */
     'piani' => [
         'predefinito' => 'free',
@@ -52,12 +83,14 @@ return [
                 // di configurazione dietro un messaggio rassicurante.
                 'gratuito' => true,
                 'stripe_price' => null,
+                'prezzo_mensile_cent' => 0,
             ],
             'saas' => [
                 'etichetta' => 'SaaS',
                 'max_enti' => 5,
                 'gratuito' => false,
                 'stripe_price' => env('STRIPE_PRICE_SAAS'),
+                'prezzo_mensile_cent' => 4900,
             ],
         ],
     ],
