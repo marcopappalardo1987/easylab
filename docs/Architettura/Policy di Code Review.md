@@ -31,7 +31,14 @@ Un bug qui = fuga di dati, soldi sbagliati o accessi indebiti. Revisione umana p
   3. `RicambioUtilizzo::fissaMontaggio()` e `cestinaConGaranzia()` — la garanzia va allineata e cestinata **anche** da chi non ha titolo a vederla, o resta viva e orfana a pesare sul semaforo di un pezzo che non c'è più;
   4. `ManagesRicambiStrumento` — stessa ragione, sul lato lettura del tab;
   5. `AccessibleStrumenti` e `GaranziaDepartmentScope` — subquery di sicurezza che rompono in anticipo la ricorsione col futuro scope Tecnico (🔗 ADR-007);
-  6. `User::ente()` — «di chi è quest'utente» va risposto anche dentro un global scope.
+  6. `User::ente()` — «di chi è quest'utente» va risposto anche dentro un global scope;
+  7. `User::sediRaggiungibili()` — le sedi di un account sono per definizione fuori dal tenant corrente (🔗 ADR-032); il confine lo dà il pivot, non un filtro;
+  8. `Account::enti()` — idem, e **con i due scope elencati per nome**: il nudo portava via anche il soft delete, e le sedi cestinate occupavano uno slot di piano per sempre;
+  9. `Strumento::percorsoUbicazione()` e `mappaUbicazioni()` — risalita gerarchica nodo→radice, che dev'essere completa anche per chi vede un ramo solo;
+  10. `Ricambio::unisciIn()` (🔗 ADR-008), `AccessibleNodes`, `AccessoTecnico`, `FugaDaLockout`, `SwitcherEnte`, `ElencoStrumenti` — rotture di ricorsione fra scope e risoluzioni di un id **prima** della guardia che lo autorizza; ciascuno con la ragione nel proprio docblock;
+  11. **`App\Support\Tenancy\VistaPiattaforma`** (21 Ago 2026) — la **porta unica** delle viste di piattaforma di S6: toglie `TenantScope` e `DepartmentScope` **per nome**, chiede `tenants.view_all`, e nessun builder non-scopato di piattaforma nasce fuori di lì. È la voce 1 resa concreta, non una dodicesima eccezione.
+
+  > ⚠️ **L'elenco si è derivato una seconda volta.** Al 21 Ago 2026 contava sei voci mentre in `app/` i bypass erano diciannove in quattordici file: la correzione del 15 Ago aveva reso l'elenco nominativo, ma non aveva impedito che tornasse a mentire. Da qui la scelta di affiancargli una **rete meccanica** invece di sola disciplina — `tests/Feature/Piattaforma/BypassNudiGuardrailTest.php` non conta tutti i bypass (sarebbe un condono in blocco), ma vieta di aggiungerne di **nudi**: `withoutGlobalScopes()` senza argomenti toglie anche `SoftDeletingScope`, ed è la forma che è davvero costata. Chi ne scrive uno nuovo deve nominarlo lì, e la scelta fra «elencare gli scope» e «dichiarare perché il nudo è giusto» diventa esplicita.
 
   Il criterio che li accomuna, e che vale per il prossimo: **il permesso governa il dettaglio mostrato, non l'integrità del dato**. Ognuno va con un test negativo che verifichi che dal risultato **non trapeli** il dato protetto — a maggior ragione nella Panoramica (🔗 ADR-024), dove il motivo del semaforo è testo in chiaro e non un pallino.
 - **Viste che compongono più aree** (Panoramica, dashboard S6): il permesso va applicato **blocco per blocco**, mai una volta sola in testa alla vista — 🔗 ADR-024.
