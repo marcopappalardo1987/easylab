@@ -600,7 +600,7 @@ gantt
 - [x] `[CORE]` **Laravel Cashier + Stripe**: piani in abbonamento; webhook Stripe. 🔗 Elenco §7
 - [x] `[CORE]` Due modelli: **Free (omaggiato)** e **SaaS a pagamento**. 🔗 ADR-002
 
-  > ✅ **Fatto il 21 Ago 2026** — suite da 791 a **853 verdi** su SQLite e Postgres, 12 guardie provate per mutazione. `laravel/cashier ^16.7`, `Account` Billable (mai `User`: è una credenziale, non un cliente), tre migration additive con `subscriptions.account_id`, catalogo piani in `config/easylab.php` + `App\Support\Piani`, limite di Enti su `Account::puoAggiungereEnte()` consumato dal provisioning, `AccountPolicy`, comando `easylab:abbona`.
+  > ✅ **Fatto il 21 Ago 2026** — suite da 791 a **860 verdi** su SQLite e Postgres, 15 guardie provate per mutazione, e **verificato end-to-end su staging con le chiavi Stripe vere** (vedi la DoD in fondo). `laravel/cashier ^16.7`, `Account` Billable (mai `User`: è una credenziale, non un cliente), tre migration additive con `subscriptions.account_id`, catalogo piani in `config/easylab.php` + `App\Support\Piani`, limite di Enti su `Account::puoAggiungereEnte()` consumato dal provisioning, `AccountPolicy`, comando `easylab:abbona`.
   >
   > Quattro cose che il punto non diceva e che l'attuazione ha imposto:
   > - ⚠️ **Il `WebhookController` di Cashier è fail-open**: aggancia la verifica della firma solo se il segreto è configurato, quindi senza segreto l'endpoint accetta payload arbitrari — chiunque ne conosca l'URL potrebbe bloccare account altrui. Chiuso dichiarando `VerifyWebhookSignature` **sulla rotta**, con `Cashier::ignoreRoutes()` a spegnere quelle del pacchetto (fra cui `payment/{id}`, pubblica e non autenticata, che in V1 non serve).
@@ -621,7 +621,21 @@ gantt
 
 **Definition of Done:** alla scadenza di una manutenzione parte l'email; un nuovo cliente si abbona via Stripe e accede; se il pagamento fallisce il tenant va in lockout; un cliente Free viene attivato da provisioning.
 
-> 🟢 **Aggiornamento al 21 Ago 2026**: le chiavi Stripe sono state configurate su staging, e col blocco Cashier la terza clausola si chiude — il lockout ora lo scatta il webhook. Della quarta («un nuovo cliente si abbona via Stripe **e accede**») resta la metà self-service: l'abbonamento si attiva da console con `easylab:abbona`, mentre il **self-signup pubblico** (🔗 ADR-012) e lo **Stripe Billing Portal** sono il blocco successivo.
+> ✅ **DoD verificata su staging il 21 Ago 2026**, con le chiavi Stripe vere e non solo in suite:
+> - *«alla scadenza di una manutenzione parte l'email»* — chiusa dal 18 Ago.
+> - *«un cliente Free viene attivato da provisioning»* — `easylab:provision-tenant` su staging: Ente, Account e Admin creati, piano `free`, **1 Ente su 1**.
+> - *«se il pagamento fallisce il tenant va in lockout»* — **chiusa**: disdetta su Stripe → webhook → account bloccato e piano decaduto a `free`, con `locked_at` manuale intatto; l'Admin entra e finisce su **`/bloccato` senza vedere il motivo**, e `/strumenti` lo rimbalza lì. Da notare: l'Admin ha il 2FA obbligatorio, e il lockout ha parlato **prima** — l'ordine dei middleware verificato sul campo.
+> - 🟡 *«un nuovo cliente si abbona via Stripe e accede»* — **metà**: l'abbonamento si attiva (`easylab:abbona` → customer, subscription `active`, piano SaaS, «1 su 5», e il secondo Ente prima rifiutato ora passa). Manca il **self-service**: self-signup pubblico (🔗 ADR-012) e Billing Portal, che sono il blocco successivo.
+>
+> ⚠️ **Il giro ha trovato quattro difetti che la suite non poteva vedere**, e la radice è comune: i test erano scritti sul flusso immaginato da chi ha scritto il codice.
+> 1. La rotta del webhook in `routes/web.php` ereditava il gruppo `web` e quindi il **CSRF** — 419 a ogni evento, cioè un lockout che non scatta mai, in silenzio. Vista in `route:list`, non dedotta.
+> 2. La verifica della firma era **fail-open col segreto vuoto**: `hash_hmac` a chiave vuota è calcolabile da chiunque. Trovata da `/security-review`; il test che doveva coprirla era verde per la ragione sbagliata.
+> 3. Il filtro sugli eventi viveva nel comando invece che nel controller, e l'endpoint reale ascoltava **241 tipi** invece di tre.
+> 4. Un cliente che disdice e **torna a pagare restava bloccato** — `customer.subscription.created` non sbloccava, e il comando rifiutava di riabbonarlo.
+>
+> *Lezione di processo, la terza volta che si ripete in questo progetto: il giro sull'ambiente vero pone domande che chi ha scritto il codice non si è posto. Nessuna suite le sostituisce.*
+>
+> 🟢 **Stato precedente della giornata** (prima del giro): le chiavi Stripe configurate su staging e la terza clausola chiusa in suite.
 >
 > 🟡 **Stato precedente, al 18 Ago 2026 — due clausole su quattro chiuse, le altre due in attesa delle chiavi Stripe** (`STRIPE_KEY`/`STRIPE_SECRET`/`STRIPE_WEBHOOK_SECRET`, non ancora disponibili):
 > - ✅ *«alla scadenza di una manutenzione parte l'email»* — `easylab:notifica-scadenze` alle 06:00 di Roma; provato end-to-end su `easylab_test` leggendo l'email nel log, e il secondo giro tace come deve.
