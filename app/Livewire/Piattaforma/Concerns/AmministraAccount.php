@@ -64,9 +64,7 @@ trait AmministraAccount
 
         $this->motivoLockout = '';
         $this->resetValidation();
-        // Una modale alla volta: `chiudiPannello()` e `chiudiScelta()` non si
-        // conoscono, quindi senza questa riga i due strati si impilerebbero.
-        $this->sceltaImpersonazione = null;
+        $this->chiudiOgniModale();
         $this->accountInLavorazione = $account->id;
         $this->pannello = 'lockout';
     }
@@ -84,7 +82,7 @@ trait AmministraAccount
         ];
 
         $this->resetValidation();
-        $this->sceltaImpersonazione = null;
+        $this->chiudiOgniModale();
         $this->accountInLavorazione = $account->id;
         $this->pannello = 'fiscali';
     }

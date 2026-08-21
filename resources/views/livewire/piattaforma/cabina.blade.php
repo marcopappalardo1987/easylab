@@ -6,12 +6,27 @@
 
 <div class="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6">
 
-    <div>
-        <h1 class="text-2xl font-bold tracking-tight text-neutral-900">Piattaforma</h1>
-        <p class="mt-1 text-sm text-neutral-600">
-            I clienti di EasyLab, le loro sedi e lo stato dei contratti.
-        </p>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-bold tracking-tight text-neutral-900">Piattaforma</h1>
+            <p class="mt-1 text-sm text-neutral-600">
+                I clienti di EasyLab, le loro sedi e lo stato dei contratti.
+            </p>
+        </div>
+
+        @can('tenants.provision')
+            <button type="button" wire:click="apriProvisioning"
+                    class="rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700">
+                <span aria-hidden="true">＋</span> Nuovo cliente
+            </button>
+        @endcan
     </div>
+
+    @if (session('provisioning'))
+        <div class="mt-4 rounded-md border border-success-500 bg-success-100 px-4 py-3 text-sm text-success-800">
+            {{ session('provisioning') }}
+        </div>
+    @endif
 
     {{-- I quattro numeri. Ognuno porta il proprio contesto sotto: un totale
          senza «di cui» è la cifra che poi viene citata da sola.
@@ -298,6 +313,14 @@
                                     </button>
                                 @endcan
 
+                                @can('tenants.provision')
+                                    <button type="button" wire:click="apriProvisioning({{ $cliente->id }})"
+                                            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-100"
+                                            title="Aggiungi una sede a questo cliente">
+                                        <span aria-hidden="true">＋</span> Sede
+                                    </button>
+                                @endcan
+
                                 @can('manage', $cliente)
                                     <button type="button" wire:click="apriFiscali({{ $cliente->id }})"
                                             class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-100"
@@ -400,6 +423,62 @@
             @endif
         @endif
     @endcan
+
+    @if ($provisioningAperto)
+        @php $perCliente = $this->clienteDelProvisioning(); @endphp
+
+        <x-ui.modal :title="$perCliente ? 'Nuova sede — '.$perCliente->ragione_sociale : 'Nuovo cliente'" close="chiudiProvisioning">
+            @if ($perCliente)
+                <p class="text-sm text-neutral-600">
+                    La sede si aggiunge al contratto di <strong>{{ $perCliente->ragione_sociale }}</strong>
+                    (piano {{ App\Support\Piani::esiste($perCliente->piano) ? App\Support\Piani::etichetta($perCliente->piano) : $perCliente->piano }},
+                    sedi {{ $this->slotDelPiano($perCliente) }}).
+                </p>
+            @else
+                {{-- ⚠️ Nessun select dei piani: i piani a pagamento passano da
+                     Stripe, e un menù offrirebbe un'opzione che fallisce al
+                     salvataggio — o peggio creerebbe un account marcato «saas»
+                     senza subscription, cioè un cliente che risulta pagante e non
+                     paga. Si dice come stanno le cose, invece di offrire una
+                     scelta che non esiste. --}}
+                <p class="text-sm text-neutral-600">
+                    Il cliente nasce sul piano <strong>Free</strong>. Il passaggio a un piano a pagamento
+                    si fa da Stripe (<code class="text-xs">easylab:abbona</code>), non da qui.
+                </p>
+            @endif
+
+            <div class="mt-4 space-y-3">
+                @foreach ([
+                    'nome' => ['Nome della sede', 'Ospedale San Giovanni'],
+                    'adminName' => ['Nome dell\'amministratore', 'Anna Bianchi'],
+                    'adminEmail' => ['Email dell\'amministratore', 'anna.bianchi@sangiovanni.it'],
+                ] as $campo => [$etichetta, $esempio])
+                    <div wire:key="prov-{{ $campo }}">
+                        <label for="prov-{{ $campo }}" class="block text-sm font-medium text-neutral-800">{{ $etichetta }}</label>
+                        <input id="prov-{{ $campo }}" type="text" wire:model="nuovo.{{ $campo }}"
+                               placeholder="{{ $esempio }}"
+                               class="mt-1 block w-full rounded-md border-neutral-300 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500">
+                        @error('nuovo.'.$campo)
+                            <p class="mt-1 text-sm text-danger-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+                @endforeach
+            </div>
+
+            <p class="mt-3 text-xs text-neutral-500">
+                All'amministratore non si consegna una password: riceve un invito con un link firmato
+                e la sceglie lui (ADR-012). Se l'indirizzo esiste già, resta sul suo Ente e raggiunge
+                il nuovo con lo switcher.
+            </p>
+
+            <div class="mt-4 flex justify-end gap-2">
+                <button type="button" wire:click="chiudiProvisioning"
+                        class="rounded-md px-3 py-1.5 text-sm font-medium text-neutral-600 hover:bg-neutral-100">Annulla</button>
+                <button type="button" wire:click="creaCliente"
+                        class="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700">Crea e invita</button>
+            </div>
+        </x-ui.modal>
+    @endif
 
     @php $inLavorazione = $this->accountAperto(); @endphp
 

@@ -47,6 +47,18 @@ final class ProvisionaEnte
         private readonly string $adminName,
         private readonly ?string $passwordEsplicita = null,
         private readonly ?int $accountId = null,
+        /**
+         * ⚠️ **«Voglio un cliente nuovo», detto esplicitamente.**
+         *
+         * Senza questo flag i due gesti — «crea un cliente» e «aggiungi una
+         * sede» — sono **indistinguibili da qui**: se l'email dell'amministratore
+         * appartiene già a qualcuno, l'Ente si aggancia al suo account. Giusto
+         * per il secondo gesto, silenziosamente sbagliato per il primo.
+         *
+         * Il default è `false`, così il comando conserva il proprio
+         * comportamento e i suoi test restano verdi senza essere toccati.
+         */
+        private readonly bool $esigiAccountNuovo = false,
     ) {}
 
     /**
@@ -124,7 +136,10 @@ final class ProvisionaEnte
             $account = Account::find($this->accountId);
 
             if ($account === null) {
-                throw new ProvisioningRifiutato("Nessun account con id {$this->accountId}.");
+                throw new ProvisioningRifiutato(
+                    "Nessun account con id {$this->accountId}.",
+                    ProvisioningRifiutato::ACCOUNT_INESISTENTE,
+                );
             }
 
             return $account;
@@ -138,11 +153,34 @@ final class ProvisionaEnte
 
         $suoi = $utenteEsistente->accounts()->get();
 
+        // 🔴 **Il gesto «crea un cliente» non deve poter agganciare a un
+        // contratto altrui.** Senza questo ramo, «crea» e «aggiungi una sede»
+        // sono indistinguibili da qui: se l'email appartiene già a qualcuno,
+        // l'Ente finisce sul suo account — giusto per il secondo gesto,
+        // silenziosamente sbagliato per il primo. Da console si nota, perché il
+        // comando stampa «Account: … (esistente)»; da un form intitolato «Nuovo
+        // cliente» no, e l'operatore legge un successo per una sede finita sul
+        // contratto di un terzo che non ha mai nominato — l'account **di
+        // piattaforma** compreso.
+        if ($suoi->isNotEmpty() && $this->esigiAccountNuovo) {
+            throw new ProvisioningRifiutato(
+                "{$this->adminEmail} amministra già ".
+                $suoi->pluck('ragione_sociale')->map(fn ($r) => "«{$r}»")->implode(', ').
+                ': una sede in più si aggiunge dalla riga di quel cliente, non creandone uno nuovo.',
+                ProvisioningRifiutato::GIA_AMMINISTRA,
+            );
+        }
+
         if ($suoi->count() > 1) {
+            // Le **ragioni sociali** e non gli id: la tabella della cabina gli id
+            // non li mostra, quindi un messaggio che li elenca è un vicolo cieco
+            // per chi lo legge da lì. In console il comando aggiunge da sé
+            // l'indicazione dell'opzione.
             throw new ProvisioningRifiutato(
                 "{$this->adminEmail} è membro di {$suoi->count()} account (".
-                $suoi->pluck('id')->implode(', ').
-                '): specificare quale.'
+                $suoi->pluck('ragione_sociale')->map(fn ($r) => "«{$r}»")->implode(', ').
+                '): indicare a quale agganciare la sede.',
+                ProvisioningRifiutato::AMBIGUO,
             );
         }
 
@@ -162,6 +200,21 @@ final class ProvisionaEnte
     {
         $perLimite = $account ?? new Account;
 
+        // ⚠️ **Un piano fuori catalogo non deve esplodere qui.**
+        // `puoAggiungereEnte()` passa da `Piani::maxEnti()`, che **lancia**
+        // `InvalidArgumentException` su un codice che non conosce — giusto per un
+        // getter in console, sbagliato per una guardia dietro a un form. È lo
+        // stesso ragionamento di `MetrichePiattaforma`: la cabina è l'unica
+        // schermata da cui quel dato si ripara, e morire proprio lì è il modo
+        // peggiore di segnalarlo. Diventa un rifiuto **spiegato**, con la strada.
+        if (! Piani::esiste($perLimite->piano)) {
+            throw new ProvisioningRifiutato(
+                "«{$perLimite->ragione_sociale}» è su un piano che non è più a catalogo («{$perLimite->piano}»): ".
+                'va rimesso su un piano valido prima di aggiungergli una sede.',
+                ProvisioningRifiutato::PIANO_FUORI_CATALOGO,
+            );
+        }
+
         if ($perLimite->puoAggiungereEnte()) {
             return;
         }
@@ -172,7 +225,8 @@ final class ProvisionaEnte
         throw new ProvisioningRifiutato(
             "«{$perLimite->ragione_sociale}» (id {$perLimite->id}) è sul piano ".
             Piani::etichetta($perLimite->piano).
-            ": {$attuali} ".($attuali === 1 ? 'Ente' : 'Enti')." su {$max}, limite raggiunto."
+            ": {$attuali} ".($attuali === 1 ? 'Ente' : 'Enti')." su {$max}, limite raggiunto.",
+            ProvisioningRifiutato::LIMITE_RAGGIUNTO,
         );
     }
 

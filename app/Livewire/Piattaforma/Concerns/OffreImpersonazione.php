@@ -63,8 +63,7 @@ trait OffreImpersonazione
         VistaPiattaforma::accounts()->whereKey($accountId)->firstOrFail();
 
         // Simmetrico ad `apriLockout`/`apriFiscali`: una modale alla volta.
-        $this->accountInLavorazione = null;
-        $this->pannello = '';
+        $this->chiudiOgniModale();
         $this->sceltaImpersonazione = $accountId;
     }
 

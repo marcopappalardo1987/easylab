@@ -6,6 +6,7 @@ use App\Livewire\Piattaforma\Concerns\AmministraAccount;
 use App\Livewire\Piattaforma\Concerns\ElencaClienti;
 use App\Livewire\Piattaforma\Concerns\FissaVisibilitaSede;
 use App\Livewire\Piattaforma\Concerns\OffreImpersonazione;
+use App\Livewire\Piattaforma\Concerns\ProvisionaCliente;
 use App\Support\Piattaforma\MetrichePiattaforma;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
@@ -54,7 +55,32 @@ use Livewire\Component;
 #[Layout('components.layouts.app')]
 class Cabina extends Component
 {
-    use AmministraAccount, ElencaClienti, FissaVisibilitaSede, OffreImpersonazione;
+    use AmministraAccount, ElencaClienti, FissaVisibilitaSede, OffreImpersonazione, ProvisionaCliente;
+
+    /**
+     * Chiude ogni modale della pagina.
+     *
+     * ⚠️ Vive **qui** e non nei quattro concern per una ragione precisa: i
+     * concern si scrivevano le property a vicenda — `ProvisionaCliente` toccava
+     * `pannello` di `AmministraAccount` e `sceltaImpersonazione` di
+     * `OffreImpersonazione` senza dichiararli — quindi usati da soli sarebbero
+     * fatali, e l'invariante «una modale alla volta» era **a senso unico**:
+     * aprire il provisioning chiudeva le altre, aprire le altre non chiudeva il
+     * provisioning. Con `x-ui.modal` a tutto schermo il caso non è raggiungibile
+     * col mouse, ma è la riga che il prossimo copia — e copierebbe quella
+     * sbagliata a seconda del file che legge per primo.
+     *
+     * Il componente è il solo posto che conosce **tutte** le modali: è suo il
+     * compito di sapere che sono mutuamente esclusive.
+     */
+    public function chiudiOgniModale(): void
+    {
+        $this->accountInLavorazione = null;
+        $this->pannello = '';
+        $this->sceltaImpersonazione = null;
+        $this->provisioningAperto = false;
+        $this->provisioningAccount = null;
+    }
 
     public function render(): View
     {
