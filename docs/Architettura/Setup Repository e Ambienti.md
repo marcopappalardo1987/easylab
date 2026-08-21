@@ -16,7 +16,7 @@
 ### 1.1 Strategia di branch — **rivista il 19 Ago 2026**
 - **`staging`** = il ramo di lavoro; ogni push → **deploy automatico sull'ambiente di staging** (§3).
 - **`main`** = **produzione**. Ci si arriva solo con una PR di **promozione** da `staging`, dopo la verifica sull'ambiente. Mai un commit diretto.
-- `feature/<breve-descrizione>` = branch a vita breve per ogni task; **PR verso `staging`**.
+- ~~`feature/<breve-descrizione>` = branch a vita breve per ogni task; **PR verso `staging`**.~~ — **superato il 21 Ago 2026**: si committa **direttamente su `staging`**. La PR restava un gesto verso sé stessi, e il suo unico effetto pratico — la CI come cancello — si ottiene tenendo la suite verde in locale prima di pushare. Un `feature/*` resta legittimo quando serve *davvero* isolare un lavoro lungo o rischioso, ma non è più la regola.
 - `fix/<...>`, `chore/<...>`, `docs/<...>` per le altre nature di lavoro.
 
 > *La versione precedente di questa sezione diceva «`main` = sempre deployabile → deploy automatico su staging» e «niente long-lived `develop`»: un ramo solo, con la produzione promossa da release taggata. Con `staging` la promozione diventa **un merge visibile e revisionabile** invece di un gesto sul pannello — e il codice che va in produzione è, per costruzione, quello che qualcuno ha già visto girare.*
@@ -105,7 +105,7 @@ Il sintomo di aver sbagliato è muto: il digest non arriva a nessuno e la dashbo
 
 | Ramo | Ambiente | Come ci si arriva |
 |---|---|---|
-| `staging` | **staging** — deploy automatico a ogni push | `feature/<descrizione>` → PR verso `staging` (CI obbligatoria verde) |
+| `staging` | **staging** — deploy automatico a ogni push | **commit diretti** (dal 21 Ago 2026). ⚠️ La CI gira *dopo* il push, non fa da cancello: la rete è la suite verde in locale. |
 | `main` | **produzione** — deploy **promosso**, mai automatico | PR di promozione `staging` → `main`, dopo la verifica sull'ambiente di staging |
 
 - Mai un commit diretto su `main`: ciò che è in produzione è passato da staging, e questo è l'unico modo per poterlo affermare.
