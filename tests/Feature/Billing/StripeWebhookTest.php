@@ -219,6 +219,50 @@ it('answers 200 without locking when an incomplete subscription expires', functi
     expect($this->account->fresh()->is_locked)->toBeFalse();
 });
 
+// ─── Il filtro sugli eventi ammessi ──────────────────────────────────────────
+
+it('ignores an event type that is not in the configured list', function () {
+    // ⚠️ Non è ridondante con `config/cashier.php`: quella chiave dice a
+    // `cashier:webhook` cosa REGISTRARE su Stripe, e non filtra niente in
+    // ingresso. Su staging l'endpoint era stato creato a mano in ascolto su
+    // **241 tipi**, quindi la restrizione era carta straccia — e gli handler
+    // ereditati da Cashier avrebbero lavorato per conto loro.
+    //
+    // `customer.deleted` è il caso peggiore: il parent azzera `stripe_id`, e da
+    // quel momento l'account è staccato da ogni futuro controllo sull'insoluto.
+    consegna([
+        'id' => 'evt_estraneo',
+        'type' => 'customer.deleted',
+        'data' => ['object' => ['id' => 'cus_easylab', 'customer' => 'cus_easylab']],
+    ])->assertOk();
+
+    expect($this->account->fresh()->stripe_id)->toBe('cus_easylab');
+});
+
+it('never lets an unlisted event reach an inherited handler', function () {
+    // `customer.updated` nel parent chiama `updateDefaultPaymentMethodFromStripe()`,
+    // cioè una chiamata di rete verso Stripe DENTRO la richiesta del webhook.
+    // Senza chiavi valide qui esploderebbe: che risponda 200 è la prova che
+    // l'handler non è stato nemmeno raggiunto.
+    consegna([
+        'id' => 'evt_estraneo',
+        'type' => 'customer.updated',
+        'data' => ['object' => ['id' => 'cus_easylab', 'customer' => 'cus_easylab']],
+    ])->assertOk();
+
+    expect($this->account->fresh()->pm_type)->toBeNull();
+});
+
+it('still handles everything when the configured list is empty', function () {
+    // Un elenco vuoto NON filtra: un webhook che ignora tutto in silenzio
+    // sarebbe di nuovo un lockout che non scatta mai.
+    config(['cashier.webhook.events' => []]);
+
+    consegna(evento('customer.subscription.updated', 'unpaid'))->assertOk();
+
+    expect($this->account->fresh()->is_locked)->toBeTrue();
+});
+
 // ─── Confini: chi non deve essere toccato ────────────────────────────────────
 
 it('ignores an event for an unknown customer, without writing anything', function () {

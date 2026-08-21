@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Account;
 use App\Support\Piani;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Laravel\Cashier\Http\Controllers\WebhookController as CashierWebhookController;
 use Stripe\Subscription as StripeSubscription;
@@ -75,7 +76,7 @@ class StripeWebhookController extends CashierWebhookController
      * accetterebbe payload arbitrari, cioè chiunque ne conosca l'URL potrebbe
      * bloccare account altrui. Fail-open su un percorso che scrive `is_locked`.
      *
-     * Da noi il middleware è dichiarato **sulla rotta** (routes/web.php),
+     * Da noi il middleware è dichiarato **sulla rotta** (bootstrap/app.php),
      * incondizionato e visibile in `route:list`. Questo costruttore vuoto
      * esiste per non farlo agganciare due volte — e per lasciare scritto il
      * perché, che è l'unica difesa contro un «semplifichiamo» futuro.
@@ -83,6 +84,43 @@ class StripeWebhookController extends CashierWebhookController
     public function __construct()
     {
         // Volutamente vuoto: niente parent::__construct().
+    }
+
+    /**
+     * Gli eventi che questo controller accetta di trattare sono **quelli
+     * dichiarati in `config/cashier.php`**, e chiunque altro riceve un 200
+     * senza che accada nulla.
+     *
+     * ⚠️ **Perché serve, benché la config già li elenchi.** Quella chiave dice
+     * a `cashier:webhook` quali eventi *registrare su Stripe*: non filtra nulla
+     * in ingresso. Se l'endpoint viene creato **a mano** dalla dashboard — come
+     * era su staging, in ascolto su **241 tipi** invece di tre — la
+     * restrizione è carta straccia, e arrivano anche gli eventi che gli handler
+     * ereditati da Cashier gestiscono per conto loro: `customer.updated` e
+     * `payment_method.automatically_updated` chiamano
+     * `updateDefaultPaymentMethodFromStripe()`, cioè un round-trip verso Stripe
+     * **dentro** la richiesta del webhook, mentre Stripe aspetta la risposta.
+     * `customer.deleted` azzererebbe `stripe_id`, staccando l'account da ogni
+     * futuro controllo sull'insoluto.
+     *
+     * La lezione è dove stava la guardia: in un comando che qualcuno può non
+     * lanciare, invece che nel codice che riceve. Qui l'elenco vale comunque,
+     * qualunque cosa sia stata configurata dall'altra parte.
+     *
+     * Un elenco **vuoto** non filtra: sarebbe un webhook che ignora tutto in
+     * silenzio, cioè di nuovo un lockout che non scatta mai — e quel modo di
+     * sbagliare questo blocco lo conosce già.
+     */
+    public function handleWebhook(Request $request): Response
+    {
+        $ammessi = config('cashier.webhook.events') ?: [];
+        $tipo = json_decode($request->getContent(), true)['type'] ?? null;
+
+        if ($ammessi !== [] && ! in_array($tipo, $ammessi, true)) {
+            return $this->successMethod();
+        }
+
+        return parent::handleWebhook($request);
     }
 
     protected function handleCustomerSubscriptionUpdated(array $payload): Response
