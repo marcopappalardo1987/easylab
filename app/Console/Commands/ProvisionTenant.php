@@ -124,11 +124,12 @@ class ProvisionTenant extends Command
 
         if (! $accountPerLimite->puoAggiungereEnte()) {
             $max = Piani::maxEnti($accountPerLimite->piano);
+            $attuali = $accountPerLimite->enti()->count();
 
             $this->error(
                 "«{$accountPerLimite->ragione_sociale}» (id {$accountPerLimite->id}) è sul piano ".
                 Piani::etichetta($accountPerLimite->piano).
-                ": {$accountPerLimite->enti()->count()} Enti su {$max}, limite raggiunto."
+                ": {$attuali} ".($attuali === 1 ? 'Ente' : 'Enti')." su {$max}, limite raggiunto."
             );
             $this->line('Passare a un piano superiore (easylab:abbona) o cestinare una sede prima di aggiungerne un\'altra.');
 

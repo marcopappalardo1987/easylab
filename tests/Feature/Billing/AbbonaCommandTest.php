@@ -97,3 +97,28 @@ it('never opens a second subscription on an account that already has one', funct
     expect(DB::table('subscriptions')->count())->toBe(1)
         ->and($this->account->fresh()->piano)->toBe('free');
 })->with(['active', 'past_due', 'incomplete', 'unpaid']);
+
+it('lets a returning customer subscribe again after cancelling', function () {
+    // ⚠️ Trovato su staging: la prima stesura della guardia usava
+    // `subscriptions()->exists()` e rifiutava anche una subscription
+    // `canceled` — che non fattura nulla. Un cliente che disdice e torna è un
+    // caso normale, non un errore da bloccare.
+    $this->account->update(['stripe_id' => 'cus_esistente']);
+
+    DB::table('subscriptions')->insert([
+        'account_id' => $this->account->id,
+        'type' => 'default',
+        'stripe_id' => 'sub_chiusa',
+        'stripe_status' => 'canceled',
+        'stripe_price' => 'price_saas_test',
+        'quantity' => 1,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    // Passa la guardia e arriva alla rete, che in test non c'è: il comando
+    // fallisce PIÙ AVANTI, e il messaggio lo dimostra.
+    $this->artisan('easylab:abbona', ['account' => (string) $this->account->id, '--force' => true])
+        ->doesntExpectOutputToContain('ha già una subscription attiva')
+        ->assertFailed();
+});

@@ -199,6 +199,33 @@ it('leaves the piano alone when the price is not in the catalogo', function () {
     expect($this->account->fresh()->piano)->toBe('saas');
 });
 
+it('unlocks a returning customer who subscribes again', function () {
+    // ⚠️ Trovato su staging, non qui: chi disdice e torna produce un
+    // `customer.subscription.created`, non un `updated`. Senza questo handler
+    // l'account restava BLOCCATO e sul piano `free` mentre pagava — il peggior
+    // esito possibile per questo blocco. I test non lo vedevano perché erano
+    // scritti sul flusso che avevo immaginato, dove si disdice e basta.
+    config(['easylab.piani.catalogo.saas.stripe_price' => 'price_saas_test']);
+    $this->account->bloccaPerStripe('Stripe: abbonamento cancellato.');
+    $this->account->cambiaPiano('free');
+
+    consegna(evento('customer.subscription.created', 'active'))->assertOk();
+
+    $account = $this->account->fresh();
+
+    expect($account->is_locked)->toBeFalse()
+        ->and($account->stripe_locked_at)->toBeNull()
+        ->and($account->piano)->toBe('saas');
+});
+
+it('locks on a subscription that is born already unpaid', function () {
+    // `created` e `updated` rispondono alla stessa domanda e devono dare la
+    // stessa risposta, o le due strade divergono al primo cambiamento.
+    consegna(evento('customer.subscription.created', 'unpaid'))->assertOk();
+
+    expect($this->account->fresh()->is_locked)->toBeTrue();
+});
+
 // ─── Stati che NON devono bloccare ───────────────────────────────────────────
 
 it('does not lock while Stripe is still retrying', function () {

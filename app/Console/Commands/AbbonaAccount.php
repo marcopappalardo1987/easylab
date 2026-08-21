@@ -7,6 +7,7 @@ use App\Support\Piani;
 use Illuminate\Console\Command;
 use Illuminate\Console\ConfirmableTrait;
 use Laravel\Cashier\Exceptions\IncompletePayment;
+use Stripe\Subscription as StripeSubscription;
 use Throwable;
 
 /**
@@ -98,17 +99,28 @@ class AbbonaAccount extends Command
             return self::FAILURE;
         }
 
-        // ⚠️ `subscriptions()->exists()` e NON `subscribed()`: quest'ultimo
-        // passa da `Subscription::valid()`, che con i default di Cashier
-        // (`$deactivatePastDue`, `$deactivateIncomplete`) considera NON valida
-        // una subscription in `past_due` o `incomplete`. Cioè lascerebbe
-        // passare proprio l'account con un insoluto in corso — che è quando
-        // qualcuno mette le mani su questo comando — e gli aprirebbe una
+        // ⚠️ La guardia è su una subscription **non ancora chiusa**, e le due
+        // metà di questa condizione sono state pagate entrambe.
+        //
+        // NON `subscribed()`: quello passa da `Subscription::valid()`, che coi
+        // default di Cashier (`$deactivatePastDue`, `$deactivateIncomplete`)
+        // considera non valida una subscription in `past_due` o `incomplete` —
+        // cioè lascerebbe passare proprio l'account con un insoluto in corso,
+        // che è quando qualcuno mette le mani su questo comando, aprendogli una
         // SECONDA subscription fatturata.
-        if ($account->subscriptions()->exists()) {
-            $esistente = $account->subscriptions()->latest('id')->first();
+        //
+        // Ma nemmeno `exists()` nudo, che era la prima stesura: su staging ha
+        // rifiutato di riabbonare un cliente la cui unica subscription era
+        // `canceled`. Una subscription chiusa non fattura nulla, quindi non c'è
+        // niente da proteggere — e chi disdice e torna è un caso normale, non
+        // un errore da bloccare.
+        $viva = $account->subscriptions()
+            ->where('stripe_status', '!=', StripeSubscription::STATUS_CANCELED)
+            ->latest('id')
+            ->first();
 
-            $this->error("L'account {$account->id} ha già una subscription ({$esistente->stripe_id}, stato «{$esistente->stripe_status}»).");
+        if ($viva !== null) {
+            $this->error("L'account {$account->id} ha già una subscription attiva ({$viva->stripe_id}, stato «{$viva->stripe_status}»).");
             $this->line('I cambi di piano e le disdette si fanno dalla dashboard Stripe: da lì il webhook riallinea piano e lockout.');
 
             return self::FAILURE;

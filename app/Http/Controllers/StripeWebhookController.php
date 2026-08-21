@@ -123,12 +123,38 @@ class StripeWebhookController extends CashierWebhookController
         return parent::handleWebhook($request);
     }
 
+    /**
+     * ⚠️ **`created` conta quanto `updated`, e scoprirlo è costato un giro su
+     * staging.** Un cliente che aveva disdetto e torna a pagare produce un
+     * `customer.subscription.created`, non un `updated`: senza questo handler
+     * restava **bloccato e sul piano `free`** benché stesse pagando — cioè il
+     * peggior errore possibile per questo blocco, un cliente in regola chiuso
+     * fuori. Il difetto non era coperto da nessun test perché i test erano
+     * scritti sul flusso che immaginavo, dove si disdice e basta.
+     */
+    protected function handleCustomerSubscriptionCreated(array $payload): Response
+    {
+        parent::handleCustomerSubscriptionCreated($payload);
+
+        return $this->applicaStato($payload);
+    }
+
     protected function handleCustomerSubscriptionUpdated(array $payload): Response
     {
         // Il parent per primo: è lui a scrivere/aggiornare la riga
         // `subscriptions`, che è lo specchio locale dello stato su Stripe.
         parent::handleCustomerSubscriptionUpdated($payload);
 
+        return $this->applicaStato($payload);
+    }
+
+    /**
+     * La mappa stato → gesto, condivisa da `created` e `updated`: è la stessa
+     * domanda («questo abbonamento è sano o è finito?») e va risposta allo
+     * stesso modo, o le due strade divergono al primo cambiamento.
+     */
+    private function applicaStato(array $payload): Response
+    {
         $dati = $payload['data']['object'] ?? [];
         $account = $this->accountDa($payload);
 
