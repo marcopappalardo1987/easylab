@@ -9,7 +9,6 @@ use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
-use RuntimeException;
 
 /**
  * La quarta leva: creare un cliente, o una sede in più (S6 — ADR-012, ADR-032).
@@ -124,7 +123,7 @@ it('does not blow up on a customer whose plan left the catalogue', function () {
 });
 
 it('says so when the invitation did not leave', function () {
-    // 🟠 Leggendo il solo `invitoInviato`, un SMTP giù dava lo **stesso**
+    // 🟠 Leggendo il solo `invitoAccodato`, un SMTP giù dava lo **stesso**
     // messaggio del caso legittimo «l'utente è già attivo, nessun invito da
     // mandare»: l'operatore chiudeva convinto e l'amministratore aspettava una
     // mail che non sarebbe arrivata. Il comando in console avvisa da sempre.
@@ -201,7 +200,13 @@ it('creates a Free customer with its Ente, its Admin and an invitation', functio
         ])
         ->call('creaCliente')
         ->assertHasNoErrors()
-        ->assertSet('provisioningAperto', false);
+        ->assertSet('provisioningAperto', false)
+        // ⚠️ «In consegna» e **mai** «inviato»: la notifica è accodata, quindi
+        // la pagina non sa se partirà. Affermarlo sarebbe una bugia che nessuno
+        // può smentire guardando questa schermata — e la frase è l'unica prova
+        // che l'operatore ha del gesto.
+        ->assertSee('Invito in consegna a')
+        ->assertDontSee('Invito inviato a');
 
     $ente = UnitaOrganizzativa::withoutGlobalScopes()->where('nome', 'Ospedale San Giovanni')->firstOrFail();
     // L'email si normalizza: due maiuscole in più creerebbero un secondo utente

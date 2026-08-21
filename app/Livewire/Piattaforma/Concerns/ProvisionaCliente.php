@@ -167,7 +167,7 @@ trait ProvisionaCliente
         $this->resetPage();
 
         // ⚠️ **Si dice tutto ciò che l'esito porta.** Leggendo il solo
-        // `invitoInviato`, un invito **fallito** (SMTP giù) dava lo stesso
+        // `invitoAccodato` (allora `invitoInviato`), un invito **fallito** dava lo stesso
         // messaggio del caso legittimo «l'utente esisteva già ed è attivo,
         // nessun invito da mandare»: l'operatore chiudeva convinto, e
         // l'amministratore aspettava una mail che non sarebbe arrivata. Il
@@ -179,7 +179,11 @@ trait ProvisionaCliente
 
         session()->flash('provisioning', match (true) {
             $esito->invitoFallito !== null => "{$cosa}, ma l'invito a {$esito->admin->email} NON è partito ({$esito->invitoFallito}): ripetere il gesto per riprovare.",
-            $esito->invitoInviato => "{$cosa}. Invito inviato a {$esito->admin->email}.",
+            // ⚠️ «In consegna» e non «inviato». La notifica è accodata: da qui
+            // non si sa se partirà, e affermarlo sarebbe una bugia che nessuno
+            // può più smentire guardando questa pagina. Un invito che poi non
+            // parte lascia una riga nell'audit — `InvitoUtente::failed()`.
+            $esito->invitoAccodato => "{$cosa}. Invito in consegna a {$esito->admin->email}.",
             default => "{$cosa} per {$esito->admin->email}, che ha già un accesso attivo.",
         });
 

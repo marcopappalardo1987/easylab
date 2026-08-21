@@ -246,7 +246,7 @@ final class ProvisionaEnte
             account: $account,
             accountNuovo: $accountNuovo,
             adminNuovo: $admin->wasRecentlyCreated,
-            invitoInviato: $inviato,
+            invitoAccodato: $inviato,
             invitoFallito: $errore,
         );
 
@@ -255,7 +255,7 @@ final class ProvisionaEnte
         }
 
         try {
-            $admin->notify(new InvitoUtente($this->nome));
+            $admin->notify(new InvitoUtente($this->nome, $this->adminEmail));
 
             return $base(true, null);
         } catch (Throwable $e) {

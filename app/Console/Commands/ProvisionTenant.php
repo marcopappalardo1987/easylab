@@ -89,8 +89,12 @@ class ProvisionTenant extends Command
         $this->info("Account: «{$esito->account->ragione_sociale}» (id {$esito->account->id}, ".($esito->accountNuovo ? 'nuovo' : 'esistente').').');
         $this->info("Admin: {$adminEmail}".($esito->adminNuovo ? '' : ' (utente esistente: resta sul suo Ente, il nuovo si raggiunge con lo switcher)'));
 
-        if ($esito->invitoInviato) {
-            $this->info("Invito inviato a {$adminEmail} (valido ".InvitoUtente::GIORNI_VALIDITA.' giorni).');
+        if ($esito->invitoAccodato) {
+            // «In consegna» e non «inviato»: la notifica è accodata, quindi da
+            // qui non si sa se partirà. Se la coda non c'è (locale, `sync`) è
+            // partita davvero — ma la frase deve essere vera in **entrambi** i
+            // casi, e questa lo è.
+            $this->info("Invito in consegna a {$adminEmail} (link valido ".InvitoUtente::GIORNI_VALIDITA.' giorni).');
         }
 
         if ($esito->invitoFallito !== null) {

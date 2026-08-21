@@ -79,6 +79,16 @@ Regola pratica:
 | Cloud **con** managed queue | **assente** dalle variabili custom — la mette la piattaforma |
 | Cloud **senza** managed queue (background process `queue:work`) | `redis`, impostata a mano |
 
+> ✅ **Staging ha una managed queue dal 21 Ago 2026** (`default`, Flex 256 MiB, autoscaling 0–3 worker, $0–13/mese: a riposo costa zero). Verificato che la variabile iniettata vinca, eseguendo sull'ambiente `php artisan tinker --execute="echo config('queue.default');"` → **`cloud`**. È il controllo da rifare a ogni dubbio, ed è l'unico che smaschera il sintomo muto descritto qui sopra.
+>
+> ⚠️ **Il runner dei Comandi non è un worker.** Lanciare `php artisan queue:work` da lì sembra funzionare — resta a girare — ma è un container effimero con un limite di durata, non sopravvive al deploy e non riparte. Nel frattempo occupa lo slot dei comandi e non c'è modo di fermarlo dal pannello. Le due strade vere sono la **managed queue** (raccomandata: compute dedicata, quindi le code non competono col traffico web e lo *scale-to-zero* dell'App cluster non interrompe i job) e il **background process** sull'App cluster (che invece paga entrambe le cose). Il **Worker cluster** richiede il piano Growth.
+>
+> ⚠️ **Una managed queue processa UNA coda** — la nostra è `default`, come si legge nella preview del comando: `php artisan queue:work cloud --queue=default`. Un job spedito con `onQueue('altro')` non verrebbe preso da nessuno. Serve una seconda managed queue per una seconda coda.
+>
+> ⚠️ **`--tries` e `--backoff` del worker si lasciano vuoti nel pannello**, e i tentativi si dichiarano **sulla classe del job** (`InvitoUtente` lo fa). Un'impostazione che vive solo nella console di Cloud non sta in nessun file, non passa da una revisione e non si scopre leggendo il repository: è la stessa forma di problema delle migration non applicate al DB di sviluppo e di `config/rbac.php` non riseminato. Sul job, inoltre, le property vincono sui flag del worker.
+>
+> ⚠️ **In locale**, senza un worker acceso, `QUEUE_CONNECTION` va su **`sync`**. Con `redis` il push riesce, l'applicazione dichiara «in consegna» e la mail resta in coda per sempre — nessun errore da nessuna parte. Era la configurazione di sviluppo fino al 21 Ago 2026, e ha smesso di essere innocua il giorno in cui l'invito è passato in coda.
+
 Il sintomo di aver sbagliato è muto: il digest non arriva a nessuno e la dashboard delle code resta vuota. Il primo controllo, in quel caso, è proprio l'elenco delle variabili dell'ambiente.
 
 **Segreti:** mai nel repo. In locale `.env`; su Laravel Cloud → variabili d'ambiente dell'ambiente. Stripe in **modalità test** su staging, **live** solo in produzione; **bucket B2 separati** per staging e produzione, così un test non tocca mai i documenti dei clienti.
