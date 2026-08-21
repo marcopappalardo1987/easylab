@@ -46,6 +46,12 @@ it('never invites an already active admin attached to a new sede', function () {
         '--admin-password' => 'secret-password',
     ])->assertSuccessful();
 
+    // Il piano Free si ferma a UN Ente (ADR-032): la seconda sede è
+    // legittima solo su un piano che la comprende. Non è un aggiustamento
+    // per far passare il test — è la regola nuova che entra in un caso che
+    // la precede.
+    Account::first()->cambiaPiano('saas');
+
     Notification::fake(); // si guarda solo il secondo giro
     $this->artisan('easylab:provision-tenant', [
         'nome' => 'Seconda',
@@ -59,6 +65,12 @@ it('resends the invite to somebody who never activated', function () {
     $args = ['nome' => 'Ente Lento', '--admin-email' => 'lento@demo.test'];
 
     $this->artisan('easylab:provision-tenant', $args)->assertSuccessful();
+
+    // Il piano Free si ferma a UN Ente (ADR-032): la seconda sede è
+    // legittima solo su un piano che la comprende. Non è un aggiustamento
+    // per far passare il test — è la regola nuova che entra in un caso che
+    // la precede.
+    Account::first()->cambiaPiano('saas');
     $this->artisan('easylab:provision-tenant', $args)->assertSuccessful();
 
     $admin = User::where('email', 'lento@demo.test')->first();
@@ -108,6 +120,12 @@ it('is idempotent on the admin email', function () {
     ];
 
     $this->artisan('easylab:provision-tenant', $args)->assertSuccessful();
+
+    // Il piano Free si ferma a UN Ente (ADR-032): la seconda sede è
+    // legittima solo su un piano che la comprende. Non è un aggiustamento
+    // per far passare il test — è la regola nuova che entra in un caso che
+    // la precede.
+    Account::first()->cambiaPiano('saas');
     $this->artisan('easylab:provision-tenant', $args)->assertSuccessful();
 
     expect(User::where('email', 'admin@demo.test')->count())->toBe(1);
@@ -168,6 +186,12 @@ it('attaches to the account of an existing admin, without touching their tenant'
     $primaSede = UnitaOrganizzativa::withoutGlobalScopes()->where('nome', 'Prima Sede')->first();
     $admin = User::where('email', 'multi@demo.test')->first();
     expect($admin->tenant_id)->toBe($primaSede->id);
+
+    // Il piano Free si ferma a UN Ente (ADR-032): la seconda sede è
+    // legittima solo su un piano che la comprende. Non è un aggiustamento
+    // per far passare il test — è la regola nuova che entra in un caso che
+    // la precede.
+    Account::first()->cambiaPiano('saas');
 
     $this->artisan('easylab:provision-tenant', [
         'nome' => 'Seconda Sede',

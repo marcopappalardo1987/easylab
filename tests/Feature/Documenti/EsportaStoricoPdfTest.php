@@ -90,7 +90,11 @@ it('puts the machine, its location and its history on the sheet', function () {
         // Il foglio dichiara quando è stato prodotto: è una fotografia, e
         // ritrovato fra un anno deve dire di quando parla.
         ->toContain(now()->format('d/m/Y'))
-        ->toContain($this->admin->name);
+        // `e()` e non il nome nudo: faker produce anche cognomi con l'apostrofo
+        // (O'Reilly), che Blade scrive `O&#039;Reilly`. Senza escape il test
+        // passa quasi sempre e fallisce quando capita quel nome — cioè in CI,
+        // su una build che non c'entra nulla. Trovato proprio così.
+        ->toContain(e($this->admin->name));
 });
 
 it('carries the report di fine lavoro next to the intervento that produced it', function () {

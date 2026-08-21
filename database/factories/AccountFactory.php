@@ -32,4 +32,36 @@ class AccountFactory extends Factory
             'locked_reason' => 'Insoluto (fixture di test)',
         ]);
     }
+
+    /**
+     * Lockout arrivato dal **webhook** e non da una persona (blocco Cashier):
+     * è l'altra sorgente, e serve a esercitare l'incrocio fra le due — un
+     * blocco manuale non deve essere riaperto da un pagamento riuscito.
+     */
+    public function bloccatoDaStripe(): static
+    {
+        return $this->state(fn () => [
+            'is_locked' => true,
+            'stripe_locked_at' => now(),
+            'stripe_lock_reason' => 'Stripe: abbonamento in stato «unpaid» (fixture di test).',
+        ]);
+    }
+
+    /** Account sul piano a pagamento: più di un Ente, e un customer Stripe. */
+    public function saas(): static
+    {
+        return $this->state(fn () => ['piano' => 'saas']);
+    }
+
+    /**
+     * Un account con un customer Stripe già associato. `cus_` fittizio: serve a
+     * far risolvere `Cashier::findBillable()` nei test del webhook, che non
+     * parlano con Stripe.
+     */
+    public function conStripe(?string $stripeId = null): static
+    {
+        return $this->state(fn () => [
+            'stripe_id' => $stripeId ?? 'cus_test_'.fake()->unique()->numerify('##########'),
+        ]);
+    }
 }

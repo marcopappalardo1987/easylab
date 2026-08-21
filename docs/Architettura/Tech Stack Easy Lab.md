@@ -34,7 +34,7 @@ La struttura gerarchica (Ente -> Dipartimento -> Sottolaboratorio -> Strumento) 
 Gli strumenti per gestire i pagamenti, gli abbonamenti e gli accessi in modo automatizzato.
 
 - **Motore Pagamenti:** Stripe
-- **Integrazione Laravel:** Laravel Cashier (Stripe)
+- **Integrazione Laravel:** Laravel Cashier (Stripe) — **installato il 21 Ago 2026: `laravel/cashier v16.7.0` + `stripe/stripe-php v20.3.1`**. Il vincolo `^16.7` non è una preferenza: il supporto a Illuminate `^13` entra in Cashier 16.5.0, la 16.4 si ferma a `^12`. Installato **senza `--with-dependencies`** (stessa lezione del framework, sotto): 4 pacchetti aggiunti, zero update, `guzzlehttp/guzzle` fermo a 7.15.3 — che conta, perché ci sta sotto l'SDK AWS dei documenti B2.
 - **Gestione Portale Clienti:** Stripe Hosted Billing Portal (Per far scaricare le fatture e gestire le carte ai clienti senza scrivere una riga di codice lato UI).
 
 5. Pacchetti Core & Moduli Consigliati

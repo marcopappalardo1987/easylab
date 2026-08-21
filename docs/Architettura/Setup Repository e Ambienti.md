@@ -124,6 +124,24 @@ Da fare **una volta sola**, nell'ordine, quando le notifiche vanno in un ambient
 
 Dal giorno dopo il digest manda solo le novità.
 
+### 3.4 Registrazione del webhook Stripe (blocco Cashier — 🔗 ADR-013)
+
+Da fare **una volta per ambiente**, dopo il primo deploy che porta il blocco Cashier:
+
+```bash
+php artisan config:show cashier      # key, secret, webhook.secret, path=stripe
+php artisan route:list --path=stripe # DEVE mostrare VerifyWebhookSignature
+php artisan cashier:webhook --url=https://<ambiente>/stripe/webhook
+```
+
+Poi si copia il `whsec_…` restituito in `STRIPE_WEBHOOK_SECRET` **e si ridistribuisce** (la config è cachata in build, §3.2).
+
+- ⚠️ **`--url` è obbligatorio.** Con `Cashier::ignoreRoutes()` il comando non sa più derivare l'indirizzo da `route('cashier.webhook')` e fallirebbe.
+- ⚠️ **Se `config:show cashier` mostra `null`**, le variabili non c'erano nell'**ambiente di build**: `php artisan optimize` gira lì e le ha cotte a null. Si ricostruisce, non si riprova.
+- ⚠️ **Un segreto sbagliato non dà errore visibile**: ogni evento prende 403 e il lockout semplicemente non scatta mai. Il controllo si fa dalla dashboard Stripe (consegne tutte 2xx), non dai log dell'app.
+- Gli eventi registrati sono i soli tre `customer.subscription.*`, letti da `config/cashier.php`: gli 8 di default trascinerebbero handler del pacchetto che fanno round-trip verso Stripe dentro la richiesta.
+- Le variabili `STRIPE_KEY`, `STRIPE_SECRET`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_SAAS` e `CASHIER_*` vanno fra quelle presenti **in build**. Stripe in **modalità test** su staging, **live** solo in produzione.
+
 ### 3.2 Comandi su Laravel Cloud — **build ≠ deploy**, e la differenza conta
 
 Laravel Cloud separa due fasi, e metterci il comando sbagliato non dà errore: semplicemente **non fa nulla**. I *build commands* girano mentre si costruisce l'immagine e ciò che scrivono resta; i *deploy commands* girano appena prima che la release vada live, e **le modifiche al filesystem che fanno NON vengono conservate**. Una `config:cache` messa fra i deploy commands genera una cache che viene buttata via subito dopo.
@@ -157,9 +175,13 @@ Si eseguono dal tab **«Commands»** dell'ambiente (comandi non interattivi, mas
 
 ```bash
 php artisan db:seed --class=RolesAndPermissionsSeeder --force   # bootstrap RBAC
-php artisan easylab:provision-tenant "EasyLab" --admin-email=…  # primo Ente + Admin (riceve l'invito)
+php artisan db:seed --class=SuperadminSeeder --force            # il Superadmin, col suo Account e il suo Ente
+php artisan easylab:provision-tenant "EasyLab" --admin-email=…  # primo Ente cliente + Admin (riceve l'invito)
 php artisan easylab:notifica-scadenze --senza-invio             # §3.1: obbligatorio
+php artisan cashier:webhook --url=https://<ambiente>/stripe/webhook   # §3.4
 ```
+
+⚠️ Il **SuperadminSeeder** va prima del provisioning e non dopo: è l'account che deve poter entrare quando non esiste ancora nessuno che possa invitarlo. Legge `SUPERADMIN_EMAIL`/`SUPERADMIN_PASSWORD` da `config/easylab.php` e **senza quelle variabili non crea nulla**, invece di ripiegare su un default — deroga consapevole ad ADR-012, motivata nel suo docblock.
 
 Poi, dal canvas dell'ambiente: **scheduler** (impostazione dell'App compute cluster — nessun crontab da scrivere, il cron è già in `routes/console.php`) e i **worker delle code**.
 

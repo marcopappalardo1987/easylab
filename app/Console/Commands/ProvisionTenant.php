@@ -7,6 +7,7 @@ use App\Models\Account;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Notifications\InvitoUtente;
+use App\Support\Piani;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -39,8 +40,10 @@ use Throwable;
  * utente, pivot) un fallimento a metà lascerebbe un account orfano o un ente
  * senza intestatario.
  *
- * Il limite di Enti per piano («chi paga di più gestisce più Enti») si farà
- * rispettare QUI quando il piano esisterà — cioè col blocco Cashier.
+ * Il limite di Enti per piano («chi paga di più gestisce più Enti») si fa
+ * rispettare qui, prima della transazione (ADR-032, blocco Cashier). La regola
+ * però vive su `Account::puoAggiungereEnte()`: questo comando la consuma, e la
+ * UI di provisioning di S6 riuserà lo stesso metodo invece di riscriverla.
  *
  * **L'Admin nuovo viene invitato, non gli si consegna una password** (ADR-012):
  * senza `--admin-password` nasce con un tappo random di 64 caratteri che
@@ -103,6 +106,33 @@ class ProvisionTenant extends Command
 
                 $accountEsistente = $suoi->first();
             }
+        }
+
+        // Il limite di Enti del piano (ADR-032), che il docblock qui sopra
+        // prenotava dal blocco S4. Sta **dopo** la risoluzione dell'account e
+        // **prima** della transazione, come le altre guardie del comando: chi
+        // viene rifiutato non deve lasciare né un account né un utente dietro
+        // di sé, e c'è già un test che lo verifica contando le righe.
+        //
+        // La decisione vive su `Account::puoAggiungereEnte()` e non qui: in S6
+        // il provisioning diventa una UI Livewire, e una guardia scritta dentro
+        // `handle()` non sarebbe lì. Un account nuovo (nessun `--account`, email
+        // mai vista) non ha Enti, quindi passa sempre — ma il controllo si fa
+        // lo stesso, senza ramo condizionale: un `max_enti` a 0, se un giorno
+        // esistesse, dev'essere rispettato anche dal primo Ente.
+        $accountPerLimite = $accountEsistente ?? new Account;
+
+        if (! $accountPerLimite->puoAggiungereEnte()) {
+            $max = Piani::maxEnti($accountPerLimite->piano);
+
+            $this->error(
+                "«{$accountPerLimite->ragione_sociale}» (id {$accountPerLimite->id}) è sul piano ".
+                Piani::etichetta($accountPerLimite->piano).
+                ": {$accountPerLimite->enti()->count()} Enti su {$max}, limite raggiunto."
+            );
+            $this->line('Passare a un piano superiore (easylab:abbona) o cestinare una sede prima di aggiungerne un\'altra.');
+
+            return self::FAILURE;
         }
 
         [$ente, $admin, $account, $accountNuovo] = DB::transaction(function () use ($nome, $adminEmail, $adminName, $passwordIniziale, $passwordEsplicita, $accountEsistente) {

@@ -28,6 +28,15 @@ Su SQLite le colonne `date` sono memorizzate come stringhe `'YYYY-MM-DD 00:00:00
 - **Commit**: Conventional Commits con lo sprint come scope (`feat(s3): ...`). Branch `feature/<descrizione>`, **PR verso `staging`**.
 - **Branch (dal 19 Ago 2026)**: `staging` è il ramo di lavoro, **`main` è produzione**. Si lavora su `feature/*` → PR verso `staging`; in `main` ci si arriva solo **promuovendo** staging con una PR dedicata, dopo la verifica sull'ambiente di staging. Mai un commit diretto su `main`.
 
+## Comandi di piattaforma (console, cross-tenant)
+
+Vivono in console perché l'amministrazione degli account è cross-tenant per natura e la Dashboard Superadmin è materia di S6 (ADR-018/032).
+
+- `easylab:provision-tenant {nome} [--account=]` — crea Ente, Account e Admin, e lo invita via email.
+- `easylab:lockout {account} [--sblocca] --motivo=` — la leva **manuale** del blocco per insoluto.
+- `easylab:abbona {account} [--piano=saas]` — attiva l'abbonamento su Stripe. ⚠️ Crea oggetti di fatturazione **veri**: in produzione chiede conferma.
+- `easylab:notifica-scadenze [--senza-invio]` — il digest giornaliero. Il **primo run in produzione va fatto con `--senza-invio`**.
+
 ## Verifiche prima di dire "fatto"
 
 - `php artisan test` (suite intera) e `vendor/bin/pint --dirty`.
