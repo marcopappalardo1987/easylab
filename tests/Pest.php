@@ -56,3 +56,21 @@ function scheda(User $user, Strumento $strumento): Testable
 {
     return Livewire\Livewire::actingAs($user)->test(SchedaStrumento::class, ['strumento' => $strumento]);
 }
+
+/**
+ * Estrae il primo `wire:snapshot` dall'HTML, come fa il vendor stesso: serve a
+ * costruire un POST **reale** a `/livewire/update`, che è l'unica strada per
+ * provare i middleware persistenti — `Livewire::test()` li disabilita.
+ *
+ * Vive qui e non nel file che l'ha introdotta (`LockoutEnforcementTest`) perché
+ * la usa anche `AccessoPiattaformaTest`: finché stava là, quel file eseguito da
+ * solo con `--filter` andava in **fatal per funzione non definita**. I file di
+ * test si caricano solo se selezionati, quindi una funzione condivisa fra due
+ * suite non può abitare in una delle due.
+ */
+function snapshotDa(string $html): string
+{
+    $grezzo = str($html)->betweenFirst('wire:snapshot="', '"')->toString();
+
+    return html_entity_decode($grezzo, ENT_QUOTES);
+}

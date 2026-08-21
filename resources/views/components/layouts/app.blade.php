@@ -33,10 +33,32 @@
     <body class="h-full bg-neutral-50 font-sans text-neutral-800 antialiased print:bg-white">
         <div x-data="{ sidebarOpen: false }" class="min-h-full">
 
-            {{-- Banner impersonation persistente (Design System §5.8) --}}
+            {{-- Banner impersonation persistente (Design System §5.8).
+
+                 ⚠️ **Dice entrambi i nomi**, non solo l'impersonato. Chi sta
+                 impersonando lo sa; non lo sa il collega che guarda lo stesso
+                 schermo, e non lo sa chi legge lo screenshot allegato a un
+                 ticket sei mesi dopo — dove «Stai impersonando Mario Rossi» non
+                 dice **chi** stesse guardando, cioè l'unica cosa che serve per
+                 ricostruire un gesto. L'impersonatore si legge dal servizio,
+                 perché `auth()->user()` è già l'impersonato. --}}
             @if (app('impersonate')->isImpersonating())
+                @php
+                    // `rescue()` e non un `??`: `getImpersonator()` **non**
+                    // restituisce null se l'utente non c'è più — chiama
+                    // `findUserById()` e **lancia** `ModelNotFoundException`,
+                    // che qui sarebbe un 500 su ogni pagina della sessione
+                    // impersonata, uscita compresa. Il banner degrada a dire un
+                    // nome solo; il pulsante «Esci» resta.
+                    $impersonatore = rescue(fn () => app('impersonate')->getImpersonator(), null, false);
+                @endphp
                 <div class="flex items-center justify-between gap-3 bg-warning-500 px-4 py-2 text-sm text-neutral-900 print:hidden">
-                    <span>Stai impersonando <strong>{{ $user->name }}</strong></span>
+                    <span>
+                        Stai impersonando <strong>{{ $user->name }}</strong>@if ($user->ente) ({{ $user->ente->nome }})@endif
+                        @if ($impersonatore)
+                            — sei <strong>{{ $impersonatore->name }}</strong>
+                        @endif
+                    </span>
                     <a href="{{ route('impersonate.leave') }}"
                        class="rounded-md bg-neutral-900/10 px-3 py-1 font-medium hover:bg-neutral-900/20">
                         Esci dall'impersonation

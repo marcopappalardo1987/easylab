@@ -410,6 +410,16 @@ Il volume gioca a favore: il digest è **una email al giorno per destinatario e 
 - Aggiungere un nuovo permesso resta un'operazione di codice (catalogo §4 + seeder); la UI gestisce l'assegnazione, non la creazione di permessi.
 - Nuovo permesso `roles.manage` da aggiungere al catalogo e alla matrice.
 
+> ⚠️ **Rischio dichiarato e accettato — l'impersonazione entra via GET senza CSRF** *(21 Ago 2026, S6 blocco F)*
+>
+> `lab404/laravel-impersonate` espone `GET /impersonate/take/{id}`. Una rotta GET non porta token CSRF, quindi una pagina esterna può far **navigare** lì un Superadmin già connesso — un `<img src>` o un redirect bastano — e la sessione entra in impersonazione senza che l'interessato abbia cliccato nulla di riconoscibile.
+>
+> **Perché si accetta, per ora.** L'attaccante **non legge la risposta** (same-origin), quindi non estrae dati: ottiene che la vittima si trovi dentro una sessione altrui. Il gesto è **loggato** e il **banner è visibile in cima a ogni pagina** — e da questo blocco dice anche **chi** sta impersonando, che è ciò che rende l'anomalia riconoscibile a colpo d'occhio invece che ricostruibile a posteriori. La superficie è ristretta a due soli ruoli (`utenti.impersonate`).
+>
+> **Perché non si chiude qui.** Chiuderla vuol dire o cambiare il metodo della rotta del pacchetto (e riscrivere il proprio controller), o metterle davanti un middleware di conferma: entrambe toccano un pacchetto di terze parti e vanno fatte con la revisione delle autorizzazioni **già in elenco nel security pass di S7**, non di sfuggita dentro un blocco di UI.
+>
+> ⚠️ **Il rifiuto del pacchetto non è un 403.** `ImpersonateController::take()` non aborta quando `canBeImpersonated()` è falso: cade fuori dall'`if` e fa `redirect()->back()`. Con `take_redirect_to => '/'` e nessun referer, **successo e rifiuto sono risposte identiche**. Chi scrive un test negativo qui deve asserire sullo **stato della sessione** (`isImpersonating()` e l'utente autenticato), non sul codice di stato: un `assertForbidden()` fallirebbe, e la via di minor resistenza per farlo passare sarebbe allargare `canBeImpersonated()` — cioè rompere la guardia per accontentare il test.
+
 ---
 
 **ADR-018 — Nessun ruolo bypassa il Global Scope: Superadmin/Developer tenant-bound, accesso cross-tenant solo via impersonazione**

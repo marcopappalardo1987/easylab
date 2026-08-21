@@ -18,6 +18,18 @@
         </include>
     </source>
     <php>
+        <!--
+            ⚠️ 512M e non il default di 128M: la suite intera non ci sta più.
+            Il sintomo non è un test rosso ma un `Fatal error: Allowed memory
+            size exhausted` **dentro il renderer di Collision**, cioè con zero
+            fallimenti elencati — l'esecuzione muore mentre stampa, e chi guarda
+            l'output non vede né verde né rosso. Sta qui e non in un flag da
+            ricordarsi (`php -d memory_limit=512M`) perché «suite verde in
+            locale prima di pushare» è l'unica rete che il progetto ha: ogni
+            push su `staging` deploya, e la CI gira dopo. Una rete che dipende
+            dal ricordarsi un flag non è una rete.
+        -->
+        <ini name="memory_limit" value="512M"/>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>

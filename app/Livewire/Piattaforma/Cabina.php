@@ -3,6 +3,7 @@
 namespace App\Livewire\Piattaforma;
 
 use App\Livewire\Piattaforma\Concerns\ElencaClienti;
+use App\Livewire\Piattaforma\Concerns\OffreImpersonazione;
 use App\Support\Piattaforma\MetrichePiattaforma;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
@@ -51,7 +52,7 @@ use Livewire\Component;
 #[Layout('components.layouts.app')]
 class Cabina extends Component
 {
-    use ElencaClienti;
+    use ElencaClienti, OffreImpersonazione;
 
     public function render(): View
     {
@@ -70,6 +71,7 @@ class Cabina extends Component
             'sediPerAccount' => $dettagli['sedi'],
             'strumentiPerAccount' => $dettagli['strumenti'],
             'strumentiPerSede' => $dettagli['perSede'],
+            'candidatiPerAccount' => $this->candidatiDellaPagina($clienti->getCollection()),
         ]);
     }
 }

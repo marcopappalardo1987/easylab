@@ -167,6 +167,31 @@ it('records who changed the setting, and from what to what', function () {
         ->and($riga->properties['a'])->toBe('nascosta');
 });
 
+it('writes no audit row when the setting does not actually change', function () {
+    // La guardia di no-op che ogni altro gesto del progetto ha (`blocca()`,
+    // `cambiaPiano()`). Serviva poco finché il gesto arrivava da un form con un
+    // bottone Salva; dalla cabina di regia (S6) arriva da una `select` per sede,
+    // e un mis-click che rimette lo stesso valore scriverebbe una riga con
+    // `da === a`. Dieci righe identiche non raccontano dieci decisioni: rendono
+    // più difficile trovare quella vera, in un registro che esiste apposta per
+    // dire chi ha deciso cosa.
+    $superadmin = ($this->utente)('Superadmin');
+    $this->actingAs($superadmin);
+
+    $attuale = $this->ente->visibilita_garanzie_ricambio;
+
+    expect($this->ente->fissaVisibilitaGaranzieRicambio($attuale))->toBeTrue()
+        ->and(Activity::where('log_name', AuditLog::NAME)
+            ->where('subject_type', UnitaOrganizzativa::class)->count())->toBe(0);
+
+    // E il gesto vero continua a lasciare la sua riga: una guardia che
+    // silenziasse anche i cambi reali sarebbe verde su metà di questo test.
+    $this->ente->fissaVisibilitaGaranzieRicambio(VisibilitaGaranzieRicambio::Nascosta);
+
+    expect(Activity::where('log_name', AuditLog::NAME)
+        ->where('subject_type', UnitaOrganizzativa::class)->count())->toBe(1);
+});
+
 it('refuses a value that is not one of the three states', function () {
     $superadmin = ($this->utente)('Superadmin');
 

@@ -240,8 +240,41 @@
                                 {{ $cliente->created_at?->format('d/m/Y') }}
                             </td>
 
-                            <td class="py-3 pl-3 pr-4 text-right text-neutral-400">
-                                <span class="text-xs">—</span>
+                            <td class="py-3 pl-3 pr-4 text-right">
+                                {{-- Si impersona una **persona**, non un contratto: l'Account
+                                     non ha sessione né permessi. Un candidato → link diretto;
+                                     più d'uno → si sceglie, perché «il primo» sarebbe una
+                                     decisione presa dall'ordinamento di una query. --}}
+                                @php $candidati = $candidatiPerAccount[$cliente->id] ?? collect(); @endphp
+                                @can('utenti.impersonate')
+
+                                    @if ($candidati->count() === 1)
+                                        {{-- `<a href>` GET e non un'azione Livewire: `take()`
+                                             sostituisce l'utente in sessione, e una risposta
+                                             Livewire lascerebbe in pagina un componente montato
+                                             per l'utente precedente, col suo scope. --}}
+                                        <a href="{{ route('impersonate', $candidati->first()) }}"
+                                           class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-primary-700 hover:bg-primary-50"
+                                           title="Impersona {{ $candidati->first()->name }}">
+                                            <span aria-hidden="true">👁</span> Impersona
+                                        </a>
+                                    @elseif ($candidati->count() > 1)
+                                        <button type="button" wire:click="apriScelta({{ $cliente->id }})"
+                                                class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-primary-700 hover:bg-primary-50">
+                                            <span aria-hidden="true">👁</span> Impersona ({{ $candidati->count() }})
+                                        </button>
+                                    @else
+                                        {{-- Nessuno: o l'account non ha membri, o l'unico è chi
+                                             sta guardando. Si dice, invece di lasciare una cella
+                                             vuota che si legge come «funzione non disponibile». --}}
+                                        <span class="text-xs text-neutral-400" title="Nessun membro impersonabile">—</span>
+                                    @endif
+                                @else
+                                    {{-- Una cella vuota si legge come «manca qualcosa»; il
+                                         trattino dice «niente da fare qui», che è la verità
+                                         anche per chi non ha il permesso. --}}
+                                    <span class="text-xs text-neutral-400">—</span>
+                                @endcan
                             </td>
                         </tr>
 
@@ -277,6 +310,49 @@
             </table>
         </div>
     </x-ui.card>
+
+    {{-- La scelta del membro, gatata **tre volte**, e non per abbondanza: la
+         prima è `apriScelta()`/`updatingSceltaImpersonazione()`, che chiedono
+         `utenti.impersonate` perché la property arriva dal browser; la seconda è
+         `clienteScelto()`, che rilegge dalla porta e restituisce `null` senza
+         quel permesso; questo `@can` è la terza e la più debole — da sola non
+         reggerebbe nulla, ma toglie il markup a chi non deve vederlo. Un test le
+         toglie tutte e tre insieme e diventa rosso. --}}
+    @can('utenti.impersonate')
+        @if ($sceltaImpersonazione !== null)
+            @php
+                // Riletti dalla porta e non pescati dalla pagina: filtrare o
+                // paginare con la modale aperta lascerebbe a schermo un guscio
+                // col titolo troncato e la lista vuota.
+                $scelto = $this->clienteScelto();
+                $suoi = $this->candidatiScelti();
+            @endphp
+
+            @if ($scelto)
+            <x-ui.modal :title="'Impersona un membro di '.$scelto->ragione_sociale" close="chiudiScelta">
+                <p class="text-sm text-neutral-600">
+                    Si entra come una persona: permessi, Ente attivo e visibilità saranno i suoi.
+                    L'ingresso è registrato e resta un banner in cima a ogni pagina.
+                </p>
+
+                <ul class="mt-4 divide-y divide-neutral-200">
+                    @foreach ($suoi as $membro)
+                        <li wire:key="candidato-{{ $membro->id }}" class="flex items-center justify-between gap-3 py-2">
+                            <span>
+                                <span class="block text-sm font-medium text-neutral-900">{{ $membro->name }}</span>
+                                <span class="block text-xs text-neutral-500">{{ $membro->email }}</span>
+                            </span>
+                            <a href="{{ route('impersonate', $membro) }}"
+                               class="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700">
+                                <span aria-hidden="true">👁</span> Entra
+                            </a>
+                        </li>
+                    @endforeach
+                </ul>
+            </x-ui.modal>
+            @endif
+        @endif
+    @endcan
 
     <div class="mt-4 flex flex-wrap items-center justify-between gap-2">
         <p class="text-xs text-neutral-500">

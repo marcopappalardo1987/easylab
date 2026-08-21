@@ -236,7 +236,11 @@ Barra orizzontale, tab attivo `border-b-2 border-primary-600 text-primary-700`, 
 - **Sidebar Superadmin:** voci con icona (Permessi 🛡, Audit 📜, Billing 💳).
 
 ### 5.8 Banner impersonation (persistente) — 🔗 ADR-016/activitylog
-Barra fissa in alto, alto contrasto `bg-warning-500 text-neutral-900`, testo "Stai impersonando **{utente}**" + `[ Esci dall'impersonation ]`. Sempre visibile durante la sessione impersonata.
+Barra fissa in alto, alto contrasto `bg-warning-500 text-neutral-900`, testo "Stai impersonando **{utente}** ({Ente}) — sei **{impersonatore}**" + `[ Esci dall'impersonation ]`. Sempre visibile durante la sessione impersonata, `print:hidden` in stampa.
+
+> ⚠️ **Dice entrambi i nomi** *(corretto il 21 Ago 2026, S6 blocco F: prima diceva solo l'impersonato).* Chi sta impersonando lo sa già; non lo sa il collega davanti allo stesso schermo, e non lo sa chi legge lo screenshot allegato a un ticket sei mesi dopo — dove «Stai impersonando Mario Rossi» non dice **chi** stesse guardando, cioè l'unica cosa che serve per ricostruire il gesto. L'impersonatore si legge da `app('impersonate')->getImpersonator()`, perché `auth()->user()` è **già** l'impersonato.
+
+**L'ingresso è un `<a href>` GET, mai un'azione Livewire.** `take()` sostituisce l'utente in sessione: una risposta Livewire lascerebbe in pagina un componente **montato per l'utente precedente**, col suo scope e i suoi permessi già risolti. Il giro completo dal server è ciò che rende lo scambio osservabile. Si bersaglia **una persona**, non un contratto — un candidato solo → link diretto, più d'uno → si sceglie, perché «il primo» sarebbe una decisione presa dall'ordinamento di una query.
 
 ### 5.9 Stati di servizio
 - **Empty state:** icona neutra + frase guida + CTA.

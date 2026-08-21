@@ -78,6 +78,39 @@ class UnitaOrganizzativa extends Model
     }
 
     /**
+     * Radica il nodo come **Ente**: `tenant_id` = sé stesso, `account_id` = il
+     * rapporto commerciale (ADR-032). Si chiama subito dopo `create()`.
+     *
+     * ⚠️ **Il metodo esiste per rendere esplicito ciò che finora funzionava per
+     * effetto collaterale.** Il nodo radice non può nascere già timbrato: la FK
+     * `tenant_id` punta a sé stesso, e il proprio id non esiste prima
+     * dell'insert. Il problema è ciò che accade *in mezzo*: se chi provisiona è
+     * **autenticato** — cioè da UI, mai in console — `BelongsToTenant::creating`
+     * timbra il nodo nuovo col `tenant_id` di **chi sta scrivendo**. Il
+     * Superadmin è tenant-bound come chiunque (ADR-018 non concede bypass a
+     * nessuno), quindi l'Ente nuovo nascerebbe dentro l'Ente di EasyLab.
+     *
+     * `saveQuietly()` e non `save()`: `BelongsToTenant::updating` **rimette il
+     * valore originale** quando `tenant_id` è dirty e c'è un utente scopato —
+     * cioè annullerebbe questa correzione, ripristinando il timbro sbagliato.
+     * Sopprimere gli eventi è quindi la scelta, non la scorciatoia; e i due
+     * hook che si stanno scavalcando sono nominati qui sopra perché il giorno in
+     * cui cambiano, questa riga è la prima da rileggere.
+     *
+     * *Finora il codice era corretto senza dirlo: la stessa coppia
+     * `forceFill(...)->saveQuietly()` viveva dentro `ProvisionTenant`, dove
+     * nessun test l'ha mai esercitata con un utente autenticato. Funzionava per
+     * effetto collaterale, non per decisione.*
+     */
+    public function radicaComeEnte(Account $account): bool
+    {
+        return $this->forceFill([
+            'tenant_id' => $this->id,
+            'account_id' => $account->id,
+        ])->saveQuietly();
+    }
+
+    /**
      * Unica via per cambiare la visibilità delle garanzie ricambio (ADR-029).
      *
      * Il metodo esiste perché la colonna è fuori da `$fillable`: senza, il
@@ -88,6 +121,22 @@ class UnitaOrganizzativa extends Model
     public function fissaVisibilitaGaranzieRicambio(VisibilitaGaranzieRicambio $visibilita): bool
     {
         $precedente = $this->visibilita_garanzie_ricambio;
+
+        // Guardia di no-op, come `Account::blocca()` e `cambiaPiano()`. Finché
+        // questo gesto è arrivato da un form con un bottone Salva il caso era
+        // raro; dalla cabina di regia (S6) arriva da una `select` per sede, e un
+        // mis-click che rimette lo stesso valore scriverebbe una riga di audit
+        // con `da === a`. Sarebbe rumore in un registro che esiste per dire **chi
+        // ha deciso cosa**: dieci righe identiche non raccontano dieci decisioni,
+        // e la vera diventa più difficile da trovare, non più facile.
+        //
+        // Il `true` è deliberato: per chi chiama, «lo stato richiesto è quello
+        // sul DB» è un successo. Restituire `false` farebbe mostrare un errore
+        // per un'operazione che non aveva niente da fare.
+        if ($precedente === $visibilita) {
+            return true;
+        }
+
         $this->visibilita_garanzie_ricambio = $visibilita;
 
         $salvato = $this->save();
