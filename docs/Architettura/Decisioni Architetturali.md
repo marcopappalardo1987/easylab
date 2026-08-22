@@ -403,8 +403,12 @@ Il volume gioca a favore: il digest è **una email al giorno per destinatario e 
 **Decisione.**
 - **Ambito globale, editor solo Superadmin/Developer.** I ruoli sono **globali** (un'unica matrice valida per tutta la piattaforma, niente modalità "teams" di spatie in V1). La modifica avviene da una UI nella Dashboard Superadmin (permesso `roles.manage`). La personalizzazione per-Ente da parte dell'Admin è rimandata a V1.1.
 - **Default da seeder.** Il `RolesAndPermissionsSeeder` (S1) imposta i default della matrice §5; da quel momento la **fonte di verità è il DB** (la UI può divergere dal seeder, che resta solo bootstrap/reset).
-- **Set "bloccato" protetto.** Un sottoinsieme di permessi è **non modificabile dalla UI** perché vincolato da privacy/legge/sicurezza o strutturale. La UI li mostra in sola lettura. Elenco bloccato (V1):
-  - `garanzie.ricambio.view` / `garanzie.ricambio.manage` → **mai** concedibili al `Tenant` (🔗 ADR-004). *Corretto l'8 Ago 2026 da ADR-027: questa riga diceva «a `Tenant` o `Tecnico`», ma ADR-004 nomina solo il Tenant — e il Tecnico è personale EasyLab. Il divieto al Tecnico era un'estensione mai decisa, poi congelata da un test.*
+- **Set "bloccato" protetto.** Un sottoinsieme di permessi è **non modificabile dalla UI** perché vincolato da privacy/legge/sicurezza o strutturale. La UI li mostra in sola lettura.
+
+  🔴 **«Bloccato» è una proprietà del PERMESSO, non della coppia ruolo-permesso** *(esplicitato il 22 Ago 2026, attuando l'editor)*. L'elenco qui sotto nomina i ruoli che oggi *hanno* ciascuna voce, e quella prosa si è prestata alla lettura sbagliata — «bloccato per quel ruolo». Non è così: una voce 🔒 non è **né revocabile né concedibile, a nessun ruolo**. La firma scritta in S1 lo diceva già (`Rbac::isLocked(string $permission)` prende un permesso, non una coppia); l'argomento decisivo però non è qui, è nel middleware del secondo fattore, che si gata **per nome di ruolo** (`two_factor_required_roles`): sotto la lettura per coppia, `roles.manage` sarebbe concedibile al `Tenant`, e si otterrebbe un editor della matrice dei permessi raggiungibile **senza 2FA obbligatorio**. Conseguenza da accettare: le 7 voci non saranno mai concedibili a un ruolo che oggi non le ha — il giorno in cui ne nascesse uno nuovo servirebbe un commit, non un click.
+
+  Elenco bloccato (V1, **7 voci** dal 15 Ago 2026):
+  - ~~`garanzie.ricambio.view` / `garanzie.ricambio.manage`~~ → 🔴 **USCITE dal set il 15 Ago 2026** (🔗 ADR-029), che le rende un'impostazione **per-Ente** a tre stati. Il set passa da 9 a **7** voci, e il Tenant ha ora entrambi i permessi. *Questa riga ha continuato a dire «mai concedibili al Tenant» fino al 22 Ago 2026, cioè per una settimana la decisione che governa l'editor dei permessi diceva il contrario della matrice che l'editor avrebbe modificato.* (Storia precedente, che si conserva perché è la stessa forma d'errore due volte: corretta l'8 Ago 2026 da ADR-027, quando diceva «a `Tenant` o `Tecnico`» — un divieto al Tecnico mai deciso, e poi congelato da un test.)
   - `utenti.impersonate` → solo `Developer`/`Superadmin`.
   - `system.logs.view` → solo `Developer`.
   - `billing.manage_global`, `billing.lockout`, `tenants.view_all`, `tenants.provision` → solo `Developer`/`Superadmin`.
@@ -413,9 +417,19 @@ Il volume gioca a favore: il digest è **una email al giorno per destinatario e 
 
 **Modello dati.** Nessuna tabella nuova: si usano le tabelle spatie. Il set bloccato è una **costante applicativa** (config/codice), non un dato editabile. Ogni modifica alla matrice va loggata in `activity_log` (chi/cosa/quando).
 
+> ✅ **Attuazione, dal 22 Ago 2026 — S6, blocco 1** (`App\Support\Rbac\MatriceRuoli`). Quattro cose che questa decisione non diceva e che l'attuazione ha dovuto stabilire:
+>
+> **(a) La riga del `Developer` è inerte in entrambe le direzioni.** Il set bloccato non la copre: `Developer => ['all' => true]` è la chiave di riserva della piattaforma e con l'editor diventerebbe svuotabile permesso per permesso. Non esiste un `Gate::before` da super-admin che la rimpiazzi. Precedente di forma: `User::canBeImpersonated()` — una definizione sola, mai due elenchi.
+>
+> **(b) Un permesso fuori catalogo non si riassegna.** `permissions` sopravvive alle proprie definizioni — il seeder usa `firstOrCreate` e non cancella — quindi senza guardia l'editor potrebbe **riassegnare** una riga orfana: è l'incidente `letture_contaore.*`, rimasto su quattro ruoli fino all'8 Ago 2026, ma con l'editor a legittimarlo invece che a isolarlo. Stessa guardia sui ruoli fuori catalogo, che non avrebbero né scope di riga né 2FA obbligatorio.
+>
+> **(c) 🔴 Il riseeding NON fa deriva: distrugge.** `RolesAndPermissionsSeeder` usa `syncPermissions()`, che **detacha tutto e riattacca** dalla config. Dal rilascio dell'editor in poi, l'istruzione di CLAUDE.md «le modifiche a `config/rbac.php` vanno riseminate» — eseguita correttamente — **cancella l'intera matrice di runtime**. Il seeder resta il reset ai default (un reset che non resetta è peggio), ma stampa il diff di ciò che sta per distruggere. ⚠️ E **non** chiede conferma: un `confirm()` lì dentro rompe gli 85 file di test che seminano — su un DB appena creato i ruoli non esistono, quindi il diff non è vuoto, è massimo.
+>
+> **(d) La traccia è una riga per cella**, sul canale `audit` e con il **ruolo** come soggetto (il permesso sta nelle proprietà): il gesto è «al ruolo X è stato tolto Y», ed è sul ruolo che si vorrà filtrare. Senza `event`, quindi la riga è un **atto** e la si raggiunge dalla sentinella del registro. Un delta di riga intero nelle proprietà si renderebbe come JSON grezzo, che è il difetto che il dettaglio del registro esiste per evitare.
+
 **Conseguenze.**
 - Flessibilità operativa senza deploy; default sensati out-of-the-box.
-- Le guard del set bloccato vanno testate (test negativi: "il Superadmin non può concedere `garanzie.ricambio.view` al Tenant via UI").
+- Le guard del set bloccato vanno testate. ⚠️ **Il test negativo che stava qui — «il Superadmin non può concedere `garanzie.ricambio.view` al Tenant via UI» — è falso dal 15 Ago 2026**: quel gesto oggi è lecito. I negativi giusti sono «non può concedere `roles.manage` all'Admin» (che è ciò che distingue la lettura per colonna da quella per coppia: un'implementazione che blocca le sole revoche resta verde su tutto il resto) e «non può revocare `tenants.view_all` al Superadmin», che se cadesse chiuderebbe fuori dalla piattaforma chi la governa.
 - Aggiungere un nuovo permesso resta un'operazione di codice (catalogo §4 + seeder); la UI gestisce l'assegnazione, non la creazione di permessi.
 - Nuovo permesso `roles.manage` da aggiungere al catalogo e alla matrice.
 
