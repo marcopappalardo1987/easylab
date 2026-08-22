@@ -75,13 +75,13 @@
                 {{-- Sidebar (fissa su desktop, drawer su mobile) --}}
                 <aside class="fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col border-r border-neutral-200 bg-white transition-transform duration-200 md:static md:min-h-screen md:translate-x-0 print:hidden"
                        :class="sidebarOpen && 'translate-x-0'">
-                    <div class="flex h-14 items-center gap-2 border-b border-neutral-200 px-4">
-                        <span class="flex h-8 w-8 items-center justify-center rounded-md bg-primary-50 text-primary-600">
-                            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23-.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
-                            </svg>
-                        </span>
-                        <span class="text-lg font-bold tracking-tight text-neutral-900">Easy Lab</span>
+                    <div class="flex h-14 items-center border-b border-neutral-200 px-4">
+                        {{-- Il marchio vero (ADR-033), al posto dell'icona a becher
+                             disegnata a mano e del testo «Easy Lab»: il logo porta già
+                             il nome, e ripeterlo accanto lo direbbe due volte. --}}
+                        <a href="{{ route('dashboard') }}" class="flex items-center" aria-label="Easy Lab — vai alla dashboard">
+                            <x-brand-logo class="h-7 w-auto" />
+                        </a>
                     </div>
 
                     <nav class="flex-1 space-y-1 p-3">
