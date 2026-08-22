@@ -10,7 +10,7 @@
                  claim del logo è testo trasformato in tracciati, quindi senza
                  questa riga la pagina non avrebbe alcuna intestazione. --}}
             <div class="flex flex-col items-center text-center">
-                <x-brand-logo variante="completo" class="h-16 w-auto" />
+                <x-brand-logo variante="completo" class="h-20 w-auto sm:h-24" />
                 <h1 class="sr-only">Easy Lab — gestione strumentazione e manutenzione</h1>
             </div>
 

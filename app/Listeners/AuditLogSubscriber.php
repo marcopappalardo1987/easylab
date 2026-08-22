@@ -20,7 +20,7 @@ use Laravel\Fortify\Events\TwoFactorAuthenticationEnabled;
  */
 class AuditLogSubscriber
 {
-    public function handleTakeImpersonation(TakeImpersonation $event): void
+    public function suImpersonationAvviata(TakeImpersonation $event): void
     {
         activity(AuditLog::NAME)
             ->causedBy($event->impersonator)
@@ -29,7 +29,7 @@ class AuditLogSubscriber
             ->log('Impersonation avviata');
     }
 
-    public function handleLeaveImpersonation(LeaveImpersonation $event): void
+    public function suImpersonationTerminata(LeaveImpersonation $event): void
     {
         activity(AuditLog::NAME)
             ->causedBy($event->impersonator)
@@ -38,7 +38,7 @@ class AuditLogSubscriber
             ->log('Impersonation terminata');
     }
 
-    public function handleLogin(Login $event): void
+    public function suLogin(Login $event): void
     {
         activity(AuditLog::NAME)
             ->causedBy($event->user)
@@ -46,7 +46,7 @@ class AuditLogSubscriber
             ->log('Login');
     }
 
-    public function handleLogout(Logout $event): void
+    public function suLogout(Logout $event): void
     {
         activity(AuditLog::NAME)
             ->causedBy($event->user)
@@ -54,7 +54,7 @@ class AuditLogSubscriber
             ->log('Logout');
     }
 
-    public function handleFailed(Failed $event): void
+    public function suLoginFallito(Failed $event): void
     {
         activity(AuditLog::NAME)
             ->withProperties([
@@ -65,32 +65,53 @@ class AuditLogSubscriber
             ->log('Login fallito');
     }
 
-    public function handleTwoFactorEnabled(TwoFactorAuthenticationEnabled $event): void
+    public function suDueFattoriAbilitati(TwoFactorAuthenticationEnabled $event): void
     {
         activity(AuditLog::NAME)->causedBy($event->user)->log('2FA abilitato');
     }
 
-    public function handleTwoFactorConfirmed(TwoFactorAuthenticationConfirmed $event): void
+    public function suDueFattoriConfermati(TwoFactorAuthenticationConfirmed $event): void
     {
         activity(AuditLog::NAME)->causedBy($event->user)->log('2FA confermato');
     }
 
-    public function handleTwoFactorDisabled(TwoFactorAuthenticationDisabled $event): void
+    public function suDueFattoriDisabilitati(TwoFactorAuthenticationDisabled $event): void
     {
         activity(AuditLog::NAME)->causedBy($event->user)->log('2FA disabilitato');
     }
 
+    /**
+     * 🔴 I metodi **non** si chiamano `handleXxx`, e non è una preferenza.
+     *
+     * Laravel scopre da sé i listener in `app/Listeners`, registrando ogni
+     * metodo che comincia per `handle` e ha un evento come parametro tipizzato.
+     * Con la mappa qui sotto **più** la scoperta automatica, questo subscriber
+     * risultava iscritto **due volte**: ogni login, ogni logout, ogni 2FA e ogni
+     * impersonazione scrivevano **due righe identiche** nel registro di audit —
+     * da S1, in silenzio, e su una tabella che ADR-027 dichiara non
+     * riscrivibile.
+     *
+     * Trovato guardando la vista Audit su staging il 22 Ago 2026: nessun test se
+     * ne era accorto perché tutti asserivano con `first()` o `where(...)->exists()`,
+     * cioè cercavano **una** riga e la trovavano.
+     *
+     * Le due strade per chiuderlo erano togliere questa mappa e affidarsi alla
+     * scoperta, oppure tenerla e sottrarsi alla scoperta. Si è scelta la seconda:
+     * un elenco esplicito di otto eventi si legge, si rivede e non dipende da una
+     * convenzione di nomi — mentre la scoperta è implicita e si romperebbe al
+     * primo metodo rinominato senza che nulla lo dica.
+     */
     public function subscribe(Dispatcher $events): array
     {
         return [
-            TakeImpersonation::class => 'handleTakeImpersonation',
-            LeaveImpersonation::class => 'handleLeaveImpersonation',
-            Login::class => 'handleLogin',
-            Logout::class => 'handleLogout',
-            Failed::class => 'handleFailed',
-            TwoFactorAuthenticationEnabled::class => 'handleTwoFactorEnabled',
-            TwoFactorAuthenticationConfirmed::class => 'handleTwoFactorConfirmed',
-            TwoFactorAuthenticationDisabled::class => 'handleTwoFactorDisabled',
+            TakeImpersonation::class => 'suImpersonationAvviata',
+            LeaveImpersonation::class => 'suImpersonationTerminata',
+            Login::class => 'suLogin',
+            Logout::class => 'suLogout',
+            Failed::class => 'suLoginFallito',
+            TwoFactorAuthenticationEnabled::class => 'suDueFattoriAbilitati',
+            TwoFactorAuthenticationConfirmed::class => 'suDueFattoriConfermati',
+            TwoFactorAuthenticationDisabled::class => 'suDueFattoriDisabilitati',
         ];
     }
 }
