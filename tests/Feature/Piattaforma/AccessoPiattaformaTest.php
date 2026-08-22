@@ -25,10 +25,11 @@ use Livewire\Livewire;
  * onesti: la prima stesura li ripeteva, e la prova di mutazione ha mostrato che
  * un dataset ridotto lasciava il test verde — controllava una copia, non
  * l'elenco davvero usato.
+ *
+ * ⚠️ Dal 23 Ago 2026 **vivono in `tests/Pest.php`**: finché stavano qui, un file
+ * che le riusava non girava da solo, e uno che si carica prima di questo non
+ * poteva riusarle affatto. La nota per esteso è là.
  */
-const RUOLI_SENZA_PIATTAFORMA = ['Admin', 'Responsabile Reparto', 'Tenant', 'Tecnico'];
-const RUOLI_CON_PIATTAFORMA = ['Developer', 'Superadmin'];
-
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
 

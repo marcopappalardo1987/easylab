@@ -74,3 +74,37 @@ function snapshotDa(string $html): string
 
     return html_entity_decode($grezzo, ENT_QUOTES);
 }
+
+/**
+ * Chi entra nelle pagine di piattaforma e chi no, come **dataset condivisi**.
+ *
+ * ⚠️ Vivono qui e non in `AccessoPiattaformaTest` per la stessa ragione — e con
+ * la stessa cicatrice — di `snapshotDa()` qui sopra, un gradino più in là: là
+ * era una **funzione** condivisa fra due suite, qui sono **costanti**. I file di
+ * test si caricano solo se selezionati, e comunque in ordine alfabetico *prima*
+ * che qualunque test giri: una costante definita in `AccessoPiattaformaTest` non
+ * esiste ancora quando Pest risolve i `->with()` di `AccessoEditorRuoliTest`, e
+ * non esiste affatto se si lancia il solo `AccessoRegistroAuditTest`.
+ *
+ * Il sintomo non è un errore leggibile: è `Pest\Exceptions\DatasetMissing`,
+ * cioè la stessa classe di guasto della trappola dei closure nei dataset —
+ * **test che non girano**. Verificato il 23 Ago 2026:
+ * `php artisan test tests/Feature/Piattaforma/AccessoRegistroAuditTest.php`
+ * falliva così, e nessuno se n'era accorto perché la suite si lancia intera.
+ *
+ * Gli elenchi restano **costanti e non closure** (i closure si risolvono prima
+ * del boot di Laravel, quindi `config('rbac.roles')` sarebbe vuoto e il dataset
+ * nascerebbe vuoto), e un test per suite li tiene onesti contro la matrice RBAC:
+ * elencare a mano senza quella rete lascia scoperto il Developer per omissione.
+ */
+const RUOLI_SENZA_PIATTAFORMA = ['Admin', 'Responsabile Reparto', 'Tenant', 'Tecnico'];
+const RUOLI_CON_PIATTAFORMA = ['Developer', 'Superadmin'];
+
+/** Un utente del ruolo dato, con 2FA già confermata (Admin e i due di piattaforma la richiedono). */
+function utenteConRuolo(string $ruolo): User
+{
+    $utente = User::factory()->create(['two_factor_confirmed_at' => now()]);
+    $utente->assignRole($ruolo);
+
+    return $utente->fresh();
+}

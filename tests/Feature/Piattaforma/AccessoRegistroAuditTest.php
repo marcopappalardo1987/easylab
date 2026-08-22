@@ -1,7 +1,6 @@
 <?php
 
 use App\Livewire\Piattaforma\RegistroAudit;
-use App\Models\User;
 use App\Support\Rbac;
 use App\Support\Tenancy\VistaPiattaforma;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -20,14 +19,8 @@ beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
 });
 
-/** Un utente del ruolo dato, con 2FA già confermata (Admin e i due di piattaforma la richiedono). */
-function utenteConRuolo(string $ruolo): User
-{
-    $utente = User::factory()->create(['two_factor_confirmed_at' => now()]);
-    $utente->assignRole($ruolo);
-
-    return $utente->fresh();
-}
+// `utenteConRuolo()` e i due dataset vivono in `tests/Pest.php`: finché
+// stavano nei file di test, questo file non girava da solo (`DatasetMissing`).
 
 // --- Negativi ---
 

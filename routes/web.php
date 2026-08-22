@@ -10,6 +10,7 @@ use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Campo\Home as CampoHome;
 use App\Livewire\Fornitori\ElencoFornitori;
 use App\Livewire\Piattaforma\Cabina;
+use App\Livewire\Piattaforma\EditorRuoli;
 use App\Livewire\Piattaforma\RegistroAudit;
 use App\Livewire\Ricambi\RicercaRicambi;
 use App\Livewire\Settings\PreferenzeNotifiche;
@@ -105,6 +106,25 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     Route::get('/piattaforma/audit', RegistroAudit::class)
         ->middleware('can:tenants.view_all')
         ->name('piattaforma.audit');
+
+    // L'editor della matrice ruolo→permesso, e qui il permesso è **un altro**:
+    // `can:roles.manage`, non `can:tenants.view_all`. È l'opposto della scelta
+    // fatta due righe più su, per lo stesso criterio: si gata su un permesso del
+    // **set bloccato**. Il registro ci arrivò per esclusione (`audit.view` è
+    // ridistribuibile, quindi non regge), questo ci arriva per elezione —
+    // `roles.manage` è bloccato, cioè non ridistribuibile da questa stessa
+    // pagina, ed è il permesso che ADR-016 nomina per questa UI.
+    //
+    // ⚠️ E **non** in AND con `can:tenants.view_all`: non aggiungerebbe
+    // protezione (chi passa il primo ha già il secondo) e darebbe un modo di
+    // rompere la pagina. Il `can:` di rotta non è ridondante rispetto al
+    // `Gate::authorize()` dentro `render()`: per un'azione che scrive — e qui ne
+    // arriveranno 324 — la guardia che regge è quella di **rotta**, perché
+    // `skipRender()` fa saltare del tutto il `render()` (ADR-018).
+    Route::get('/piattaforma/ruoli', EditorRuoli::class)
+        ->middleware('can:'.EditorRuoli::PERMESSO)
+        ->name('piattaforma.ruoli');
+
     Route::get('/settings/security', TwoFactorAuthentication::class)->name('settings.security');
     // Nessun `can:`: qui si governa la propria casella di posta, non un dato
     // dell'Ente (ADR-011). Un permesso significherebbe che qualcuno può
