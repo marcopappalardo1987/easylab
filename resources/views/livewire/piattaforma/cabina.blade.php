@@ -6,7 +6,9 @@
 
 <div class="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6">
 
-    <div class="flex flex-wrap items-start justify-between gap-3">
+    <x-piattaforma.nav />
+
+    <div class="mt-6 flex flex-wrap items-start justify-between gap-3">
         <div>
             <h1 class="text-2xl font-bold tracking-tight text-neutral-900">Piattaforma</h1>
             <p class="mt-1 text-sm text-neutral-600">

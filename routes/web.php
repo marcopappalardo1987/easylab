@@ -10,6 +10,7 @@ use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Campo\Home as CampoHome;
 use App\Livewire\Fornitori\ElencoFornitori;
 use App\Livewire\Piattaforma\Cabina;
+use App\Livewire\Piattaforma\RegistroAudit;
 use App\Livewire\Ricambi\RicercaRicambi;
 use App\Livewire\Settings\PreferenzeNotifiche;
 use App\Livewire\Settings\TwoFactorAuthentication;
@@ -94,6 +95,16 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     Route::get('/piattaforma', Cabina::class)
         ->middleware('can:tenants.view_all')
         ->name('piattaforma.index');
+
+    // Il registro di audit, stessa porta e stesso permesso della cabina.
+    // ⚠️ **Non** `can:audit.view`, che pure esiste a catalogo: quel permesso ce
+    // l'ha anche l'Admin e non è nel set bloccato, quindi l'editor permessi di
+    // S6 potrà ridistribuirlo — un gate cross-tenant su un permesso
+    // ridistribuibile è una falla ad attivazione differita. `audit.view` resta
+    // il permesso della futura vista per-cliente.
+    Route::get('/piattaforma/audit', RegistroAudit::class)
+        ->middleware('can:tenants.view_all')
+        ->name('piattaforma.audit');
     Route::get('/settings/security', TwoFactorAuthentication::class)->name('settings.security');
     // Nessun `can:`: qui si governa la propria casella di posta, non un dato
     // dell'Ente (ADR-011). Un permesso significherebbe che qualcuno può

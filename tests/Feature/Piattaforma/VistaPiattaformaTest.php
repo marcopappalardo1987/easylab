@@ -9,6 +9,7 @@ use App\Support\Tenancy\VistaPiattaforma;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Spatie\Activitylog\Models\Activity;
 
 /**
  * 🔴 La porta unica delle viste di piattaforma (ADR-018).
@@ -43,13 +44,43 @@ it('refuses to open without the platform permission', function (string $ruolo) {
 
     $this->actingAs($utente);
 
+    // ⚠️ Questa catena **enumera i metodi a mano**, quindi va estesa a ogni
+    // metodo nuovo della porta: dimenticarlo lascia la suite tutta verde con un
+    // ingresso non provato. Un test che elenca è un test che invecchia.
     expect(fn () => VistaPiattaforma::accounts())->toThrow(AuthorizationException::class)
+        ->and(fn () => VistaPiattaforma::accountsInclusaPiattaforma())->toThrow(AuthorizationException::class)
         ->and(fn () => VistaPiattaforma::enti())->toThrow(AuthorizationException::class)
-        ->and(fn () => VistaPiattaforma::strumenti())->toThrow(AuthorizationException::class);
+        ->and(fn () => VistaPiattaforma::strumenti())->toThrow(AuthorizationException::class)
+        ->and(fn () => VistaPiattaforma::audit())->toThrow(AuthorizationException::class);
 })->with(['Admin', 'Responsabile Reparto', 'Tenant', 'Tecnico']);
 
 it('refuses to open for a guest', function () {
-    expect(fn () => VistaPiattaforma::accounts())->toThrow(AuthorizationException::class);
+    expect(fn () => VistaPiattaforma::accounts())->toThrow(AuthorizationException::class)
+        ->and(fn () => VistaPiattaforma::audit())->toThrow(AuthorizationException::class);
+});
+
+it('names every public method of the door, so none can be added without a negative', function () {
+    // 🔴 La rete che rende inutile ricordarsi di estendere le catene qui sopra.
+    // I due test negativi elencano i metodi **a mano**: un ingresso nuovo alla
+    // porta non provato è la peggiore delle omissioni possibili, e non ha alcun
+    // segnale. Questo confronta l'elenco con la riflessione sulla classe.
+    $pubblici = collect((new ReflectionClass(VistaPiattaforma::class))->getMethods(ReflectionMethod::IS_PUBLIC))
+        ->filter(fn (ReflectionMethod $m) => $m->class === VistaPiattaforma::class)
+        ->map(fn (ReflectionMethod $m) => $m->name)
+        ->values()->all();
+
+    expect($pubblici)->toEqualCanonicalizing([
+        'accounts', 'accountsInclusaPiattaforma', 'enti', 'strumenti', 'audit',
+    ]);
+});
+
+it('keeps Activity free of global scopes, or the audit door would be scoped in silence', function () {
+    // Stessa forma del test su `Account`, e per lo stesso rischio: `audit()` non
+    // toglie nulla perché il model di vendor non ha scope. Se ne guadagnasse uno
+    // a un `composer update`, quel metodo diventerebbe scopato mentre gli altri
+    // restano nudi — e la porta smetterebbe di essere non-scopata per un quinto
+    // di sé, senza che niente lo dica.
+    expect(array_keys((new Activity)->getGlobalScopes()))->toBe([]);
 });
 
 it('throws instead of handing back an empty builder', function () {

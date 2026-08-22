@@ -7,8 +7,10 @@ use App\Models\Scopes\DepartmentScope;
 use App\Models\Scopes\TenantScope;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
+use App\Support\AuditLog;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Gate;
+use Spatie\Activitylog\Models\Activity;
 
 /**
  * 🔴 La porta unica delle viste di piattaforma (ADR-018).
@@ -136,6 +138,36 @@ final class VistaPiattaforma
 
         return Strumento::query()
             ->withoutGlobalScopes([TenantScope::class, DepartmentScope::class]);
+    }
+
+    /**
+     * Il registro di audit, di tutta la piattaforma.
+     *
+     * ⚠️ **Non toglie alcuno scope, ed è corretto così.** `Activity` è il model
+     * di vendor (`config/activitylog.php`), non usa `BelongsToTenant` e non
+     * registra global scope: qui la classe non è un bypass ma **la porta**, e
+     * ciò che aggiunge è il permesso. È la stessa forma di
+     * `accountsInclusaPiattaforma()`, e va detto per iscritto o il prossimo
+     * lettore toglierà il metodo «perché non fa niente». Un test meccanico
+     * verifica che `Activity` resti senza scope, perché il rischio non è che
+     * qualcuno cambi la config: è che il model di vendor ne guadagni uno a un
+     * `composer update` e questo metodo diventi scopato **in silenzio** mentre
+     * gli altri restano nudi.
+     *
+     * **Il pavimento `log_name` sta qui e non nei chiamanti**, per la ragione di
+     * `di_piattaforma` in `accounts()`: delegarlo significherebbe ricordarlo N
+     * volte. Il canale `audit` è quello degli eventi di sicurezza (ADR-027); il
+     * `default` di spatie oggi è vuoto, e resta fuori. Chi un giorno volesse
+     * anche quello scriverà un metodo che lo dice nel nome, come
+     * `accountsInclusaPiattaforma()`.
+     *
+     * @return Builder<Activity>
+     */
+    public static function audit(): Builder
+    {
+        self::porta();
+
+        return Activity::query()->where('log_name', AuditLog::NAME);
     }
 
     /**
