@@ -168,33 +168,54 @@ it('never lets a write be chained onto the platform view', function () {
             iterator_to_array(new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir)))
         )->filter(fn ($f) => $f->isFile() && str_ends_with($f->getFilename(), '.php'))->map->getPathname());
 
-    // ⚠️ **Si tokenizza, non si cerca col regex sul testo grezzo.** Il pattern
-    // precedente saltava gli argomenti con `[^)]*\)`, che non attraversa una
-    // parentesi **dentro una stringa** — forma introdotta il giorno dopo da
-    // `MetrichePiattaforma` con `selectRaw('… count(*) …')`. Verificato: una
-    // scrittura scritta così passava indisturbata. È lo stesso buco già
-    // corretto su `BypassNudiGuardrailTest`, dove bastava uno spazio: un
-    // guardrail aggirabile da come si formatta un argomento è peggio di
-    // nessun guardrail, perché sembra coprire.
-    $scritture = ['update', 'delete', 'forceDelete', 'increment', 'decrement', 'truncate', 'upsert', 'insert'];
-
-    $colpevoli = $sorgenti->filter(function (string $f) use ($scritture) {
-        $token = collect(token_get_all(file_get_contents($f)))
-            ->reject(fn ($t) => is_array($t) && in_array($t[0], [T_COMMENT, T_DOC_COMMENT, T_WHITESPACE, T_CONSTANT_ENCAPSED_STRING], true))
-            ->map(fn ($t) => is_array($t) ? $t[1] : $t)
-            ->implode('');
-
-        // Tolte stringhe e spazi la catena è lineare: la porta, e prima del `;`
-        // uno dei metodi di scrittura.
-        return collect($scritture)->contains(
-            fn (string $m) => preg_match('/VistaPiattaforma::\w+\(\)[^;]*->'.$m.'\(/', $token) === 1
-        );
-    })->values();
+    $colpevoli = $sorgenti
+        ->filter(fn (string $f) => scrittureSullaPortaDiPiattaforma(file_get_contents($f)) !== [])
+        ->values();
 
     expect($colpevoli)->toBeEmpty(
         'La vista di piattaforma è per LEGGERE: un update/delete concatenato le passa attraverso senza '.
         'gli hook di BelongsToTenant e tocca ogni cliente. Trovato in: '.$colpevoli->implode(', ')
     );
+});
+
+it('follows the platform view through a variable and through a method that returns it', function () {
+    // 🔴 **Il guardrail del guardrail**, e non è zelo: la prima stesura cercava
+    // la sola catena **diretta** (`VistaPiattaforma::audit()->delete()`), e
+    // bastava un passaggio per uscirne. Verificato sperimentalmente il 22 Ago
+    // 2026 sul registro di audit: una cancellazione di massa scritta come
+    // `$this->filtrata()->delete()` lasciava la suite **tutta verde**, sulla
+    // tabella che è append-only per definizione.
+    //
+    // Le due forme non sono ipotesi: la variabile è la forma che `ElencaClienti`
+    // usa da sempre, il metodo è quella che il registro di audit ha introdotto.
+    // Un guardrail aggirabile da come si formatta una chiamata è peggio di
+    // nessun guardrail, perché **sembra** coprire — è la stessa lezione già
+    // scritta qui sopra a proposito degli argomenti con le parentesi.
+    $diretta = '<?php VistaPiattaforma::audit()->delete();';
+    $perVariabile = '<?php class A { function f() { $q = VistaPiattaforma::audit(); $q->where("a", 1)->delete(); } }';
+    $perMetodo = '<?php class A {
+        private function porta(): Builder { return VistaPiattaforma::audit(); }
+        public function purga(): void { $this->porta()->delete(); }
+    }';
+
+    expect(scrittureSullaPortaDiPiattaforma($diretta))->not->toBeEmpty()
+        ->and(scrittureSullaPortaDiPiattaforma($perVariabile))->not->toBeEmpty()
+        ->and(scrittureSullaPortaDiPiattaforma($perMetodo))->not->toBeEmpty();
+});
+
+it('lets a single model read from the platform view be written like any other', function () {
+    // ⚠️ Il rovescio, e conta quanto l'altro: un guardrail che grida su ogni
+    // riga onesta viene disattivato entro la settimana. `->find()`,
+    // `->firstOrFail()` e compagnia **materializzano un model**: da lì in poi
+    // `$account->update([...])` è una scrittura Eloquent normale, che tocca
+    // **una** riga ed emette i suoi eventi, quindi gli hook di
+    // `BelongsToTenant` girano. È esattamente ciò che fanno le leve
+    // amministrative della cabina, ed è corretto.
+    $unModel = '<?php class A { function f() { $a = VistaPiattaforma::accounts()->firstOrFail(); $a->update(["x" => 1]); } }';
+    $soloLettura = '<?php class A { function f() { $q = VistaPiattaforma::accounts(); return $q->where("x", 1)->paginate(); } }';
+
+    expect(scrittureSullaPortaDiPiattaforma($unModel))->toBeEmpty()
+        ->and(scrittureSullaPortaDiPiattaforma($soloLettura))->toBeEmpty();
 });
 
 it('opens for the Developer, and for nobody without the permission', function () {
@@ -255,3 +276,162 @@ it('keeps Account free of global scopes, or a third of this class would be scope
     expect(array_keys((new Account)->getGlobalScopes()))
         ->toBe([SoftDeletingScope::class]);
 });
+
+/**
+ * Le scritture che in questo sorgente raggiungono la porta di piattaforma.
+ *
+ * ⚠️ **Si tokenizza, non si cerca col regex sul testo grezzo.** Il pattern
+ * precedente saltava gli argomenti con `[^)]*\)`, che non attraversa una
+ * parentesi **dentro una stringa** — forma introdotta il giorno dopo da
+ * `MetrichePiattaforma` con `selectRaw('… count(*) …')`. Verificato: una
+ * scrittura scritta così passava indisturbata.
+ *
+ * **Tre strade, non una.** La porta si raggiunge (a) concatenando alla chiamata
+ * statica, (b) da una **variabile** a cui è stata assegnata, (c) da un **metodo
+ * che la restituisce**. La prima stesura vedeva solo la (a), e le altre due non
+ * sono ipotesi di scuola: la (b) è la forma di `ElencaClienti`, la (c) quella
+ * che il registro di audit ha introdotto — e con cui un `delete()` di massa
+ * sull'audit è passato inosservato.
+ *
+ * ⚠️ **Limite dichiarato: l'analisi è per-file.** Un metodo che restituisse la
+ * porta e venisse chiamato da un'**altra** classe non verrebbe seguito. Chiuderlo
+ * vorrebbe dire un'analisi statica vera; qui si è scelto di coprire le forme che
+ * il progetto usa davvero e di scrivere quale resta fuori, invece di lasciar
+ * credere che sia tutto.
+ *
+ * @return list<string> i metodi di scrittura trovati, vuoto se il file è pulito
+ */
+function scrittureSullaPortaDiPiattaforma(string $php): array
+{
+    if (! str_contains($php, 'VistaPiattaforma')) {
+        return [];
+    }
+
+    $scritture = ['update', 'delete', 'forceDelete', 'increment', 'decrement', 'truncate', 'upsert', 'insert'];
+
+    // Tolti commenti, spazi e stringhe la catena è lineare: fino al `;` c'è una
+    // sola istruzione, e nessuna parentesi dentro una stringa può spezzarla.
+    $token = collect(token_get_all($php))
+        ->reject(fn ($t) => is_array($t) && in_array($t[0], [T_COMMENT, T_DOC_COMMENT, T_WHITESPACE, T_CONSTANT_ENCAPSED_STRING], true))
+        ->map(fn ($t) => is_array($t) ? $t[1] : $t)
+        ->implode('');
+
+    $sorgenti = ['VistaPiattaforma::\w+\(\)'];
+
+    foreach (variabiliCheTengonoLaPorta($token) as $variabile) {
+        $sorgenti[] = preg_quote($variabile, '/');
+    }
+
+    foreach (metodiCheRestituisconoLaPorta($token) as $metodo) {
+        $sorgenti[] = '\$this->'.preg_quote($metodo, '/').'\(\)';
+    }
+
+    $trovate = [];
+
+    foreach ($sorgenti as $sorgente) {
+        foreach ($scritture as $scrittura) {
+            if (preg_match('/'.$sorgente.'[^;]*->'.$scrittura.'\(/', $token) === 1) {
+                $trovate[] = $scrittura;
+            }
+        }
+    }
+
+    return array_values(array_unique($trovate));
+}
+
+/**
+ * Le variabili che tengono **il builder** della porta, non una riga già letta.
+ *
+ * ⚠️ La distinzione è ciò che tiene il guardrail utilizzabile. `$account =
+ * VistaPiattaforma::accounts()->firstOrFail()` non è un builder: è un model, e
+ * `$account->update([...])` tocca **una** riga emettendo i propri eventi, quindi
+ * gli hook di `BelongsToTenant` girano. È la forma delle leve amministrative
+ * della cabina, ed è corretta. Contarla come violazione farebbe gridare il
+ * guardrail su ogni riga onesta — e un guardrail che grida a vuoto viene
+ * disattivato entro la settimana.
+ *
+ * @return list<string>
+ */
+function variabiliCheTengonoLaPorta(string $token): array
+{
+    $materializzano = 'find|findOrFail|findOr|first|firstOr|firstOrFail|firstWhere|sole|get|getQuery|pluck|count|sum|avg|max|min|exists|doesntExist|paginate|simplePaginate|cursorPaginate|value|cursor|toArray|toBase';
+
+    preg_match_all('/(\$\w+)=VistaPiattaforma::\w+\(\)([^;]*)/', $token, $trovate, PREG_SET_ORDER);
+
+    $variabili = [];
+
+    foreach ($trovate as [$_, $variabile, $coda]) {
+        if (preg_match('/->('.$materializzano.')\(/', $coda) === 1) {
+            continue;
+        }
+
+        $variabili[] = $variabile;
+    }
+
+    return array_values(array_unique($variabili));
+}
+
+/**
+ * I metodi del file il cui `return` è la porta — direttamente o via una
+ * variabile che la tiene.
+ *
+ * Le graffe si contano invece di fermarsi alla prima chiusa: il corpo di un
+ * metodo ne contiene altre (`if`, `foreach`, closure), e un `[^}]*` si
+ * fermerebbe alla prima, tagliando via proprio il `return` finale.
+ *
+ * @return list<string>
+ */
+function metodiCheRestituisconoLaPorta(string $token): array
+{
+    $variabili = variabiliCheTengonoLaPorta($token);
+    $metodi = [];
+
+    preg_match_all('/function(\w+)\(/', $token, $trovate, PREG_OFFSET_CAPTURE);
+
+    foreach ($trovate[1] as $i => [$nome, $_]) {
+        // La prima graffa **o** il primo `;`: una firma senza corpo (interfaccia,
+        // metodo astratto) non ha un corpo da leggere, e prendere la graffa del
+        // metodo successivo attribuirebbe a lei il corpo di un altro.
+        $apertura = null;
+
+        for ($p = $trovate[0][$i][1]; $p < strlen($token); $p++) {
+            if ($token[$p] === ';') {
+                break;
+            }
+
+            if ($token[$p] === '{') {
+                $apertura = $p;
+                break;
+            }
+        }
+
+        if ($apertura === null) {
+            continue;
+        }
+
+        $livello = 0;
+        $corpo = null;
+
+        for ($p = $apertura; $p < strlen($token); $p++) {
+            $livello += $token[$p] === '{' ? 1 : ($token[$p] === '}' ? -1 : 0);
+
+            if ($livello === 0) {
+                $corpo = substr($token, $apertura, $p - $apertura);
+                break;
+            }
+        }
+
+        if ($corpo === null) {
+            continue;
+        }
+
+        $restituisce = str_contains($corpo, 'returnVistaPiattaforma::')
+            || collect($variabili)->contains(fn (string $v) => str_contains($corpo, 'return'.$v.';'));
+
+        if ($restituisce) {
+            $metodi[] = $nome;
+        }
+    }
+
+    return array_values(array_unique($metodi));
+}
