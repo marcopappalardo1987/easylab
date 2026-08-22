@@ -23,16 +23,19 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Spatie\Activitylog\Models\Activity;
+use Spatie\Permission\Models\Role;
 
 /**
  * 🔴 Come si legge il soggetto di una riga di audit **attraverso i tenant**.
  *
  * Il problema che risolve, e che non si vede finché non lo si prova: `subject`
- * punta a undici modelli **scopati**, e chi guarda il registro è tenant-bound
- * come chiunque (ADR-018). Caricare la relazione in modo ingenuo restituisce
- * **null** per i soggetti di ogni altro cliente — cioè la pagina mostrerebbe
- * righe senza soggetto, in silenzio e senza dire perché. È il difetto per cui
- * questa classe esiste.
+ * punta a dodici modelli, **dieci dei quali scopati**: `User` e il `Role` di
+ * vendor non registrano alcuno scope, e `Account` porta il solo
+ * `SoftDeletingScope` — non è tenancy. Chi guarda il registro è
+ * tenant-bound come chiunque (ADR-018). Caricare la relazione in modo ingenuo
+ * restituisce **null** per i soggetti di ogni altro cliente — cioè la pagina
+ * mostrerebbe righe senza soggetto, in silenzio e senza dire perché. È il
+ * difetto per cui questa classe esiste.
  *
  * ⚠️ **Gli scope sono cinque, e uno è di privacy.** Oltre a `TenantScope` e
  * `DepartmentScope` ci sono `DepartmentThroughStrumentoScope` (Documento,
@@ -90,6 +93,16 @@ final class SoggettiAudit
         Intervento::class => ['Intervento', null],
         Ricambio::class => ['Ricambio', 'nome'],
         RicambioUtilizzo::class => ['Ricambio montato', null],
+        // ⚠️ **L'unico model di VENDOR della mappa**, ed è il motivo per cui il
+        // meta-test qui accanto ha dovuto crescere: cercava i soggetti con
+        // `glob(app_path('Models/*.php'))`, e `Role` non abita lì. Senza questa
+        // riga l'etichetta di ogni modifica alla matrice dei permessi si legge
+        // «Role · #id» — in inglese e senza nome — e il tipo **non compare nel
+        // filtro**, perché `RegistroAudit::tipiSoggetto()` legge questa mappa.
+        // Ce lo scrive `MatriceRuoli` (S6, ADR-016): il soggetto è il ruolo e
+        // non il permesso, perché il gesto è «al ruolo X è stato tolto Y» ed è
+        // sul ruolo che si vorrà filtrare.
+        Role::class => ['Ruolo', 'name'],
         SpostamentoStrumento::class => ['Spostamento', null],
         Strumento::class => ['Strumento', 'nome'],
         UnitaOrganizzativa::class => ['Ente', 'nome'],

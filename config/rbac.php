@@ -182,6 +182,34 @@ return [
         'roles.manage',
     ],
 
+    // Ruoli la cui RIGA è in sola lettura nell'editor della matrice (S6).
+    //
+    // È una cosa DIVERSA dal set bloccato qui sopra: `locked` è una colonna
+    // (un permesso che nessun ruolo può guadagnare o perdere dalla UI), questa
+    // è una riga (un ruolo di cui non si tocca nessuna cella). Le due guardie
+    // si incrociano e non si sostituiscono.
+    //
+    // Il Developer c'è perché `['all' => true]` è la CHIAVE DI RISERVA della
+    // piattaforma e non esiste alcun `Gate::before` da super-admin
+    // (`AppServiceProvider` registra solo `Gate::policy()`): il Developer
+    // dipende davvero dalla matrice a DB, quindi un editor che potesse
+    // svuotarne la riga permesso per permesso toglierebbe l'ultima via di
+    // rientro. Il set bloccato non basta a coprirlo — protegge sette permessi,
+    // non gli altri quarantasette.
+    //
+    // ⚠️ NON è la stessa lista di `User::canBeImpersonated()`, che oggi contiene
+    // anch'essa il solo Developer. «Chi non si impersona» e «di chi non si tocca
+    // la riga» sono due decisioni indipendenti e possono divergere
+    // legittimamente (si potrebbe voler rendere inerte anche la riga Superadmin
+    // senza renderlo non impersonabile): legarle con un meta-test sarebbe una
+    // falsa equivalenza, che diventerebbe rossa su una scelta corretta.
+    //
+    // ⚠️ Questa chiave NON è nella matrice e il seeder non la legge: aggiungerla
+    // o cambiarla **non richiede** un riseeding (CLAUDE.md riga 47 non si
+    // applica) — e riseminare per riflesso cancellerebbe le personalizzazioni
+    // fatte dalla UI, perché `syncPermissions` detacha tutto.
+    'protected_roles' => ['Developer'],
+
     // Ruoli per cui il 2FA è obbligatorio (roadmap kickoff §2FA).
     'two_factor_required_roles' => ['Developer', 'Superadmin', 'Admin'],
 

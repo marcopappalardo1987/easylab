@@ -18,13 +18,15 @@ use Illuminate\Support\Facades\Schema;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Spatie\Activitylog\Models\Activity;
+use Spatie\Permission\Models\Role;
 
 /**
  * 🔴 Il soggetto di una riga, letto **attraverso i tenant**.
  *
- * `subject` punta a undici modelli scopati e chi guarda è tenant-bound come
- * chiunque (ADR-018): senza i cinque scope tolti, la pagina mostrerebbe righe
- * senza soggetto — in silenzio, e senza dire perché.
+ * `subject` punta a dodici modelli — undici scopati, più il `Role` di vendor —
+ * e chi guarda è tenant-bound come chiunque (ADR-018): senza i cinque scope
+ * tolti, la pagina mostrerebbe righe senza soggetto — in silenzio, e senza dire
+ * perché.
  */
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
@@ -89,6 +91,19 @@ function rigaAudit(array $attributi = []): Activity
         'event' => 'updated',
     ], $attributi));
 }
+
+/**
+ * Model di **vendor** usati come soggetto di audit → [file che li scrive, token da trovarci].
+ *
+ * `glob(app_path('Models/*.php'))` non li vede, quindi qui non c'è niente da
+ * derivare: l'elenco è a mano, e il test qui sotto lo tiene onesto verificando
+ * che il file dichiarato contenga davvero la scrittura.
+ */
+const SOGGETTI_DI_VENDOR = [
+    // L'editor dei permessi di ruolo (S6, ADR-016): il gesto è «al ruolo X è
+    // stato tolto Y», quindi il soggetto è il `Role` e non il `Permission`.
+    Role::class => ['app/Support/Rbac/MatriceRuoli.php', 'performedOn($riga)'],
+];
 
 it('shows the subject of another tenant, which is the whole point', function () {
     // 🔴 Il difetto per cui esiste `SoggettiAudit`. Lo strumento è dell'Ente B,
@@ -276,9 +291,37 @@ it('covers every model the codebase can write as a subject', function () {
         fn (string $c) => str_contains(file_get_contents(app_path('Models/'.class_basename($c).'.php')), 'activity(')
     );
 
+    // ⚠️ **E i model di VENDOR, che il `glob` non può vedere.** La rete che il
+    // progetto credeva di avere qui **non copriva** `Role`: `glob(app_path(
+    // 'Models/*.php'))` guarda solo casa propria, e il soggetto delle righe
+    // dell'editor dei permessi vive in `vendor/spatie`. Verificato: senza la
+    // riga in `SoggettiAudit::SOGGETTI`, l'etichetta si legge «Role · #id».
+    //
+    // L'elenco è a mano perché non c'è niente da cui derivarlo — è la stessa
+    // forma di `AuditCoverageGuardrailTest::ESENZIONI`, e come quella porta
+    // accanto a ogni voce il gesto che la scrive, così una voce non resta un
+    // permesso aperto su qualcosa che non esiste più.
     $noti = array_keys(SoggettiAudit::tipi());
 
-    expect($conTrait->merge($espliciti)->unique()->diff($noti)->values()->all())->toBe([]);
+    expect($conTrait->merge($espliciti)->merge(array_keys(SOGGETTI_DI_VENDOR))->unique()->diff($noti)->values()->all())
+        ->toBe([], 'Soggetto di audit non nominato: aggiungilo a SoggettiAudit::SOGGETTI, o la riga si leggerà «Classe · #id».');
+});
+
+it('keeps the vendor subject list honest about what actually writes it', function () {
+    // Il compagno obbligatorio del precedente: un elenco a mano di model di
+    // vendor è un secondo elenco parallelo, e su elenchi paralleli questo
+    // progetto ha già perso due volte (`letture_contaore.*`, `fornitori.view`).
+    // Qui si verifica che il file dichiarato **contenga davvero** la scrittura,
+    // sulla forma del guardrail di `sbloccaPerStripe()`. Il giorno in cui
+    // `MatriceRuoli` smettesse di scrivere audit, questa voce diventerebbe una
+    // riga morta nella mappa dei soggetti, e nessun altro test se ne
+    // accorgerebbe.
+    foreach (SOGGETTI_DI_VENDOR as $classe => [$file, $token]) {
+        expect(file_exists(base_path($file)))
+            ->toBeTrue("Il file dichiarato per {$classe} non esiste più: {$file}")
+            ->and(str_contains(file_get_contents(base_path($file)), $token))
+            ->toBeTrue("«{$token}» non c'è più in {$file}: {$classe} è ancora un soggetto di audit?");
+    }
 });
 
 it('keeps every label column real', function () {
