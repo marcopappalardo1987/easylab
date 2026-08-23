@@ -1,6 +1,7 @@
 <?php
 
 use App\Livewire\Strumenti\SchedaStrumento;
+use App\Models\Errore;
 use App\Models\Strumento;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -161,4 +162,69 @@ function rigaDelPermesso(string $html, string $permesso): string
 function permessiDiRuolo(string $ruolo): array
 {
     return Role::findByName($ruolo, 'web')->permissions()->pluck('name')->sort()->values()->all();
+}
+
+/**
+ * Una **issue** dell'error tracker, coi campi che `$fillable` non lascia passare.
+ *
+ * ⚠️ **`forceFill()` e non `Errore::create()`**, e non è pignoleria: il
+ * `$fillable` del model elenca solo ciò che il tracker scrive alla *nascita*
+ * di una issue, quindi `stato`, `occorrenze`, `contesti`, `risolto_da` e i
+ * timestamp di chiusura vengono **scartati in silenzio** dall'assegnazione di
+ * massa. Una fixture scritta con `create(['stato' => 'risolto'])` nasce
+ * `aperto` e il test che credeva di provare il filtro proverebbe il default.
+ *
+ * ⚠️ **L'impronta è casuale a ogni chiamata.** La colonna è `unique`, e il
+ * tracker è **acceso durante la suite** (`bootstrap/app.php`): una qualunque
+ * eccezione riportata da un altro test scrive righe in questa stessa tabella.
+ * Da cui anche la regola dei test che la usano: si conta **per impronta**, mai
+ * con `Errore::count()`.
+ *
+ * ⚠️ **Vive qui e non in uno dei due file di test degli errori** per la ragione
+ * già scritta sopra per `snapshotDa()` e `rigaDelPermesso()`: la usano due suite
+ * (`ElencoErroriTest`, `SchedaErroreTest`), e i file di test si caricano solo se
+ * selezionati — una funzione condivisa fra due suite non può abitare in una
+ * delle due, o l'altra eseguita da sola va in fatal.
+ *
+ * @param  array<string, mixed>  $attributi
+ */
+function issueErrore(array $attributi = []): Errore
+{
+    $errore = new Errore;
+
+    $errore->forceFill(array_merge([
+        'impronta' => sha1(uniqid('', true)),
+        'classe' => 'RuntimeException',
+        'messaggio' => 'Qualcosa non ha funzionato',
+        'file' => 'app/Support/Prova.php',
+        'riga' => 42,
+        'stato' => 'aperto',
+        'occorrenze' => 1,
+        'contesti' => 0,
+        'prima_occorrenza_at' => now(),
+        'ultima_occorrenza_at' => now(),
+    ], $attributi))->save();
+
+    return $errore;
+}
+
+/**
+ * Il blocco `<nav>` della sub-nav di piattaforma, estratto dall'HTML di pagina.
+ *
+ * ⚠️ Vive in fondo a **questo** file e non in `tests/Pest.php` di proposito: la
+ * usano due test di questa sola suite, e la disciplina che ha portato là
+ * `snapshotDa()` e `rigaDelPermesso()` è la reciproca — ci si sale quando una
+ * funzione serve a **due suite**, non per simmetria. Se un domani
+ * `AccessoEditorRuoliTest` volesse la stessa estrazione (oggi ne ha una copia
+ * inline), è quello il momento di spostarla.
+ */
+function navDiPiattaforma(string $html): string
+{
+    preg_match('/<nav[^>]*aria-label="Sezioni della piattaforma".*?<\/nav>/s', $html, $blocco);
+
+    // Non `?? ''`: un blocco assente e un blocco vuoto vanno distinti, o un
+    // `not->toContain()` sarebbe verde proprio quando la nav è sparita.
+    expect($blocco)->not->toBeEmpty();
+
+    return $blocco[0];
 }

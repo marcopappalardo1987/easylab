@@ -24,7 +24,7 @@ use Livewire\Livewire;
  * prodotto — da qui si legge ciò che si è rotto in *ogni* Ente, coi messaggi, i
  * percorsi e (dai blocchi successivi) gli input di richiesta.
  *
- * ⚠️ La pagina di questo blocco **non mostra nulla**: è un guscio con la sola
+ * ⚠️ La pagina era un guscio quando questo file è nato (blocco 2); dal blocco 5 mostra l'elenco e il dettaglio, ma **ciò che questo file prova non è cambiato**: chi entra e chi no con la sola
  * intestazione. È deliberato, per la ragione già scritta in `EditorRuoli` — una
  * pagina vuota ma già gatata rende il gate dimostrabile *prima* che ci sia
  * qualcosa da proteggere. Questo file è quindi l'intero valore del blocco.
@@ -299,23 +299,5 @@ it('keeps the tracker behind auth, lockout, two-factor and system.logs.view', fu
         ->toBeLessThan(array_search('two-factor.enforce', $middleware, true));
 });
 
-/**
- * Il blocco `<nav>` della sub-nav di piattaforma, estratto dall'HTML di pagina.
- *
- * ⚠️ Vive in fondo a **questo** file e non in `tests/Pest.php` di proposito: la
- * usano due test di questa sola suite, e la disciplina che ha portato là
- * `snapshotDa()` e `rigaDelPermesso()` è la reciproca — ci si sale quando una
- * funzione serve a **due suite**, non per simmetria. Se un domani
- * `AccessoEditorRuoliTest` volesse la stessa estrazione (oggi ne ha una copia
- * inline), è quello il momento di spostarla.
- */
-function navDiPiattaforma(string $html): string
-{
-    preg_match('/<nav[^>]*aria-label="Sezioni della piattaforma".*?<\/nav>/s', $html, $blocco);
-
-    // Non `?? ''`: un blocco assente e un blocco vuoto vanno distinti, o un
-    // `not->toContain()` sarebbe verde proprio quando la nav è sparita.
-    expect($blocco)->not->toBeEmpty();
-
-    return $blocco[0];
-}
+// `navDiPiattaforma()` vive in `tests/Pest.php`: la usano due suite, e una
+// funzione condivisa non puo abitare in una delle due (caricamento alfabetico).

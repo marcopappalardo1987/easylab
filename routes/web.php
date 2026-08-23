@@ -13,6 +13,7 @@ use App\Livewire\Piattaforma\Cabina;
 use App\Livewire\Piattaforma\EditorRuoli;
 use App\Livewire\Piattaforma\Errori;
 use App\Livewire\Piattaforma\RegistroAudit;
+use App\Livewire\Piattaforma\SchedaErrore;
 use App\Livewire\Ricambi\RicercaRicambi;
 use App\Livewire\Settings\PreferenzeNotifiche;
 use App\Livewire\Settings\TwoFactorAuthentication;
@@ -146,6 +147,25 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     Route::get('/piattaforma/errori', Errori::class)
         ->middleware('can:'.Errori::PERMESSO)
         ->name('piattaforma.errori');
+
+    // La scheda di una issue, e **una rotta a sé** invece di un dettaglio
+    // espanso dentro l'elenco. La ragione prima è meccanica: elenco e occorrenze
+    // sono entrambi paginati e `WithPagination` ha un `page` solo — nello stesso
+    // componente le due paginazioni collidono. È la stessa collisione per cui il
+    // registro di audit non è un tab della cabina.
+    //
+    // ⚠️ Il `can:` si **riscrive**, e non si eredita da nessuna parte: la
+    // sicurezza di questo progetto è per-URL, e un URL digitato a mano non passa
+    // dall'elenco. Il permesso è lo stesso e si legge dalla stessa costante,
+    // perché le due pagine mostrano lo stesso dato: gatarle diversamente
+    // lascerebbe aperta la scheda a chi l'elenco rifiuta.
+    //
+    // Route-model binding sull'id: una issue potata dal blocco 7 mentre qualcuno
+    // ha il link aperto dà **404**, che è il verso giusto — meglio di una scheda
+    // vuota per una riga che non c'è più.
+    Route::get('/piattaforma/errori/{errore}', SchedaErrore::class)
+        ->middleware('can:'.Errori::PERMESSO)
+        ->name('piattaforma.errori.mostra');
 
     Route::get('/settings/security', TwoFactorAuthentication::class)->name('settings.security');
     // Nessun `can:`: qui si governa la propria casella di posta, non un dato

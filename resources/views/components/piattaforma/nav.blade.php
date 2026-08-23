@@ -45,7 +45,13 @@
 
 <nav class="flex gap-1 border-b border-neutral-200" aria-label="Sezioni della piattaforma">
     @foreach ($voci as $voce)
-        @php $attiva = request()->routeIs($voce['rotta']); @endphp
+        {{-- ⚠️ Anche le **sotto-rotte** della voce, non solo la sua: da S6 la
+             quarta voce ha una scheda propria (`piattaforma.errori.mostra`), e
+             col solo nome esatto la sub-nav non evidenzierebbe nulla mentre si
+             legge un errore — cioè la pagina direbbe di non stare in nessuna
+             sezione. Il jolly non tocca le altre tre, che di sotto-rotte non ne
+             hanno. --}}
+        @php $attiva = request()->routeIs($voce['rotta'], $voce['rotta'].'.*'); @endphp
         <a href="{{ route($voce['rotta']) }}"
            @if ($attiva) aria-current="page" @endif
            class="-mb-px border-b-2 px-3 py-2 text-sm font-medium {{ $attiva
