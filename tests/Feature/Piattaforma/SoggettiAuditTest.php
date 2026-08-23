@@ -23,7 +23,9 @@ use Spatie\Permission\Models\Role;
 /**
  * 🔴 Il soggetto di una riga, letto **attraverso i tenant**.
  *
- * `subject` punta a dodici modelli — undici scopati, più il `Role` di vendor —
+ * `subject` punta a **tredici** modelli — nove scopati sulla tenancy, più
+ * `Account` (solo soft delete), `User`, l'`Errore` di piattaforma e il `Role` di
+ * vendor, che scope non ne registrano —
  * e chi guarda è tenant-bound come chiunque (ADR-018): senza i cinque scope
  * tolti, la pagina mostrerebbe righe senza soggetto — in silenzio, e senza dire
  * perché.

@@ -4,6 +4,7 @@ namespace App\Support\Audit;
 
 use App\Models\Account;
 use App\Models\Documento;
+use App\Models\Errore;
 use App\Models\Fornitore;
 use App\Models\Garanzia;
 use App\Models\Intervento;
@@ -29,9 +30,11 @@ use Spatie\Permission\Models\Role;
  * 🔴 Come si legge il soggetto di una riga di audit **attraverso i tenant**.
  *
  * Il problema che risolve, e che non si vede finché non lo si prova: `subject`
- * punta a dodici modelli, **dieci dei quali scopati**: `User` e il `Role` di
- * vendor non registrano alcuno scope, e `Account` porta il solo
- * `SoftDeletingScope` — non è tenancy. Chi guarda il registro è
+ * punta a **tredici** modelli, **nove dei quali scopati sulla tenancy**. Gli
+ * altri quattro non lo sono, e ciascuno per una ragione propria: `User` e il
+ * `Role` di vendor non registrano alcuno scope, `Errore` è un modello di
+ * piattaforma (un'eccezione PHP non appartiene a un Ente) e `Account` porta il
+ * solo `SoftDeletingScope` — che non è tenancy. Chi guarda il registro è
  * tenant-bound come chiunque (ADR-018). Caricare la relazione in modo ingenuo
  * restituisce **null** per i soggetti di ogni altro cliente — cioè la pagina
  * mostrerebbe righe senza soggetto, in silenzio e senza dire perché. È il
@@ -88,6 +91,24 @@ final class SoggettiAudit
     private const SOGGETTI = [
         Account::class => ['Account', 'ragione_sociale'],
         Documento::class => ['Documento', 'nome'],
+        // 🔴 **`classe`, e MAI `messaggio`.** L'etichetta di una issue
+        // dell'error tracker è il nome dell'eccezione, non il suo messaggio, e la
+        // ragione è un **confine di privacy** — non una scelta di stile.
+        //
+        // Questo registro si legge con `tenants.view_all`, cioè dal Superadmin,
+        // che `system.logs.view` **non ce l'ha**: `/piattaforma/errori` gli
+        // risponde 403, ed è la prima pagina del progetto che non può aprire. I
+        // messaggi delle eccezioni sono interpolati e portano dati di richiesta
+        // reali («Utente 42 non trovato»): metterli qui li farebbe **filtrare
+        // attraverso il gate più stretto del progetto**, verso l'unico ruolo che
+        // quella pagina esclude apposta.
+        //
+        // ⚠️ E l'etichetta è la sola cosa che si degrada bene: dal blocco 7 la
+        // retention si porta via le issue chiuse dopo 90 giorni, la riga di audit
+        // resta, e da lì in poi si legge «Errore · #12» con la `classe` nelle
+        // `properties`. Col messaggio al posto della classe si perderebbe anche
+        // quella — cioè si sarebbe pagato un rischio di privacy per niente.
+        Errore::class => ['Errore', 'classe'],
         Fornitore::class => ['Fornitore', 'ragione_sociale'],
         Garanzia::class => ['Garanzia', null],
         Intervento::class => ['Intervento', null],

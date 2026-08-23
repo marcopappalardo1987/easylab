@@ -1,10 +1,12 @@
 {{--
     L'error tracker interno — l'elenco delle issue.
 
-    ⚠️ **Sola lettura.** Non c'è un solo `wire:click` che scriva: le tre azioni
-    (risolvi/ignora/riapri) nascono nel blocco 6, col loro guardrail e la loro
-    riga nel registro di audit. L'unico controllo interattivo è il filtro di
-    stato, che è in query string — una vista filtrata si manda per link.
+    ⚠️ **Sola lettura, e per scelta.** Non c'è un solo `wire:click` che scriva:
+    i tre gesti (risolvi/ignora/riapri) vivono sulla **scheda**, che è la pagina
+    in cui si è letto lo stack trace e si sa abbastanza per decidere — qui
+    chiederebbero di zittire un errore senza averlo aperto. L'unico controllo
+    interattivo è il filtro di stato, che è in query string: una vista filtrata
+    si manda per link.
 
     ⚠️ Il sottotitolo non è decorazione: è la **stringa del corpo** su cui il
     positivo di `AccessoErroriTest` distingue questa pagina dalla cabina.

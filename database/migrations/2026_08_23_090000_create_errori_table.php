@@ -67,9 +67,12 @@ return new class extends Migration
             $table->string('file');
             $table->unsignedInteger('riga');
 
-            // aperto | risolto | ignorato. Stringa e non enum di dominio: i tre
-            // gesti che muovono questa colonna nascono nel blocco 6, e un enum
-            // senza i suoi consumatori sarebbe una classe scritta per nessuno.
+            // aperto | risolto | ignorato. Stringa e non enum di dominio: la
+            // muovono i tre gesti di `Errore` (risolvi/ignora/riapri) e la
+            // riapertura automatica di `CatturaErrori`, che leggono e scrivono i
+            // tre valori letterali. Un enum resta possibile e non è stato
+            // introdotto: sarebbe un secondo vocabolario da tenere allineato a
+            // `Errori::STATI`, che è già l'elenco che la UI usa.
             $table->string('stato')->default('aperto');
 
             // Contatore atomico: cresce con un `increment` sul percorso caldo,

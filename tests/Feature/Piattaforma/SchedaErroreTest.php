@@ -19,9 +19,16 @@ use Livewire\Livewire;
  * test è che questa pagina ha un **proprio** gate da provare — un URL digitato a
  * mano non passa dall'elenco.
  *
- * ⚠️ **Sola lettura**: nessuna azione, e il dettaglio della singola occorrenza
- * si apre con un `<details>` nativo. I test non chiamano quindi nessun metodo:
- * se un giorno ne comparisse uno, sarebbe il blocco 6 e avrebbe la sua suite.
+ * ⚠️ **Qui si prova solo ciò che la scheda MOSTRA.** I tre gesti
+ * (risolvi/ignora/riapri) vivono su questo stesso componente ma hanno la loro
+ * suite, `AzioniErroriTest`: là il rifiuto si asserisce **sul dato** — perché le
+ * azioni non fanno `skipRender()` e un `assertForbidden()` sarebbe verde anche a
+ * scrittura avvenuta — e là stanno la riga di audit e il confine di privacy sul
+ * messaggio. Tenerli separati è la stessa ragione per cui `AccessoErroriTest`
+ * non è dentro `ElencoErroriTest`: i due file si rompono per motivi diversi.
+ *
+ * Il dettaglio della singola occorrenza resta senza azione: si apre con un
+ * `<details>` nativo, quindi i test qui non chiamano nessun metodo.
  *
  * ⚠️ Il tracker è **acceso durante la suite**: si cerca per id, mai contando
  * `Errore::count()`.
@@ -175,7 +182,7 @@ it('says the two figures in the same sentence', function () {
     // quindi due asserzioni separate sarebbero verdi anche a cifra tolta.
     $errore = issueErrore(['occorrenze' => 10412, 'contesti' => 20]);
 
-    expect(schedaErrore($errore))->toContain('occorrenze: 10.412 · contesti conservati: 20');
+    expect(schedaErrore($errore))->toContain('occorrenze: 10.412 · prove raccolte dall\'ultima riapertura: 20');
 });
 
 // ─── Il messaggio è un campione ──────────────────────────────────────────────
@@ -314,9 +321,9 @@ it('paginates the occurrences on their own page number', function () {
     $seconda = schedaErrore($errore, ['page' => 2]);
 
     expect(substr_count($prima, 'wire:key="occorrenza-'))->toBe(10)
-        ->and($prima)->toContain('1–10 di 12 contesti conservati')
+        ->and($prima)->toContain('1–10 di 12 prove conservate in tutto')
         ->and(substr_count($seconda, 'wire:key="occorrenza-'))->toBe(2)
-        ->and($seconda)->toContain('11–12 di 12 contesti conservati');
+        ->and($seconda)->toContain('11–12 di 12 prove conservate in tutto');
 });
 
 it('tells a missing context from a missing occurrence', function () {
@@ -327,7 +334,7 @@ it('tells a missing context from a missing occurrence', function () {
 
     expect(schedaErrore($errore))
         ->toContain('Nessun contesto conservato per questo errore.')
-        ->toContain('occorrenze: 7 · contesti conservati: 0');
+        ->toContain('occorrenze: 7 · prove raccolte dall\'ultima riapertura: 0');
 });
 
 // ─── Il costo ────────────────────────────────────────────────────────────────

@@ -23,9 +23,15 @@ use Livewire\WithPagination;
  *
  * ## Sola lettura, e non provvisoriamente
  *
- * ⚠️ **In questo blocco la pagina non ha nessuna azione**: niente risolvi,
- * ignora, riapri — nascono nel blocco 6 col loro guardrail e la loro riga di
- * audit. Qui **nessun metodo scrive**: c'è `render()`, un solo hook di filtro
+ * ⚠️ **Questa pagina non ha azioni, e non è un lavoro rimandato.** I tre gesti
+ * (risolvi/ignora/riapri) esistono e vivono su `SchedaErrore`: è là che si è
+ * appena letto lo stack trace, l'input e chi c'era, cioè dove si sa abbastanza
+ * per decidere. La stessa fila di pulsanti qui chiederebbe di zittire una issue
+ * **senza averla aperta** — e `ignorato` è l'unico interruttore di silenzio del
+ * tracker, il solo stato che non si riapre mai da sé. Il link sulla classe è
+ * quindi anche la strada verso le azioni, non solo verso il dettaglio.
+ *
+ * Qui **nessun metodo scrive**: c'è `render()`, un solo hook di filtro
  * (`updatingStato`, che chiama `resetPage()`), e i sette metodi che
  * `WithPagination` porta con sé — `gotoPage`, `resetPage` e compagnia.
  *
@@ -98,10 +104,12 @@ use Livewire\WithPagination;
  * il montaggio diretto del componente — `Livewire::test()`, che **disabilita i
  * middleware** — non incontrerebbe nessuna guardia.
  *
- * Il `can:` di rotta resta comunque, e non è ridondante: è la sola guardia che
- * regge sugli update Livewire, dove un'azione con `skipRender()` non arriva mai
- * a `render()`. Le tre azioni del blocco 6 (risolvi/ignora/riapri) sono
- * esattamente quel caso.
+ * Il `can:` di rotta resta comunque, e non è ridondante: è la guardia larga, e
+ * la sola che regge sugli update Livewire quando un'azione non arriva mai a
+ * `render()` (`skipRender()`). Su questa pagina il caso non si presenta — azioni
+ * non ce ne sono — ma sulla scheda sì, e là ogni gesto porta il proprio
+ * `Gate::authorize()` in testa: senza, `render()` risponderebbe 403 **dopo** che
+ * la scrittura è già avvenuta.
  *
  * La rotta sta **dentro** il gruppo `['auth','account.lockout','two-factor.enforce']`
  * per la ragione già scritta per `/piattaforma`: il Developer è un utente
@@ -142,13 +150,12 @@ class Errori extends Component
      * property è `#[Url]`, quindi `?stato=` può valere qualunque cosa e finisce
      * in una clausola `where`. Chi non è qui dentro non filtra niente.
      *
-     * I tre stati sono quelli della colonna, e i gesti che li muovono nascono
-     * nel blocco 6: qui si legge una colonna che oggi vale sempre `aperto`
-     * tranne dopo una riapertura automatica. Il filtro esiste comunque da
-     * adesso perché è ciò che rende la pagina utilizzabile il giorno stesso in
-     * cui quei gesti arrivano — e perché una lista che mostra anche gli
-     * `ignorato` fra gli aperti rende l'unico interruttore di silenzio del
-     * tracker indistinguibile dal rumore.
+     * I tre stati sono quelli della colonna, e i gesti che li muovono stanno su
+     * `SchedaErrore` (`Errore::risolvi()`, `ignora()`, `riapri()`) più la
+     * riapertura automatica di `CatturaErrori`. Il filtro è ciò che rende
+     * utilizzabile l'unico interruttore di silenzio del tracker: una lista che
+     * mostrasse gli `ignorato` fra gli aperti lo renderebbe indistinguibile dal
+     * rumore, cioè lo annullerebbe.
      */
     public const STATI = [
         'aperto' => 'Aperti',

@@ -386,7 +386,8 @@ it('reopens a resolved issue, and never reopens an ignored one', function () {
     // ⚠️ **`forceFill()` e non `update()`**, ed è una trappola che questo test ha
     // pagato scrivendosi: `Errore::$fillable` elenca **solo** ciò che il tracker
     // scrive alla nascita di una issue — `stato`, `contesti` e `risolto_at` ne
-    // sono fuori di proposito, perché si muovono da gesti espliciti (blocco 6).
+    // sono fuori di proposito, perché si muovono da gesti espliciti
+    // (`Errore::risolvi()`, `ignora()`, `riapri()`).
     // Un `update()` di massa li **scarta in silenzio**: la issue restava aperta,
     // il ramo della riapertura non veniva mai percorso, e il test falliva
     // dicendo tutt'altro.

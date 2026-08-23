@@ -35,7 +35,7 @@ const ESENZIONI = [
     // voce serve davvero: `Errore` non usa `AuditsDomainWrites`, quindi senza
     // queste due righe il primo test di questo file è rosso — come infatti è
     // stato appena i due model sono nati (S6, error tracker interno).
-    Errore::class => 'il contatore di un log, non un gesto di una persona: il trait scriverebbe una riga di audit a ogni incremento delle occorrenze — l\'audit di un log, la ragione di AvvisoScadenza. I tre gesti (risolvi/ignora/riapri) tracceranno invece una riga esplicita, scritta dal model.',
+    Errore::class => 'il contatore di un log, non un gesto di una persona: il trait scriverebbe una riga di audit a ogni incremento delle occorrenze — l\'audit di un log, la ragione di AvvisoScadenza. I tre gesti (risolvi/ignora/riapri) lasciano invece una riga esplicita, scritta dal model stesso e non da un service: e\' lì che il meta-test dei soggetti audit va a cercarla.',
     OccorrenzaErrore::class => 'riga append-only scritta dal gestore delle eccezioni: nessuna persona la crea, la modifica o la cancella — solo la retention e il cascade della propria issue.',
     Strumento::class => 'logga a mano: i suoi gesti (forzaSemaforo/rimuoviForzatura) hanno un messaggio che vale più dell\'elenco dei campi, e le colonne forced_* sono fuori da $fillable (ADR-005/027).',
     UnitaOrganizzativa::class => 'logga a mano la sola scrittura che conta — la visibilità garanzie ricambio (ADR-029). Il resto dell\'anagrafica non è tracciato: ADR-027 §3, «il resto quando serve».',

@@ -88,7 +88,7 @@ it('says the two figures in the same sentence', function () {
     $errore = issueErrore(['occorrenze' => 10412, 'contesti' => 20]);
 
     expect(rigaErrore(elenco(), $errore->id))
-        ->toContain('occorrenze: 10.412 · contesti conservati: 20');
+        ->toContain('occorrenze: 10.412 · prove raccolte dall\'ultima riapertura: 20');
 });
 
 it('formats both figures in Italian, thousands included', function () {
@@ -97,7 +97,7 @@ it('formats both figures in Italian, thousands included', function () {
     $errore = issueErrore(['occorrenze' => 1234567, 'contesti' => 0]);
 
     expect(rigaErrore(elenco(), $errore->id))
-        ->toContain('occorrenze: 1.234.567 · contesti conservati: 0');
+        ->toContain('occorrenze: 1.234.567 · prove raccolte dall\'ultima riapertura: 0');
 });
 
 // ─── L'ordine ────────────────────────────────────────────────────────────────

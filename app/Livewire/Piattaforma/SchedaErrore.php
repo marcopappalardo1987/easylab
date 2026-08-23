@@ -34,14 +34,45 @@ use Livewire\WithPagination;
  * dettaglio dentro l'elenco erediterebbe il gate del genitore, e il giorno in
  * cui qualcuno spostasse la scheda altrove se lo lascerebbe dietro.
  *
- * ## Sola lettura
+ * ## 🔴 Le tre azioni, e perché stanno QUI e non nell'elenco
  *
- * ⚠️ Come `Errori`, **nessun metodo che scrive** — e come là, i sette di
- * `WithPagination` sono pubblici e raggiungibili, innocui ma esistenti: le tre azioni
- * (risolvi/ignora/riapri) nascono nel blocco 6. Il dettaglio della singola
- * occorrenza si apre con un `<details>` **nativo** e non con un `wire:click`:
- * niente round-trip, niente azione, e la pagina resta leggibile anche senza
- * JavaScript. Una schermata che si consulta quando l'applicazione sta già
+ * `risolvi()`, `ignora()` e `riapri()` sono i soli metodi di scrittura
+ * dell'error tracker, e vivono sulla **scheda**: è la pagina in cui si è appena
+ * letto lo stack trace, l'input e chi c'era: cioè il posto in cui si sa
+ * abbastanza per decidere. Nell'elenco la stessa fila di pulsanti chiederebbe di
+ * zittire una issue **senza averla aperta** — e `ignorato` è l'unico interruttore
+ * di silenzio del tracker, il solo stato che non si riapre mai da sé.
+ *
+ * Ne segue anche una proprietà di sicurezza: le scritture sono su **una** rotta
+ * sola, con un gate solo da provare, invece che su due superfici in cui
+ * ricordarsi due volte della stessa guardia. `Errori` resta in sola lettura.
+ *
+ * **Niente modale di conferma**, a differenza dell'editor dei permessi: là il
+ * gesto ricade su tutti gli utenti di un ruolo e si disfa a fatica, qui ricade su
+ * una riga di diagnostica, è reversibile con un click dalla stessa pagina, e
+ * **ogni gesto lascia la propria riga** nel registro. Una conferma qui sarebbe un
+ * ostacolo senza una decisione dentro.
+ *
+ * ⚠️ **Nessuna delle tre fa `skipRender()`**, ed è deliberato: dopo il gesto la
+ * scheda deve mostrare il badge nuovo e i due pulsanti che ora hanno senso. La
+ * conseguenza va però detta per intero, perché è la trappola che questo blocco ha
+ * pagato: `render()` gira **dopo** l'azione, quindi il suo `Gate::authorize()`
+ * risponderebbe 403 **a scrittura già avvenuta**. Un `assertForbidden()` su una
+ * chiamata Livewire non è quindi prova di rifiuto — il rifiuto si asserisce sul
+ * **dato** (`$errore->fresh()->stato` e il conteggio delle righe di audit), ed è
+ * ciò che fa `AzioniErroriTest`.
+ *
+ * Da cui il `Gate::authorize()` **in testa a ogni azione**, che non è ridondante
+ * rispetto al `can:` di rotta: quello è la guardia larga e vive in
+ * `routes/web.php` — un file che si modifica per ragioni che con questa pagina
+ * non c'entrano — questo vive accanto al gesto ed è l'unico che regge sul
+ * montaggio diretto, dove `Livewire::test()` **disabilita i middleware**.
+ *
+ * ⚠️ Il resto della pagina resta in sola lettura: i sette metodi di
+ * `WithPagination` sono pubblici e raggiungibili, innocui ma esistenti, e il
+ * dettaglio della singola occorrenza si apre con un `<details>` **nativo** e non
+ * con un `wire:click` — niente round-trip, e la pagina resta leggibile anche
+ * senza JavaScript. Una schermata che si consulta quando l'applicazione sta già
  * andando male è il posto sbagliato per dipendere da altro codice.
  *
  * ## Il gate, di nuovo e per intero
@@ -97,6 +128,71 @@ class SchedaErrore extends Component
     public function mount(Errore $errore): void
     {
         $this->errore = $errore;
+    }
+
+    /**
+     * «Credo di averlo sistemato».
+     *
+     * Non decide niente: lo stato, i timestamp e la riga di audit stanno tutti in
+     * `Errore::risolvi()`, che è un metodo del **model** e non di un service — il
+     * meta-test dei soggetti audit cerca le `activity()` leggendo il sorgente dei
+     * model, e da un service non le vedrebbe.
+     */
+    public function risolvi(): void
+    {
+        Gate::authorize(Errori::PERMESSO);
+
+        $this->errore->risolvi($this->chiAgisce());
+    }
+
+    /**
+     * «So che c'è e non me ne importa»: l'unico interruttore di silenzio.
+     *
+     * ⚠️ È l'unico stato che **non si riapre mai** da solo, ed è la ragione per
+     * cui questi pulsanti stanno sulla scheda e non nell'elenco: zittire una issue
+     * senza averla aperta è il gesto che poi non si ricorda di aver fatto.
+     */
+    public function ignora(): void
+    {
+        Gate::authorize(Errori::PERMESSO);
+
+        $this->errore->ignora($this->chiAgisce());
+    }
+
+    /** «Non è sistemato»: la issue torna in elenco, col budget dei contesti azzerato. */
+    public function riapri(): void
+    {
+        Gate::authorize(Errori::PERMESSO);
+
+        $this->errore->riapri($this->chiAgisce());
+    }
+
+    /**
+     * Chi sta compiendo il gesto.
+     *
+     * ⚠️ Il `?User` di `auth()->user()` si restringe **dopo** il gate e non prima:
+     * `Gate::authorize()` su un permesso nudo nega a un utente non autenticato,
+     * quindi qui dentro non si arriva mai da ospiti. Scriverlo in un metodo solo
+     * evita di ripetere tre volte una restrizione che vale per la stessa ragione.
+     *
+     * Durante un'impersonazione questo è l'utente **impersonato** — è quello che
+     * la guard restituisce — e va bene così: chi c'era davvero dietro il gesto lo
+     * dice `properties.impersonato_da`, timbrato dall'hook di
+     * `AppServiceProvider` su ogni riga scritta dentro una richiesta.
+     */
+    private function chiAgisce(): User
+    {
+        $chi = auth()->user();
+
+        if (! $chi instanceof User) {
+            // Irraggiungibile passando dal gate qui sopra, e quindi **fail-closed
+            // e rumoroso** invece di un `return` silenzioso: se un domani
+            // qualcuno chiamasse queste azioni da un'altra strada, il gesto non
+            // deve finire in `errori` con un autore inventato.
+            abort(403);
+        }
+
+        return $chi;
     }
 
     public function render(): View

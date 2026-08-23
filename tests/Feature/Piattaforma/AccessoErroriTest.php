@@ -111,10 +111,10 @@ it('keeps the permission on a real Livewire update', function () {
     // 🔴 **L'unica strada che copre un'azione con `skipRender()`**: un POST vero
     // a `/livewire/update`. Livewire rilegge `memo.path`, rimatcha la rotta e
     // riapplica i middleware **persistenti**, fra cui `Authorize` (il `can:`).
-    // Le tre azioni del blocco 6 (risolvi/ignora/riapri) girano prima di
-    // `render()`, e con `skipRender()` `render()` non gira affatto — quindi il
-    // gate di rotta è la sola guardia che resta, e va provato adesso che la
-    // pagina è ancora un guscio.
+    // ⚠️ **Su QUESTA pagina non ci sono azioni**, e non è un rinvio: i tre gesti
+    // (risolvi/ignora/riapri) vivono su `SchedaErrore`, che ha il proprio `can:`
+    // e il proprio gemello di questo test in `AzioniErroriTest`. Qui resta la
+    // prova che il gate di rotta regge sull'update Livewire dell'elenco.
     //
     // 🔴 **Si passa a un Superadmin VERO**, non si toglie il ruolo al Developer:
     // un utente senza alcun ruolo viene respinto da *qualunque* `can:`, quindi
@@ -129,11 +129,6 @@ it('keeps the permission on a real Livewire update', function () {
     // `render()` risponde comunque 403 — difesa in profondità che qui maschera
     // la guardia che si vorrebbe provare. Il sentinella del gate di rotta è
     // l'assert **strutturale** in fondo al file, che è rosso sotto entrambe.
-    //
-    // Questo test diventa la sola guardia nel blocco 6, quando le azioni
-    // gireranno **prima** di `render()` e con `skipRender()` `render()` non
-    // girerà affatto. È scritto adesso, e puntato sul componente giusto, perché
-    // allora sia già al suo posto.
     //
     // ⚠️ Lo snapshot si prende **per nome**: il primo della pagina è lo switcher
     // di ente, montato dal layout su ogni schermata. La prima stesura prendeva

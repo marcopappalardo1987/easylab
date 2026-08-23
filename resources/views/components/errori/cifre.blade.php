@@ -23,4 +23,4 @@
 --}}
 @props(['errore'])
 
-<span {{ $attributes->merge(['class' => 'tabular-nums']) }}>occorrenze: {{ number_format($errore->occorrenze, 0, ',', '.') }} · contesti conservati: {{ number_format($errore->contesti, 0, ',', '.') }}</span>
+<span {{ $attributes->merge(['class' => 'tabular-nums']) }}>occorrenze: {{ number_format($errore->occorrenze, 0, ',', '.') }} · prove raccolte dall'ultima riapertura: {{ number_format($errore->contesti, 0, ',', '.') }}</span>

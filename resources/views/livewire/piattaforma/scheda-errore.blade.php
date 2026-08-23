@@ -1,11 +1,13 @@
 {{--
     L'error tracker interno — la scheda di una issue.
 
-    ⚠️ **Sola lettura, e senza un solo `wire:click`.** Il dettaglio di ogni
-    occorrenza si apre con un `<details>` **nativo**: nessun round-trip, nessuna
-    azione, e la pagina resta leggibile anche se JavaScript non parte. Una
-    schermata che si consulta quando l'applicazione sta già andando male è il
-    posto sbagliato per dipendere da altro codice.
+    ⚠️ **Le uniche azioni della pagina sono i tre pulsanti di stato**
+    (risolvi/ignora/riapri), e sono anche le uniche scritture dell'intero error
+    tracker fuori dal gestore delle eccezioni. Tutto il resto è in sola lettura:
+    il dettaglio di ogni occorrenza si apre con un `<details>` **nativo** —
+    nessun round-trip, nessuna azione — e resta leggibile anche se JavaScript non
+    parte. Una schermata che si consulta quando l'applicazione sta già andando
+    male è il posto sbagliato per dipendere da altro codice.
 
     ⚠️ **Qui dentro ci sono dati personali** — stack trace, ip, user agent,
     input di richiesta — e la sanificazione è avvenuta **in scrittura**, a monte
@@ -49,6 +51,59 @@
             @endif
         @endif
     </div>
+
+    {{-- 🔴 **I tre gesti, e nessuna modale di conferma.**
+
+         Si offrono **solo** i due che portano altrove: da «aperto» si risolve o
+         si ignora, da «risolto» si riapre o si ignora, da «ignorato» si riapre o
+         si risolve. Un pulsante che rimette la issue nello stato in cui già si
+         trova scriverebbe una riga di audit che dice «da risolto a risolto» —
+         rumore in un registro che deve restare leggibile.
+
+         ⚠️ Niente conferma: il gesto è reversibile con un click da questa stessa
+         pagina e ognuno lascia la propria riga nel registro. La modale
+         dell'editor dei permessi esiste perché là il gesto ricade su tutti gli
+         utenti di un ruolo; qui ricade su una riga di diagnostica.
+
+         ⚠️ **`ignora` è marcato `secondary` e non `danger`**, per quanto sia il
+         gesto più conseguente dei tre: non distrugge niente e si disfa con
+         «Riapri». È «risolvi» a essere l'azione principale, perché è quella che
+         si compie novantanove volte su cento.
+
+         L'`aria-label` sul gruppo non è decorazione: è ciò da cui i test
+         estraggono **questo** blocco, per poter poi asserire sul testo che
+         l'utente legge davvero e non su un marcatore invisibile. --}}
+    <div role="group" aria-label="Azioni sull'errore" class="mt-4 flex flex-wrap items-center gap-2">
+        @if ($errore->stato !== 'risolto')
+            <x-ui.button wire:click="risolvi" wire:target="risolvi" wire:loading.attr="disabled">
+                Risolvi
+            </x-ui.button>
+        @endif
+
+        @if ($errore->stato !== 'aperto')
+            <x-ui.button variant="secondary" wire:click="riapri" wire:target="riapri" wire:loading.attr="disabled">
+                Riapri
+            </x-ui.button>
+        @endif
+
+        @if ($errore->stato !== 'ignorato')
+            <x-ui.button variant="secondary" wire:click="ignora" wire:target="ignora" wire:loading.attr="disabled">
+                Ignora
+            </x-ui.button>
+        @endif
+    </div>
+
+    {{-- Cosa vuol dire ciascuno dei tre, accanto ai pulsanti e non in una guida
+         altrove: «risolto» e «ignorato» si somigliano finché non si scopre che
+         **solo il primo si riapre da sé**, e scoprirlo dopo aver zittito un bug
+         vero è tardi. --}}
+    <p class="mt-2 max-w-3xl text-xs text-neutral-600">
+        <strong>Risolto</strong> vuol dire «credo di averlo sistemato»: una nuova occorrenza lo contraddice e
+        riapre l'errore da sé, azzerando il conteggio dei contesti conservati per poter raccogliere la prova
+        successiva al tentativo di correzione. <strong>Ignorato</strong> vuol dire «so che c'è e non me ne
+        importa»: le occorrenze continuano a essere contate, ma l'errore <strong>non si riapre mai</strong> da
+        solo. È l'unico modo di zittire qualcosa qui dentro.
+    </p>
 
     {{-- 🔴 **Le due cifre nella stessa frase**, dallo stesso componente
          dell'elenco: qui pesa più che là, perché è questa la pagina in cui si
@@ -216,7 +271,7 @@
     <div class="mt-4 flex flex-wrap items-center justify-between gap-2">
         <p class="text-xs text-neutral-500">
             @if ($occorrenze->total() > 0)
-                {{ $occorrenze->firstItem() }}–{{ $occorrenze->lastItem() }} di {{ number_format($occorrenze->total(), 0, ',', '.') }} contesti conservati
+                {{ $occorrenze->firstItem() }}–{{ $occorrenze->lastItem() }} di {{ number_format($occorrenze->total(), 0, ',', '.') }} prove conservate in tutto
             @endif
         </p>
 

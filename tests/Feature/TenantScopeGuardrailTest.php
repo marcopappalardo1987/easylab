@@ -40,8 +40,10 @@ use function PHPUnit\Framework\assertTrue;
 //    il tenant, è il permesso.
 //    ⚠️ E non si chiude con una porta in `VistaPiattaforma`: sarebbe il
 //    «bypass finto» di `BypassNudiGuardrailTest` — non c'è nessuno scope da
-//    togliere. In cambio serve un guardrail sulle SCRITTURE, che arriva coi
-//    tre gesti (blocco 6), sulla forma di `ScrittureRbacGuardrailTest`.
+//    togliere. In cambio c'è un guardrail sulle SCRITTURE,
+//    `ScrittureErroriGuardrailTest`, sulla forma di quello del pivot RBAC:
+//    fuori da `Errore` e da `CatturaErrori` quelle due tabelle si leggono e
+//    basta.
 const NON_TENANT_MODELS = [
     User::class,
     Account::class,
