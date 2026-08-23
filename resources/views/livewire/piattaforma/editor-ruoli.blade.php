@@ -217,8 +217,20 @@
         </x-ui.card>
     @endif
 
+    {{-- ⚠️ **Una finestra che scorre, non una pagina lunga.** `overflow-x-auto`
+         da solo non basta e non è una scelta di stile: la matrice è alta 54
+         righe, e scorrendo la pagina l'intestazione dei ruoli usciva dallo
+         schermo — restavano sei colonne di ✅/❌ senza più un nome sopra, cioè
+         una matrice illeggibile proprio dove serve leggerla. Trovato guardando
+         la pagina, non dai test: nessuna asserzione può accorgersi che
+         un'intestazione è scorsa via.
+
+         Il `sticky` dell'intestazione funziona **solo** dentro un contenitore
+         che scorre di suo: `overflow-x-auto` rende `overflow-y` un `auto`
+         implicito, ma senza un'altezza massima il contenitore non scorre mai e
+         il `sticky` non ha nulla a cui ancorarsi. Da qui `max-h` esplicita. --}}
     <x-ui.card class="mt-4 !p-0">
-        <div class="overflow-x-auto">
+        <div class="max-h-[75vh] overflow-auto">
             <table class="w-full border-collapse text-sm">
                 <caption class="sr-only">
                     Matrice dei permessi: {{ count(App\Support\Rbac::permissions()) }} permessi del
@@ -227,7 +239,10 @@
 
                 <thead class="border-b border-neutral-200 bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500">
                     <tr>
-                        <th scope="col" class="sticky left-0 z-10 bg-neutral-50 py-3 pl-4 pr-3 text-left">Permesso</th>
+                        {{-- L'angolo: ancorato su **due** lati, quindi sopra a
+                             entrambe le fasce (z-30 > z-20 dell'intestazione
+                             > z-10 della colonna dei nomi). --}}
+                        <th scope="col" class="sticky left-0 top-0 z-30 bg-neutral-50 py-3 pl-4 pr-3 text-left">Permesso</th>
 
                         @foreach ($ruoli as $ruolo)
                             @php $ruoloProtetto = isset($inerti[$ruolo]); @endphp
@@ -244,7 +259,7 @@
                             <th scope="col"
                                 data-ruolo="{{ $ruolo }}"
                                 @if ($ruoloProtetto) data-inerte="1" @endif
-                                class="px-3 py-3 text-center {{ $ruoloProtetto ? 'text-neutral-400' : '' }}">
+                                class="sticky top-0 z-20 bg-neutral-50 px-3 py-3 text-center {{ $ruoloProtetto ? 'text-neutral-400' : '' }}">
                                 <span class="whitespace-nowrap">{{ $ruolo }}</span>
                                 @if ($ruoloProtetto)
                                     <span class="mt-0.5 block normal-case tracking-normal"
@@ -285,7 +300,12 @@
                         <tr class="bg-neutral-50/60">
                             <th scope="colgroup" colspan="{{ count($ruoli) + 1 }}"
                                 data-gruppo="{{ $prefisso }}"
-                                class="sticky left-0 px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                                {{-- Sfondo proprio e `z-10`: era ancorata a
+                                     sinistra ma trasparente, quindi scorrendo in
+                                     orizzontale il nome del gruppo si sarebbe
+                                     letto **sopra** le celle che gli passavano
+                                     sotto. --}}
+                                class="sticky left-0 z-10 bg-neutral-100 px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">
                                 {{ ucfirst(str_replace('_', ' ', $prefisso)) }}
                             </th>
                         </tr>
