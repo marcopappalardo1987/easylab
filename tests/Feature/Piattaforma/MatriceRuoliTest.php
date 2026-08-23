@@ -44,11 +44,9 @@ beforeEach(function () {
     $this->superadmin->assignRole('Superadmin');
 });
 
-/** I permessi che un ruolo ha **a database**, letti senza passare dal registrar. */
-function permessiDiRuolo(string $ruolo): array
-{
-    return Role::findByName($ruolo, 'web')->permissions()->pluck('name')->sort()->values()->all();
-}
+// `permessiDiRuolo()` vive in `tests/Pest.php`: la usano due suite, e una
+// funzione condivisa non può abitare in una delle due — la lezione è già
+// scritta lì accanto, accanto a `snapshotDa()`.
 
 /**
  * Gli errori di validazione di un gesto rifiutato.

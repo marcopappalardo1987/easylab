@@ -62,6 +62,24 @@ use Spatie\Permission\Models\Permission;
  * database, e nessun test su questo HTML la prova — `Livewire::test()` non passa
  * dai middleware e un `@if` in Blade si toglie in un secondo.
  *
+ * ## La riconciliazione col file di configurazione
+ *
+ * Dal momento in cui la matrice si modifica a runtime, `config/rbac.php` smette
+ * di essere la verità e diventa **il default**. Le due sorgenti divergono per
+ * costruzione, e la divergenza non è un guasto: è la feature. Ciò che è
+ * pericoloso è che sia **invisibile**, perché `CLAUDE.md` ordina di riseminare
+ * dopo ogni modifica alla config e `RolesAndPermissionsSeeder` fa
+ * `syncPermissions()` — detacha tutto e riattacca dai default. Eseguito alla
+ * lettera, quell'ordine corretto cancella la matrice di runtime.
+ *
+ * Le celle divergenti portano quindi il marcatore «personalizzato» **coi due
+ * valori affiancati**, e un interruttore le isola. È il confronto ruolo per
+ * ruolo che `CLAUDE.md` chiede a mano, fatto qui e a **zero query**:
+ * `Rbac::permissionsForRole()` legge la config in PHP e la matrice a database è
+ * già in memoria per la griglia. L'altra metà della stessa difesa vive nel
+ * seeder, che prima di sincronizzare stampa ciò che sta per portare via e ne
+ * lascia una riga nel registro.
+ *
  * ## Il gate: `roles.manage`, cioè l'**opposto** della scelta del registro di
  * audit, per lo stesso ragionamento
  *
@@ -172,6 +190,24 @@ class EditorRuoli extends Component
     public string $ruoloInConferma = '';
 
     public string $permessoInConferma = '';
+
+    /**
+     * L'interruttore «mostra solo le differenze» fra database e `config/rbac.php`.
+     *
+     * ⚠️ **Non è `#[Url]`**, e la scelta ha una ragione precisa: l'argomento per
+     * cui questa pagina ha una rotta propria invece di un tab della cabina
+     * poggia su «la matrice non è paginata e non dichiara `#[Url]`, quindi non
+     * collide col `page` unico di `ElencaClienti`». Un `#[Url]` scritto qui per
+     * comodità di condivisione toglierebbe metà di quell'argomento senza che
+     * nessuno se ne accorga. E non serve: il filtro non seleziona *dati* da
+     * mostrare a qualcun altro, è una lente su una pagina che si guarda una
+     * volta prima di riseminare.
+     *
+     * Property pubblica, quindi scrivibile dal browser — e va bene: non
+     * difende niente, non nasconde niente che non sia altrimenti visibile, e
+     * ciò che si può scrivere è un booleano.
+     */
+    public bool $soloDifferenze = false;
 
     /**
      * Il click su una cella: chiede conferma quando serve, altrimenti scrive.
@@ -381,6 +417,19 @@ class EditorRuoli extends Component
         $matrice = MatriceRuoli::stato();
         $seminati = array_fill_keys($aDatabase, true);
 
+        // ⚠️ **Zero query in più**, ed è la ragione per cui la riconciliazione
+        // vive qui e non in un comando: `Rbac::permissionsForRole()` è PHP puro
+        // (legge `config/rbac.php`) e la matrice a database è già in memoria per
+        // rendere la griglia. Il confronto ruolo-per-ruolo che `CLAUDE.md`
+        // chiede **a mano** prima di riseminare costa quindi, in pagina, un
+        // doppio ciclo su 324 celle e niente altro.
+        $personalizzate = self::personalizzazioni($matrice, $seminati);
+        $gruppi = self::gruppi();
+
+        if ($this->soloDifferenze) {
+            $gruppi = self::soloDivergenti($gruppi, $personalizzate);
+        }
+
         return view('livewire.piattaforma.editor-ruoli', [
             // L'ordine di `config/rbac.php`, che è **anche** quello della
             // tabella di `Schema Ruoli §5`: la vista si affianca al documento e
@@ -388,12 +437,24 @@ class EditorRuoli extends Component
             // altrimenti (per nome, per numero di permessi) sarebbe una scelta
             // di presentazione che rompe quel confronto.
             'ruoli' => Rbac::roleNames(),
-            'gruppi' => self::gruppi(),
+            'gruppi' => $gruppi,
             'matrice' => $matrice,
             // Insieme e non lista: il consumo è `isset($seminati[$permesso])`
             // per ognuna delle 54 righe.
             'seminati' => $seminati,
             'orfani' => self::orfani($aDatabase),
+            // I permessi che il catalogo dichiara e il database non ha. La
+            // griglia li marca già riga per riga («da seminare»); qui servono
+            // per dire **una volta sola, e col comando scritto**, cosa si fa per
+            // farli esistere — un marcatore che non porta a un gesto lascia
+            // l'operatore a metà strada.
+            'nonSeminati' => array_values(array_diff(Rbac::permissions(), $aDatabase)),
+            'personalizzate' => $personalizzate,
+            // Il conteggio si fa qui e non nel Blade: è la cifra che decide se
+            // il pannello di riconciliazione dice «coincidono» o «divergono», e
+            // un `array_sum(array_map(...))` dentro una vista è la stessa
+            // logica scritta dove non si può provare.
+            'quantePersonalizzate' => array_sum(array_map('count', $personalizzate)),
             // ⚠️ **I due insiemi si derivano qui e si consumano nel Blade**, e
             // non è pignoleria di stile: il ruolo protetto serve
             // all'intestazione *e* a ognuna delle 324 celle, e ricalcolarlo in
@@ -449,6 +510,103 @@ class EditorRuoli extends Component
         }
 
         return $gruppi;
+    }
+
+    /**
+     * 🔴 Le celle in cui il **database** e `config/rbac.php` non dicono la stessa cosa.
+     *
+     * È il «confrontare ruolo per ruolo DB e config» che `CLAUDE.md` chiede di
+     * fare **a mano** prima di riseminare, reso un colpo d'occhio. Serve perché
+     * dal momento in cui la matrice si modifica a runtime le due sorgenti
+     * divergono per costruzione, e `RolesAndPermissionsSeeder` —  che
+     * `CLAUDE.md` *ordina* di lanciare dopo ogni modifica a `config/rbac.php` —
+     * fa `syncPermissions()`, cioè **detacha tutto e riattacca dalla config**:
+     * ogni cella marcata qui è una cella che quel comando porterà via.
+     *
+     * Il verso è quello del **gesto che ha prodotto la differenza**, non quello
+     * del confronto: `concesso` è una cella accesa a database che la config
+     * vuole spenta (qualcuno l'ha concessa da questa pagina), `revocato` il
+     * contrario. Chiamarli «in più»/«in meno» costringerebbe a ricordarsi da che
+     * parte si guarda.
+     *
+     * ⚠️ **Due famiglie di celle restano fuori, e per la stessa ragione**: dire
+     * «personalizzato» dove nessuno ha personalizzato niente manda a fare il
+     * gesto sbagliato.
+     * - i permessi **orfani** — a database e non più in catalogo — non sono
+     *   confrontabili con la config, che non li dichiara: hanno una striscia a
+     *   parte, e il gesto che li riguarda è una rimozione a mano, non un click;
+     * - i permessi **non seminati** — in catalogo e non a database — sono spenti
+     *   su *tutte e sei* le colonne, e senza questa esclusione una riga che
+     *   manca al bootstrap comparirebbe come sei personalizzazioni deliberate.
+     *   La riga lo dice già di suo («da seminare»), e il gesto che la ripara è
+     *   proprio il seeding — cioè l'opposto di «attenzione, il seeding ti porta
+     *   via questo».
+     *
+     * @param  array<string, array<string, true>>  $matrice
+     * @param  array<string, true>  $seminati
+     * @return array<string, array<string, string>> ruolo → permesso → «concesso»|«revocato»
+     */
+    private static function personalizzazioni(array $matrice, array $seminati): array
+    {
+        $personalizzate = [];
+
+        foreach (Rbac::roleNames() as $ruolo) {
+            // ⚠️ **La config si legge una volta per ruolo**, non una per cella:
+            // `permissionsForRole()` risolve `all`/`except`/`only` daccapo a
+            // ogni chiamata, quindi un `in_array()` scritto dentro il doppio
+            // ciclo costerebbe **324** risoluzioni della matrice, ognuna seguita
+            // da una scansione lineare. Un insieme `nome => true` per colonna e
+            // 324 `isset()`.
+            $daConfig = array_fill_keys(Rbac::permissionsForRole($ruolo), true);
+
+            foreach (Rbac::permissions() as $permesso) {
+                if (! isset($seminati[$permesso])) {
+                    continue;
+                }
+
+                $aDatabase = isset($matrice[$ruolo][$permesso]);
+
+                if ($aDatabase !== isset($daConfig[$permesso])) {
+                    $personalizzate[$ruolo][$permesso] = $aDatabase ? 'concesso' : 'revocato';
+                }
+            }
+        }
+
+        return $personalizzate;
+    }
+
+    /**
+     * Gli stessi gruppi, con le sole righe che hanno almeno una cella divergente.
+     *
+     * Filtra le **righe** e non le celle: una riga mostrata a metà — solo le
+     * colonne divergenti — direbbe «il Tenant ha `qr.scan`» senza far vedere che
+     * l'Admin ce l'ha per default, cioè toglierebbe il confronto fra colonne che
+     * è l'unica cosa che una griglia sa fare. I gruppi che restano senza righe
+     * spariscono: un'intestazione vuota è rumore.
+     *
+     * @param  array<string, list<string>>  $gruppi
+     * @param  array<string, array<string, string>>  $personalizzate
+     * @return array<string, list<string>>
+     */
+    private static function soloDivergenti(array $gruppi, array $personalizzate): array
+    {
+        $divergenti = [];
+
+        foreach ($personalizzate as $celle) {
+            $divergenti += $celle;
+        }
+
+        $filtrati = [];
+
+        foreach ($gruppi as $prefisso => $permessi) {
+            $restano = array_values(array_filter($permessi, fn (string $p) => isset($divergenti[$p])));
+
+            if ($restano !== []) {
+                $filtrati[$prefisso] = $restano;
+            }
+        }
+
+        return $filtrati;
     }
 
     /**

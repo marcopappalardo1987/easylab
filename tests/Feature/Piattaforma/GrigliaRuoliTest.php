@@ -53,22 +53,6 @@ beforeEach(function () {
         ->getContent();
 });
 
-/**
- * Il `<tr>` di una riga-permesso, estratto per la sua `wire:key`.
- *
- * ⚠️ Si estrae il **blocco** invece di fare `assertSee` sull'HTML intero, e la
- * ragione ha una cicatrice recente: in questo stesso lavoro un
- * `assertSee('Clienti')` sulla pagina intera era verde *anche con la voce di
- * menù rimossa*, perché quella parola compare altrove. Un'asserzione che non può
- * fallire è peggio di nessuna asserzione, perché occupa il posto di quella vera.
- */
-function rigaDelPermesso(string $html, string $permesso): string
-{
-    preg_match('/<tr wire:key="permesso-'.preg_quote($permesso, '/').'".*?<\/tr>/s', $html, $blocco);
-
-    return $blocco[0] ?? '';
-}
-
 /** Il `<th>` di intestazione di una colonna-ruolo. */
 function intestazioneDelRuolo(string $html, string $ruolo): string
 {

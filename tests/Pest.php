@@ -5,6 +5,7 @@ use App\Models\Strumento;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Features\SupportTesting\Testable;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /*
@@ -107,4 +108,32 @@ function utenteConRuolo(string $ruolo): User
     $utente->assignRole($ruolo);
 
     return $utente->fresh();
+}
+
+/**
+ * Il `<tr>` di una riga-permesso dell'editor ruoli, estratto per la sua `wire:key`.
+ *
+ * ⚠️ Si estrae il **blocco** invece di fare `assertSee` sull'HTML intero, e la
+ * ragione ha una cicatrice recente: in questo stesso lavoro un
+ * `assertSee('Clienti')` sulla pagina intera era verde *anche con la voce di
+ * menù rimossa*, perché quella parola compare altrove. Un'asserzione che non può
+ * fallire è peggio di nessuna asserzione, perché occupa il posto di quella vera.
+ *
+ * ⚠️ **Vive qui e non in `GrigliaRuoliTest`, che l'ha introdotta**, per la
+ * ragione già scritta sopra per `snapshotDa()`: i file di test si caricano solo
+ * se selezionati, quindi una funzione condivisa fra due suite non può abitare in
+ * una delle due — `RiconciliazioneRuoliTest` eseguito da solo andrebbe in fatal
+ * per funzione non definita.
+ */
+function rigaDelPermesso(string $html, string $permesso): string
+{
+    preg_match('/<tr wire:key="permesso-'.preg_quote($permesso, '/').'".*?<\/tr>/s', $html, $blocco);
+
+    return $blocco[0] ?? '';
+}
+
+/** I permessi che un ruolo ha **a database**, letti senza passare dal registrar. */
+function permessiDiRuolo(string $ruolo): array
+{
+    return Role::findByName($ruolo, 'web')->permissions()->pluck('name')->sort()->values()->all();
 }

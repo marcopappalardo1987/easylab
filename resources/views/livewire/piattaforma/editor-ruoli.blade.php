@@ -131,7 +131,91 @@
             <dt aria-hidden="true">👆</dt>
             <dd>le celle senza 🔒 e senza 🔑 sono bottoni: un click inverte la cella e scrive</dd>
         </div>
+        <div class="flex items-center gap-1.5">
+            <dt class="text-primary-700">personalizzato</dt>
+            <dd>la cella non dice ciò che dice <code>config/rbac.php</code>: il riseeding la riporterebbe indietro</dd>
+        </div>
     </dl>
+
+    {{-- 🔴 **La riconciliazione fra le due sorgenti.**
+
+         Dal momento in cui la matrice si modifica da qui, `config/rbac.php`
+         smette di essere la verità e diventa **il default**: le due divergono
+         per costruzione, e la divergenza è la feature, non un guasto. Ciò che è
+         pericoloso è che sia invisibile — perché `CLAUDE.md` ordina di
+         riseminare dopo ogni modifica alla config, e il seeder fa
+         `syncPermissions()`, cioè detacha tutto e riattacca dai default.
+         Eseguito alla lettera, quell'ordine **corretto** cancella la matrice di
+         runtime.
+
+         Questo pannello è il confronto ruolo-per-ruolo che `CLAUDE.md` chiede a
+         mano, fatto in pagina e a **zero query**. L'altra metà della stessa
+         difesa vive nel seeder, che stampa il diff prima di sincronizzare e ne
+         lascia una riga nel registro. --}}
+    <x-ui.card class="mt-4" data-riconciliazione="{{ $quantePersonalizzate }}">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0">
+                @if ($quantePersonalizzate === 0)
+                    <p class="text-sm text-neutral-700">
+                        La matrice a database <strong>coincide</strong> con <code class="text-xs">config/rbac.php</code>:
+                        nessuna cella personalizzata.
+                    </p>
+                @else
+                    <p class="text-sm text-neutral-800">
+                        <strong>{{ $quantePersonalizzate }}</strong>
+                        {{ $quantePersonalizzate === 1 ? 'cella non dice' : 'celle non dicono' }} ciò che dice
+                        <code class="text-xs">config/rbac.php</code>.
+                    </p>
+                    {{-- ⚠️ Il comando si scrive **per esteso**: chi arriva qui
+                         dopo aver letto la riga di `CLAUDE.md` sta per lanciarlo,
+                         e deve leggere accanto cosa fa davvero. --}}
+                    <p class="mt-1 text-xs text-neutral-600">
+                        <span aria-hidden="true">⚠️</span>
+                        <code class="text-xs">php artisan db:seed --class=RolesAndPermissionsSeeder</code>
+                        le riporta <strong>tutte</strong> ai default:
+                        <code class="text-xs">syncPermissions()</code> detacha e riattacca, non fonde.
+                        Il comando stampa ciò che sta per portare via e ne lascia una riga nel
+                        <a href="{{ route('piattaforma.audit') }}" class="underline">registro</a>.
+                    </p>
+                @endif
+            </div>
+
+            @if ($quantePersonalizzate > 0 || $soloDifferenze)
+                {{-- L'interruttore resta anche quando le differenze sono zero, se
+                     è acceso: senza, chi lo accende e poi riporta l'ultima cella
+                     al default si troverebbe una griglia vuota e nessun modo di
+                     tornare indietro. --}}
+                <button type="button"
+                        wire:click="$toggle('soloDifferenze')"
+                        data-filtro-differenze="{{ $soloDifferenze ? 'attivo' : 'spento' }}"
+                        class="shrink-0 rounded-md border px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 {{ $soloDifferenze ? 'border-primary-600 bg-primary-600 text-white hover:bg-primary-700' : 'border-neutral-300 text-neutral-700 hover:bg-neutral-50' }}">
+                    {{ $soloDifferenze ? 'Mostra tutti i permessi' : 'Mostra solo le differenze' }}
+                </button>
+            @endif
+        </div>
+    </x-ui.card>
+
+    {{-- ⚠️ **Il «da seminare» col gesto accanto.** La griglia marca già le righe
+         che il catalogo dichiara e il database non ha, ma un marcatore che non
+         porta a un gesto lascia l'operatore a metà strada — e il gesto qui è
+         proprio il comando che, sulle *altre* righe, distrugge. Le due cose
+         vanno dette insieme o si sceglie alla cieca. --}}
+    @if ($nonSeminati !== [])
+        <x-ui.card class="mt-4 border-warning-500 bg-warning-100" data-non-seminati="{{ count($nonSeminati) }}">
+            <p class="text-sm text-warning-800">
+                <span aria-hidden="true">⚠️</span>
+                <strong>{{ count($nonSeminati) }}</strong>
+                {{ count($nonSeminati) === 1 ? 'permesso del catalogo non esiste' : 'permessi del catalogo non esistono' }}
+                a database ({{ implode(', ', $nonSeminati) }}): la riga è segnata «da seminare» e
+                <strong>non è accendibile</strong> finché il permesso non viene creato.
+            </p>
+            <p class="mt-2 text-xs text-warning-800">
+                <code class="text-xs">php artisan db:seed --class=RolesAndPermissionsSeeder</code>
+                li crea — e nello stesso giro riporta l'intera matrice ai default, cancellando le
+                personalizzazioni elencate qui sopra.
+            </p>
+        </x-ui.card>
+    @endif
 
     <x-ui.card class="mt-4 !p-0">
         <div class="overflow-x-auto">
@@ -262,6 +346,15 @@
                                         // `MatriceRuoli::applica()`, che rifiuta
                                         // prima di toccare il database.
                                         $modificabile = ! $bloccato && ! $daSeminare && ! isset($inerti[$ruolo]);
+                                        // ⚠️ Il quarto marcatore, e l'unico che
+                                        // **non** dice cosa la pagina permette:
+                                        // dice che questa cella e
+                                        // `config/rbac.php` non sono d'accordo,
+                                        // cioè che il riseeding la riporterebbe
+                                        // indietro. Deriva da `render()`, che
+                                        // legge la config **una volta per
+                                        // ruolo** invece di una volta per cella.
+                                        $diverge = $personalizzate[$ruolo][$permesso] ?? null;
                                     @endphp
                                     {{-- `isset()` sulla matrice già in memoria, e
                                          **mai** `$role->hasPermissionTo()`: quello
@@ -303,12 +396,47 @@
                                             <span aria-hidden="true">{{ $ha ? '✅' : '❌' }}</span>
                                             <span class="sr-only">{{ $ruolo }}: {{ $ha ? 'sì' : 'no' }}</span>
                                         @endif
+
+                                        {{-- **I due valori affiancati, non solo
+                                             il fatto che divergano.** «Questa
+                                             cella è personalizzata» da solo
+                                             obbligherebbe ad aprire
+                                             `config/rbac.php` per sapere dove il
+                                             riseeding la riporterebbe — cioè a
+                                             fare a mano la metà del confronto
+                                             che questo pannello esiste per
+                                             togliere. --}}
+                                        @if ($diverge)
+                                            <span class="mt-0.5 block text-[10px] font-medium leading-tight text-primary-700"
+                                                  data-personalizzato="{{ $diverge }}"
+                                                  title="Il database dice il contrario di config/rbac.php. Un `db:seed --class=RolesAndPermissionsSeeder` riporterebbe questa cella al default.">
+                                                personalizzato:
+                                                config {{ $diverge === 'concesso' ? 'no' : 'sì' }} →
+                                                adesso {{ $diverge === 'concesso' ? 'sì' : 'no' }}
+                                            </span>
+                                        @endif
                                     </td>
                                 @endforeach
                             </tr>
                         @endforeach
                     </tbody>
                 @endforeach
+
+                {{-- Il caso raggiungibile solo con l'interruttore acceso: il
+                     catalogo non è mai vuoto. Una tabella con la sola
+                     intestazione si legge come un guasto, e qui è invece la
+                     risposta migliore possibile. --}}
+                @if ($gruppi === [])
+                    <tbody>
+                        <tr>
+                            <td colspan="{{ count($ruoli) + 1 }}" class="px-4 py-8 text-center text-sm text-neutral-500"
+                                data-nessuna-differenza>
+                                Nessuna cella diversa da <code class="text-xs">config/rbac.php</code>:
+                                la matrice a database è quella dei default.
+                            </td>
+                        </tr>
+                    </tbody>
+                @endif
             </table>
         </div>
     </x-ui.card>
@@ -335,6 +463,20 @@
             <p class="mt-1 text-xs text-neutral-600">
                 Esistono a database ma <code>config/rbac.php</code> non li dichiara più. Non si riassegnano
                 dalla UI e non si cancellano di qui: vanno rimossi a mano.
+            </p>
+            {{-- ⚠️ **E il riseeding non li porta via**, che è la domanda
+                 immediatamente successiva per chi ha appena letto, due riquadri
+                 più su, che quel comando riporta tutto ai default: il seeder usa
+                 `firstOrCreate` e non cancella mai ciò che ha smesso di
+                 conoscere. È così che i `letture_contaore.*` sono rimasti
+                 attaccati a quattro ruoli del database di sviluppo fino all'8
+                 Ago 2026. --}}
+            <p class="mt-1 text-xs text-neutral-600">
+                <code>php artisan db:seed --class=RolesAndPermissionsSeeder</code> <strong>non</strong> li rimuove:
+                il seeder usa <code>firstOrCreate</code> e non cancella ciò che il catalogo non dichiara più.
+                Li <strong>stacca</strong> però da ogni ruolo — <code>syncPermissions()</code> riattacca solo i
+                permessi del catalogo — quindi dopo un reset le ✅ qui sotto spariscono e la riga orfana
+                resta a database, senza più nessuno che la porti.
             </p>
 
             <x-ui.card class="mt-3 !p-0 border-warning-500">
