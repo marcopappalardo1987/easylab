@@ -122,4 +122,65 @@ return [
         ],
     ],
 
+    /*
+    | Error tracker interno (S6 — `docs/Architettura/Error Tracker Interno
+    | (piano).md`, ADR-017). Su Laravel Cloud `laravel.log` vive su un disco
+    | effimero e per-replica: il database è l'unico posto in cui un errore visto
+    | da un cliente lascia una traccia consultabile.
+    |
+    | ⚠️ Questa config **non è** `config/rbac.php`: non è il bootstrap di
+    | qualcosa che poi vive a DB, quindi cambiarla NON richiede alcun riseeding.
+    |
+    | Due chiavi leggono l'ambiente e tre no, e la linea che le separa è la
+    | stessa di `piani` qui sopra: ciò che cambia **da ambiente a ambiente**
+    | (l'interruttore, la casella che riceve gli alert) sta in `env()`; ciò che è
+    | un parametro di **prodotto** (quanti contesti bastano, ogni quanto, quante
+    | email al giorno sono troppe) è un numero che deve cambiare con un commit
+    | visibile, come `giorni_imminente` e `prezzo_mensile_cent`.
+    |
+    | ⚠️ In produzione la config è cachata in build (`php artisan optimize`),
+    | quindi `ERRORI_ABILITATO=false` **richiede un redeploy** per avere effetto:
+    | è un interruttore d'emergenza lento, e va saputo prima di averne bisogno.
+    */
+    'errori' => [
+        // L'interruttore generale della cattura. `true` di default: un tracker
+        // spento di default sarebbe un tracker che non c'è, e ci si accorgerebbe
+        // dell'errore di configurazione solo cercando l'errore che non è stato
+        // registrato.
+        'abilitato' => env('ERRORI_ABILITATO', true),
+
+        // Destinatario dell'alert. `null` = nessun alert, e il tracker resta
+        // muto senza lamentarsi: registrare gli errori ha valore anche senza
+        // email.
+        //
+        // ⚠️ È **un canale senza gate e senza registro di audit**: la pagina
+        // degli errori è del solo Developer (`system.logs.view`), l'email arriva
+        // a chiunque legga questa casella. Dev'essere una casella controllata.
+        'alert_email' => env('ERRORI_ALERT_EMAIL'),
+
+        // Quante occorrenze conservare **col contesto** per ogni errore. Oltre,
+        // cresce solo il contatore: la ventesima copia dello stesso stack trace
+        // non insegna nulla che non dicessero le prime, e ogni riga porta dati
+        // personali.
+        //
+        // Il conteggio si azzera alla riapertura di una issue risolta: senza,
+        // dopo un tentativo di correzione la issue sarebbe già al cap e non
+        // catturerebbe **mai più** la prova che serve a rispondere a «l'ho
+        // corretto, perché succede ancora?».
+        'contesti_per_errore' => 20,
+
+        // Distanza minima fra due contesti conservati dello stesso errore. È la
+        // guardia contro il loop caldo: un errore che scatta mille volte al
+        // minuto consumerebbe il budget di contesti in un secondo, e li
+        // spenderebbe tutti sullo stesso istante.
+        'finestra_contesto_secondi' => 60,
+
+        // Tetto **globale** agli alert di una giornata, non per-errore: serve a
+        // proteggere la casella dalla tempesta di issue nuove di un deploy
+        // sbagliato, cioè proprio dal caso in cui gli errori sono tanti e
+        // diversi. Per questo si conta sul database (`alert_inviato_at` di oggi)
+        // e non in una colonna della singola issue, che delle altre non sa nulla.
+        'alert_max_giornalieri' => 20,
+    ],
+
 ];

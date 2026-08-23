@@ -4,9 +4,11 @@ use App\Models\Account;
 use App\Models\AvvisoScadenza;
 use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Documento;
+use App\Models\Errore;
 use App\Models\Fornitore;
 use App\Models\Garanzia;
 use App\Models\Intervento;
+use App\Models\OccorrenzaErrore;
 use App\Models\Ricambio;
 use App\Models\RicambioUtilizzo;
 use App\Models\SpostamentoStrumento;
@@ -29,6 +31,12 @@ use Illuminate\Database\Eloquent\Model;
 /** Modelli di business che NON usano il trait, ciascuno col proprio perché. */
 const ESENZIONI = [
     AvvisoScadenza::class => 'log tecnico dello scheduler (ADR-011), non un gesto di una persona: tracciarlo sarebbe l\'audit di un log. Ruota a 24 mesi per conto suo.',
+    // ⚠️ **Il ramo del trait non copre questi due**, ed è il motivo per cui la
+    // voce serve davvero: `Errore` non usa `AuditsDomainWrites`, quindi senza
+    // queste due righe il primo test di questo file è rosso — come infatti è
+    // stato appena i due model sono nati (S6, error tracker interno).
+    Errore::class => 'il contatore di un log, non un gesto di una persona: il trait scriverebbe una riga di audit a ogni incremento delle occorrenze — l\'audit di un log, la ragione di AvvisoScadenza. I tre gesti (risolvi/ignora/riapri) tracceranno invece una riga esplicita, scritta dal model.',
+    OccorrenzaErrore::class => 'riga append-only scritta dal gestore delle eccezioni: nessuna persona la crea, la modifica o la cancella — solo la retention e il cascade della propria issue.',
     Strumento::class => 'logga a mano: i suoi gesti (forzaSemaforo/rimuoviForzatura) hanno un messaggio che vale più dell\'elenco dei campi, e le colonne forced_* sono fuori da $fillable (ADR-005/027).',
     UnitaOrganizzativa::class => 'logga a mano la sola scrittura che conta — la visibilità garanzie ricambio (ADR-029). Il resto dell\'anagrafica non è tracciato: ADR-027 §3, «il resto quando serve».',
     User::class => 'identità e sessioni, già coperte da AuditLogSubscriber su un altro canale (login, 2FA, impersonation).',
