@@ -11,6 +11,7 @@ use App\Livewire\Campo\Home as CampoHome;
 use App\Livewire\Fornitori\ElencoFornitori;
 use App\Livewire\Piattaforma\Cabina;
 use App\Livewire\Piattaforma\EditorRuoli;
+use App\Livewire\Piattaforma\Errori;
 use App\Livewire\Piattaforma\RegistroAudit;
 use App\Livewire\Ricambi\RicercaRicambi;
 use App\Livewire\Settings\PreferenzeNotifiche;
@@ -124,6 +125,27 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     Route::get('/piattaforma/ruoli', EditorRuoli::class)
         ->middleware('can:'.EditorRuoli::PERMESSO)
         ->name('piattaforma.ruoli');
+
+    // 🔴 L'error tracker interno (S6), e qui il permesso è **un terzo ancora**:
+    // `can:system.logs.view`. Il criterio non cambia — si gata su un permesso
+    // del **set bloccato** — ma per la prima volta la partizione che ne esce
+    // **non coincide** con quella di `tenants.view_all`: `system.logs.view` è
+    // del **solo Developer**, e il Superadmin ne è escluso per eccezione
+    // esplicita in `config/rbac.php` pur avendo ogni altro permesso di
+    // piattaforma.
+    //
+    // ⚠️ È quindi la prima rotta del progetto che il Superadmin non può aprire,
+    // ed è deliberato: da qui si legge ciò che si è rotto in **ogni** Ente, con
+    // dentro messaggi, percorsi e input di richiesta. Aprirla anche a lui è un
+    // commit su `config/rbac.php` più un riseeding, non un click — il permesso
+    // è bloccato, quindi l'editor della matrice non lo redistribuisce.
+    //
+    // Dentro il gruppo protetto come le altre tre: il Developer è un utente
+    // tenant-bound con un account proprio (ADR-018), e un account in lockout
+    // deve vedere /bloccato anche da qui.
+    Route::get('/piattaforma/errori', Errori::class)
+        ->middleware('can:'.Errori::PERMESSO)
+        ->name('piattaforma.errori');
 
     Route::get('/settings/security', TwoFactorAuthentication::class)->name('settings.security');
     // Nessun `can:`: qui si governa la propria casella di posta, non un dato

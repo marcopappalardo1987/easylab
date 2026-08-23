@@ -60,7 +60,7 @@ it('keeps the permission on a real Livewire update', function () {
     $utente = utenteConRuolo('Superadmin');
 
     $html = $this->actingAs($utente)->get(route('piattaforma.audit'))->assertOk()->getContent();
-    $snapshot = snapshotDa($html);
+    $snapshot = snapshotDa($html, 'piattaforma.registro-audit');
 
     expect($snapshot)->not->toBe('');
 
@@ -86,7 +86,7 @@ it('lets in exactly the roles that hold the platform permission', function (stri
         ->get(route('piattaforma.audit'))
         ->assertOk()
         // Una stringa del **corpo**, non «Registro di audit», che la sub-nav
-        // stampa su entrambe le pagine e renderebbe il test verde anche
+        // stampa su tutte le pagine di piattaforma e renderebbe il test verde anche
         // atterrando sulla cabina.
         ->assertSee('Chi ha fatto cosa, e quando, su tutta la piattaforma.', false);
 })->with(RUOLI_CON_PIATTAFORMA);

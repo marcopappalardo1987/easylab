@@ -69,8 +69,33 @@ function scheda(User $user, Strumento $strumento): Testable
  * test si caricano solo se selezionati, quindi una funzione condivisa fra due
  * suite non può abitare in una delle due.
  */
-function snapshotDa(string $html): string
+function snapshotDa(string $html, ?string $componente = null): string
 {
+    // ⚠️ **Senza `$componente` si prende il PRIMO snapshot della pagina, che
+    // quasi mai è quello che interessa.** Misurato il 23 Ago 2026 su
+    // `/piattaforma/errori`: l'ordine è `tenancy.switcher-ente`,
+    // `notifiche.campanella`, `piattaforma.errori` — cioè i test che credevano
+    // di rinfrescare la pagina gatata stavano rinfrescando lo **switcher di
+    // ente**, montato dal layout su ogni schermata.
+    //
+    // Il test non era del tutto vuoto — Livewire rimatcha sul `memo.path` e
+    // riapplica i middleware persistenti, che è il meccanismo vero — ma non
+    // toccava il componente, quindi sarebbe rimasto verde qualunque cosa fosse
+    // successa alle sue azioni. Chi prova il gate di una pagina passi il nome.
+    if ($componente !== null) {
+        preg_match_all('/wire:snapshot="([^"]*)"/', $html, $trovati);
+
+        foreach ($trovati[1] as $grezzo) {
+            $decodificato = html_entity_decode($grezzo, ENT_QUOTES);
+
+            if ((json_decode($decodificato, true)['memo']['name'] ?? null) === $componente) {
+                return $decodificato;
+            }
+        }
+
+        return '';
+    }
+
     $grezzo = str($html)->betweenFirst('wire:snapshot="', '"')->toString();
 
     return html_entity_decode($grezzo, ENT_QUOTES);

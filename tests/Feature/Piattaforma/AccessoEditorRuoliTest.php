@@ -123,7 +123,7 @@ it('keeps the permission on a real Livewire update', function () {
     $utente = ($this->utente)('Superadmin');
 
     $html = $this->actingAs($utente)->get(route('piattaforma.ruoli'))->assertOk()->getContent();
-    $snapshot = snapshotDa($html);
+    $snapshot = snapshotDa($html, 'piattaforma.editor-ruoli');
 
     expect($snapshot)->not->toBe('');
 
@@ -173,7 +173,7 @@ it('lets in exactly the roles that hold roles.manage', function (string $ruolo) 
         ->get(route('piattaforma.ruoli'))
         ->assertOk()
         // Una stringa del **corpo**, non «Ruoli e permessi», che la sub-nav
-        // stampa su tutte e tre le pagine e renderebbe il test verde anche
+        // stampa su tutte le pagine di piattaforma e renderebbe il test verde anche
         // atterrando sulla cabina.
         ->assertSee('Chi può fare cosa, per tutti i clienti insieme.', false);
 })->with(RUOLI_CON_EDITOR);
@@ -239,7 +239,7 @@ it('keeps the editor behind auth, lockout, two-factor and roles.manage', functio
         ->toBeLessThan(array_search('two-factor.enforce', $middleware, true));
 });
 
-it('shows all three platform tabs to someone who governs the whole platform', function () {
+it('shows the platform tabs a Superadmin is entitled to, and only those', function () {
     // 🔴 Il rovescio del negativo qui sopra, e non è simmetria di cortesia: il
     // filtro della nav è nato per la **terza** voce ma si applica a tutte e tre,
     // e un permesso sbagliato sulla **prima** la farebbe sparire per tutti senza
