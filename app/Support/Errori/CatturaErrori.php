@@ -3,8 +3,12 @@
 namespace App\Support\Errori;
 
 use App\Models\Errore;
+use App\Models\OccorrenzaErrore;
+use App\Support\ChiaviSensibili;
 use Carbon\CarbonInterface;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
 /**
@@ -13,9 +17,14 @@ use Throwable;
  *
  * Agganciata a `$exceptions->report()` in `bootstrap/app.php`, scrive **una
  * riga in `errori`** per ogni punto d'origine: la prima volta la crea, dalla
- * seconda in poi incrementa il contatore. Il **contesto** (stack trace, input,
- * utente) non nasce qui: è materia del blocco successivo, e questa classe non
- * tocca `occorrenze_errore`.
+ * seconda in poi incrementa il contatore. E, **a campione**, una riga in
+ * `occorrenze_errore` col contesto dell'avvenimento — stack trace, percorso,
+ * input, chi c'era.
+ *
+ * ⚠️ **Le due cifre non sono la stessa cosa**: `errori.occorrenze` conta *tutti*
+ * gli avvenimenti, `errori.contesti` quante prove se ne sono conservate (al più
+ * `contesti_per_errore`, non più di una ogni `finestra_contesto_secondi`). La
+ * pagina dovrà dirle insieme, o la seconda si legge come la prima.
  *
  * ## Le regole che questa classe non può violare, e perché
  *
@@ -58,7 +67,14 @@ use Throwable;
  * Due query **di dominio** sul percorso caldo: la SELECT sull'impronta e, a
  * seconda del ramo, l'INSERT della issue nuova o l'UPDATE atomico del contatore.
  * È la ragione per cui la contabilità del campionamento vive su `errori` e non
- * si deriva contando le occorrenze già salvate.
+ * si deriva contando le occorrenze già salvate: la decisione «conservo il
+ * contesto?» si legge sulla riga **che si è appena caricata**, e costa zero.
+ *
+ * Quando invece il contesto si conserva le query diventano quattro (l'INSERT
+ * dell'occorrenza e l'UPDATE della contabilità), ed è un costo **limitato per
+ * costruzione** — al più venti volte per issue, e non più di una al minuto.
+ * L'errore in loop caldo, cioè il solo caso in cui il costo conterebbe, è
+ * esattamente quello che il campionamento riporta a due.
  *
  * ⚠️ **I round trip veri sono di più, e va detto**: il savepoint che protegge la
  * transazione del chiamante ne aggiunge (BEGIN, e SAVEPOINT sul ramo di
@@ -85,6 +101,18 @@ final class CatturaErrori
      * primo frame vero, che è il componente Livewire o il controller.
      */
     private const NON_APPLICATIVE = ['vendor/', 'storage/'];
+
+    /**
+     * Quanti frame di stack trace si conservano.
+     *
+     * Non è una misura di spazio — la colonna è `text` — ma di leggibilità: sotto
+     * il cinquantesimo frame c'è il dispatcher del framework, che è identico in
+     * ogni occorrenza di ogni issue e non ha mai spiegato niente a nessuno.
+     */
+    private const FRAMI = 50;
+
+    /** Il `metodo` di un'occorrenza nata fuori da HTTP: non c'è un verbo. */
+    private const CLI = 'CLI';
 
     /**
      * Guardia di rientranza: `cattura()` non gira dentro sé stessa.
@@ -337,7 +365,7 @@ final class CatturaErrori
         $adesso = now();
         $connessione = (new Errore)->getConnection();
 
-        $connessione->transaction(function () use ($e, $impronta, $file, $riga, $adesso, $connessione): void {
+        $errore = $connessione->transaction(function () use ($e, $impronta, $file, $riga, $adesso, $connessione): Errore {
             $trova = fn (): ?Errore => Errore::query()->where('impronta', $impronta)->first();
 
             $errore = $trova();
@@ -347,7 +375,13 @@ final class CatturaErrori
                     // Savepoint suo, dentro quello esterno: la collisione
                     // sull'unique deve poter essere ripulita **senza** portarsi
                     // via la SELECT di recupero qui sotto.
-                    $connessione->transaction(fn () => Errore::create([
+                    //
+                    // ⚠️ **L'istanza creata si tiene**, e non è una comodità: è
+                    // ciò da cui il campionamento legge `contesti` e
+                    // `ultimo_contesto_at` senza spendere una terza query. Con
+                    // un `create()` scartato bisognerebbe rileggere la riga
+                    // appena scritta per sapere ciò che si è appena scritto.
+                    $nata = $connessione->transaction(fn (): Errore => Errore::create([
                         'impronta' => $impronta,
                         // `classe` e `file` sono varchar(255). Una classe
                         // anonima ci arriva vicino, e su Postgres un varchar
@@ -355,7 +389,7 @@ final class CatturaErrori
                         // inghiottirebbe il catch di `cattura()` e la issue non
                         // esisterebbe. È la lezione già pagata su `user_agent`.
                         'classe' => mb_substr($e::class, 0, 255),
-                        'messaggio' => $e->getMessage(),
+                        'messaggio' => self::testo(self::messaggio($e)) ?? '',
                         'file' => mb_substr($file, 0, 255),
                         'riga' => $riga,
                         'prima_occorrenza_at' => $adesso,
@@ -365,7 +399,7 @@ final class CatturaErrori
                     // Issue nuova: `occorrenze` nasce a 1 dal default del model,
                     // quindi qui non si incrementa niente. Il ramo dell'alert
                     // (blocco 8) si aggancerà a questo `return`.
-                    return;
+                    return $nata;
                 } catch (QueryException $collisione) {
                     // Corsa persa: l'unique ha fatto il suo lavoro e la riga ora
                     // c'è. Si rilegge invece di ispezionare lo SQLSTATE, che
@@ -378,7 +412,16 @@ final class CatturaErrori
             }
 
             self::incrementa($errore, $adesso);
+
+            return $errore;
         });
+
+        // Il contesto sta **fuori** dalla transazione della contabilità, e ha la
+        // propria (vedi `contesto()`): la issue e il suo contatore sono il dato
+        // che non si può perdere, il contesto è una prova in più. Un guasto qui
+        // — una colonna troppo corta, un JSON che non si serializza — non deve
+        // portarsi via anche il fatto che l'errore è successo.
+        self::contesto($errore, $e, $adesso);
     }
 
     /**
@@ -423,5 +466,434 @@ final class CatturaErrori
         }
 
         Errore::query()->whereKey($errore->getKey())->increment('occorrenze', 1, $altre);
+
+        // ⚠️ **E l'istanza in memoria si allinea**, o il campionamento
+        // deciderebbe sul budget vecchio: subito dopo una riapertura `$errore`
+        // direbbe ancora `contesti = 20` mentre a database ce ne sono 0, e la
+        // prima occorrenza dopo il tentativo di correzione — cioè **la** prova
+        // per cui l'azzeramento esiste — non verrebbe conservata. `syncOriginal()`
+        // perché questa istanza non va mai salvata: la scrittura è già avvenuta,
+        // qui si sta solo raccontando alla copia in memoria ciò che il database
+        // ha fatto.
+        $errore->forceFill($altre)->syncOriginal();
+    }
+
+    /**
+     * 🔴 Il **contesto** di un avvenimento: stack trace, dove stava succedendo,
+     * chi c'era, con quali dati. È la riga che risponde a «con quali input si
+     * rompe», e la sola del tracker che porta dati personali in quantità.
+     *
+     * ## Un campione, non un registro
+     *
+     * Al più `contesti_per_errore` righe per issue, e non più di una ogni
+     * `finestra_contesto_secondi`. La finestra è la guardia contro il loop caldo:
+     * senza, un errore che scatta mille volte al minuto spenderebbe l'intero
+     * budget in un secondo, e lo spenderebbe **tutto sullo stesso istante** —
+     * venti copie della stessa fotografia invece di venti fotografie.
+     *
+     * La contabilità si legge dalla riga `Errore` **già caricata**: zero query
+     * per decidere, che è la ragione per cui quelle due colonne stanno lì e non
+     * si ricavano contando `occorrenze_errore`.
+     *
+     * ## La transazione, e perché è sua
+     *
+     * Su Postgres una query fallita aborta l'**intera** transazione (25P02):
+     * senza savepoint, un contesto che non si riesce a scrivere lascerebbe morta
+     * la transazione del chiamante — cioè trasformerebbe una prova mancata in un
+     * guasto vero. È la stessa ragione già scritta su `registra()`, un gradino
+     * più in là.
+     */
+    private static function contesto(Errore $errore, Throwable $e, CarbonInterface $adesso): void
+    {
+        if (! self::daCampionare($errore, $adesso)) {
+            return;
+        }
+
+        // ⚠️ **L'ambiente si decide PRIMA di leggere la richiesta**, perché fuori
+        // da HTTP `request()` non è assente: è una `Request` **fabbricata** da
+        // `$_SERVER`, che dice `GET`, percorso `/`, ip `127.0.0.1` e user agent
+        // `Symfony`. Verificato in console. Salvarla darebbe a ogni errore di un
+        // comando o di un job un contesto HTTP inventato di sana pianta — dati
+        // falsi su una riga che esiste per dire la verità su cosa è successo.
+        $ambiente = self::ambiente();
+        $richiesta = $ambiente === 'http' ? request() : null;
+
+        [$utente, $impersonatore] = self::attori();
+
+        $errore->getConnection()->transaction(function () use ($errore, $e, $adesso, $ambiente, $richiesta, $utente, $impersonatore): void {
+            OccorrenzaErrore::create([
+                'errore_id' => $errore->getKey(),
+                'messaggio' => self::testo(self::messaggio($e)) ?? '',
+                'stack_trace' => self::traccia($e),
+                'percorso' => self::testo(self::percorso($richiesta)) ?? '',
+                'metodo' => $richiesta?->method() ?? self::CLI,
+                'codice_http' => $richiesta === null ? null : self::codice($e),
+                'user_id' => $utente,
+                'impersonato_da' => $impersonatore,
+                'ip' => $richiesta?->ip(),
+                'user_agent' => self::testo($richiesta?->userAgent()),
+                'input' => $richiesta === null ? null : self::input($richiesta),
+                'contesto' => $ambiente,
+                'avvenuta_at' => $adesso,
+            ]);
+
+            // `increment()` e non `$errore->contesti + 1` calcolato in PHP: la
+            // ragione è la stessa del contatore delle occorrenze, e qui in più
+            // il valore è un **budget** — sovrastimarlo spegne il campionamento
+            // in anticipo, sottostimarlo lo lascia correre oltre il tetto
+            // dichiarato in T8.
+            Errore::query()
+                ->whereKey($errore->getKey())
+                ->increment('contesti', 1, ['ultimo_contesto_at' => $adesso]);
+        });
+    }
+
+    /**
+     * Si conserva il contesto di questo avvenimento?
+     *
+     * Due condizioni, e vanno **entrambe** soddisfatte: il budget della issue non
+     * è esaurito, ed è passata abbastanza dall'ultima prova conservata.
+     *
+     * ⚠️ **`>=` sul tetto e non `>`**: `contesti_per_errore` è «quante se ne
+     * conservano», non «dopo quante si smette». Con `>` la ventunesima passerebbe.
+     */
+    private static function daCampionare(Errore $errore, CarbonInterface $adesso): bool
+    {
+        if ($errore->contesti >= (int) config('easylab.errori.contesti_per_errore')) {
+            return false;
+        }
+
+        $ultimo = $errore->ultimo_contesto_at;
+
+        // `null` è la issue appena nata (o appena riaperta): la prima prova si
+        // prende sempre, ed è quella che vale di più.
+        if ($ultimo === null) {
+            return true;
+        }
+
+        // `true` come secondo argomento: la differenza in **valore assoluto**.
+        // Un orologio che torna indietro — l'ora legale, un `travel()` di un
+        // test, due repliche non sincronizzate — darebbe altrimenti un negativo,
+        // che è sempre `< finestra`: il campionamento si spegnerebbe fino a
+        // quando il tempo non ha recuperato.
+        return $ultimo->diffInSeconds($adesso, true) >= (int) config('easylab.errori.finestra_contesto_secondi');
+    }
+
+    /**
+     * 🔴 Lo stack trace **ricostruito dai frame**, senza gli argomenti.
+     *
+     * ⚠️ **E la strada che sembrava più prudente è quella che perde di più.**
+     * `getTraceAsString()` sembra la scelta ovvia e sicura perché tronca gli
+     * argomenti a 15 caratteri: è il contrario di ciò che serve. Tronca, ma
+     * **stampa** — verificato, una password di 23 caratteri esce con i suoi primi
+     * 15 in chiaro, che di una password sono più che abbastanza per essere
+     * riconosciuta, e di un codice di recupero 2FA sono la metà. `getTrace()`
+     * restituisce invece gli argomenti **integri**, oggetti vivi compresi: da
+     * soli, i frame sono la strada peggiore delle due.
+     *
+     * Ciò che rende buona questa strada è **`unset($frame['args'])`**, che è la
+     * sola riga di questo metodo che conti dal punto di vista della privacy.
+     *
+     * ⚠️ **E non ci si affida a `zend.exception_ignore_args`.** `php.ini-production`
+     * la distribuisce a `On`, e dove è attiva gli argomenti non ci sono nemmeno.
+     * Ma su Herd è `Off` — misurato, `ini_get()` dice `'0'` — quindi in sviluppo
+     * la perdita esisterebbe eccome, e su Laravel Cloud va **letto lì**, non
+     * dedotto. Una protezione che dipende da un'ini di cui non si conosce il
+     * valore non è una protezione.
+     *
+     * ⚠️ **Perché il residuo del frame viene reso, invece di leggere solo le
+     * chiavi attese.** Con un'allowlist (`file`, `line`, `class`, `type`,
+     * `function`) l'`unset()` sarebbe **decorativo**: togliendolo non cambierebbe
+     * un carattere dell'output, e il test di mutazione che deve tenerlo in piedi
+     * resterebbe verde su codice rotto — cioè la guardia più importante del
+     * blocco sarebbe l'unica senza rete. Rendendo ciò che resta del frame,
+     * `unset()` diventa la sola cosa fra `args` e il database, e togliendolo il
+     * test diventa rosso. Il prezzo dichiarato è che una chiave nuova nei frame
+     * di PHP finirebbe qui: i frame di `Throwable::getTrace()` ne hanno sei
+     * (`file`, `line`, `function`, `class`, `type`, `args`) e `object` non
+     * compare mai — è di `debug_backtrace()` con `DEBUG_BACKTRACE_PROVIDE_OBJECT`,
+     * che qui non passa. Si preferisce una guardia falsificabile a una guardia
+     * elegante.
+     */
+    private static function traccia(Throwable $e): string
+    {
+        // La prima riga dice **dov'è nata** l'eccezione (la riga del `throw`),
+        // che `getTrace()[0]` non dice: quello è già il chiamante. È la stessa
+        // ragione per cui `posizioni()` mette `getFile()` davanti al trace.
+        $righe = [
+            // ⚠️ `self::messaggio()` e non `getMessage()`: la prima riga del
+            // trace ricopia il messaggio, quindi senza questa i binding di una
+            // `QueryException` rientrerebbero da qui dopo essere stati tolti
+            // dalla colonna. È la stessa fuga, un centimetro più in là.
+            $e::class.': '.self::messaggio($e),
+            'origine '.$e->getFile().':'.$e->getLine(),
+        ];
+
+        foreach (array_slice($e->getTrace(), 0, self::FRAMI) as $n => $frame) {
+            // 🔴 **La riga che conta.** Vedi il docblock: senza, qui dentro
+            // finiscono gli argomenti **integri** di ogni chiamata sullo stack —
+            // password, codici di recupero, oggetti vivi.
+            unset($frame['args']);
+
+            $posizione = isset($frame['file'], $frame['line'])
+                ? $frame['file'].':'.$frame['line']
+                // Funzione interna, `call_user_func`, closure di un handler: il
+                // frame non ha una posizione, e dirlo è meglio che saltarlo —
+                // altrimenti la numerazione mentirebbe sulla profondità.
+                : '[interno]';
+
+            $chiamata = ($frame['class'] ?? '').($frame['type'] ?? '').($frame['function'] ?? '').'()';
+
+            unset($frame['file'], $frame['line'], $frame['class'], $frame['type'], $frame['function']);
+
+            // Il residuo: vuoto su ogni versione di PHP conosciuta, e **pieno di
+            // argomenti** se qualcuno togliesse l'`unset()` qui sopra. È ciò che
+            // rende quella riga una guardia invece di un'intenzione.
+            $residuo = $frame === [] ? '' : ' '.self::json($frame);
+
+            $righe[] = '#'.$n.' '.$posizione.' '.$chiamata.$residuo;
+        }
+
+        // ⚠️ **La radice si toglie dalla stringa intera, non percorso per
+        // percorso**, e la ragione è che i percorsi assoluti non stanno solo in
+        // `file`. Verificato su PHP 8.4: il nome di una closure è
+        // `{closure:/percorso/assoluto/File.php:21}` e quello di una classe
+        // anonima `class@anonymous/percorso/assoluto/File.php:12$0` — cioè la
+        // directory di deploy rientra dalla chiave `function` e dalla chiave
+        // `class`, dove nessuno la cercherebbe. Su Laravel Cloud ogni release
+        // vive in una directory diversa, quindi senza questa riga metà dei frame
+        // di ogni trace sarebbe illeggibile il giorno dopo.
+        return self::testo(str_replace(base_path().'/', '', implode("\n", $righe))) ?? '';
+    }
+
+    /**
+     * L'input della richiesta, ripulito dalle chiavi sensibili **in scrittura**.
+     *
+     * 🔴 **`input()` e non `all()`**, e i due differiscono in un punto che conta:
+     * `all()` è `input() + allFiles()`, quindi porta dentro gli `UploadedFile`.
+     * Un oggetto attraversato dalla ripulitura ricorsiva si apre nei propri campi
+     * **privati**, e PHP prefissa le chiavi dei campi privati con un byte **NUL**
+     * — che su Postgres non è un carattere qualunque: `text` e `json` lo
+     * rifiutano o lo troncano, e la riga intera diventa insalvabile. Il contenuto
+     * di un file caricato non è comunque contesto: è il file.
+     *
+     * ⚠️ **`input()` include la query string**, ed è voluto: è da lì che
+     * `signature` ed `expires` di una rotta firmata rientrano dopo essere state
+     * escluse dal percorso. La denylist le prende — ed è la ragione per cui il
+     * test asserisce **sul valore** e non sulla presenza della chiave.
+     *
+     * @return array<array-key, mixed>|null
+     */
+    private static function input(Request $richiesta): ?array
+    {
+        $pulito = ChiaviSensibili::ripulisci($richiesta->input());
+
+        if (! is_array($pulito) || $pulito === []) {
+            return null;
+        }
+
+        // ⚠️ **Un byte UTF-8 malformato rende insalvabile l'INTERA riga**, non
+        // solo la colonna: il cast `array` di Eloquent serializza con
+        // `json_encode()` nudo, che su input non valido lancia
+        // `JsonEncodingException` — e a raccoglierla c'è il catch di `cattura()`,
+        // che scarterebbe **tutto** il contesto (stack trace compreso) per un
+        // byte arrivato da un client. Il giro di andata e ritorno normalizza qui,
+        // dove si può ancora scegliere cosa perdere.
+        $json = self::json($pulito);
+
+        // `\u0000` non è UTF-8 malformato — è legale in JSON — ma su Postgres il
+        // NUL è comunque rifiutato in estrazione. Si toglie dalla forma
+        // serializzata, che è l'unico punto in cui è un pattern e non un byte.
+        $riletto = json_decode(str_replace('\\u0000', '', $json), true);
+
+        return is_array($riletto) && $riletto !== [] ? $riletto : null;
+    }
+
+    /**
+     * JSON che non lancia mai, per un gestore di eccezioni.
+     *
+     * `JSON_INVALID_UTF8_SUBSTITUTE` sostituisce i byte malformati con `U+FFFD`
+     * invece di far fallire l'intera codifica, e `JSON_PARTIAL_OUTPUT_ON_ERROR`
+     * copre ciò che resta (ricorsione, `INF`/`NAN`): meglio un contesto monco che
+     * nessun contesto.
+     *
+     * @param  array<array-key, mixed>  $valore
+     */
+    private static function json(array $valore): string
+    {
+        return (string) json_encode(
+            $valore,
+            JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+        );
+    }
+
+    /**
+     * Chi ha subito l'errore, e chi stava **davvero** agendo.
+     *
+     * 🔴 `user_id` è l'utente autenticato — cioè, durante un'impersonazione,
+     * l'**impersonato** — e `impersonato_da` è l'impersonatore. È lo stesso verso
+     * del timbro che `AppServiceProvider` mette su ogni riga di audit
+     * (`properties.impersonato_da`), e invertirlo attribuirebbe al cliente un
+     * errore incontrato da EasyLab: un dato falso su una persona, non un dettaglio
+     * di rendering.
+     *
+     * ⚠️ **Niente `rescue()`**, per la regola 1 del docblock di classe: `rescue()`
+     * chiama `report()`. Il `try` nudo qui dentro serve perché la sessione può non
+     * esserci affatto (console, coda) e perché `auth()` durante un guasto
+     * dell'autenticazione è l'ultimo posto da cui farsi rilanciare un'eccezione:
+     * senza il nome di chi c'era il contesto vale ancora, senza il contesto no.
+     *
+     * @return array{0: int|null, 1: int|null}
+     */
+    private static function attori(): array
+    {
+        try {
+            $utente = auth()->id();
+
+            $impersonatore = app()->bound('impersonate') && app('impersonate')->isImpersonating()
+                ? app('impersonate')->getImpersonatorId()
+                : null;
+
+            return [$utente, $impersonatore];
+        } catch (Throwable) {
+            return [null, null];
+        }
+    }
+
+    /**
+     * `http` | `console` | `coda`. Dice **come leggere** le colonne accanto: fuori
+     * da `http`, `percorso` è il comando e `codice_http` è null.
+     *
+     * ⚠️ **`runningInConsole()` da sola non basta, e la ragione morderebbe proprio
+     * i test di questo blocco.** Legge il SAPI, e sotto PHPUnit il SAPI è `cli`
+     * **anche per una richiesta HTTP simulata**: `$this->post(...)` risulterebbe
+     * `console`, cioè ogni test che prova la sanificazione dell'input starebbe
+     * provando il ramo sbagliato — e sarebbe verde, perché in quel ramo l'input
+     * non si salva affatto. La seconda condizione è la **rotta risolta**: esiste
+     * solo se il router ha instradato una richiesta vera.
+     *
+     * ⚠️ Limite dichiarato: un'eccezione lanciata **prima** dell'instradamento
+     * (middleware globale) dentro la suite si classifica `console`. In esecuzione
+     * vera no — là `runningInConsole()` è già falso — quindi il limite vive solo
+     * nei test, dove si nota.
+     */
+    private static function ambiente(): string
+    {
+        if (! app()->runningInConsole()) {
+            return 'http';
+        }
+
+        if (app()->runningConsoleCommand('queue:work', 'queue:listen')) {
+            return 'coda';
+        }
+
+        return request()->route() !== null ? 'http' : 'console';
+    }
+
+    /**
+     * Il comando in esecuzione, per le occorrenze fuori da HTTP.
+     *
+     * 🔴 **Il nome del comando, mai i suoi argomenti.** `easylab:abbona --token=…`
+     * scriverebbe un segreto in `percorso`, che è una colonna di testo libero su
+     * cui la denylist dell'input non passa: la riga di comando è un canale che
+     * porta credenziali per mestiere. Si tiene la sola prima parola, e la si
+     * scarta se comincia per `-` (flag globale, nessun comando).
+     */
+    /**
+     * Il percorso della richiesta, **senza i valori dei parametri di rotta**.
+     *
+     * 🔴 Chiudere `fullUrl()` e mettere `signature` nella denylist non bastava:
+     * i segreti stanno anche **dentro il percorso**. Questo progetto ha davvero
+     * `reset-password/{token}` (Fortify), `q/{token}` (QR, ADR-003) e
+     * `email/verify/{id}/{hash}`: con `path()` un'eccezione su quelle pagine
+     * scriveva un **gettone vivo in chiaro** in una colonna conservata mesi,
+     * dietro il gate che nessuno può ispezionare tranne il Developer — cioè
+     * esattamente la fuga che questo blocco esiste per impedire, per la strada
+     * che nessuno aveva provato.
+     *
+     * Si salva perciò lo **schema** della rotta (`reset-password/{token}`) e non
+     * il percorso risolto. Non è solo più sicuro: raggruppa meglio, perché mille
+     * gettoni diversi diventano una riga sola invece di mille.
+     *
+     * Il fallback su `path()` vale quando **nessuna rotta ha corrisposto** — un
+     * 404, o un'eccezione prima del routing: lì non c'è uno schema da usare, e
+     * il percorso grezzo è ciò che resta. È anche il caso in cui un segreto
+     * nell'URL è meno probabile, perché nessuna rotta lo ha dichiarato.
+     */
+    private static function percorso(?Request $richiesta): string
+    {
+        if ($richiesta === null) {
+            return self::comando();
+        }
+
+        return $richiesta->route()?->uri() ?? $richiesta->path();
+    }
+
+    /**
+     * Il messaggio dell'eccezione, **senza i valori dei binding**.
+     *
+     * 🔴 `QueryException` costruisce il proprio messaggio interpolando i binding
+     * nell'SQL (`Str::replaceArray('?', $bindings, $sql)`): **ogni valore di ogni
+     * query fallita** finisce nel messaggio, e il messaggio non passa da nessuna
+     * denylist. Verificato con una query su `recovery_code`: il codice usciva in
+     * tre colonne, fra cui `errori.messaggio`, che si scrive una volta sola, non
+     * si campiona e vive quanto la issue.
+     *
+     * Non si taglia la coda `, SQL: …`, perché quella è la cosa più utile che un
+     * tracker di errori possa dire: si **ricostruisce** dall'SQL coi segnaposto,
+     * che `getSql()` restituisce già senza valori. Diagnostica intatta, segreti
+     * fuori.
+     */
+    private static function messaggio(Throwable $e): string
+    {
+        if (! $e instanceof QueryException) {
+            return $e->getMessage();
+        }
+
+        return sprintf(
+            '%s (Connection: %s, SQL: %s)',
+            $e->getPrevious()?->getMessage() ?? 'Query fallita',
+            $e->getConnectionName(),
+            $e->getSql(),
+        );
+    }
+
+    private static function comando(): string
+    {
+        $primo = $_SERVER['argv'][1] ?? null;
+
+        return is_string($primo) && $primo !== '' && ! str_starts_with($primo, '-')
+            ? $primo
+            : 'artisan';
+    }
+
+    /**
+     * Il codice di stato dell'occorrenza.
+     *
+     * `500` di default perché un'eccezione **riportata** è, per la lista ereditata
+     * da `shouldntReport()`, ciò che non è una `HttpException`. L'`instanceof`
+     * resta per le eccezioni riportate a mano da un `try/catch` applicativo, che
+     * possono benissimo portare un codice proprio.
+     */
+    private static function codice(Throwable $e): int
+    {
+        return $e instanceof HttpExceptionInterface ? $e->getStatusCode() : 500;
+    }
+
+    /**
+     * Testo pronto per una colonna di Postgres.
+     *
+     * ⚠️ **Il byte NUL non è un carattere qualunque**: Postgres lo rifiuta in
+     * `text` (`invalid byte sequence for encoding "UTF8": 0x00`), e sotto SQLite
+     * tronca in silenzio il valore al primo NUL. Ci arriva dai nomi delle classi
+     * anonime (`class@anonymous\0/percorso/File.php:12$0`), che in uno stack trace
+     * capitano eccome — ogni closure di un provider, ogni `new class` di un test.
+     * Su un percorso che gira dentro il gestore delle eccezioni il guasto
+     * sarebbe muto: il catch di `cattura()` lo inghiottirebbe e la issue
+     * resterebbe senza contesti, indistinguibile dal campionamento.
+     */
+    private static function testo(?string $valore): ?string
+    {
+        return $valore === null ? null : str_replace("\0", '', $valore);
     }
 }

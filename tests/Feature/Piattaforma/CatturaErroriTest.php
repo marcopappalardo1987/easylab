@@ -406,12 +406,21 @@ it('reopens a resolved issue, and never reopens an ignored one', function () {
         ->and($errore->occorrenze)->toBe(2)
         ->and($errore->riaperto_automaticamente_at)->not->toBeNull()
         ->and($errore->risolto_at)->toBeNull()
-        // ⚠️ Il budget dei contesti si azzera con la riapertura: senza, dopo un
-        // tentativo di correzione la issue sarebbe già al cap e non
-        // catturerebbe **mai più** la prova che serve a rispondere a «l'ho
-        // corretto, perché succede ancora?».
-        ->and($errore->contesti)->toBe(0)
-        ->and($errore->ultimo_contesto_at)->toBeNull();
+        // ⚠️ **Il budget dei contesti si azzera con la riapertura, e `1` è
+        // esattamente la sua prova** — non `0`, come diceva questa riga finché
+        // il campionamento non esisteva (blocco 3). Dal blocco 4 l'occorrenza
+        // che riapre la issue **spende subito** il budget appena azzerato, ed è
+        // giusto che lo faccia: è la prima prova dopo il tentativo di
+        // correzione, cioè la risposta a «l'ho corretto, perché succede
+        // ancora?», e conservarla è tutto il senso dell'azzeramento.
+        //
+        // Il test resta falsificabile, e con lo stesso verso di prima: senza
+        // l'azzeramento la issue sarebbe ancora a 20 — cioè al tetto — il
+        // campionamento non scatterebbe affatto e qui si leggerebbe `20`.
+        // Mutazione: in `incrementa()`, togliere `'contesti' => 0` dal ramo
+        // della riapertura → rosso.
+        ->and($errore->contesti)->toBe(1)
+        ->and($errore->ultimo_contesto_at)->not->toBeNull();
 
     // **La riapertura non è il gesto di una persona e non scrive audit**: il
     // registro racconta chi ha fatto cosa, e qui non c'è nessun chi. Il fatto

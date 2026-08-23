@@ -2,6 +2,7 @@
 
 namespace App\Support\Audit;
 
+use App\Support\ChiaviSensibili;
 use Spatie\Activitylog\Models\Activity;
 
 /**
@@ -48,23 +49,14 @@ use Spatie\Activitylog\Models\Activity;
  * ⚠️ **Limite noto, dichiarato e non chiuso.** `Login fallito` scrive
  * `properties.email` con *ciò che è stato digitato nel campo email*: se qualcuno
  * batte la password nel campo sbagliato, la password finisce lì in chiaro e la
- * denylist (`password`, `*token*`, `*secret*`) non la vede, perché la chiave si
- * chiama `email`. Oscurare `email` **non** è il rimedio: svuoterebbe la riga più
+ * denylist (🔗 `App\Support\ChiaviSensibili`) non la vede, perché **guarda la
+ * chiave, mai il valore**, e la chiave si chiama `email`. Oscurare `email` **non** è il rimedio: svuoterebbe la riga più
  * utile del registro di sicurezza — «chi ha provato a entrare come chi» è
  * l'informazione per cui quella riga si scrive. Si dichiara e si sceglie, non si
  * nasconde.
  */
 final class DettaglioAttivita
 {
-    /**
-     * Le porzioni di chiave il cui **valore** non esce mai dal database.
-     *
-     * Match su porzione e senza distinzione di maiuscole: `password`,
-     * `password_confirmation`, `api_token`, `remember_token`, `client_secret`
-     * cadono tutte qui senza doverle elencare.
-     */
-    private const OSCURATE = ['password', 'token', 'secret'];
-
     /**
      * Le chiavi che la **colonna «Chi» dice già, e dice meglio**.
      *
@@ -179,18 +171,17 @@ final class DettaglioAttivita
      * oscurati dev'essere **vuota** — altrimenti l'espansione si offre e si apre
      * su una scatola che dice solo «c'era qualcosa che non ti mostro», che è il
      * caso che `vuoto()` esiste per impedire.
+     *
+     * L'elenco e il modo di applicarlo vivono in `App\Support\ChiaviSensibili`
+     * dal blocco 4 dell'error tracker (S6): da lì la stessa denylist filtra
+     * anche `$request->all()` prima che finisca in `occorrenze_errore.input`, e
+     * due copie dello stesso elenco divergono alla prima aggiunta. La lista è
+     * anche **cresciuta** in quell'occasione — `code`, `recovery_code`,
+     * `signature`, `expires` — per ragioni che stanno scritte là.
      */
     private static function daOscurare(string $chiave): bool
     {
-        $normalizzata = mb_strtolower($chiave);
-
-        foreach (self::OSCURATE as $ago) {
-            if (str_contains($normalizzata, $ago)) {
-                return true;
-            }
-        }
-
-        return false;
+        return ChiaviSensibili::nomina($chiave);
     }
 
     /**
@@ -227,27 +218,9 @@ final class DettaglioAttivita
         ) ?: self::VUOTO;
     }
 
-    /** Toglie le chiavi oscurate a ogni livello di annidamento. */
+    /** Toglie le chiavi oscurate a ogni livello di annidamento (🔗 `ChiaviSensibili`). */
     private static function ripulisci(mixed $valore): mixed
     {
-        if (is_object($valore)) {
-            $valore = (array) $valore;
-        }
-
-        if (! is_array($valore)) {
-            return $valore;
-        }
-
-        $pulito = [];
-
-        foreach ($valore as $chiave => $interno) {
-            if (is_string($chiave) && self::daOscurare($chiave)) {
-                continue;
-            }
-
-            $pulito[$chiave] = self::ripulisci($interno);
-        }
-
-        return $pulito;
+        return ChiaviSensibili::ripulisci($valore);
     }
 }
