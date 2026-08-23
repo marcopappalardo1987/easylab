@@ -4,6 +4,7 @@ use App\Http\Controllers\StripeWebhookController;
 use App\Http\Middleware\EnforceAccountLockout;
 use App\Http\Middleware\EnsureTwoFactorIsEnabled;
 use App\Http\Middleware\VerificaFirmaWebhookStripe;
+use App\Support\Errori\CatturaErrori;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -55,4 +56,35 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );
+
+        // 🔴 Error tracker interno (S6 — `App\Support\Errori\CatturaErrori`).
+        //
+        // Su Laravel Cloud `laravel.log` vive su un disco **effimero e
+        // per-replica**, azzerato a ogni deploy e a ogni risveglio da
+        // scale-to-zero: un errore visto da un cliente può non lasciare nulla di
+        // consultabile. Questa riga lo fa arrivare anche a database, che è
+        // l'unico store condiviso e persistente dell'ambiente.
+        //
+        // ⚠️ **Il type hint `Throwable` è obbligatorio, e la sua assenza non è
+        // un guasto silenzioso.** `ReportableHandler::handles()` legge il tipo
+        // del primo parametro con `firstClosureParameterTypes()`, che **lancia**
+        // se non ne trova: senza `Throwable` ogni eccezione riportabile
+        // crasherebbe **prima** di raggiungere il logger, cioè con zero righe in
+        // `laravel.log`. Il caso davvero silenzioso è l'opposto — un hint più
+        // stretto, che farebbe passare quasi tutto senza dire niente.
+        //
+        // ⚠️ **Closure a graffe e non arrow function**, e non è stile: un
+        // callback che restituisce `false` **interrompe** `reportThrowable()` e
+        // il logger di default non riceve più nulla. `cattura()` è `void`,
+        // quindi anche una arrow function sarebbe innocua — ma il corpo
+        // esplicito rende impossibile trasformare un ritorno in una soppressione
+        // per distrazione.
+        //
+        // Il callback gira **dopo** `shouldntReport()`: la lista degli ignorati
+        // del framework si eredita e non si ridichiara. Per la stessa ragione
+        // qui non c'è nessun `$exceptions->throttle()` — quello sta *dentro*
+        // `shouldntReport()` e strozzerebbe anche `laravel.log`.
+        $exceptions->report(function (Throwable $e): void {
+            CatturaErrori::cattura($e);
+        });
     })->create();
