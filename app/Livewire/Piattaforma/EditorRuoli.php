@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Piattaforma;
 
+use App\Models\User;
 use App\Support\Rbac;
 use App\Support\Rbac\MatriceRuoli;
 use Illuminate\Contracts\View\View;
@@ -14,15 +15,32 @@ use Spatie\Permission\Models\Permission;
 /**
  * 🔴 L'editor della matrice ruolo→permesso (S6 — ADR-016).
  *
- * Per ora è **in sola lettura**: la matrice intera resa in tabella, e nessun
- * controllo che scriva. È voluto, ed è la stessa sequenza con cui sono nate
- * `Cabina` e `RegistroAudit` — prima un guscio già gatato (una pagina che non
- * mostra nulla rende il gate **dimostrabile prima** che ci sia qualcosa da
- * proteggere), poi la lettura, e solo dopo la scrittura. Leggere correttamente
- * 324 celle è un lavoro a sé, e questa tappa è ciò che permette di verificare a
+ * La matrice intera resa in tabella, e una cella alla volta modificabile. È
+ * nata in tre tappe — guscio gatato, griglia in sola lettura, e solo alla fine
+ * i controlli — ed è la stessa sequenza di `Cabina` e `RegistroAudit`: una
+ * pagina che non mostra nulla rende il gate **dimostrabile prima** che ci sia
+ * qualcosa da proteggere, e una griglia in sola lettura permette di verificare a
  * occhio, su staging, che `MatriceRuoli::stato()` dica il vero **prima** che
  * esista un bottone che scrive. L'ordine opposto mette la guardia addosso a una
  * vista già scritta, e la prova diventa «non sembra rotto».
+ *
+ * ## Si salva per cella, e non c'è un bottone «salva»
+ *
+ * ⚠️ **È l'unica forma in cui la guardia del set bloccato è strutturale.** Un
+ * «salva la riga» accetterebbe un array dal browser, e allora un permesso
+ * bloccato potrebbe essere *omesso* dall'array invece che revocato — la revoca
+ * per omissione, contro cui nessuna guardia scritta sulle celle presenti può
+ * niente. La lezione è già scritta in `AmministraAccount`: «Un elenco derivato
+ * dal dato che deve difendere non difende niente». In più toglie la
+ * sovrapposizione fra due amministratori invece di gestirla: ogni scrittura è
+ * una riga sola del pivot, e sulla stessa cella vince l'ultimo — con **entrambi
+ * i gesti nel registro**, quindi la sequenza si ricostruisce.
+ *
+ * Nessun locking ottimistico, e va detto perché è il primo posto dove si
+ * guarderebbe: `roles` ha i timestamp, ma un `attach`/`detach` su una
+ * `belongsToMany` **non tocca** `roles.updated_at`. Un token di versione
+ * andrebbe inventato, cioè si costruirebbe il meccanismo *e* la cosa che
+ * protegge.
  *
  * ## L'orientamento della griglia, che è una decisione e non un caso
  *
@@ -98,6 +116,32 @@ use Spatie\Permission\Models\Permission;
  *
  * 🔗 ADR-016 (RBAC e UI di gestione), ADR-018 (tenancy senza bypass, `can:` di
  * rotta sulle azioni), `App\Support\Rbac\MatriceRuoli` (la regola).
+ *
+ * ⚠️ **Le asimmetrie di RUOLO non sono rese, ed è una scelta da dichiarare.**
+ *
+ * Questa pagina si prende cura delle due asimmetrie del **catalogo dei
+ * permessi** — l'orfano rimasto a database, il dichiarato-ma-non-seminato — e
+ * lascia cadere in silenzio le due gemelle sui **ruoli**: un `Role` creato fuori
+ * catalogo non compare da nessuna parte, e un ruolo del catalogo mancante a
+ * database rende una colonna tutta ❌ senza dire che è vuota per assenza e non
+ * per scelta. È la stessa confusione che la striscia degli orfani evita sui
+ * permessi, accettata sui ruoli.
+ *
+ * Non è un rinvio comodo: `MatriceRuoli` nomina il ruolo fuori catalogo come
+ * minaccia viva («`Role::create()` è a portata di chiunque abbia una console…
+ * non avrebbe né scope di riga né 2FA obbligatorio»), e questa è l'unica
+ * schermata da cui lo si vedrebbe.
+ *
+ * Ciò che **contiene** il rischio è il dominio, non questa pagina: `MatriceRuoli`
+ * rifiuta di scrivere su un ruolo fuori catalogo, quindi da qui non lo si può
+ * riempire. Resta scoperta la sola **visibilità** — chi lo crea da console lo
+ * tiene nascosto — e chiuderla vorrebbe dire decidere cosa se ne fa chi lo
+ * trova, che è una scelta di prodotto e non di questa schermata.
+ *
+ * *La prima stesura di questa nota motivava il rinvio con «la griglia di questo
+ * blocco è in sola lettura»: era vero quando è stata scritta e ha smesso di
+ * esserlo nel blocco successivo, cioè in questo stesso file. Un rinvio motivato
+ * da uno stato transitorio invecchia in silenzio.*
  */
 #[Layout('components.layouts.app')]
 class EditorRuoli extends Component
@@ -111,6 +155,199 @@ class EditorRuoli extends Component
      * gatare la pagina su un permesso e la voce di menù su un altro.
      */
     public const PERMESSO = 'roles.manage';
+
+    /**
+     * La cella in attesa di conferma, `''` quando non ce n'è nessuna.
+     *
+     * ⚠️ Sono property **pubbliche**, cioè scrivibili dal browser, e non è una
+     * svista: non difendono niente e non devono sembrare di farlo. Ciò che
+     * regge è che `commuta()` ricalcola tutto da capo — il verso dalla matrice a
+     * database, le due guardie dentro `MatriceRuoli` — quindi impostarle a mano
+     * e chiamare `procedi()` non arriva più lontano di una chiamata diretta a
+     * `commuta()`, che è già provata come rifiutata sui casi vietati. La
+     * conferma è una **decisione da far prendere a un umano**, non una guardia:
+     * confonderle produrrebbe la falsa sicurezza che questo lavoro combatte
+     * ovunque.
+     */
+    public string $ruoloInConferma = '';
+
+    public string $permessoInConferma = '';
+
+    /**
+     * Il click su una cella: chiede conferma quando serve, altrimenti scrive.
+     *
+     * ⚠️ **Non è `commuta()` con un `if` davanti**, ed è il motivo per cui sono
+     * due metodi: `commuta()` deve restare chiamabile e rifiutabile per conto
+     * proprio — una richiesta forgiata a mano non passa di qui, e la prova che
+     * la cella bloccata resiste si scrive **su quella**.
+     *
+     * Il verso si legge dalla matrice a database e **non** dal browser, per la
+     * stessa ragione per cui `MatriceRuoli::commuta()` non accetta un booleano:
+     * l'HTML che l'utente sta guardando afferma uno stato che aveva letto prima.
+     * Costa le due query fisse di `stato()`, cioè quanto le due query di `stato()` — la pagina ne fa tre —
+     * l'alternativa sarebbe una seconda lettura del pivot scritta qui, e le
+     * letture della matrice stanno in un posto solo.
+     */
+    public function chiedi(string $ruolo, string $permesso): void
+    {
+        Gate::authorize(self::PERMESSO);
+
+        $concede = ! isset(MatriceRuoli::stato()[$ruolo][$permesso]);
+
+        if (! self::vaConfermato($ruolo, $concede)) {
+            $this->commuta($ruolo, $permesso);
+
+            return;
+        }
+
+        $this->ruoloInConferma = $ruolo;
+        $this->permessoInConferma = $permesso;
+    }
+
+    /**
+     * Quali gesti si fermano a chiedere, e perché **la concessione è il lato che
+     * conta di più**.
+     *
+     * L'istinto dice il contrario — «concedere è additivo e reversibile, revocare
+     * toglie accesso a persone vive» — e vale solo finché si guardano i
+     * permessi. Ma `EnsureTwoFactorIsEnabled` non gata il secondo fattore sui
+     * permessi: lo gata **per nome di ruolo**
+     * (`Rbac::twoFactorRequiredRoles()`). Concedere `utenti.delete`,
+     * `semaforo.force` o `documenti.delete` a `Tenant`, `Tecnico` o
+     * `Responsabile Reparto` allarga quindi il potere di ruoli **senza secondo
+     * fattore obbligatorio**, con un click e per tutti i clienti insieme: è la
+     * direzione in cui questa pagina fa danno davvero, e non si vede guardando
+     * la matrice.
+     *
+     * Le revoche chiedono sempre. Non perché una singola revoca sia grave — è
+     * anzi il gesto più facile da annullare — ma perché nessuna singola revoca
+     * *sembra* grave: quattordici click e il `Tenant` non fa più niente, per
+     * tutti gli Enti. Il numero di persone col ruolo è ciò che trasforma la
+     * conferma in una decisione invece che in un ostacolo.
+     *
+     * Ne segue che l'unico gesto che scrive senza fermarsi è la concessione a un
+     * ruolo che il 2FA lo ha già obbligatorio — `Admin` e `Superadmin`, dato che
+     * la riga del `Developer` non è toccabile affatto.
+     */
+    private static function vaConfermato(string $ruolo, bool $concede): bool
+    {
+        return ! $concede || ! in_array($ruolo, Rbac::twoFactorRequiredRoles(), true);
+    }
+
+    /**
+     * L'unica scrittura della pagina.
+     *
+     * `Gate::authorize()` **in testa all'azione** e non solo sulla rotta, benché
+     * il `can:` di rotta regga anche sugli update di Livewire (è il test
+     * `keeps the permission on a real Livewire update` a congelarlo). Le due
+     * guardie non sono ridondanti: quella di rotta è larga e vive in
+     * `routes/web.php`, cioè in un file che si modifica per ragioni che con
+     * questa pagina non c'entrano; questa vive accanto al gesto e regge se un
+     * domani la rotta cambiasse gruppo, o se l'azione guadagnasse
+     * `skipRender()` — nel qual caso il `Gate::authorize()` di `render()` non
+     * girerebbe affatto.
+     *
+     * Non decide **niente**: il verso, le due guardie e la riga di audit stanno
+     * tutte in `MatriceRuoli`. Se una `ValidationException` sale, la modale
+     * resta aperta di proposito e l'errore si legge in pagina — chiuderla
+     * cancellerebbe il contesto proprio nel momento in cui serve.
+     */
+    public function commuta(string $ruolo, string $permesso): void
+    {
+        Gate::authorize(self::PERMESSO);
+
+        MatriceRuoli::commuta($ruolo, $permesso);
+
+        $this->annulla();
+    }
+
+    /** Il pulsante di conferma della modale. */
+    public function procedi(): void
+    {
+        $this->commuta($this->ruoloInConferma, $this->permessoInConferma);
+    }
+
+    /** Chiude la modale senza scrivere. */
+    public function annulla(): void
+    {
+        $this->ruoloInConferma = '';
+        $this->permessoInConferma = '';
+    }
+
+    /**
+     * Cosa deve dire la modale, o `null` se non c'è nessuna cella in attesa.
+     *
+     * ⚠️ **Le due property arrivano dal browser**, quindi si passano prima dalla
+     * whitelist del catalogo, ed è la disciplina di `RegistroAudit`, dove un
+     * `soggetto` fuori mappa non finisce in un `where`.
+     *
+     * *Ciò che questa whitelist NON fa, scritto perché è la prima cosa che si
+     * penserebbe*: non evita un crash. La prima stesura di questo docblock
+     * diceva che senza di lei un `ruoloInConferma` arbitrario avrebbe fatto
+     * lanciare `User::role()` con `RoleDoesNotExist` durante il render —
+     * **falso, verificato mutando**. `User::role()` si chiama solo sul ramo
+     * della revoca, cioè quando `isset($matrice[$ruolo][$permesso])`, e la
+     * matrice viene dal database: un ruolo che compare lì **esiste** per
+     * costruzione. Il test che pretendeva di provarlo restava verde con la
+     * whitelist tolta.
+     *
+     * Ciò che fa davvero è impedire alla pagina di **aprire una conferma per un
+     * gesto che il dominio poi rifiuta**. Il caso vivo è l'orfano — un permesso
+     * uscito dal catalogo e rimasto attaccato a un ruolo, come i
+     * `letture_contaore.*` fino all'8 Ago 2026: senza whitelist la modale
+     * direbbe «Revocare «letture_contaore.view» a «Tecnico»? 3 utenti hanno il
+     * ruolo», e il pulsante di conferma produrrebbe un errore di validazione. Una
+     * conferma che promette un gesto impossibile è peggio di nessuna conferma.
+     *
+     * L'elenco delle condizioni è quindi **lo stesso dei tre marcatori della
+     * griglia** — riga bloccata, colonna protetta, riga non seminata — più le due
+     * appartenenze al catalogo, e legge le stesse definizioni
+     * (`Rbac::isLocked()`, `Rbac::isRuoloProtetto()`): non è una seconda copia
+     * della regola, è la stessa regola chiesta da un altro punto. ⚠️ E **non è
+     * una guardia**: la difesa vera è in `MatriceRuoli`, che rifiuta prima di
+     * toccare il database. Qui si decide soltanto se una modale ha senso.
+     *
+     * @param  array<string, array<string, true>>  $matrice
+     * @param  array<string, true>  $seminati
+     * @return array{ruolo: string, permesso: string, concede: bool, senzaDueFattori: bool, utenti: int}|null
+     */
+    private function conferma(array $matrice, array $seminati): ?array
+    {
+        $ruolo = $this->ruoloInConferma;
+        $permesso = $this->permessoInConferma;
+
+        $offribile = in_array($ruolo, Rbac::roleNames(), true)
+            && in_array($permesso, Rbac::permissions(), true)
+            && ! Rbac::isLocked($permesso)
+            && ! Rbac::isRuoloProtetto($ruolo)
+            && isset($seminati[$permesso]);
+
+        if (! $offribile) {
+            return null;
+        }
+
+        $concede = ! isset($matrice[$ruolo][$permesso]);
+
+        return [
+            'ruolo' => $ruolo,
+            'permesso' => $permesso,
+            'concede' => $concede,
+            'senzaDueFattori' => ! in_array($ruolo, Rbac::twoFactorRequiredRoles(), true),
+            // ⚠️ `User::role()` **direttamente**, e non da `VistaPiattaforma`.
+            // Il riflesso dopo il registro di audit è passare ogni lettura
+            // cross-tenant dalla porta, e qui sarebbe sbagliato due volte:
+            // `User` non ha global scope (è dichiarato in
+            // `TenantScopeGuardrailTest::NON_TENANT_MODELS`), quindi non c'è
+            // niente da togliere, e il docblock della porta rifiuta per nome
+            // proprio un `utenti()` — «un bypass finto, che legittimerebbe
+            // l'idea che serva sempre». Il permesso, che è ciò che la porta
+            // aggiunge davvero, l'ha già chiesto `render()`.
+            //
+            // Si conta solo sulle revoche: su una concessione il numero non
+            // direbbe niente che l'utente debba decidere.
+            'utenti' => $concede ? 0 : User::role($ruolo)->count(),
+        ];
+    }
 
     public function render(): View
     {
@@ -141,6 +378,9 @@ class EditorRuoli extends Component
         // copia.
         $aDatabase = Permission::query()->pluck('name')->all();
 
+        $matrice = MatriceRuoli::stato();
+        $seminati = array_fill_keys($aDatabase, true);
+
         return view('livewire.piattaforma.editor-ruoli', [
             // L'ordine di `config/rbac.php`, che è **anche** quello della
             // tabella di `Schema Ruoli §5`: la vista si affianca al documento e
@@ -149,11 +389,29 @@ class EditorRuoli extends Component
             // di presentazione che rompe quel confronto.
             'ruoli' => Rbac::roleNames(),
             'gruppi' => self::gruppi(),
-            'matrice' => MatriceRuoli::stato(),
+            'matrice' => $matrice,
             // Insieme e non lista: il consumo è `isset($seminati[$permesso])`
             // per ognuna delle 54 righe.
-            'seminati' => array_fill_keys($aDatabase, true),
+            'seminati' => $seminati,
             'orfani' => self::orfani($aDatabase),
+            // ⚠️ **I due insiemi si derivano qui e si consumano nel Blade**, e
+            // non è pignoleria di stile: il ruolo protetto serve
+            // all'intestazione *e* a ognuna delle 324 celle, e ricalcolarlo in
+            // due punti significherebbe due copie di una regola che
+            // `Rbac::isRuoloProtetto()` esiste per tenere unica — la disciplina
+            // di `canBeImpersonated()`, «una definizione, mai una seconda
+            // copia». Insiemi e non liste, perché il consumo è `isset()` per
+            // cella.
+            'inerti' => array_fill_keys(array_filter(Rbac::roleNames(), Rbac::isRuoloProtetto(...)), true),
+            // I ruoli **senza** secondo fattore obbligatorio: è la direzione in
+            // cui una concessione fa danno (vedi `vaConfermato()`), e la pagina
+            // deve dirlo dov'è visibile — non solo dentro la modale, che si apre
+            // quando la decisione è già stata presa.
+            'senzaDueFattori' => array_fill_keys(
+                array_values(array_diff(Rbac::roleNames(), Rbac::twoFactorRequiredRoles())),
+                true
+            ),
+            'conferma' => $this->conferma($matrice, $seminati),
         ]);
     }
 
@@ -181,24 +439,6 @@ class EditorRuoli extends Component
      * ancora quello del documento.
      *
      * @return array<string, list<string>>
-     */
-    /**
-     * ⚠️ **Le asimmetrie di RUOLO non sono rese, ed è una scelta da dichiarare.**
-     *
-     * Questa pagina si prende cura delle due asimmetrie del **catalogo dei
-     * permessi** — l'orfano rimasto a database, il dichiarato-ma-non-seminato —
-     * e lascia cadere in silenzio le due gemelle sui **ruoli**: un `Role` creato
-     * fuori catalogo non compare da nessuna parte, e un ruolo del catalogo
-     * mancante a database rende una colonna tutta ❌ senza dire che è vuota per
-     * assenza, non per scelta. È esattamente la confusione che la striscia degli
-     * orfani esiste per evitare sui permessi, accettata sui ruoli.
-     *
-     * Non è un rinvio comodo: `MatriceRuoli` nomina il ruolo fuori catalogo come
-     * minaccia viva («`Role::create()` è a portata di chiunque abbia una
-     * console… non avrebbe né scope di riga né 2FA obbligatorio»), e questa è
-     * l'unica schermata da cui lo si vedrebbe. Resta fuori perché la griglia di
-     * questo blocco è in sola lettura e renderlo qui vorrebbe dire decidere ora
-     * cosa se ne fa chi lo trova — che è materia dei blocchi successivi.
      */
     private static function gruppi(): array
     {

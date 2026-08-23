@@ -1,11 +1,17 @@
 {{--
-    L'editor della matrice ruolo→permesso — per ora **in sola lettura**.
+    L'editor della matrice ruolo→permesso.
 
-    Le 324 celle si guardano, non si toccano: nessun `wire:click`, nessuna
-    scrittura. È deliberato (vedi il docblock di `EditorRuoli`): leggere
-    correttamente la matrice è un lavoro a sé, e questa tappa esiste perché si
-    possa verificare a occhio, su staging, che `MatriceRuoli::stato()` dica il
-    vero prima che esista un bottone che scrive.
+    Ogni cella modificabile è un bottone, e un click **scrive subito**: non c'è
+    un «salva». La ragione sta nel docblock di `EditorRuoli` ed è strutturale —
+    un salvataggio di riga accetterebbe un array dal browser, e un permesso
+    bloccato potrebbe essere *omesso* invece che revocato.
+
+    ⚠️ **Tre famiglie di celle non sono bottoni**, e i tre marcatori esistevano
+    già da prima che ci fossero i controlli: la riga bloccata (`data-bloccato`),
+    la colonna del ruolo protetto (`data-inerte`) e la riga non seminata
+    (`data-da-seminare`). Si **riusano**, non si ricalcolano: `MatriceRuoli`
+    rifiuta esattamente quei tre gesti, e una seconda copia della condizione
+    scritta qui divergerebbe dalla prima senza che nulla lo dica.
 
     ⚠️ **Orientamento**: 6 ruoli in colonna, 54 permessi in riga — lo stesso di
     `Schema Ruoli §5`, perché questa pagina si affianca a quel documento e chi
@@ -55,11 +61,49 @@
             progressivo. Le impostazioni per-Ente possono <strong>restringere</strong> questi permessi,
             mai allargarli.
         </p>
+        {{-- 🔴 **Il secondo fattore non segue i permessi: segue i NOMI DEI
+             RUOLI.** `EnsureTwoFactorIsEnabled` legge
+             `Rbac::twoFactorRequiredRoles()`, quindi concedere un potere forte a
+             un ruolo che non è in quell'elenco lo consegna a chi entra con la
+             sola password. È la direzione in cui questa pagina fa danno davvero,
+             ed è la meno intuitiva — l'istinto dice che concedere è additivo e
+             reversibile. Va detto **qui**, dove si guarda la griglia e si decide,
+             e non solo nella modale, che si apre quando la decisione è già
+             presa.
+
+             L'elenco si deriva dalla config e non si scrive a mano: sarebbe
+             l'ennesimo elenco parallelo. --}}
+        <p class="mt-2 text-sm text-warning-800" data-avviso-2fa="pagina">
+            <span aria-hidden="true">⚠️</span>
+            Il secondo fattore è obbligatorio <strong>per nome di ruolo</strong>, non per permesso:
+            oggi lo richiedono {{ implode(', ', App\Support\Rbac::twoFactorRequiredRoles()) }}.
+            Concedere un permesso a
+            <strong>{{ implode(', ', array_diff(App\Support\Rbac::roleNames(), App\Support\Rbac::twoFactorRequiredRoles())) }}</strong>
+            lo dà anche a chi accede con la sola password.
+        </p>
         <p class="mt-2 text-xs text-warning-800">
-            In sola lettura per ora: le modifiche si fanno ancora da
-            <code>config/rbac.php</code> e dal seeder.
+            Ogni click scrive subito, e resta nel <a href="{{ route('piattaforma.audit') }}" class="underline">registro di audit</a>.
+            Aggiungere o togliere un permesso dal <em>catalogo</em> resta un'operazione di codice.
         </p>
     </x-ui.card>
+
+    {{-- ⚠️ **Gli errori si rendono in pagina, e non solo nella modale.**
+         `MatriceRuoli` rifiuta con una `ValidationException` — fail-closed e
+         rumorosa — e i tre gesti che rifiuta (cella bloccata, riga protetta,
+         permesso fuori catalogo) sono per costruzione quelli che la pagina non
+         offre: chi li produce non sta usando questa schermata. Se l'errore
+         vivesse solo dentro la modale, una richiesta forgiata a mano tornerebbe
+         **muta**, e il rifiuto si leggerebbe come «non è successo niente». --}}
+    @if ($errors->any())
+        <x-ui.card class="mt-4 border-danger-500 bg-danger-100" data-errore>
+            <p class="text-sm font-medium text-danger-600">Gesto rifiutato</p>
+            <ul class="mt-1 list-disc space-y-1 pl-5 text-sm text-danger-600">
+                @foreach ($errors->all() as $errore)
+                    <li>{{ $errore }}</li>
+                @endforeach
+            </ul>
+        </x-ui.card>
+    @endif
 
     {{-- La legenda. Serve perché tre dei quattro simboli non sono ovvi, e
          soprattutto perché 🔒 qui NON vuol dire «negato»: dice che la UI non
@@ -83,6 +127,10 @@
             <dt aria-hidden="true">🔑</dt>
             <dd>riga di riserva della piattaforma: intoccabile</dd>
         </div>
+        <div class="flex items-center gap-1.5">
+            <dt aria-hidden="true">👆</dt>
+            <dd>le celle senza 🔒 e senza 🔑 sono bottoni: un click inverte la cella e scrive</dd>
+        </div>
     </dl>
 
     <x-ui.card class="mt-4 !p-0">
@@ -98,15 +146,17 @@
                         <th scope="col" class="sticky left-0 z-10 bg-neutral-50 py-3 pl-4 pr-3 text-left">Permesso</th>
 
                         @foreach ($ruoli as $ruolo)
-                            @php $ruoloProtetto = App\Support\Rbac::isRuoloProtetto($ruolo); @endphp
-                            {{-- ⚠️ `Rbac::isRuoloProtetto()` e **non** un elenco
-                                 scritto qui: è la stessa disciplina di
-                                 `canBeImpersonated()` — «una definizione, mai
-                                 una seconda copia», perché la copia il giorno in
-                                 cui la prima cambia resta indietro in silenzio.
-                                 La colonna che si vede inerte e la riga che il
-                                 metodo di dominio rifiuta devono essere la
-                                 stessa cosa. --}}
+                            @php $ruoloProtetto = isset($inerti[$ruolo]); @endphp
+                            {{-- ⚠️ L'insieme arriva da `render()`, che lo deriva
+                                 da `Rbac::isRuoloProtetto()` — **la** definizione
+                                 di quale riga è inerte. Non si richiama qui e
+                                 non si riscrive nelle celle: è la disciplina di
+                                 `canBeImpersonated()` («una definizione, mai una
+                                 seconda copia»), e da questo blocco in poi conta
+                                 doppio, perché la colonna che si vede inerte e
+                                 la colonna che non ha bottoni devono essere la
+                                 stessa cosa — e devono coincidere con ciò che
+                                 `MatriceRuoli` rifiuta. --}}
                             <th scope="col"
                                 data-ruolo="{{ $ruolo }}"
                                 @if ($ruoloProtetto) data-inerte="1" @endif
@@ -116,6 +166,22 @@
                                     <span class="mt-0.5 block normal-case tracking-normal"
                                           title="La chiave di riserva della piattaforma: non esiste un Gate::before da super-admin, quindi il Developer dipende davvero da questa riga.">
                                         <span aria-hidden="true">🔑</span> sola lettura
+                                    </span>
+                                @elseif (isset($senzaDueFattori[$ruolo]))
+                                    {{-- 🔴 La colonna dice **da sé** che non ha il
+                                         secondo fattore obbligatorio. Il pannello
+                                         in cima lo dichiara una volta, ma è qui —
+                                         sopra la colonna che si sta per accendere
+                                         — che l'informazione arriva nel momento in
+                                         cui serve. Deriva da
+                                         `Rbac::twoFactorRequiredRoles()`, cioè
+                                         dallo stesso elenco che
+                                         `EnsureTwoFactorIsEnabled` legge: non c'è
+                                         una seconda copia da tenere allineata. --}}
+                                    <span class="mt-0.5 block normal-case tracking-normal text-warning-800"
+                                          title="EnsureTwoFactorIsEnabled richiede il secondo fattore per nome di ruolo, e questo ruolo non è nell'elenco: un permesso concesso qui arriva anche a chi entra con la sola password."
+                                          data-senza-2fa="1">
+                                        <span aria-hidden="true">⚠️</span> senza 2FA
                                     </span>
                                 @endif
                             </th>
@@ -175,7 +241,28 @@
                                 </th>
 
                                 @foreach ($ruoli as $ruolo)
-                                    @php $ha = isset($matrice[$ruolo][$permesso]); @endphp
+                                    @php
+                                        $ha = isset($matrice[$ruolo][$permesso]);
+                                        // ⚠️ **I tre marcatori, riusati e non
+                                        // ricalcolati.** Sono esattamente i tre
+                                        // gesti che `MatriceRuoli` rifiuta —
+                                        // permesso bloccato, ruolo protetto,
+                                        // permesso non seminato — e scriverne
+                                        // qui una seconda definizione
+                                        // significherebbe che il giorno in cui
+                                        // la prima cambia la pagina offre un
+                                        // bottone che il dominio rifiuta (o,
+                                        // peggio, lo nasconde dove il dominio
+                                        // acconsentirebbe).
+                                        //
+                                        // ⚠️ E resta **presentazione**: un `@if`
+                                        // in Blade si toglie in un secondo, e
+                                        // `Livewire::test()` non passa dai
+                                        // middleware. La protezione è in
+                                        // `MatriceRuoli::applica()`, che rifiuta
+                                        // prima di toccare il database.
+                                        $modificabile = ! $bloccato && ! $daSeminare && ! isset($inerti[$ruolo]);
+                                    @endphp
                                     {{-- `isset()` sulla matrice già in memoria, e
                                          **mai** `$role->hasPermissionTo()`: quello
                                          passa dal registrar e senza eager load
@@ -186,8 +273,36 @@
                                     <td data-ruolo="{{ $ruolo }}"
                                         data-stato="{{ $ha ? 'si' : 'no' }}"
                                         class="px-3 py-2 text-center">
-                                        <span aria-hidden="true">{{ $ha ? '✅' : '❌' }}</span>
-                                        <span class="sr-only">{{ $ruolo }}: {{ $ha ? 'sì' : 'no' }}</span>
+                                        @if ($modificabile)
+                                            {{-- ⚠️ `wire:loading.attr="disabled"`
+                                                 non è cosmesi: `commuta()`
+                                                 **inverte**, quindi un doppio
+                                                 click su una cella che non chiede
+                                                 conferma varrebbe concedi + revoca
+                                                 — due righe nel registro e lo
+                                                 stato di partenza, cioè un gesto
+                                                 che sembra non aver fatto niente.
+                                                 Il `wire:target` lo restringe a
+                                                 questa azione, o basterebbe un
+                                                 render qualunque a spegnere la
+                                                 griglia intera. --}}
+                                            <button type="button"
+                                                    wire:click="chiedi('{{ $ruolo }}', '{{ $permesso }}')"
+                                                    wire:loading.attr="disabled"
+                                                    wire:target="chiedi"
+                                                    class="rounded-md px-2 py-1 hover:bg-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50">
+                                                <span aria-hidden="true">{{ $ha ? '✅' : '❌' }}</span>
+                                                {{-- Il testo per chi ascolta dice
+                                                     lo stato **e** il gesto: un
+                                                     bottone che annuncia solo
+                                                     «Tenant: sì» non fa capire che
+                                                     premerlo toglie il permesso. --}}
+                                                <span class="sr-only">{{ $ruolo }}: {{ $ha ? 'sì' : 'no' }} — {{ $ha ? 'revoca' : 'concedi' }} {{ $permesso }}</span>
+                                            </button>
+                                        @else
+                                            <span aria-hidden="true">{{ $ha ? '✅' : '❌' }}</span>
+                                            <span class="sr-only">{{ $ruolo }}: {{ $ha ? 'sì' : 'no' }}</span>
+                                        @endif
                                     </td>
                                 @endforeach
                             </tr>
@@ -256,6 +371,89 @@
                 </div>
             </x-ui.card>
         </div>
+    @endif
+
+    {{-- ⚠️ **La conferma: due casi, e quello che conta è la CONCESSIONE.**
+
+         L'istinto dice il contrario — concedere è additivo e reversibile,
+         revocare toglie accesso a persone vive — e vale solo finché si guardano
+         i permessi. Ma `EnsureTwoFactorIsEnabled` gata il secondo fattore **per
+         nome di ruolo**, quindi dare un potere forte a un ruolo fuori da
+         `Rbac::twoFactorRequiredRoles()` lo consegna a chi entra con la sola
+         password, con un click e per tutti i clienti insieme.
+
+         Le revoche chiedono sempre, non perché una singola revoca sia grave ma
+         perché nessuna singola revoca *sembra* grave: quattordici click e il
+         Tenant non fa più niente. Il numero di persone col ruolo è ciò che
+         trasforma la conferma in una decisione invece che in un ostacolo.
+
+         Resta un solo gesto che scrive senza fermarsi: la concessione a un ruolo
+         che il secondo fattore ce l'ha già obbligatorio. --}}
+    @if ($conferma)
+        <x-ui.modal :title="($conferma['concede'] ? 'Concedere' : 'Revocare').' «'.$conferma['permesso'].'» a «'.$conferma['ruolo'].'»?'"
+                    close="annulla">
+            <div data-conferma="{{ $conferma['concede'] ? 'concessione' : 'revoca' }}">
+                <p class="text-sm text-neutral-700">
+                    @if ($conferma['concede'])
+                        <strong>{{ $conferma['ruolo'] }}</strong> otterrà <code class="text-xs">{{ $conferma['permesso'] }}</code>
+                        in <strong>tutti gli Enti</strong> della piattaforma.
+                    @else
+                        <strong>{{ $conferma['ruolo'] }}</strong> perderà <code class="text-xs">{{ $conferma['permesso'] }}</code>
+                        in <strong>tutti gli Enti</strong> della piattaforma.
+                    @endif
+                </p>
+
+                @if ($conferma['concede'] && $conferma['senzaDueFattori'])
+                    {{-- Il motivo per cui questa modale esiste anche sulle
+                         concessioni. Non è un avviso generico: nomina il
+                         meccanismo, perché chi legge deve poter verificare che
+                         sia vero. --}}
+                    <p class="mt-3 rounded-md bg-warning-100 p-3 text-sm text-warning-800" data-avviso-2fa="modale">
+                        <span aria-hidden="true">⚠️</span>
+                        <strong>{{ $conferma['ruolo'] }}</strong> non è fra i ruoli con secondo fattore
+                        obbligatorio ({{ implode(', ', App\Support\Rbac::twoFactorRequiredRoles()) }}):
+                        il permesso arriverà anche a chi accede con la sola password.
+                    </p>
+                @endif
+
+                @if (! $conferma['concede'])
+                    {{-- ⚠️ **Il numero dice «quanti hanno il ruolo», non «quanti
+                         perdono l'accesso»**, e la frase in pagina dev'essere
+                         quella vera: un utente con due ruoli conserva il permesso
+                         dall'altro. Oggi l'app assegna un ruolo solo, quindi i due
+                         numeri coincidono — ma è un fatto di *come sono i dati
+                         adesso*, non una proprietà del sistema, e una modale che
+                         lo presentasse come «N persone perderanno l'accesso»
+                         mentirebbe il giorno in cui i ruoli multipli arrivano,
+                         cioè senza che nessuno tocchi questo file. --}}
+                    <p class="mt-3 text-sm text-neutral-700" data-utenti-col-ruolo="{{ $conferma['utenti'] }}">
+                        <strong>{{ $conferma['utenti'] }}</strong>
+                        {{ $conferma['utenti'] === 1 ? 'utente ha' : 'utenti hanno' }} oggi il ruolo
+                        <strong>{{ $conferma['ruolo'] }}</strong>.
+                    </p>
+                    <p class="mt-1 text-xs text-neutral-500">
+                        Non è detto che tutti perdano l'accesso: chi avesse anche un altro ruolo che porta
+                        <code class="text-xs">{{ $conferma['permesso'] }}</code> lo conserva.
+                    </p>
+                @endif
+
+                <p class="mt-3 text-xs text-neutral-500">
+                    Il gesto è reversibile con un altro click, e resta scritto nel registro di audit
+                    col nome di chi l'ha fatto.
+                </p>
+
+                <div class="mt-4 flex justify-end gap-2">
+                    <button type="button" wire:click="annulla"
+                            class="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50">
+                        Annulla
+                    </button>
+                    <button type="button" wire:click="procedi"
+                            class="rounded-md px-3 py-1.5 text-sm font-medium text-white {{ $conferma['concede'] ? 'bg-primary-600 hover:bg-primary-700' : 'bg-danger-500 hover:bg-danger-600' }}">
+                        {{ $conferma['concede'] ? 'Concedi' : 'Revoca' }}
+                    </button>
+                </div>
+            </div>
+        </x-ui.modal>
     @endif
 
 </div>
