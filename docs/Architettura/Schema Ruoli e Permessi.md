@@ -98,7 +98,9 @@ Risorse derivate dall'ERD §3–§9. Questo è l'elenco canonico che il seeder S
 - `utenti.view` · `.create` · `.update` · `.delete`
 - `utenti.impersonate` — impersonation con banner + log (lab404/laravel-impersonate).
 - `audit.view` — consultazione activity log (filtri impersonation/forzature).
-- `system.logs.view` — log di sistema globali (solo Developer).
+- `system.logs.view` — log di sistema globali (solo Developer). ✅ **Ha un consumatore dal 24 Ago 2026** (🔗 ADR-017): gata `/piattaforma/errori` e `/piattaforma/errori/{errore}`, l'**error tracker interno** — cioè gli errori catturati dall'applicazione, non un visore di `laravel.log`, che su Cloud vive su un disco effimero. Fino a quel giorno il permesso esisteva a catalogo, era bloccato, ed era assegnato al Developer **senza gatare niente**.
+  - 🔴 **È il primo permesso del progetto in cui le due partizioni di piattaforma non coincidono**: il Superadmin ha ogni altro permesso di piattaforma, questa pagina non la può nemmeno aprire. Il registro di audit sta invece dietro `tenants.view_all`, che ce l'hanno entrambi — da cui il vincolo che ne discende, e che nessuno indovinerebbe: l'etichetta del soggetto di una riga «Errore risolto» è la **classe**, mai il **messaggio**, o quest'ultimo filtrerebbe attraverso un gate che agli errori non dà accesso.
+  - ⚠️ **Nessun conteggio cambia**: restano **54** permessi e **7** bloccati. Il piano dell'error tracker prevedeva un `system.errors.view` nuovo — sarebbe stato un ottavo bloccato, un riseeding e un secondo nome per la stessa cosa; si è riusato questo, che era già a catalogo, già bloccato e già del solo Developer.
 - `roles.manage` — gestione della matrice ruolo→permesso dalla UI Superadmin (🔗 ADR-016).
 
 ---

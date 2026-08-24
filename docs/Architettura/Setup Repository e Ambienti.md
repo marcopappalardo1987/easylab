@@ -217,6 +217,12 @@ php artisan schedule:list                             # verifica che i cron sian
 
 Il resto gira da sé: il digest delle scadenze alle 06:00 di Roma, la rotazione di `avvisi_scadenza` (24 mesi) e delle `notifications` (12 mesi) alle 03:30/03:35.
 
+🔴 **E per l'error tracker (🔗 ADR-017) NON c'è nessun comando da ricordarsi — è scritto qui apposta, perché qualcuno lo cercherà.** La conservazione dichiarata in Privacy §T8 — occorrenze 90 giorni, issue chiuse 90, aperte 180, `ignorato` mai potato, e **il messaggio oscurato dopo 180 giorni in qualunque stato** — avviene **tutta** dentro il `model:prune` delle 03:30 che è già in quella riga: i due modelli dell'error tracker si sono aggiunti a quello esistente invece di aprire un secondo cron. L'oscuramento dei messaggi in particolare non ha un comando proprio: è agganciato a `Errore::pruneAll()`, cioè al metodo che `model:prune` chiama già.
+
+> **Perché la nota vale la riga che occupa.** Chi legge «il messaggio si oscura a 180 giorni» in un registro dei trattamenti va a cercare l'operazione che lo fa, non la trova, e conclude una delle due cose sbagliate: che manchi (e ne scrive una nuova, duplicando il gesto) oppure che sia inerte. È la forma del difetto **T6**, dove `clean_after_days => 365` è dichiarato in `config/activitylog.php` e `activitylog:clean` non è schedulato da nessuna parte — una retention scritta e mai avvenuta. Qui l'assenza del comando è la **prova che il gesto è agganciato**, non il sintomo che manchi.
+>
+> Come si verifica, se il dubbio torna: `php artisan schedule:list` deve mostrare un `model:prune` con `--model='App\Models\AvvisoScadenza' --model='App\Models\Errore' --model='App\Models\OccorrenzaErrore'`. Due meta-test (`tests/Feature/RetentionTest.php`) pretendono esattamente quella forma — compreso il fatto che **non** ci sia un `--pretend` di troppo, che darebbe un cron che gira ogni notte senza cancellare niente.
+
 ---
 
 ## 4. CI — GitHub Actions (S0.7)

@@ -5,6 +5,16 @@ Questa è la vista di massimo livello tecnico, dove tu come sviluppatore control
 - **Monitoraggio di Sistema:** Accesso ai log di sistema globali per identificare bug o malfunzionamenti.
 - **User Impersonation (Tecnica):** Funzionalità con 1-click per impersonificare qualsiasi utente nel database allo scopo di fare assistenza tecnica profonda o risolvere bug, con banner persistente per tornare ai privilegi massimi.
 
+> **Stato di attuazione al 24 Ago 2026 (S6).** Entrambe le voci esistono: l'**impersonazione** dalla cabina di regia con banner persistente che dice **entrambi** i nomi, e il **monitoraggio** su `/piattaforma/errori`, quarta voce della sub-nav di piattaforma. La pagina è dietro `system.logs.view` — permesso **bloccato** e del **solo Developer**, quindi nemmeno il Superadmin la apre (🔗 ADR-017, ADR-016).
+>
+> 🔴 **Una voce va letta con una correzione, non alla lettera.**
+>
+> *«Accesso ai log di sistema globali»* — oggi significa **gli errori catturati dall'applicazione**, non un visore di `laravel.log`. Non è una riduzione dell'ambizione, è la sola forma che dica la verità: su Laravel Cloud (🔗 ADR-025) `laravel.log` vive su un disco **effimero e per-replica**, azzerato a ogni deploy e a ogni risveglio da scale-to-zero. Una schermata che lo mostrasse sarebbe *muta proprio sugli errori che contano* — quelli visti da un cliente prima di un rilascio — e lo sarebbe **senza dirlo**, che è la ragione per cui è stata scartata invece che rimandata: un cruscotto che mente per omissione è peggio della sua assenza, perché chi lo guarda smette di cercare altrove. Le eccezioni si salvano quindi **a database**, raggruppate per punto d'origine, con il messaggio, lo stack trace e l'input della richiesta **ripuliti in scrittura** dalle chiavi sensibili (🔗 Privacy §3).
+>
+> ⚠️ **E il «monitoraggio» dell'infrastruttura non è qui, di proposito**: uso di CPU, memoria, code e repliche li mostra già la dashboard di Laravel Cloud, e rifarli in applicazione significherebbe un secondo cruscotto da tenere allineato al primo — con il difetto che il nostro si spegne insieme all'applicazione che dovrebbe sorvegliare.
+>
+> ⚠️ **In uso quotidiano il canale non è la pagina, è l'email.** Nessuno apre `/piattaforma/errori` a caso: ci si arriva perché è arrivato un alert. Quell'email va a una **casella** (`ERRORI_ALERT_EMAIL`), che non ha né permesso né registro di audit, e per questo contiene solo classe, punto d'origine, conteggio e il link — mai il dettaglio (🔗 Privacy §T8).
+
 **2. Dashboard Superadmin (EasyLab)**
 
 Questa è la cabina di regia commerciale e operativa del proprietario originario della piattaforma (EasyLab).

@@ -2,8 +2,10 @@
 
 namespace App\Support\Errori;
 
+use App\Jobs\InviaAllertaErrore;
 use App\Models\Errore;
 use App\Models\OccorrenzaErrore;
+use App\Notifications\NuovoErrore;
 use App\Support\ChiaviSensibili;
 use Carbon\CarbonInterface;
 use Illuminate\Database\QueryException;
@@ -13,7 +15,7 @@ use Throwable;
 
 /**
  * 🔴 La cattura dell'error tracker interno (S6 — 🔗 `docs/Architettura/Error
- * Tracker Interno (piano).md`, ADR-017 quando sarà scritto).
+ * Tracker Interno (piano).md`, 🔗 ADR-017).
  *
  * Agganciata a `$exceptions->report()` in `bootstrap/app.php`, scrive **una
  * riga in `errori`** per ogni punto d'origine: la prima volta la crea, dalla
@@ -365,7 +367,15 @@ final class CatturaErrori
         $adesso = now();
         $connessione = (new Errore)->getConnection();
 
-        $errore = $connessione->transaction(function () use ($e, $impronta, $file, $riga, $adesso, $connessione): Errore {
+        // ⚠️ **La transazione restituisce una COPPIA, e il secondo elemento non
+        // è una comodità**: «questa issue merita un alert» è una cosa che si sa
+        // solo *dentro* i due rami qui sotto — è nata adesso, oppure
+        // `incrementa()` l'ha riaperta — e fuori non si può più ricostruire
+        // senza rileggere la riga. Dedurlo da `riaperto_automaticamente_at`
+        // sarebbe per giunta **sbagliato**: quella colonna resta valorizzata
+        // anche alle mille occorrenze successive alla riapertura, e l'alert
+        // partirebbe a ogni avvenimento.
+        [$errore, $daAllertare] = $connessione->transaction(function () use ($e, $impronta, $file, $riga, $adesso, $connessione): array {
             $trova = fn (): ?Errore => Errore::query()->where('impronta', $impronta)->first();
 
             $errore = $trova();
@@ -397,9 +407,9 @@ final class CatturaErrori
                     ]));
 
                     // Issue nuova: `occorrenze` nasce a 1 dal default del model,
-                    // quindi qui non si incrementa niente. Il ramo dell'alert
-                    // (blocco 8) si aggancerà a questo `return`.
-                    return $nata;
+                    // quindi qui non si incrementa niente. È il primo dei due
+                    // casi che meritano un alert — l'altro è la riapertura.
+                    return [$nata, true];
                 } catch (QueryException $collisione) {
                     // Corsa persa: l'unique ha fatto il suo lavoro e la riga ora
                     // c'è. Si rilegge invece di ispezionare lo SQLSTATE, che
@@ -411,9 +421,7 @@ final class CatturaErrori
                 }
             }
 
-            self::incrementa($errore, $adesso);
-
-            return $errore;
+            return [$errore, self::incrementa($errore, $adesso)];
         });
 
         // Il contesto sta **fuori** dalla transazione della contabilità, e ha la
@@ -422,6 +430,17 @@ final class CatturaErrori
         // — una colonna troppo corta, un JSON che non si serializza — non deve
         // portarsi via anche il fatto che l'errore è successo.
         self::contesto($errore, $e, $adesso);
+
+        // ⚠️ **L'alert per ULTIMO, e fuori da ogni transazione.** In coda
+        // `sync` — che è la configurazione di sviluppo e quella dei test — il
+        // `notify()` invia davvero, quindi un SMTP che rifiuta lancia proprio
+        // qui: dentro la transazione della contabilità si porterebbe via la
+        // issue, prima di `contesto()` si porterebbe via la prova. In fondo,
+        // l'unica cosa che si perde è l'email, e a raccogliere il guasto c'è il
+        // catch di `cattura()`.
+        if ($daAllertare) {
+            self::allerta($errore);
+        }
     }
 
     /**
@@ -436,7 +455,7 @@ final class CatturaErrori
      * **La riapertura non è il gesto di una persona e non scrive audit.** Il
      * registro racconta chi ha fatto cosa; qui non c'è nessun chi. Il fatto
      * resta leggibile in `riaperto_automaticamente_at`, che è anche ciò a cui il
-     * secondo alert si aggancerà (blocco 8).
+     * secondo alert si aggancia — vedi `allerta()`.
      *
      * ⚠️ **`ignorato` non si riapre mai.** È l'unico interruttore di silenzio del
      * tracker: se una issue ignorata tornasse «aperta» alla prima occorrenza
@@ -449,12 +468,19 @@ final class CatturaErrori
      * «l'ho corretto, perché succede ancora?». Sta qui e non nel blocco che
      * introduce il campionamento perché è una proprietà della *riapertura*, e
      * lasciarla a dopo significa affidarla a un ricordo.
+     *
+     * @return bool la issue è stata **riaperta adesso** — cioè il secondo dei
+     *              due casi che fanno partire un alert. Si restituisce invece
+     *              di rileggerlo dopo dalla riga, perché
+     *              `riaperto_automaticamente_at` dice «l'ultima riapertura è
+     *              stata automatica», non «è avvenuta in questa chiamata».
      */
-    private static function incrementa(Errore $errore, CarbonInterface $adesso): void
+    private static function incrementa(Errore $errore, CarbonInterface $adesso): bool
     {
         $altre = ['ultima_occorrenza_at' => $adesso];
+        $riaperta = $errore->stato === 'risolto';
 
-        if ($errore->stato === 'risolto') {
+        if ($riaperta) {
             $altre += [
                 'stato' => 'aperto',
                 'riaperto_automaticamente_at' => $adesso,
@@ -476,6 +502,161 @@ final class CatturaErrori
         // qui si sta solo raccontando alla copia in memoria ciò che il database
         // ha fatto.
         $errore->forceFill($altre)->syncOriginal();
+
+        return $riaperta;
+    }
+
+    /**
+     * 🔴 L'**allerta**: l'email che fa sapere che qualcosa si è rotto (🔗 ADR-017,
+     * Privacy §T8).
+     *
+     * Parte **solo** su issue nuova o riapertura automatica, cioè sui due fatti
+     * che non si ripetono: dalla seconda occorrenza in poi la riga cresce e la
+     * casella tace. È il motivo per cui cinquantamila occorrenze dello stesso
+     * bug producono **una** email.
+     *
+     * ⚠️ **Una issue `ignorato` non passa mai di qui**, e non serve una guardia
+     * sua: `incrementa()` riapre soltanto i `risolto`, quindi lo stato zittito
+     * non produce né il ramo «nuova» né il ramo «riaperta». Il silenzio di
+     * `ignora()` vale quindi anche per la posta, che è dove contava di più — ed
+     * è anche la ragione per cui il blocco 7 non pota quello stato: una issue
+     * ignorata e potata rinascerebbe `aperto`, e l'alert tornerebbe da sé.
+     *
+     * ⚠️ **Il contenuto non si compone qui.** Questa funzione passa alla
+     * notifica quattro scalari — classe, `file:riga`, contatore, id — e la
+     * regola su *cosa* non deve uscire (messaggio, stack trace, input, utente)
+     * vive nel docblock di `NuovoErrore`, accanto al corpo dell'email. Due sedi
+     * per la stessa regola sarebbero due sedi da cui divergere.
+     */
+    private static function allerta(Errore $errore): void
+    {
+        $a = self::destinatario();
+
+        // Nessuna casella configurata: il tracker resta **muto senza
+        // lamentarsi**. Registrare gli errori ha valore anche senza email, e
+        // un'eccezione sollevata qui per una config vuota violerebbe la regola
+        // 1 del docblock di classe.
+        if ($a === null || ! self::prenotaAlert($errore)) {
+            return;
+        }
+
+        // ⚠️ **Un job nostro, non la notifica accodata direttamente.** Il
+        // perché sta nel docblock di `InviaAllertaErrore`, e in una riga: il
+        // mittente di Laravel **rilancia** dopo aver segnalato il fallimento,
+        // quindi l'eccezione esce dal job e `Worker::runJob()` la **riporta** —
+        // cioè chiama questo stesso aggancio, in un processo dove la guardia di
+        // rientranza non c'è. Un alert fallito diventava un errore nuovo.
+        InviaAllertaErrore::dispatch($a, new NuovoErrore(
+            classe: $errore->classe,
+            // Già relativo alla radice: `identifica()` lo ha reso tale prima di
+            // scriverlo, ed è ciò che rende la riga leggibile dopo un deploy.
+            posizione: $errore->file.':'.$errore->riga,
+            occorrenze: (int) $errore->occorrenze,
+            erroreId: (int) $errore->getKey(),
+            // ⚠️ **`wasRecentlyCreated` distingue i due casi senza una seconda
+            // colonna né un secondo parametro**: è `true` solo sull'istanza
+            // uscita da `Errore::create()`, e la issue riaperta arriva invece
+            // da una `first()`. Dedurlo da `riaperto_automaticamente_at`
+            // direbbe «riaperta» anche a una issue nata risolta e riaperta un
+            // anno fa.
+            riaperto: ! $errore->wasRecentlyCreated,
+        ));
+    }
+
+    /**
+     * Il posto in cui l'alert **si prenota**: il cap giornaliero e il timbro,
+     * insieme.
+     *
+     * ⚠️ **Il cap è globale, non per-issue**, ed è la sola forma che protegga da
+     * ciò che deve proteggere: la tempesta che riempie una casella non è un
+     * errore che si ripete — quello manda **una** email e basta — è un deploy
+     * sbagliato che genera venti issue *diverse*. Un contatore denormalizzato
+     * sulla riga non saprebbe nulla delle altre righe; da qui il `count()` su
+     * `alert_inviato_at` di oggi, che è la ragione per cui quella colonna esiste
+     * (lo dice già la migration).
+     *
+     * ⚠️ **Il timbro si scrive PRIMA dell'invio, e non dopo.** Non è ottimismo:
+     * `alert_inviato_at` è ciò che il cap conta, e scriverlo dopo un `notify()`
+     * che sotto coda vera ritorna **prima** della consegna significherebbe
+     * contarlo mai o contarlo in ritardo. Il verso sbagliato costa una casella
+     * intasata; questo costa, nel caso peggiore, un alert perso — e il fatto
+     * resta comunque scritto in `errori`, che è il canale primario.
+     *
+     * ⚠️ **`now()` e non l'istante dell'eccezione**: la colonna dice quando
+     * l'alert è **partito**, non quando l'errore è avvenuto — per quello ci
+     * sono le due colonne di occorrenza. Il «giorno» del cap è quello del fuso
+     * dell'applicazione: è una strozzatura di frequenza, non un rendiconto.
+     *
+     * ⚠️ **`DB::transaction()` attorno alle due query** per la ragione già
+     * scritta due volte in questa classe: su Postgres una query fallita aborta
+     * l'**intera** transazione (25P02), e senza savepoint un cap che non si
+     * riesce a leggere lascerebbe morta la transazione del chiamante — cioè
+     * trasformerebbe un'email mancata in un guasto vero.
+     */
+    private static function prenotaAlert(Errore $errore): bool
+    {
+        $adesso = now();
+
+        return $errore->getConnection()->transaction(function () use ($errore, $adesso): bool {
+            $oggi = Errore::query()
+                ->where('alert_inviato_at', '>=', $adesso->copy()->startOfDay())
+                ->count();
+
+            // `>=` e non `>`: `alert_max_giornalieri` è «quante se ne mandano»,
+            // non «dopo quante si smette». Stessa disciplina del tetto dei
+            // contesti in `daCampionare()`.
+            if ($oggi >= (int) config('easylab.errori.alert_max_giornalieri')) {
+                return false;
+            }
+
+            // ⚠️ **Update sul query builder, non `forceFill()->save()`**: qui non
+            // si sta compiendo un gesto sulla issue (quelli stanno sul model e
+            // scrivono audit), si sta segnando che la posta è partita. Una
+            // `save()` riscriverebbe per giunta l'intera istanza in memoria
+            // sopra ciò che la transazione del contatore ha appena committato.
+            Errore::query()->whereKey($errore->getKey())->update(['alert_inviato_at' => $adesso]);
+
+            return true;
+        });
+    }
+
+    /**
+     * A chi va l'alert: la casella configurata, o — se non c'è — il Developer.
+     *
+     * 🔴 **Mai una query su `users`**, per quanto «l'email del Developer» sia un
+     * dato che a database c'è. Questo codice gira **dentro il gestore delle
+     * eccezioni**: una query aggiuntiva fallirebbe proprio nei casi in cui
+     * l'alert serve di più — database irraggiungibile, connessione morta,
+     * transazione del chiamante già abortita — e in quelli in cui il guasto *è*
+     * l'autenticazione. La config si legge dalla memoria del processo e non
+     * può fallire.
+     *
+     * ⚠️ **Il fallback ha un default in `config/easylab.php`**
+     * (`DEVELOPER_EMAIL`, con un valore anche senza variabile), quindi in
+     * pratica il ramo «nessun destinatario» non si raggiunge per dimenticanza:
+     * scordarsi `ERRORI_ALERT_EMAIL` non spegne gli alert, li manda al
+     * Developer. Il ramo muto resta perché la casella si può **svuotare
+     * apposta**, ed è l'unico modo di zittire la posta senza spegnere il
+     * tracker.
+     *
+     * ⚠️ Il destinatario è una **casella**, che non ha né permesso né registro
+     * di audit: è dichiarato in Privacy §T8 e vincola il contenuto dell'email
+     * (🔗 `NuovoErrore`), non questa riga.
+     */
+    private static function destinatario(): ?string
+    {
+        $candidati = [
+            config('easylab.errori.alert_email'),
+            config('easylab.piattaforma.developer.email'),
+        ];
+
+        foreach ($candidati as $candidato) {
+            if (is_string($candidato) && trim($candidato) !== '') {
+                return trim($candidato);
+            }
+        }
+
+        return null;
     }
 
     /**

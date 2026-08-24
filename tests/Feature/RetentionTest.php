@@ -290,3 +290,113 @@ it('leaves a state it has never heard of out of the pruning', function () {
 
     expect(Errore::whereKey($sospeso->id)->exists())->toBeTrue();
 });
+
+/*
+|--------------------------------------------------------------------------
+| 🔴 L'oscuramento del messaggio a 180 giorni (24 Ago 2026)
+|--------------------------------------------------------------------------
+|
+| Una issue `ignorato` non si pota mai, e il suo `messaggio` è **interpolato**
+| («Utente 42 non trovato»): senza questo gesto resterebbe a database senza
+| scadenza. Il rimedio non cancella la riga — classe, file, riga, impronta e
+| contatore non riguardano nessuno e servono a riconoscere l'errore — svuota il
+| solo campo che può portare un dato riferito a una persona.
+|
+| ⚠️ **E passa dallo stesso `model:prune`**, non da un comando nuovo: è la
+| lezione del blocco 7, cioè il difetto T6 (una misura dichiarata e inerte).
+| Tutti i test qui sotto lo invocano da lì, non chiamando il metodo a mano.
+*/
+
+it('blanks the message of an issue that outlives the pruning, and keeps everything else', function () {
+    // 🔴 Il caso che ha motivato la decisione: `ignorato` non si pota **mai**,
+    // quindi senza oscuramento questo messaggio vivrebbe per sempre.
+    $zittita = issueErrore([
+        'stato' => 'ignorato',
+        'messaggio' => 'Utente 42 non trovato',
+        'classe' => 'App\\Exceptions\\Boom',
+        'file' => 'app/Support/Prova.php',
+        'riga' => 42,
+        'occorrenze' => 1234,
+        'ultima_occorrenza_at' => now()->subYears(3),
+    ]);
+
+    $this->artisan('model:prune', ['--model' => [Errore::class]])->assertSuccessful();
+
+    $dopo = Errore::find($zittita->id);
+
+    // La riga resta, e resta **riconoscibile**: è la metà della decisione che
+    // un `delete()` avrebbe buttato via insieme al dato personale.
+    expect($dopo)->not->toBeNull()
+        ->and($dopo->stato)->toBe('ignorato')
+        ->and($dopo->classe)->toBe('App\\Exceptions\\Boom')
+        ->and($dopo->file)->toBe('app/Support/Prova.php')
+        ->and($dopo->riga)->toBe(42)
+        ->and($dopo->impronta)->toBe($zittita->impronta)
+        ->and($dopo->occorrenze)->toBe(1234);
+
+    // E il messaggio non c'è più.
+    expect($dopo->messaggio)->not->toContain('Utente 42')
+        ->and($dopo->messaggio)->toBe(Errore::MESSAGGIO_OSCURATO);
+});
+
+it('tells a blanked message apart from an empty one', function () {
+    $this->freezeTime();
+
+    // 🔴 **Il vuoto esiste davvero**: `CatturaErrori` scrive `''` quando
+    // l'eccezione non porta messaggio. Svuotare a `''` renderebbe le due cose
+    // indistinguibili, e chi legge la scheda non saprebbe se il messaggio non
+    // c'è mai stato o se gli è stato tolto — che è la differenza fra «non c'è
+    // niente da cercare» e «la storia è più lunga di così».
+    $natoMuto = issueErrore(['stato' => 'ignorato', 'messaggio' => '', 'ultima_occorrenza_at' => now()]);
+    $svuotato = issueErrore(['stato' => 'ignorato', 'messaggio' => '', 'ultima_occorrenza_at' => now()->subDays(200)]);
+
+    $this->artisan('model:prune', ['--model' => [Errore::class]])->assertSuccessful();
+
+    expect(Errore::find($natoMuto->id)->messaggio)->toBe('')
+        ->and(Errore::find($svuotato->id)->messaggio)->toBe(Errore::MESSAGGIO_OSCURATO)
+        ->and(Errore::find($svuotato->id)->messaggio)->not->toBe(Errore::find($natoMuto->id)->messaggio);
+});
+
+it('keeps the message until the hundred-and-eightieth day, and not one minute more', function () {
+    $this->freezeTime();
+
+    // Il confine appartiene a chi resta, come per la potatura: `<` e non `<=`.
+    // ⚠️ Su SQLite questi confronti sono lessicografici su stringhe e su
+    // Postgres sono date vere: il file si rilegge su `easylab_test`.
+    $sulConfine = issueErrore(['stato' => 'ignorato', 'ultima_occorrenza_at' => now()->subDays(180)]);
+    $oltre = issueErrore(['stato' => 'ignorato', 'ultima_occorrenza_at' => now()->subDays(180)->subMinute()]);
+
+    $this->artisan('model:prune', ['--model' => [Errore::class]])->assertSuccessful();
+
+    expect(Errore::find($sulConfine->id)->messaggio)->toBe('Qualcosa non ha funzionato')
+        ->and(Errore::find($oltre->id)->messaggio)->toBe(Errore::MESSAGGIO_OSCURATO);
+});
+
+it('blanks whatever the state, because a recurring issue is never pruned either', function () {
+    $this->freezeTime();
+
+    // 🔴 **Il rischio non è dove sembra.** Sarebbe comodo restringere
+    // l'oscuramento a `ignorato` — «è l'unico stato che non si pota» — ma
+    // `ultima_occorrenza_at` si rinfresca a **ogni** avvenimento, quindi una
+    // issue che continua a ripetersi non viene mai potata comunque, senza che
+    // nessuno tocchi niente. Un filtro per stato avrebbe coperto la casella
+    // rara lasciando aperta la frequente.
+    //
+    // Lo stato `sospeso` — che la potatura non conosce e per fail-closed non
+    // tocca — è il modo di provarlo su una riga che sopravvive alla passata:
+    // una `aperto` oltre i 180 giorni verrebbe oscurata e poi cancellata nella
+    // stessa esecuzione, e non ci sarebbe niente da guardare.
+    $sconosciuta = issueErrore(['ultima_occorrenza_at' => now()->subDays(200)]);
+    $sconosciuta->forceFill(['stato' => 'sospeso'])->save();
+
+    $recente = issueErrore(['stato' => 'aperto', 'ultima_occorrenza_at' => now()->subDays(179)]);
+
+    $this->artisan('model:prune', ['--model' => [Errore::class]])->assertSuccessful();
+
+    expect(Errore::find($sconosciuta->id))->not->toBeNull()
+        ->and(Errore::find($sconosciuta->id)->stato)->toBe('sospeso')
+        ->and(Errore::find($sconosciuta->id)->messaggio)->toBe(Errore::MESSAGGIO_OSCURATO)
+        // E chi è ancora vivo tiene il proprio messaggio: l'oscuramento è un
+        // orizzonte, non un'amnesia.
+        ->and(Errore::find($recente->id)->messaggio)->toBe('Qualcosa non ha funzionato');
+});

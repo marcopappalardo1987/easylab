@@ -62,7 +62,21 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Errore extends Model
 {
-    use Prunable;
+    /**
+     * ⚠️ **L'alias non è uno sfoggio: senza, `pruneAll()` qui sotto non
+     * compila.** `pruneAll()` arriva da un **trait usato da questa stessa
+     * classe**, non da una classe genitore: definendone una versione propria la
+     * si sostituisce, e `parent::pruneAll()` finisce su `Model`, che non ce l'ha
+     * — quindi cade in `__call()`, viene inoltrato al query builder e muore con
+     * «Call to undefined method App\Models\Errore::pruneAll()». Misurato: dieci
+     * test rossi, e il messaggio non nomina il trait.
+     *
+     * Con l'alias l'implementazione originale resta raggiungibile per nome, ed è
+     * ciò che la nostra chiama dopo aver oscurato i messaggi.
+     */
+    use Prunable {
+        Prunable::pruneAll as private potaDavvero;
+    }
 
     /**
      * Quanto vive una issue **chiusa** dopo l'ultima volta che è successa.
@@ -92,6 +106,77 @@ class Errore extends Model
      * conservazione proprio dove va stretta (Privacy §3, T8).
      */
     private const GIORNI_APERTE = 180;
+
+    /**
+     * 🔴 **Oltre quanto tempo il `messaggio` di una issue si SVUOTA**, in
+     * qualunque stato essa sia (decisione del 24 Ago 2026 — 🔗 ADR-017, Privacy
+     * §T8).
+     *
+     * ## Il buco che chiude
+     *
+     * Il `messaggio` è **interpolato** («Utente 42 non trovato»): è l'unica
+     * colonna di `errori` che possa portare un dato riferito a una persona, e a
+     * differenza delle occorrenze — che se ne vanno a 90 giorni — vive quanto la
+     * issue. Su una issue `ignorato`, che il blocco 7 non pota **mai**, «quanto
+     * la issue» significa **per sempre**: la Privacy lo aveva dichiarato come
+     * limite accettato, e questa costante è la decisione che lo toglie.
+     *
+     * ⚠️ **E vale per OGNI stato, non solo per `ignorato`**, perché il rischio
+     * più grande non è quello che si vede: `ultima_occorrenza_at` si rinfresca a
+     * ogni avvenimento, quindi **una issue aperta che continua a ripetersi non
+     * viene mai potata comunque**, senza che nessuno tocchi niente. Restringere
+     * l'oscuramento al solo stato zittito avrebbe coperto la casella più rara
+     * lasciando aperta la più frequente. (È la stessa misura già scritta in
+     * Privacy §T8: «il delta vero dell'esenzione è la sola casella *zittita e
+     * smessa di ripetersi*».)
+     *
+     * ## Cosa resta, e perché basta
+     *
+     * `classe`, `file`, `riga`, `impronta`, i contatori e le date. Cioè **cosa**
+     * si rompe, **dove** e **quante volte** — che è tutto ciò che serve a
+     * riconoscere l'errore e a decidere se guardarlo — e che non riguarda
+     * nessuno: un nome di classe e un numero di riga sono fatti sul codice, non
+     * su una persona. Il messaggio era comunque etichettato in pagina come
+     * **campione** e non come «il» messaggio dell'errore.
+     *
+     * ⚠️ **180 giorni scritti qui e non `self::GIORNI_APERTE`**, benché la cifra
+     * coincida: è un confine di *minimizzazione*, non di conservazione, e i due
+     * devono poter divergere. Allungare la vita delle issue aperte a 365 giorni
+     * — decisione tecnica plausibile — non deve **allungare in silenzio** la
+     * permanenza di un dato personale; una costante condivisa lo farebbe senza
+     * che nessuno se ne accorgesse.
+     */
+    private const GIORNI_MESSAGGIO = 180;
+
+    /**
+     * Ciò che prende il posto del messaggio oscurato.
+     *
+     * 🔴 **Serviva distinguere «oscurato» da «vuoto», e la scelta è una
+     * sentinella e non una colonna nuova.** Il vuoto esiste davvero: quando
+     * un'eccezione non porta messaggio, `CatturaErrori` scrive `''` — quindi una
+     * riga svuotata a `''` sarebbe **indistinguibile** da una issue nata muta, e
+     * chi legge la pagina non saprebbe se il messaggio non c'è mai stato o se
+     * gli è stato tolto. La differenza conta: nel primo caso non c'è niente da
+     * cercare, nel secondo la storia è più lunga della riga.
+     *
+     * Le alternative pesate:
+     *
+     * - **`null`** — la colonna è `NOT NULL`, quindi servirebbe una migration; e
+     *   `null` significa comunque «non lo so», che è ciò che si vuole evitare;
+     * - **una colonna `messaggio_oscurato_at`** — dice anche *quando*, ma costa
+     *   una migration (da applicare anche al DB di sviluppo) per un dato che
+     *   nessuna schermata userebbe, e lascerebbe comunque aperta la domanda su
+     *   cosa scrivere in `messaggio`;
+     * - **questa stringa** — nessuna migration, e soprattutto si legge **ovunque
+     *   il messaggio si legga già**: nella scheda, in una `psql`, in un dump.
+     *   Una colonna a parte sarebbe visibile solo a chi sa di doverla guardare.
+     *
+     * ⚠️ **È `public` apposta**: la sentinella è un valore di dominio che i test
+     * e chiunque legga la scheda devono poter nominare, non un dettaglio
+     * privato. Il testo dice **cosa** è successo e **dopo quanto**, perché
+     * troverà lettori che questa costante non la leggeranno mai.
+     */
+    public const MESSAGGIO_OSCURATO = '[messaggio oscurato dopo 180 giorni dall\'ultima occorrenza]';
 
     /** Plurale italiano: il default di Eloquent direbbe `errores`. */
     protected $table = 'errori';
@@ -162,8 +247,9 @@ class Errore extends Model
      * ## Perché una whitelist di stati e non `where('stato', '!=', 'ignorato')`
      *
      * 🔴 **Potare un `ignorato` lo resusciterebbe.** È l'unico interruttore di
-     * silenzio del tracker: la issue resta fuori dall'elenco e — dal blocco 8 —
-     * non manda alert. Ma il silenzio vive **nella riga**, non altrove: tolta la
+     * silenzio del tracker: la issue resta fuori dall'elenco e non manda alert
+     * (`CatturaErrori::allerta()` non ha nemmeno un ramo che la raggiunga:
+     * `incrementa()` riapre solo i `risolto`). Ma il silenzio vive **nella riga**, non altrove: tolta la
      * riga, il `firstOrCreate` del percorso caldo non la trova più, ne crea una
      * nuova `aperto`, `wasRecentlyCreated` è vero e parte l'alert. L'unica cosa
      * che qualcuno ha chiesto di non sentire più si riaccenderebbe **da sé, a
@@ -235,6 +321,69 @@ class Errore extends Model
                 ->orWhere(fn (Builder $aperte) => $aperte
                     ->where('stato', 'aperto')
                     ->where('ultima_occorrenza_at', '<', now()->subDays(self::GIORNI_APERTE))));
+    }
+
+    /**
+     * 🔴 **L'oscuramento dei messaggi, agganciato alla potatura che già gira.**
+     *
+     * ⚠️ **Qui e non in un comando nuovo**, ed è la lezione del blocco 7 messa
+     * in pratica una seconda volta: un `errori:oscura-messaggi` da schedulare al
+     * deploy sarebbe la forma esatta del difetto **T6** — una misura dichiarata
+     * nel registro dei trattamenti e mai avvenuta, perché nessuno si ricorda di
+     * una riga di cron che non è nel repository. `pruneAll()` è il metodo che
+     * `model:prune` chiama su ogni modello dell'elenco
+     * (`App\Support\Retention::MODELLI`), quindi l'oscuramento eredita **la
+     * schedulazione già verificata da due meta-test** e non ne aggiunge una da
+     * verificare a parte. Non c'è nessun comando in più da ricordarsi.
+     *
+     * ⚠️ **Prima l'oscuramento, poi la potatura**, e l'ordine è stato scelto,
+     * non subito. Al contrario si risparmierebbero le poche righe aggiornate un
+     * istante prima di essere cancellate — ma si legherebbe l'oscuramento alla
+     * **riuscita** della potatura: `pruneAll()` scorre la tabella a chunk e
+     * cancella riga per riga, cioè è la metà che può rompersi (timeout, tabella
+     * grande, una FK), mentre l'oscuramento è **una sola UPDATE**. Nell'ordine
+     * scelto il dato personale se ne va anche nella giornata in cui la potatura
+     * fallisce; nell'ordine inverso resterebbe in chiaro un altro giorno. Il
+     * costo è qualche riga aggiornata invano.
+     *
+     * ⚠️ **Non si filtra per stato.** `prunable()` qui sotto nomina i due stati
+     * che pota — disciplina fail-closed, perché cancellare è irreversibile — ma
+     * l'oscuramento è il gesto **opposto**: sbagliarlo per eccesso toglie un
+     * messaggio a una issue che poteva tenerselo, sbagliarlo per difetto lascia
+     * un dato personale a database. Il verso giusto in cui sbagliare si ribalta
+     * insieme alla conseguenza, quindi qui si guarda solo il **tempo**.
+     */
+    public function pruneAll(int $chunkSize = 1000)
+    {
+        self::oscuraMessaggiScaduti();
+
+        return $this->potaDavvero($chunkSize);
+    }
+
+    /**
+     * Svuota il `messaggio` delle issue ferme da oltre `GIORNI_MESSAGGIO`,
+     * lasciando in piedi tutto il resto della riga.
+     *
+     * ⚠️ **Una UPDATE di massa, e non un giro di `save()`**: non è un gesto di
+     * dominio (quelli stanno su `risolvi()`/`ignora()`/`riapri()` e scrivono
+     * audit), è una misura di minimizzazione che deve costare una query anche su
+     * una tabella grande. Non scrive audit per la stessa ragione per cui non lo
+     * fa la potatura: nessuno ha fatto niente, è passato del tempo.
+     *
+     * ⚠️ **`<` e non `<=`**, come `prunable()`: il confine appartiene a chi
+     * resta. E il filtro sulla sentinella non è un'ottimizzazione ma la
+     * differenza fra un'operazione **idempotente** e una che ogni notte
+     * riscrive — e rimuove la data di `updated_at` — le stesse righe già
+     * oscurate mesi fa.
+     *
+     * @return int quante righe sono state oscurate in questa passata
+     */
+    public static function oscuraMessaggiScaduti(): int
+    {
+        return static::query()
+            ->where('ultima_occorrenza_at', '<', now()->subDays(self::GIORNI_MESSAGGIO))
+            ->where('messaggio', '!=', self::MESSAGGIO_OSCURATO)
+            ->update(['messaggio' => self::MESSAGGIO_OSCURATO]);
     }
 
     /**

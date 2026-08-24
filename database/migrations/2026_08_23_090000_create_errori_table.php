@@ -8,7 +8,7 @@ return new class extends Migration
 {
     /**
      * Le **issue** dell'error tracker interno (S6 — 🔗 `docs/Architettura/Error
-     * Tracker Interno (piano).md`, ADR-017 quando sarà scritto).
+     * Tracker Interno (piano).md`, 🔗 ADR-017).
      *
      * Su Laravel Cloud `laravel.log` vive su un disco **effimero e per-replica**,
      * azzerato a ogni deploy e a ogni risveglio da scale-to-zero: un errore visto
@@ -94,7 +94,7 @@ return new class extends Migration
 
             // Regressione: la issue era risolta ed è tornata. Colonna distinta da
             // `ultima_occorrenza_at` perché è il fatto che fa scattare il secondo
-            // alert (blocco 8) e la sola prova leggibile che una correzione non
+            // alert e la sola prova leggibile che una correzione non
             // ha tenuto.
             $table->timestamp('riaperto_automaticamente_at')->nullable();
 
@@ -103,7 +103,7 @@ return new class extends Migration
             // Cancellare un utente non deve cancellare la storia dei bug.
             $table->foreignId('risolto_da')->nullable()->constrained('users')->nullOnDelete();
 
-            // Alert (blocco 8): quando è partita l'email per questa issue.
+            // Alert: quando è partita l'email per questa issue.
             //
             // ⚠️ **Nessuna coppia `alert_giorno`/`alert_conteggio`.** Il cap
             // `alert_max_giornalieri` protegge la casella da una tempesta di
