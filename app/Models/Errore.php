@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use App\Support\AuditLog;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Prunable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -60,6 +62,37 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Errore extends Model
 {
+    use Prunable;
+
+    /**
+     * Quanto vive una issue **chiusa** dopo l'ultima volta che è successa.
+     *
+     * Novanta giorni, cioè **lo stesso orizzonte delle occorrenze**
+     * (`OccorrenzaErrore::GIORNI`), e l'uguaglianza è voluta: l'ultima
+     * occorrenza di una issue avviene per definizione a `ultima_occorrenza_at`,
+     * quindi contenitore e prove attraversano il confine insieme e non resta un
+     * guscio senza niente dentro. Un bug che qualcuno ha dichiarato sistemato e
+     * che per tre mesi non si è più visto non ha altro da dire.
+     */
+    private const GIORNI_CHIUSE = 90;
+
+    /**
+     * Quanto vive una issue **aperta** dopo l'ultima volta che è successa.
+     *
+     * Il doppio, perché è lavoro ancora da fare e la riga è la sola traccia che
+     * esista di un guasto che nessuno ha guardato.
+     *
+     * ⚠️ **Conseguenza accettata e dichiarata**: fra i 90 e i 180 giorni una
+     * issue aperta e silenziosa resta **senza le proprie prove**, potate al
+     * proprio confine. Continua a portare classe, file, riga e il contatore —
+     * cioè cosa si rompe e quante volte — e perde il «con quali dati». È il
+     * verso giusto in cui sbagliare: le occorrenze sono la parte che contiene
+     * dati personali (stack trace, ip, user agent, input), e prolungarne la vita
+     * per accompagnare una issue che nessuno apre da tre mesi allargherebbe la
+     * conservazione proprio dove va stretta (Privacy §3, T8).
+     */
+    private const GIORNI_APERTE = 180;
+
     /** Plurale italiano: il default di Eloquent direbbe `errores`. */
     protected $table = 'errori';
 
@@ -115,6 +148,93 @@ class Errore extends Model
             'risolto_at' => 'datetime',
             'alert_inviato_at' => 'datetime',
         ];
+    }
+
+    /**
+     * 🔴 **La potatura, e i due stati che la subiscono — `ignorato` non è uno di
+     * loro.**
+     *
+     * Passa dal `model:prune` **già schedulato** in `routes/console.php`, che
+     * legge `App\Support\Retention::MODELLI`: nessun comando nuovo «da
+     * schedulare al deploy», che è la forma esatta del difetto T6 (una retention
+     * dichiarata e inerte) già rimproverata al registro di audit.
+     *
+     * ## Perché una whitelist di stati e non `where('stato', '!=', 'ignorato')`
+     *
+     * 🔴 **Potare un `ignorato` lo resusciterebbe.** È l'unico interruttore di
+     * silenzio del tracker: la issue resta fuori dall'elenco e — dal blocco 8 —
+     * non manda alert. Ma il silenzio vive **nella riga**, non altrove: tolta la
+     * riga, il `firstOrCreate` del percorso caldo non la trova più, ne crea una
+     * nuova `aperto`, `wasRecentlyCreated` è vero e parte l'alert. L'unica cosa
+     * che qualcuno ha chiesto di non sentire più si riaccenderebbe **da sé, a
+     * scadenza** — e per giunta il giorno in cui nessuno se lo aspetta.
+     *
+     * I due rami nominano quindi lo stato che potano, invece di escludere quello
+     * che non va potato: è la stessa disciplina fail-closed della tenancy. Uno
+     * stato **nuovo** — se un domani ne nascesse un quarto — resterebbe fuori
+     * dalla potatura finché qualcuno non decide che ci deve stare, che è il verso
+     * in cui si sbaglia senza perdere dati.
+     *
+     * ## Il confine è `ultima_occorrenza_at`, non `created_at`
+     *
+     * Una issue nata un anno fa e successa ieri è viva. Il tempo che conta è
+     * quello passato dall'ultima volta che il guasto è avvenuto, ed è anche ciò
+     * che fa combaciare l'orizzonte delle issue chiuse con quello delle loro
+     * occorrenze.
+     *
+     * ⚠️ `<` e non `<=`: il confine appartiene a chi resta. Su SQLite questi
+     * confronti sono lessicografici su stringhe e su Postgres sono date vere,
+     * quindi i test dei confini si rieseguono su `easylab_test`.
+     *
+     * ## `Prunable` e non `MassPrunable`, e la ragione vera
+     *
+     * ⚠️ La ragione che il piano attribuiva a questa scelta — «`Prunable` salta
+     * gli eventi del model» — è **falsa, verificata**: è `MassPrunable` a
+     * saltarli (fa una `delete()` di massa sul query builder), mentre
+     * `Prunable::pruneAll()` fa `chunkById()` → `$model->prune()` → `delete()`,
+     * quindi `deleting`/`deleted` **scattano** riga per riga.
+     *
+     * La scelta resta `Prunable`, per due ragioni che valgono davvero. La prima:
+     * le occorrenze se ne vanno comunque, perché il `cascadeOnDelete` è **nello
+     * schema** (`occorrenze_errore.errore_id`) e il database non chiede il
+     * permesso a Eloquent — un `MassPrunable` non lascerebbe orfani neanche lui.
+     * La seconda, che è quella decisiva: `pruneAll()` isola il guasto di **una**
+     * riga (vedi sotto), mentre una delete di massa fallisce o riesce tutta
+     * insieme, su una tabella che qui può essere grande.
+     *
+     * ## 🔴 Un guasto mentre si potano gli errori scrive in `errori`, e va bene
+     *
+     * `Prunable::pruneAll()` avvolge ogni `$model->prune()` in un
+     * `catch (Throwable)` che chiama `report()` — cioè, per questo model, il
+     * tracker stesso. Il flag di rientranza di `CatturaErrori` **non copre questo
+     * caso** e il suo docblock lo dice: quel `report()` avviene *dopo* che
+     * `cattura()` è uscita, quindi il flag non è più sullo stack.
+     *
+     * **Non si aggiunge una guardia**, ed è una decisione, non una dimenticanza:
+     *
+     * - **non è una ricorsione.** La riga che `report()` scrive nasce con
+     *   `ultima_occorrenza_at = now()`, quindi è per costruzione **fuori** dalla
+     *   query qui sotto; e `chunkById()` avanza per `id` crescente, quindi non
+     *   torna nemmeno a guardarla. Il giro si chiude da sé, senza flag;
+     * - **il verso della guardia sarebbe sbagliato.** Zittire il tracker durante
+     *   la potatura significa che il giorno in cui la potatura si rompe — la sola
+     *   cosa che tenga sotto controllo la crescita di queste due tabelle — non
+     *   resta niente da nessuna parte, perché `laravel.log` su Cloud è effimero e
+     *   il cron non ha nessuno che lo guardi. Un guasto della potatura è
+     *   esattamente il genere di errore per cui questo tracker esiste.
+     *
+     * @return Builder<Errore>
+     */
+    public function prunable(): Builder
+    {
+        return static::query()
+            ->where(fn (Builder $query) => $query
+                ->where(fn (Builder $chiuse) => $chiuse
+                    ->where('stato', 'risolto')
+                    ->where('ultima_occorrenza_at', '<', now()->subDays(self::GIORNI_CHIUSE)))
+                ->orWhere(fn (Builder $aperte) => $aperte
+                    ->where('stato', 'aperto')
+                    ->where('ultima_occorrenza_at', '<', now()->subDays(self::GIORNI_APERTE))));
     }
 
     /**

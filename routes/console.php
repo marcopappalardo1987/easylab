@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\AvvisoScadenza;
+use App\Support\Retention;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -37,14 +37,30 @@ Schedule::command('easylab:notifica-scadenze')
     ->onOneServer();
 
 /*
- * Rotazione dei dati di notifica: è la «rotazione» che il registro dei
- * trattamenti dichiara per T4, resa un fatto invece che un'intenzione.
+ * 🔴 **La potatura, ed è QUI che una retention smette di essere un'intenzione.**
  *
- * Due orizzonti diversi perché rispondono a due domande diverse: gli avvisi (24
- * mesi) servono al comando per non ripetersi, le notifiche in-app (12 mesi) sono
- * posta letta che nessuno riapre dopo un anno.
+ * È la «rotazione» che il registro dei trattamenti dichiara per T4 (avvisi) e
+ * T8 (error tracker), resa un fatto. L'elenco dei modelli non si scrive a mano
+ * su questa riga: arriva da `App\Support\Retention::MODELLI`, e la ragione è
+ * che così il legame fra «un model dichiara `prunable()`» e «qualcuno lo pota
+ * davvero» diventa **verificabile** — `tests/Feature/RetentionTest.php` legge
+ * `app(Schedule::class)->events()` e pretende che questa riga li nomini tutti.
+ *
+ * ⚠️ **Nessun comando `errors:prune` nuovo**, benché il piano S1 ne volesse uno
+ * «da schedulare al deploy»: sarebbe stata la forma esatta del difetto T6 —
+ * `clean_after_days => 365` dichiarato in `config/activitylog.php` e
+ * `activitylog:clean` mai schedulato, cioè una retention **inerte**. Il
+ * `model:prune` di Laravel gira già: i modelli si aggiungono a lui.
+ *
+ * Gli orizzonti stanno **sui model** (`prunable()`), non qui, perché sono
+ * decisioni di dominio e vanno lette accanto ai dati che riguardano: 24 mesi per
+ * gli avvisi (servono al comando per non ripetersi), 90 giorni per le occorrenze
+ * e per le issue chiuse, 180 per quelle aperte — e `ignorato` mai.
+ *
+ * Le notifiche in-app (12 mesi qui sotto) non passano di lì: non sono un model,
+ * sono posta letta che nessuno riapre dopo un anno.
  */
-Schedule::command('model:prune', ['--model' => [AvvisoScadenza::class]])
+Schedule::command('model:prune', ['--model' => Retention::MODELLI])
     ->dailyAt('03:30')
     ->timezone('Europe/Rome')
     ->onOneServer();

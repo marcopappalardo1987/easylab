@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Prunable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
@@ -32,6 +34,21 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class OccorrenzaErrore extends Model
 {
+    use Prunable;
+
+    /**
+     * Novanta giorni, ed è **l'orizzonte più corto delle due tabelle**.
+     *
+     * Qui stanno i dati personali (stack trace con i percorsi, ip, user agent,
+     * input della richiesta): la riga T8 del registro dei trattamenti dichiara
+     * questa cifra, e la minimizzazione vuole che sia la più corta che risponda
+     * ancora alla domanda «con quali dati si rompe». Tre mesi sono il tempo in
+     * cui un guasto si guarda; oltre, la si legge dal contatore.
+     *
+     * Coincide con `Errore::GIORNI_CHIUSE` di proposito — vedi là il perché.
+     */
+    private const GIORNI = 90;
+
     /** Il default di Eloquent direbbe `occorrenza_errores`. */
     protected $table = 'occorrenze_errore';
 
@@ -62,6 +79,40 @@ class OccorrenzaErrore extends Model
             'input' => 'array',
             'avvenuta_at' => 'datetime',
         ];
+    }
+
+    /**
+     * La potatura, sul `model:prune` già schedulato
+     * (`App\Support\Retention::MODELLI`).
+     *
+     * ⚠️ **Il confine è `avvenuta_at`**, che è l'unico momento che questa riga
+     * conosce: non c'è `created_at` (`$timestamps = false`), ed è voluto — una
+     * seconda colonna che dice la stessa cosa è una seconda colonna che può
+     * dirla diversa. L'indice su `avvenuta_at` da sola esiste **per questa
+     * query**: la potatura scandisce per data senza `errore_id`, e su questa
+     * tabella non c'è nient'altro che cresca così.
+     *
+     * 🔴 **Nessuna clausola sullo stato della issue, e non è una dimenticanza.**
+     * Un'occorrenza di novanta giorni fa se ne va anche se la sua issue è
+     * `ignorato`, cioè l'unico stato che non si pota mai: ciò che non va potato
+     * è **la riga di `errori`**, perché è lei a tenere il silenzio (toglierla la
+     * farebbe rinascere `aperto` al prossimo `firstOrCreate`). Le sue prove non
+     * tengono niente, e sono la parte che porta dati personali: conservarle per
+     * sempre perché qualcuno ha zittito la issue sarebbe la conservazione
+     * illimitata ottenuta con un click.
+     *
+     * ⚠️ **Il verso opposto non vale**: le prove non sopravvivono mai alla
+     * propria issue, e non per questa query — per il `cascadeOnDelete` dello
+     * schema, che porta via anche le occorrenze di ieri quando la issue viene
+     * potata.
+     *
+     * `<` e non `<=` come su `Errore`: i confini si rieseguono su Postgres.
+     *
+     * @return Builder<OccorrenzaErrore>
+     */
+    public function prunable(): Builder
+    {
+        return static::query()->where('avvenuta_at', '<', now()->subDays(self::GIORNI));
     }
 
     /**
