@@ -8,6 +8,7 @@ use App\Http\Controllers\PaginaBloccato;
 use App\Http\Controllers\ScaricaDocumento;
 use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Campo\Home as CampoHome;
+use App\Livewire\Dashboard\Home as DashboardHome;
 use App\Livewire\Fornitori\ElencoFornitori;
 use App\Livewire\Piattaforma\Cabina;
 use App\Livewire\Piattaforma\EditorRuoli;
@@ -35,7 +36,15 @@ Route::redirect('/', '/login');
 // 2FA deve finire su /bloccato, non sul setup della sicurezza — la condizione
 // più forte parla per prima (ADR-013).
 Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(function () {
-    Route::view('/dashboard', 'dashboard')->name('dashboard');
+    // La pagina di atterraggio di OGNI ruolo (S6): niente `can:`, perché è
+    // l'unica che ogni utente autenticato deve poter aprire — ci mandano
+    // Fortify dopo il login, `SwitcherEnte::passa()` a ogni cambio sede e
+    // `FugaDaLockout`. Il permesso si chiede blocco per blocco dentro la vista,
+    // come impone la Policy di Code Review per le viste che compongono più
+    // aree. ⚠️ Regge finché il componente non ha AZIONI: una con `skipRender()`
+    // non arriverebbe a `render()`, e qui non c'è un `can:` di rotta a
+    // raccoglierla.
+    Route::get('/dashboard', DashboardHome::class)->name('dashboard');
     Route::get('/anagrafica', Albero::class)
         ->middleware('can:unita_organizzativa.view')
         ->name('anagrafica.index');
