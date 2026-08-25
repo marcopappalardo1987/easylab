@@ -8,6 +8,7 @@ use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
 beforeEach(function () {
@@ -229,12 +230,107 @@ it('says the list is empty for a filter, not empty full stop', function () {
         ->assertDontSee('Nessuno strumento.');
 });
 
+it('counts a falsy or unknown filter value as a filter, or as none, correctly', function () {
+    // 🔴 **Tre casi che la prima correzione lasciava aperti**, tutti misurati:
+    //
+    //   `?ubicazioneId=0` — il componente FILTRA (`!== null`) e trova zero righe,
+    //                      ma la condizione in Blade testava la truthiness: lo
+    //                      zero è falsy, quindi diceva «Nessuno strumento.» su un
+    //                      elenco filtrato. È esattamente il difetto che la
+    //                      correzione precedente dichiarava di chiudere.
+    //   `?enteId=…`      — filtra, e non era nominato affatto nella condizione.
+    //   `?stato=giallo`  — il componente SCARTA il valore (whitelist), quindi
+    //                      l'elenco NON è filtrato: dire «Nessun risultato per i
+    //                      filtri applicati» manda a togliere un filtro che non
+    //                      c'è.
+    Strumento::factory()->count(3)->forNode($this->dip1)
+        ->create(['data_installazione' => today()->subYear()->toDateString()]);
+
+    $frase = fn (array $query) => Livewire::withQueryParams($query)
+        ->actingAs($this->admin)->test(ElencoStrumenti::class);
+
+    // Filtrati e vuoti: la frase deve nominare i filtri.
+    $frase(['ubicazioneId' => 0])
+        ->assertSee('Nessun risultato per i filtri applicati.')
+        ->assertDontSee('Nessuno strumento.');
+
+    $frase(['enteId' => 999999])
+        ->assertSee('Nessun risultato per i filtri applicati.')
+        ->assertDontSee('Nessuno strumento.');
+
+    // Valore fuori whitelist: il filtro NON è stato applicato, quindi le tre
+    // macchine ci sono e non c'è nessun vuoto da spiegare.
+    $frase(['stato' => 'giallo'])
+        ->assertDontSee('Nessun risultato per i filtri applicati.')
+        ->assertDontSee('Nessuno strumento.')
+        ->tap(fn ($c) => expect($c->viewData('strumenti')->total())->toBe(3));
+});
+
 it('says the list is empty full stop when there is nothing and no filter', function () {
     // L'altra metà: senza filtri il messaggio non deve mandare a cercare un
     // filtro da togliere che non c'è.
     Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)
         ->assertSee('Nessuno strumento.')
         ->assertDontSee('Nessun risultato per i filtri applicati.');
+});
+
+it('ends every ordering with a tie-break, so pages cannot lose rows', function () {
+    // 🔴 **Trovato girando la suite su Postgres**: la raccolta di due pagine
+    // dava 46 righe su 47, con SQLite verde. A parità di chiave l'ordine fra la
+    // query di pagina 1 e quella di pagina 2 è una **proprietà del motore**, e
+    // su Postgres i pari possono riordinarsi: una riga esce da entrambe. La
+    // colonna `stato` ha tre valori distinti su tutto il parco, quindi i pari
+    // sono quasi tutte le righe.
+    //
+    // ⚠️ **Si asserisce sull'SQL, e non sulle righe raccolte.** Verificato: la
+    // prova sui dati non è deterministica — togliendo il tie-break la suite
+    // resta verde su entrambi i driver a seconda del piano scelto. Un test che
+    // coglie un difetto una volta su tre non è una rete, è un aneddoto. È la
+    // stessa conclusione già raggiunta sul registro di audit.
+    Strumento::factory()->count(3)->forNode($this->dip1)->create();
+
+    // Le colonne ordinabili si leggono da ciò che l'utente può CLICCARE, non da
+    // un secondo elenco copiato dal componente: due liste divergono, e la copia
+    // che diverge smette di controllare proprio la colonna appena aggiunta.
+    $html = Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)->html();
+    preg_match_all("/wire:click=\"sort\('(\\w+)'\)\"/", $html, $trovate);
+    $colonne = $trovate[1];
+
+    expect($colonne)->toHaveCount(7, 'Le colonne ordinabili cliccabili sono cambiate: aggiorna il numero.');
+
+    foreach ($colonne as $colonna) {
+        foreach (['asc', 'desc'] as $direzione) {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            Livewire::withQueryParams(['sortBy' => $colonna, 'sortDir' => $direzione])
+                ->actingAs($this->admin)->test(ElencoStrumenti::class);
+            $query = collect(DB::getQueryLog())
+                ->pluck('query')
+                ->first(fn (string $q) => str_contains($q, 'from "strumenti"') && str_contains($q, 'order by'));
+            DB::disableQueryLog();
+
+            expect($query)->not->toBeNull("Nessuna query ordinata per «{$colonna} {$direzione}»");
+
+            // L'ULTIMO criterio dell'`order by` è l'id, che è unico: da lì in poi
+            // l'ordine è totale e la pagina 2 comincia dove finisce la 1.
+            //
+            // ⚠️ Nessun messaggio dentro `toContain`: è **variadico**, e il testo
+            // diventerebbe un secondo ago — cioè un'asserzione che non può
+            // fallire. È lo stesso errore che ha svuotato il guardrail di
+            // ADR-020 sulla dashboard, e l'ho rifatto scrivendo questa riga.
+            // ⚠️ Si toglie il `limit … offset …` FINALE con un'ancora di fine
+            // stringa: un `strpos(' limit ')` prenderebbe il `limit 1` che sta
+            // dentro la sottoquery dell'ubicazione, tagliando la clausola a metà
+            // e facendo fallire il test sulla colonna sbagliata.
+            $ordinamento = preg_replace(
+                '/\s+limit\s+\d+(\s+offset\s+\d+)?$/',
+                '',
+                substr($query, strpos($query, 'order by'))
+            );
+
+            expect($ordinamento)->toEndWith('"strumenti"."id" asc');
+        }
+    }
 });
 
 it('shows 20 rows per page by default', function () {

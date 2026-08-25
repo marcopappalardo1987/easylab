@@ -124,6 +124,34 @@ class ElencoStrumenti extends Component
         $this->resetPage();
     }
 
+    /**
+     * Almeno un filtro è attivo, cioè l'elenco che si sta guardando è un
+     * SOTTOINSIEME e non il parco.
+     *
+     * 🔴 **Esiste come metodo perché la vista non deve riscrivere questa lista.**
+     * La condizione del messaggio di vuoto viveva in Blade e nominava due filtri
+     * su cinque: era la terza forma della stessa regola, e infatti divergeva —
+     * `?ubicazioneId=0` mostrava «Nessuno strumento.» su un elenco filtrato (lo
+     * zero è falsy), `?enteId=` non era nominato affatto, e `?stato=giallo`
+     * mostrava «Nessun risultato per i filtri applicati» su un elenco **non**
+     * filtrato, mandando a togliere un filtro che il componente aveva già
+     * scartato. Una lista scritta a mano diverge di nuovo alla prossima
+     * `#[Url]`.
+     *
+     * ⚠️ Ogni ramo usa **lo stesso predicato con cui il filtro viene applicato**
+     * in `render()`: `!== null` dove là c'è `!== null`, la whitelist dove là
+     * c'è la whitelist. È ciò che rende «filtro applicato» e «filtro annunciato»
+     * la stessa cosa invece che due cose che si somigliano.
+     */
+    public function haFiltriAttivi(): bool
+    {
+        return filled($this->search)
+            || $this->enteId !== null
+            || $this->ubicazioneId !== null
+            || $this->soloObsoleti
+            || in_array($this->stato, array_map(fn (StatoSemaforo $c) => $c->value, StatoSemaforo::cases()), true);
+    }
+
     /** Opzioni del select, esposte alla view. @return list<int> */
     public function opzioniPerPage(): array
     {
@@ -242,9 +270,35 @@ class ElencoStrumenti extends Component
      * regola), e `prossima_scadenza` lo stesso criterio "aperti, scadenza
      * minima" del calcolo per-model.
      *
+     * 🔴 **Ogni ordinamento finisce con un tie-break sull'id, e non è
+     * pignoleria: senza, la paginazione PERDE righe.** A parità di chiave
+     * l'ordine fra due pagine è una proprietà del motore — su SQLite la
+     * scansione è stabile, su Postgres i pari possono riordinarsi fra la query
+     * di pagina 1 e quella di pagina 2, e una riga esce da entrambe. È lo stesso
+     * difetto già pagato sul registro di audit, e qui pesa di più: la colonna
+     * `stato` ha **tre** valori distinti su tutto il parco, quindi i pari sono
+     * quasi tutte le righe.
+     *
+     * Trovato il 25 Ago 2026 girando la suite su Postgres: 46 righe raccolte su
+     * 47, con SQLite verde. Nessun dato di prova l'avrebbe mostrato in locale.
+     *
      * @param  Builder<Strumento>  $query
      */
     protected function applicaOrdinamento($query, string $sortBy, string $sortDir): void
+    {
+        $this->applicaCriterio($query, $sortBy, $sortDir);
+
+        // L'ultimo criterio, sempre e per ogni colonna: l'id è unico, quindi da
+        // qui in poi l'ordine è totale e la pagina 2 comincia dove finisce la 1.
+        $query->orderBy('strumenti.id');
+    }
+
+    /**
+     * Il criterio scelto dall'utente, senza il tie-break.
+     *
+     * @param  Builder<Strumento>  $query
+     */
+    private function applicaCriterio($query, string $sortBy, string $sortDir): void
     {
         if ($sortBy === 'ubicazione') {
             // Per l'utente "ubicazione" è il nodo in cui sta lo strumento:

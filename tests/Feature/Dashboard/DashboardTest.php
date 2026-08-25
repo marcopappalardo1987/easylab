@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\StatoSemaforo;
+use App\Livewire\Dashboard\Home;
 use App\Livewire\Strumenti\ElencoStrumenti;
 use App\Models\Intervento;
 use App\Models\Strumento;
@@ -53,8 +54,23 @@ beforeEach(function () {
 
         $trovati = [];
 
-        foreach ($xpath->query("//a[.//p[contains(@class, 'text-3xl')]]") as $ancora) {
+        // ⚠️ **Si aggancia al CONTRATTO, non alla presentazione.** La prima
+        // stesura cercava `//a[.//p[contains(@class,'text-3xl')]]`, cioè una
+        // classe di stile: rinominarla in `text-4xl` — una modifica puramente
+        // estetica — rendeva rossi tre test con un messaggio che non nomina la
+        // causa, e **svuotava in silenzio** gli altri due, fra cui quello sul
+        // permesso, perché `toBeEmpty()` su un selettore che non aggancia più
+        // nulla è soddisfatto per definizione. Ciò che deve esistere è il link
+        // verso l'elenco, e su quello ci si aggancia.
+        foreach ($xpath->query('//a[contains(@href, "/strumenti")]') as $ancora) {
             $testo = preg_replace('/\s+/', ' ', trim($ancora->textContent));
+
+            // Il link della sidebar non è un riquadro: porta allo stesso posto
+            // ma non ha un numero sotto l'etichetta.
+            if (! preg_match('/\d/', $testo)) {
+                continue;
+            }
+
             $trovati[$testo] = [
                 'testo' => $testo,
                 'href' => $ancora->getAttribute('href'),
@@ -310,21 +326,35 @@ it('never shows the way into the cabina to whoever cannot walk it', function () 
 
 // ─── Privacy: il pallino è un aggregato, la sua causa no ─────────────────────
 
-it('never breaks the orange down by cause on the page', function () {
+it('never breaks the orange down by cause', function () {
     // ⛔ ADR-020 legittima il PALLINO come aggregato dovuto a tutti, non la sua
     // scomposizione: «di cui N da garanzie ricambio» direbbe a un Ente su
     // `nascosta` quanti pezzi sostituiti ha, e lo direbbe senza passare da
     // nessuno scope — perché un numero non è una riga.
+    //
+    // 🔴 **La prima stesura di questo test era COMPLETAMENTE VUOTA**, e la
+    // ragione vale oltre questo file: `expect()->not->toContain()` è
+    // **variadico**, non accetta un messaggio. Il testo che credevo di passare
+    // come spiegazione era un **secondo ago** — e non essendo mai in pagina,
+    // l'asserzione era soddisfatta per qualunque parola. Misurato: aggiungendo
+    // «di cui N da garanzie ricambio» alla vista, tutti e quattordici i test
+    // restavano verdi.
+    //
+    // ⚠️ E si guarda il markup del **solo componente**, non la pagina: con
+    // `strip_tags` del documento intero la sidebar stampa già «Ricambi» a un
+    // Admin, quindi il test sarebbe rosso per il layout invece che per la
+    // dashboard — e verrebbe «aggiustato» finché non dice più niente. È la
+    // stessa trappola che `RetentionTest` e `ContestoErroriTest` spiegano per
+    // nome.
     $s = ($this->macchina)('Scaduta');
     Intervento::factory()->forStrumento($s)->scaduto()->create();
+    ($this->macchina)('Vecchia')->update(['data_installazione' => today()->subYears(12)->toDateString()]);
 
-    $testo = preg_replace('/\s+/', ' ', strip_tags(
-        $this->actingAs($this->admin)->get(route('dashboard'))->assertOk()->getContent()
-    ));
+    $testo = mb_strtolower(preg_replace('/\s+/', ' ', strip_tags(
+        Livewire::actingAs($this->admin)->test(Home::class)->html()
+    )));
 
     foreach (['ricambio', 'ricambi', 'garanzia', 'garanzie', 'intervento', 'interventi'] as $parola) {
-        expect(mb_strtolower($testo))->not->toContain($parola,
-            "La dashboard nomina «{$parola}»: se è per scomporre uno stato per causa, ADR-020 non lo consente."
-        );
+        expect($testo)->not->toContain($parola);
     }
 });

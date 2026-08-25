@@ -29,6 +29,19 @@
     SaaS» — e sta qui invece che in un secondo componente perché un numero senza
     il suo contesto è la cosa che poi viene citata in una riunione da sola.
 --}}
+@php
+    // ⚠️ **La label resta OBBLIGATORIA**, anche ora che può arrivare da uno slot.
+    // Con `'label' => null` e nient'altro, una tile senza etichetta renderebbe un
+    // `<p>` vuoto sopra il numero — cioè «il numero senza il suo contesto», la
+    // cosa che questo componente esiste per impedire, e in silenzio. Prima il
+    // prop obbligatorio dava un errore; qui lo si rimette a mano.
+    throw_if(
+        $label === null && $slot->isEmpty(),
+        InvalidArgumentException::class,
+        'x-ui.stat-tile richiede una label, come prop o come slot.'
+    );
+@endphp
+
 <x-ui.card {{ $attributes }}>
     <p class="text-sm text-neutral-600">{{ $label ?? $slot }}</p>
 

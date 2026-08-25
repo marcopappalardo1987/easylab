@@ -231,9 +231,17 @@ it('appears in the app shell', function () {
     $tenant = User::factory()->create(['tenant_id' => $this->enteA->id]);
     $tenant->assignRole('Tenant');
 
+    // ⚠️ **Il nome dell'Ente si asserisce sul COMPONENTE, non sulla pagina.**
+    // Dal 25 Ago la dashboard stampa da sé «Lo stato delle macchine di Sede
+    // Nord.», quindi un `assertSee('Sede Nord')` sulla shell è verde anche se lo
+    // switcher smette del tutto di nominare l'Ente — misurato sostituendo
+    // `{{ $nomeEnte }}` con una costante. È la stessa trappola che
+    // `DashboardTest` documenta dal verso opposto.
     $this->actingAs($tenant)->get('/dashboard')
         ->assertOk()
-        ->assertSeeLivewire(SwitcherEnte::class)
+        ->assertSeeLivewire(SwitcherEnte::class);
+
+    Livewire\Livewire::actingAs($tenant)->test(SwitcherEnte::class)
         ->assertSee('Sede Nord');
 });
 

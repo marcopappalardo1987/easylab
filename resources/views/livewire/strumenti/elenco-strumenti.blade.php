@@ -195,19 +195,21 @@
                         </tr>
                     @empty
                         <tr>
-                            {{-- ⚠️ **Due messaggi, perché sono due fatti diversi**, e la
-                                 condizione deve guardare TUTTI i filtri. Guardava solo
-                                 ricerca e ubicazione, quindi «Non idoneo 0» sulla
-                                 dashboard (S6) portava qui e faceva leggere «Nessuno
-                                 strumento.» a un cliente che ne ha trecento — un elenco
-                                 filtrato che si dichiara vuoto manda a cercare macchine
-                                 che ci sono. È la stessa regola già applicata al registro
-                                 degli errori e al registro di audit. --}}
-                            @php
-                                $conFiltri = filled($search) || $ubicazioneId || filled($stato) || $soloObsoleti;
-                            @endphp
+                            {{-- ⚠️ **Due messaggi, perché sono due fatti diversi**: un
+                                 elenco filtrato che si dichiara vuoto manda a cercare
+                                 macchine che ci sono, e «Nessun risultato per i filtri»
+                                 senza filtri manda a togliere un filtro che non c'è. È
+                                 la stessa regola già applicata al registro degli errori
+                                 e a quello di audit.
+
+                                 La condizione **non si scrive qui**: la prima stesura lo
+                                 faceva e nominava due filtri su cinque, quindi
+                                 `?ubicazioneId=0` ed `?enteId=` cadevano nel ramo
+                                 sbagliato. Il componente espone un predicato solo,
+                                 costruito con gli stessi confronti con cui applica i
+                                 filtri. --}}
                             <td colspan="7" class="px-4 py-10 text-center text-sm text-neutral-400">
-                                {{ $conFiltri ? 'Nessun risultato per i filtri applicati.' : 'Nessuno strumento.' }}
+                                {{ $this->haFiltriAttivi() ? 'Nessun risultato per i filtri applicati.' : 'Nessuno strumento.' }}
                             </td>
                         </tr>
                     @endforelse

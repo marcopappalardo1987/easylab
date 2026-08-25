@@ -262,40 +262,80 @@ it('says nothing about soglie when there is no parco at all', function () {
 
 // ─── Costo ───────────────────────────────────────────────────────────────────
 
-it('stays at six statements no matter how many machines there are', function () {
-    $this->actingAs($this->admin);
-    ($this->macchina)('Una');
+it('costs the same whether there is one machine or thirty', function () {
+    // 🔴 **La prima stesura mentiva due volte, e l'ho misurato.**
+    //
+    // 1. Filtrava il log per `"strumenti"` e `from "unita_organizzativa"`, cioè
+    //    contava le query che si aspettava invece di quelle che ci sono:
+    //    infilando tre `DB::table('interventi')->count()` dentro `riepilogo()`
+    //    il test restava verde. Ora si conta il log **secco**.
+    // 2. Esercitava il solo Admin — il ruolo per cui la costanza vale
+    //    banalmente. Per il **Responsabile Reparto** il costo è tutt'altro, e
+    //    va scritto invece che scoperto in produzione.
+    $misura = function (User $utente): int {
+        // Un giro a vuoto prima: la prima richiesta di un utente risolve ruoli e
+        // permessi, e quelle letture non si ripetono.
+        $this->actingAs($utente);
+        MetricheParco::riepilogo();
 
-    // Un giro a vuoto prima di misurare: scalda la cache dei permessi di spatie,
-    // che altrimenti finirebbe nel primo conteggio e non nel secondo.
-    MetricheParco::riepilogo();
-
-    $conta = function (): int {
         DB::flushQueryLog();
         DB::enableQueryLog();
         MetricheParco::riepilogo();
-        // ⚠️ Si filtra per tabella **con le virgolette**: `strumenti` nudo
-        // matcherebbe anche `spostamenti_strumento` e ogni `strumento_id`.
-        $n = collect(DB::getQueryLog())
-            ->filter(fn ($q) => str_contains($q['query'], '"strumenti"')
-                || str_contains($q['query'], 'from "unita_organizzativa"'))
-            ->count();
+        $n = count(DB::getQueryLog());
         DB::disableQueryLog();
 
         return $n;
     };
 
-    // Sei, e sapere quali è ciò che rende utile il numero: le soglie (2), i tre
-    // conteggi di stato, il conteggio degli obsoleti. Un settimo statement è
-    // qualcuno che ha rimesso una lettura dentro un ciclo.
-    expect($conta())->toBe(6);
+    ($this->macchina)('Una');
+
+    $conUna = $misura($this->admin);
 
     foreach (range(1, 30) as $n) {
         $s = ($this->macchina)("Macchina {$n}");
         Intervento::factory()->forStrumento($s)->scaduto()->create();
     }
 
-    expect($conta())->toBe(6);
+    // La proprietà che conta: trentuno macchine non costano più di una.
+    expect($misura($this->admin))->toBe($conUna)
+        // Sei, e sapere quali rende utile il numero: le soglie (2), i tre
+        // conteggi di stato, il conteggio degli obsoleti.
+        ->and($conUna)->toBe(6);
+});
+
+it('costs a Responsabile far more than six, and that is a declared debt', function () {
+    // 🔴 **Il numero che il docblock prometteva non vale per tutti.** Ogni query
+    // scopata fa passare `DepartmentScope`, che chiama
+    // `AccessibleNodes::forCurrentUser()` — non memoizzata — e quella rilegge
+    // **l'intero albero dell'Ente** più il pivot `responsabile_unita`. Undici
+    // volte, sulla pagina che quel ruolo apre a ogni login.
+    //
+    // Non si corregge qui: memoizzare un risolutore di autorizzazioni vuole il
+    // proprio invalidamento (login, cambio sede, impersonazione) e non entra di
+    // straforo in un commit di dashboard. Il numero è **congelato** perché una
+    // regressione si veda, e la riga è in roadmap per il passo performance di
+    // S7.
+    $mio = UnitaOrganizzativa::factory()->dipartimento()->under($this->ente)->create(['nome' => 'Mio']);
+    Strumento::factory()->forNode($mio)->create(['nome' => 'Sua']);
+
+    $resp = User::factory()->create(['tenant_id' => $this->ente->id, 'two_factor_confirmed_at' => now()]);
+    $resp->assignRole('Responsabile Reparto');
+    $resp->unitaResponsabili()->attach($mio->id);
+    $this->actingAs($resp->fresh());
+
+    MetricheParco::riepilogo();
+
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+    MetricheParco::riepilogo();
+    $statement = collect(DB::getQueryLog());
+    DB::disableQueryLog();
+
+    $albero = $statement->filter(fn ($q) => str_contains($q['query'], 'responsabile_unita'))->count();
+
+    expect($statement)->toHaveCount(28)
+        // Undici riletture dell'albero: è il costo, e questa riga lo nomina.
+        ->and($albero)->toBe(11);
 });
 
 // ─── Privacy: il pallino è un aggregato, la sua causa no ─────────────────────

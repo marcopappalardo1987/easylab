@@ -46,6 +46,21 @@ use App\Models\Strumento;
  * La proprietà da difendere non è «un solo statement» ma **«costante rispetto al
  * numero di righe»**, e sei lo è: le soglie si leggono una volta e si passano al
  * conteggio degli obsoleti invece di essere rilette da lui.
+ *
+ * ⚠️ **«Sei» vale per l'Admin, il Tenant e il Tecnico — non per il Responsabile
+ * Reparto, e va detto invece di lasciarlo scoprire in produzione.** Per lui sono
+ * **ventotto**, misurate: ogni query scopata passa da `DepartmentScope`, che
+ * chiama `AccessibleNodes::forCurrentUser()` — **non memoizzata** — e quella
+ * rilegge il pivot `responsabile_unita` più **l'intero albero dell'Ente**. Undici
+ * volte, sulla pagina che quel ruolo apre a ogni login.
+ *
+ * Non è un difetto di questa classe: è il costo del livello 2 del Global Scope,
+ * e vale già su ogni pagina scopata. Qui si somma perché i conteggi sono sei.
+ * Il rimedio è memoizzare `AccessibleNodes::forUser()` per id-utente, ma un
+ * risolutore di **autorizzazioni** vuole il proprio invalidamento — login,
+ * `SwitcherEnte::passa()`, impersonazione — e non entra di straforo in un
+ * commit di dashboard: è una riga del passo performance di S7. Nel frattempo il
+ * numero è congelato da un test, perché una regressione si veda.
  */
 final class MetricheParco
 {
