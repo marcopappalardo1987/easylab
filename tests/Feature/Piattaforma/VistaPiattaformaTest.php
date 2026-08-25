@@ -38,6 +38,9 @@ beforeEach(function () {
 
 // ─── I negativi: la porta è chiusa ───────────────────────────────────────────
 
+/** Gli scope di `Strumento` le cui sottoquery restano scopate (S6 blocco A). */
+const SCOPE_SEMAFORO = ['conStato', 'obsoleti', 'ordinaPerStato'];
+
 it('refuses to open without the platform permission', function (string $ruolo) {
     $utente = User::factory()->create(['tenant_id' => $this->enteA->id]);
     $utente->assignRole($ruolo);
@@ -178,6 +181,50 @@ it('never lets a write be chained onto the platform view', function () {
     );
 });
 
+it('never lets a tenant-scoped semaforo scope be chained onto the platform view', function () {
+    // 🔴 **Un numero plausibile e sbagliato, che nessuna somma smaschera.**
+    // `Strumento::scopeConStato()`, `scopeObsoleti()` e `scopeOrdinaPerStato()`
+    // (S6 blocco A) compongono sottoquery che partono da `Intervento::query()` e
+    // `Garanzia::query()`, cioè **con** i loro global scope. Concatenati a
+    // `VistaPiattaforma::strumenti()`, che gli scope li ha tolti, la query
+    // esterna vedrebbe tutti gli Enti e le sottoquery solo il proprio: le
+    // macchine altrui uscirebbero **verdi** invece che arancioni.
+    //
+    // ⚠️ E la partizione — l'invariante su cui poggiano i quattro numeri della
+    // dashboard — **tornerebbe lo stesso**, perché verde+arancione+rosso
+    // continua a fare il totale: il difetto non si presenta come una cifra
+    // mancante ma come una cifra credibile. Misurato su due Enti: `arancioni`
+    // vuoto con una macchina scaduta in pancia.
+    //
+    // Chi vorrà davvero i conteggi cross-tenant deve costruire fonti NON
+    // scopate, non riusare queste.
+    $sorgenti = collect([app_path(), resource_path('views')])
+        ->flatMap(fn (string $dir) => collect(
+            iterator_to_array(new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir)))
+        )->filter(fn ($f) => $f->isFile() && str_ends_with($f->getFilename(), '.php'))->map->getPathname());
+
+    $colpevoli = $sorgenti
+        ->filter(fn (string $f) => metodiConcatenatiAllaPorta(file_get_contents($f), SCOPE_SEMAFORO) !== [])
+        ->values();
+
+    expect($colpevoli)->toBeEmpty(
+        'Gli scope del semaforo compongono sottoquery SCOPATE: sulla porta di piattaforma classificano '.
+        'come verdi le macchine degli altri Enti, e la somma torna lo stesso. Trovato in: '.$colpevoli->implode(', ')
+    );
+});
+
+it('spots the semaforo scopes on the platform view through a variable too', function () {
+    // La rete della rete, come per le scritture: un guardrail aggirabile da come
+    // si formatta una chiamata sembra coprire e non copre.
+    $diretta = '<?php VistaPiattaforma::strumenti()->conStato($s);';
+    $perVariabile = '<?php class A { function f() { $q = VistaPiattaforma::strumenti(); $q->where("a", 1)->obsoleti(); } }';
+    $innocente = '<?php VistaPiattaforma::strumenti()->count();';
+
+    expect(metodiConcatenatiAllaPorta($diretta, SCOPE_SEMAFORO))->toContain('conStato')
+        ->and(metodiConcatenatiAllaPorta($perVariabile, SCOPE_SEMAFORO))->toContain('obsoleti')
+        ->and(metodiConcatenatiAllaPorta($innocente, SCOPE_SEMAFORO))->toBeEmpty();
+});
+
 it('follows the platform view through a variable and through a method that returns it', function () {
     // 🔴 **Il guardrail del guardrail**, e non è zelo: la prima stesura cercava
     // la sola catena **diretta** (`VistaPiattaforma::audit()->delete()`), e
@@ -307,7 +354,35 @@ function scrittureSullaPortaDiPiattaforma(string $php): array
         return [];
     }
 
-    $scritture = ['update', 'delete', 'forceDelete', 'increment', 'decrement', 'truncate', 'upsert', 'insert'];
+    return metodiConcatenatiAllaPorta(
+        $php,
+        ['update', 'delete', 'forceDelete', 'increment', 'decrement', 'truncate', 'upsert', 'insert']
+    );
+}
+
+/**
+ * I metodi di `$metodi` concatenati a un builder che viene dalla porta —
+ * direttamente, attraverso una variabile o attraverso un metodo che la
+ * restituisce.
+ *
+ * ⚠️ **Estratto il 25 Ago 2026 dal guardrail sulle scritture**, e non per
+ * simmetria: dal blocco A di S6 c'è una seconda famiglia di metodi che sulla
+ * porta non va concatenata — gli scope del semaforo, le cui sottoquery restano
+ * scopate — e la parte difficile non è l'elenco dei verbi, è **seguire** la
+ * porta attraverso una variabile o un metodo. Due copie di quella parte
+ * divergerebbero, e la metà che diverge smetterebbe di vedere proprio la forma
+ * che qualcuno ha appena usato.
+ *
+ * @param  list<string>  $metodi
+ * @return list<string>
+ */
+function metodiConcatenatiAllaPorta(string $php, array $metodi): array
+{
+    if (! str_contains($php, 'VistaPiattaforma')) {
+        return [];
+    }
+
+    $scritture = $metodi;
 
     // Tolti commenti, spazi e stringhe la catena è lineare: fino al `;` c'è una
     // sola istruzione, e nessuna parentesi dentro una stringa può spezzarla.

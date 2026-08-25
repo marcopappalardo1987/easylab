@@ -7,6 +7,8 @@ use App\Enums\StatoSemaforo;
 use App\Models\Concerns\BelongsToOrgNode;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Contracts\ReachesStrumento;
+use App\Models\Scopes\DepartmentScope;
+use App\Models\Scopes\TenantScope;
 use App\Support\AuditLog;
 use App\Support\DiagnosiSemaforo;
 use App\Support\MotivoSemaforo;
@@ -314,6 +316,252 @@ class Strumento extends Model implements ReachesStrumento
         }
 
         return $this->data_installazione->lte(today()->subYears($this->sogliaObsolescenza()));
+    }
+
+    /**
+     * Le TRE fonti dell'arancione (🔗 ADR-005 · ADR-004 · ADR-020) come
+     * sottoquery **correlate** alla riga `strumenti` della query esterna.
+     *
+     * 🔴 **È l'unica forma SQL della regola del semaforo del progetto.** Prima
+     * ne esistevano due, entrambe dentro `ElencoStrumenti` — il `match` del
+     * filtro e il `CASE` dell'ordinamento — e la dashboard di S6 ne avrebbe
+     * scritta una terza. Il calcolo per-model (`diagnosiSemaforo()`) resta la
+     * quarta lettura possibile, ma non è una copia: è la **fonte di verità**
+     * su cui i test differenziali misurano questa.
+     *
+     * ⚠️ **Restituisce builder NUOVI a ogni chiamata, e la ragione non è quella
+     * che verrebbe da scrivere.** Non è la mutazione condivisa: `whereExists()`,
+     * `toSql()` e `getBindings()` passano tutti da `toBase()` → `applyScopes()`,
+     * che **clona** — verificato, memoizzarli lascia la suite verde. È che i
+     * binding di queste tre sottoquery contengono **`today()`, il `tenant_id`
+     * corrente e i nodi accessibili a chi guarda**: una property statica li
+     * congelerebbe alla prima chiamata del processo, e sotto un worker
+     * persistente (Octane, o semplicemente il giorno dopo la mezzanotte) la
+     * seconda richiesta leggerebbe la soglia di ieri o l'Ente di un altro. Chi
+     * «ottimizza» questa riga non rompe una query: sposta un confine.
+     *
+     * ⚠️ **Si consumano con `whereExists`/`whereNotExists`, mai con
+     * `whereIn`/`whereNotIn`.** Non è una preferenza di stile: la forma `NOT
+     * IN` è corretta solo finché la colonna della sottoquery è NOT NULL, e qui
+     * `garanzie.strumento_id` è NULL per invariante su ogni riga
+     * `soggetto = ricambio`. Reggeva grazie a un `whereNotNull` esplicito che
+     * bisognava ricordarsi; `NOT EXISTS` è null-safe per costruzione, quindi la
+     * protezione non è più dimenticabile perché non serve più.
+     *
+     * 🔴 **Non si concatenano alla porta di piattaforma.** Queste sottoquery
+     * partono da `Intervento::query()` e `Garanzia::query()`, cioè **con** i
+     * loro global scope: su un builder non scopato — `VistaPiattaforma::strumenti()`
+     * — la query esterna vedrebbe tutti gli Enti e le sottoquery solo il
+     * proprio, quindi le macchine altrui risulterebbero **verdi** invece di
+     * arancioni. E la partizione tornerebbe lo stesso, perché la somma non
+     * cambia: sarebbe un numero plausibile e sbagliato, il guasto peggiore per
+     * una cifra che qualcuno riporta. La dashboard di S6 è per-Ente e passa di
+     * qui; chi un giorno vorrà gli stessi conteggi **cross-tenant** deve
+     * costruire fonti non scopate, non riusare queste. Un meta-test lo vieta.
+     *
+     * @return list<Builder<*>>
+     */
+    protected static function fontiArancione(): array
+    {
+        return [
+            // Un intervento aperto già scaduto o entro la soglia.
+            Intervento::query()->select(DB::raw('1'))
+                ->whereColumn('strumento_id', 'strumenti.id')
+                ->apertiEntroSoglia(),
+
+            // La garanzia della macchina (ADR-004).
+            Garanzia::query()->select(DB::raw('1'))
+                ->whereColumn('garanzie.strumento_id', 'strumenti.id')
+                ->entroSoglia(),
+
+            // La garanzia di un pezzo MONTATO (ADR-020), con la correlazione e
+            // il bypass del privacy scope in un posto solo.
+            Garanzia::query()->deiPezziMontatiSullaRiga()->select(DB::raw('1'))
+                ->entroSoglia(),
+        ];
+    }
+
+    /**
+     * Filtra per stato semaforo EFFETTIVO (🔗 ADR-005): il forzato vince, e solo
+     * in sua assenza si guarda il calcolato.
+     *
+     * I tre rami sono disgiunti ed esaustivi sui quattro valori **legali** di
+     * `forced_state` (NULL più i tre dell'enum), quindi verde + arancione +
+     * rosso è tutto il parco — proprietà su cui la dashboard di S6 poggia i
+     * propri quattro numeri, e che un test asserisce invece di supporla.
+     *
+     * ⚠️ **«Legali» e non «possibili»: la colonna è `string` nullable senza
+     * CHECK.** Con un valore fuori enum le tre letture rispondono tre cose
+     * diverse — il filtro fa sparire la riga, l'ordinamento la tratta come
+     * verde (`else 0`), il calcolo per-model **lancia** sul cast. Non è
+     * raggiungibile dall'applicazione (`forced_state` è fuori da `$fillable` e
+     * l'unica via è `forzaSemaforo()`), ma lo è da una migration o da un
+     * import, e finché lo schema non porta il vincolo l'esaustività è
+     * un'ipotesi sui dati invece che una proprietà.
+     *
+     * Il rosso esiste **solo** come forzatura: il motore calcolato non lo
+     * produce mai.
+     *
+     * @param  Builder<Strumento>  $query
+     */
+    public function scopeConStato(Builder $query, StatoSemaforo $stato): void
+    {
+        $query->where(function (Builder $q) use ($stato): void {
+            $q->where('strumenti.forced_state', $stato->value);
+
+            if ($stato === StatoSemaforo::Rosso) {
+                return;
+            }
+
+            $q->orWhere(function (Builder $q) use ($stato): void {
+                $q->whereNull('strumenti.forced_state')
+                    ->where(function (Builder $q) use ($stato): void {
+                        foreach (self::fontiArancione() as $i => $fonte) {
+                            $stato === StatoSemaforo::Arancione
+                                // Basta UNA fonte accesa.
+                                ? ($i === 0 ? $q->whereExists($fonte) : $q->orWhereExists($fonte))
+                                // Il verde è il complemento di TUTTE e tre.
+                                : $q->whereNotExists($fonte);
+                        }
+                    });
+            });
+        });
+    }
+
+    /**
+     * Filtra gli strumenti obsoleti (🔗 ADR-014), forma SQL di `isObsoleto()`.
+     *
+     * 🔴 **La soglia è per ENTE, quindi qui non ce n'è una sola.** La stesura
+     * precedente — inline in `ElencoStrumenti` — leggeva la soglia dell'Ente
+     * *corrente* e la applicava a tutte le righe. Per un Tecnico ESTERNO
+     * `CurrentTenant::id()` è null, quindi ricadeva su 10 mentre le righe che
+     * vede possono venire da Enti con soglie diverse: il filtro e il badge ⏳
+     * della stessa riga si contraddicevano, e nessun test poteva accorgersene
+     * perché tutti girano su un Ente solo. Qui si costruisce invece un ramo per
+     * ciascuna soglia effettivamente presente fra le righe visibili.
+     *
+     * Nessuna aritmetica di intervallo in SQL: si calcola la data limite in PHP
+     * per ogni soglia. `date_sub`/`INTERVAL` non esistono uguali sui due
+     * driver, e questo è il punto del progetto in cui una divergenza passa in
+     * locale e cade in CI.
+     *
+     * Confine `< limite+1` e **mai `<=`**: su SQLite le colonne `date` sono
+     * stringhe `'Y-m-d H:i:s'` e il confronto è lessicografico, quindi
+     * `'2026-08-31 00:00:00' <= '2026-08-31'` è falso mentre su Postgres è vero
+     * (vedi `Intervento::scopeApertiEntroSoglia`). Il confine dell'ADR resta
+     * INCLUSIVO: installato esattamente N anni fa oggi è già obsoleto.
+     *
+     * @param  Builder<Strumento>  $query
+     */
+    public function scopeObsoleti(Builder $query): void
+    {
+        $soglie = self::soglieDegliEntiVisibili();
+
+        // ⚠️ **Oggi non è raggiungibile, e resta lo stesso.** Col fallback di
+        // `soglieDegliEntiVisibili()` ogni `tenant_id` visibile ha sempre una
+        // soglia, quindi l'insieme è vuoto solo quando lo è già il parco — e
+        // nessuna mutazione lo rende rosso, verificato. Non è però codice
+        // decorativo: senza, un `where()` con zero rami **non filtra nulla**, e
+        // il ramo di salvaguardia salterebbe verso «passa tutto» invece che
+        // verso «non passa niente». Su un filtro è la direzione sbagliata, ed è
+        // la sola ragione per cui questa riga vale il suo posto.
+        if ($soglie === []) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $query->whereNotNull('strumenti.data_installazione')
+            ->where(function (Builder $q) use ($soglie): void {
+                foreach ($soglie as $tenantId => $anni) {
+                    $q->orWhere(fn (Builder $q) => $q
+                        ->where('strumenti.tenant_id', $tenantId)
+                        ->where(
+                            'strumenti.data_installazione',
+                            '<',
+                            today()->subYears($anni)->addDay()->toDateString()
+                        ));
+                }
+            });
+    }
+
+    /**
+     * `tenant_id → soglia_obsolescenza_anni` per i soli Enti che compaiono fra
+     * gli strumenti visibili a chi guarda. Due query costanti, qualunque sia il
+     * numero di righe.
+     *
+     * Il bypass è **nominato**: servono via i soli scope di tenancy, e togliere
+     * anche il soft delete leggerebbe la soglia di un Ente cestinato — che il
+     * per-model non legge.
+     *
+     * ⚠️ **Ciò che allinea questa lettura a `sogliaObsolescenza()` non è il
+     * bypass: è il FALLBACK a 10.** La relazione `tenant()` passa dai global
+     * scope, quindi per un Ente cestinato torna `null` e il per-model ricade sul
+     * default; qui la riga semplicemente non si trova, e senza il fallback quel
+     * `tenant_id` resterebbe **senza alcun ramo OR** — cioè le sue macchine
+     * sparirebbero dal filtro mentre `isObsoleto()` le dichiara obsolete.
+     * Misurato: è il caso che `ObsolescenzaTest` congela dal solo lato
+     * per-model.
+     *
+     * @return array<int, int>
+     */
+    protected static function soglieDegliEntiVisibili(): array
+    {
+        $tenantIds = self::query()->distinct()->pluck('tenant_id')->all();
+
+        if ($tenantIds === []) {
+            return [];
+        }
+
+        $lette = UnitaOrganizzativa::withoutGlobalScopes([TenantScope::class, DepartmentScope::class])
+            ->whereIn('id', $tenantIds)
+            ->pluck('soglia_obsolescenza_anni', 'id')
+            ->map(fn ($anni) => (int) ($anni ?? 10))
+            ->all();
+
+        // 🔴 Un Ente che non si riesce a leggere prende la soglia di DEFAULT,
+        // non perde il proprio ramo. Senza questa riga la sua macchina sparirebbe
+        // dal filtro mentre `isObsoleto()` continua a dichiararla obsoleta — ed è
+        // un caso reale: `UnitaOrganizzativa` usa i soft delete, quindi un Ente
+        // cestinato non c'è più nemmeno per il bypass nominato qui sopra.
+        return array_replace(array_fill_keys($tenantIds, 10), $lette);
+    }
+
+    /**
+     * Ordina per stato semaforo effettivo: 0 = verde, 1 = arancione, 2 = rosso.
+     *
+     * Stessa regola di `scopeConStato()` e stesse tre sottoquery, in forma
+     * ordinale invece che booleana — è il motivo per cui `fontiArancione()`
+     * esiste: finché filtro e ordinamento leggono da lì, non possono dire cose
+     * diverse sulla stessa riga.
+     *
+     * L'`EXISTS` è inlineato nel `CASE` e non estratto come alias: Postgres non
+     * ammette alias di select nelle espressioni dell'`ORDER BY`, mentre SQLite
+     * sì — divergerebbe solo in CI.
+     *
+     * @param  Builder<Strumento>  $query
+     */
+    public function scopeOrdinaPerStato(Builder $query, string $direzione): void
+    {
+        $direzione = strtolower($direzione) === 'desc' ? 'desc' : 'asc';
+
+        $sql = 'case'
+            .' when strumenti.forced_state = ? then 2'
+            .' when strumenti.forced_state = ? then 1'
+            .' when strumenti.forced_state = ? then 0';
+
+        $bindings = [
+            StatoSemaforo::Rosso->value,
+            StatoSemaforo::Arancione->value,
+            StatoSemaforo::Verde->value,
+        ];
+
+        foreach (self::fontiArancione() as $fonte) {
+            $sql .= ' when exists ('.$fonte->toSql().') then 1';
+            $bindings = array_merge($bindings, $fonte->getBindings());
+        }
+
+        $query->orderByRaw($sql.' else 0 end '.$direzione, $bindings);
     }
 
     /**

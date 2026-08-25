@@ -42,7 +42,6 @@ const BYPASS_NUDI_ATTESI = [
     // Risolvono un id PRIMA della guardia che lo autorizza.
     'app/Livewire/Tenancy/SwitcherEnte.php' => 1,
     'app/Http/Controllers/FugaDaLockout.php' => 1,
-    'app/Livewire/Strumenti/ElencoStrumenti.php' => 1,
 ];
 
 it('never grows a new bare withoutGlobalScopes()', function () {

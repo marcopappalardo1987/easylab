@@ -311,6 +311,28 @@ class Garanzia extends Model implements ReachesStrumento
             ->whereNotNull('ricambio_utilizzo.data');
     }
 
+    /**
+     * Le garanzie dei pezzi montati sulla riga `strumenti` della query esterna
+     * (ADR-020), pronte per un `whereExists` o per un aggregato correlato.
+     *
+     * Esiste come scope, e non ripetuta nei chiamanti, per la ragione che vale
+     * già per `deiPezziMontati()` un gradino più su: la **correlazione** è
+     * parte della regola quanto il doppio salto, e due copie sono due cose
+     * libere di divergere. La usano il filtro per stato, l'ordinamento per
+     * stato e quello per prossima scadenza — cioè i tre punti in cui la terza
+     * fonte dell'arancione entra in SQL.
+     *
+     * `ricambio_utilizzo.strumento_id` e non `garanzie.strumento_id`: su una
+     * riga `soggetto = ricambio` quella colonna è NULL per invariante, e la
+     * macchina si raggiunge solo attraverso il montaggio.
+     *
+     * @param  Builder<Garanzia>  $query
+     */
+    public function scopeDeiPezziMontatiSullaRiga(Builder $query): void
+    {
+        $query->deiPezziMontati()->whereColumn('ricambio_utilizzo.strumento_id', 'strumenti.id');
+    }
+
     /** True se la garanzia è già finita. */
     public function isScaduta(): bool
     {
