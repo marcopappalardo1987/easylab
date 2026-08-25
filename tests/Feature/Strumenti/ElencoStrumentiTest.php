@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\StatoSemaforo;
 use App\Enums\TipoIntervento;
 use App\Livewire\Strumenti\ElencoStrumenti;
 use App\Models\Intervento;
@@ -202,6 +203,39 @@ it('goes back to the first page when the sorting changes', function () {
 });
 
 // --- Righe per pagina ---
+
+it('says the list is empty for a filter, not empty full stop', function () {
+    // 🔴 Il difetto che la dashboard di S6 rende quotidiano: i suoi riquadri
+    // portano qui con `stato` o `soloObsoleti` nella query string, e la
+    // condizione del vuoto guardava solo ricerca e ubicazione. Chi cliccava
+    // «Non idoneo 0» leggeva «Nessuno strumento.» avendone trecento.
+    //
+    // Le due frasi non sono l'una sottostringa dell'altra, quindi
+    // l'`assertDontSee` morde davvero — il confronto per sottostringa è una
+    // delle forme di falso verde già viste in questo progetto.
+    // Installate di recente e senza scadenze: né rosse né obsolete, così
+    // entrambi i filtri trovano zero righe su un parco che ne ha tre.
+    Strumento::factory()->count(3)->forNode($this->dip1)
+        ->create(['data_installazione' => today()->subYear()->toDateString()]);
+
+    Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)
+        ->set('stato', StatoSemaforo::Rosso->value)
+        ->assertSee('Nessun risultato per i filtri applicati.')
+        ->assertDontSee('Nessuno strumento.');
+
+    Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)
+        ->set('soloObsoleti', true)
+        ->assertSee('Nessun risultato per i filtri applicati.')
+        ->assertDontSee('Nessuno strumento.');
+});
+
+it('says the list is empty full stop when there is nothing and no filter', function () {
+    // L'altra metà: senza filtri il messaggio non deve mandare a cercare un
+    // filtro da togliere che non c'è.
+    Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)
+        ->assertSee('Nessuno strumento.')
+        ->assertDontSee('Nessun risultato per i filtri applicati.');
+});
 
 it('shows 20 rows per page by default', function () {
     foreach (range(1, 25) as $n) {

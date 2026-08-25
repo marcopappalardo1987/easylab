@@ -195,8 +195,19 @@
                         </tr>
                     @empty
                         <tr>
+                            {{-- ⚠️ **Due messaggi, perché sono due fatti diversi**, e la
+                                 condizione deve guardare TUTTI i filtri. Guardava solo
+                                 ricerca e ubicazione, quindi «Non idoneo 0» sulla
+                                 dashboard (S6) portava qui e faceva leggere «Nessuno
+                                 strumento.» a un cliente che ne ha trecento — un elenco
+                                 filtrato che si dichiara vuoto manda a cercare macchine
+                                 che ci sono. È la stessa regola già applicata al registro
+                                 degli errori e al registro di audit. --}}
+                            @php
+                                $conFiltri = filled($search) || $ubicazioneId || filled($stato) || $soloObsoleti;
+                            @endphp
                             <td colspan="7" class="px-4 py-10 text-center text-sm text-neutral-400">
-                                {{ (filled($search) || $ubicazioneId) ? 'Nessun risultato per i filtri applicati.' : 'Nessuno strumento.' }}
+                                {{ $conFiltri ? 'Nessun risultato per i filtri applicati.' : 'Nessuno strumento.' }}
                             </td>
                         </tr>
                     @endforelse
