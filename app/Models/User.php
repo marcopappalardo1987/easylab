@@ -42,6 +42,16 @@ class User extends Authenticatable
     public const TECNICO_ROLE = 'Tecnico';
 
     /**
+     * Il laboratorio/Ente finale (🔗 Funzionalità per Ruolo §4).
+     *
+     * Vive qui come costante, e non come stringa ribattuta, per la ragione dei
+     * due sopra: è il ruolo che 🔗 ADR-029 protegge, quindi ogni punto che lo
+     * nomina deve nominare **lo stesso** — un refuso in una delle due copie
+     * spegnerebbe una regola di privacy senza rompere nulla.
+     */
+    public const TENANT_ROLE = 'Tenant';
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
