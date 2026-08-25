@@ -42,6 +42,7 @@ Un bug qui = fuga di dati, soldi sbagliati o accessi indebiti. Revisione umana p
 
   Il criterio che li accomuna, e che vale per il prossimo: **il permesso governa il dettaglio mostrato, non l'integrità del dato**. Ognuno va con un test negativo che verifichi che dal risultato **non trapeli** il dato protetto — a maggior ragione nella Panoramica (🔗 ADR-024), dove il motivo del semaforo è testo in chiaro e non un pallino.
 - **Viste che compongono più aree** (Panoramica, dashboard S6): il permesso va applicato **blocco per blocco**, mai una volta sola in testa alla vista — 🔗 ADR-024.
+  - *Al 25 Ago 2026 la voce ha **due referenti reali**: `_panoramica.blade.php` e `App\Livewire\Dashboard\Home`. La seconda è anche l'**unica pagina del progetto senza `can:` di rotta** — ci atterra ogni utente autenticato — quindi lì «blocco per blocco» non è una raccomandazione di stile: è l'unica guardia che esista. ⚠️ E regge **finché il componente non ha azioni**: una con `skipRender()` non arriverebbe mai a `render()`, e non c'è un `can:` a raccoglierla.*
 - **Migrazioni distruttive** (drop di colonne o tabelle popolate) e i **backfill** che le precedono — 🔗 ADR-019. Un ordine sbagliato fra backfill e drop non è recuperabile.
 
 ### 🟡 Livello 2 — Leggi la forma, fidati dei test sui casi limite

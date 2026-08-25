@@ -48,6 +48,19 @@ Questi sono i clienti che acquistano il SaaS per operare in autonomia sui propri
 - **Valutazione Obsolescenza:** Alert automatico e gestione per le macchine che superano i 10 anni (ricambi non più garantiti per legge).
 - **Gestione Fornitori e Anomalie:** Associazione diretta tra macchinari e fornitori, oltre alla gestione manuale della "Pallina Rossa" (macchinario non idoneo) a seguito di verifiche.
 
+> **Stato di attuazione al 25 Ago 2026 (S6).** La pagina di atterraggio è `/dashboard`, **una sola per tutti i ruoli** e non una per ruolo: ci arrivano Fortify dopo il login, lo switcher di sede a ogni cambio e la fuga da lockout, quindi due componenti avrebbero richiesto un instradamento **per nome di ruolo** — che il progetto rifiuta ovunque (`/campo` è gatata `interventi.view` e non «Tecnico»), e che diventerebbe falso al primo click sull'editor permessi. Ciò che distingue questo §3 dal §4 è già espresso da `TenantScope`, `DepartmentScope`, `AccessoTecnico` e `GaranziaRicambioPolicy`: una seconda vista dovrebbe **ri-deciderlo**.
+>
+> La dashboard **aggiunge una cosa sola**: i quattro conteggi del parco (in regola / azione richiesta / non idoneo / obsoleti), che non esistevano da nessuna parte — l'elenco strumenti mostra il totale del paginatore, mai la ripartizione. Tutto il resto lo **indirizza**: ogni riquadro è un link a `/strumenti` col proprio filtro, e cliccando «Azione richiesta 18» si atterra su esattamente diciotto righe. 🔗 Wireframe §1, riscritto lo stesso giorno.
+>
+> 🔴 **Una voce di questo elenco è testo morto, e va corretta invece che letta.**
+>
+> *«Gestione Garanzie e Ricambi: accesso riservato (nascosto ai Tenant)»* — **non è più vero dal 15 Ago 2026** (🔗 ADR-029, e per il Tecnico 🔗 ADR-027). `config/rbac.php` dà `garanzie.ricambio.view` **e** `.manage` sia al Tenant sia al Tecnico, e il default del singolo Ente è `modifica`. Il divieto assoluto non era mai stato deciso davvero: poggiava sulla premessa mai scritta che i ricambi li fornisca EasyLab, che non regge quando il Tenant è l'intestatario dell'abbonamento e il pezzo sta sulla sua macchina. Oggi la restrizione è **un'impostazione per Ente a tre stati** (`nascosta` / `lettura` / `modifica`), che **restringe e non allarga mai**, e si governa dalla cabina di regia.
+>
+> ⚠️ **Due voci restano aperte, dichiarate invece che nascoste.**
+>
+> 1. *«Valutazione Obsolescenza: **alert automatico**»* — l'alert **non esiste**. Ci sono il filtro «solo obsoleti» nell'elenco, il badge ⏳ nella scheda e, da oggi, il **conteggio aggregato** in dashboard con il link all'elenco filtrato: è più di prima, ma nessuno *avvisa*. E non è una dimenticanza di tempo: `easylab:notifica-scadenze` è costruito su **transizioni datate** (`avvisi_scadenza` porta riferimento, transizione e data di scadenza), mentre l'obsolescenza dipende da una **soglia mutabile per Ente** — abbassare `soglia_obsolescenza_anni` fa attraversare la linea a decine di macchine nello stesso istante, e quella non è una transizione del *dato* ma della *configurazione*. Serve una decisione — si avvisa al cambio soglia? mai? con quale riferimento? — non un'aggiunta. Riga aperta in roadmap.
+> 2. *«Registrazione dei trasferimenti fisici tra laboratori»* — esiste, ma **solo dentro un Ente**: `TipoSpostamento` prevede anche `Uscita` e `CrossTenant` (🔗 ADR-015) e nessuna delle due è mai stata scritta. E `spostamenti.view` ha **un solo consumatore**, il tab della scheda: non c'è nessuna vista «dov'è stata questa macchina» che attraversi il parco.
+
 **4. Dashboard Tenant (I Laboratori / Enti Finali)**
 
 Questa è l'interfaccia usata dai dipartimenti o laboratori fisici. Vedono solo i propri strumenti, con isolamento assoluto dei dati da altri clienti.
@@ -57,6 +70,16 @@ Questa è l'interfaccia usata dai dipartimenti o laboratori fisici. Vedono solo 
 - **Automazioni e "Email del Futuro":** Ricezione delle notifiche programmate tramite cron jobs per l'approssimarsi di scadenze o rinnovi contrattuali.
 - **Gestione Documentale:** Area dedicata per caricare certificati di taratura, scaricare report di fine lavoro ed esportare storici o certificati in PDF.
 - **Limitazione di Visibilità (Privacy):** Il tenant è escluso dalla visione delle dinamiche interne di garanzia sui singoli ricambi.
+
+> **Stato di attuazione al 25 Ago 2026 (S6).** Il Tenant atterra sulla **stessa** `/dashboard` dell'Admin, che gli mostra ciò che i suoi permessi e i global scope gli concedono — vedi la nota del §3 per il perché di una vista sola.
+>
+> ✅ **«Automazioni ed email del futuro» è stata chiusa oggi, ed era una promessa che il codice negava.** Fino al 25 Ago 2026 il Tenant **non riceveva nulla**: né email né notifica in-app. `NotificaScadenze::destinatari()` ammetteva Admin, Responsabile Reparto e tecnico assegnato, e `DigestScadenze::via()` scrive il canale `database` **sempre, ma solo per chi quel metodo sceglie** — quindi la sua campanella non era «vuota oggi», era *strutturalmente* vuota, mentre `/settings/notifiche` gli offriva una preferenza per un'email che nessuno gli mandava. Ora è fra i destinatari, con le righe del proprio Ente.
+>
+> ⚠️ Con lui **entra in gioco ADR-029**, e il filtro è nato con lui: le righe delle garanzie ricambio si tolgono a chi il proprio Ente le nasconde, chiedendo l'**ability** della Policy e mai il permesso nudo — `spatie` concede appena il permesso esiste sul ruolo, cioè *prima* che l'impostazione dell'Ente sia letta. Il docblock del comando diceva «nessun destinatario è il ruolo che quella regola protegge»: era vero, e da oggi sarebbe falso.
+>
+> 🔴 **Una voce di questo elenco è testo morto**, la stessa del §3: *«Limitazione di Visibilità (Privacy): il tenant è escluso dalla visione delle dinamiche interne di garanzia sui singoli ricambi»* — **non è più vero dal 15 Ago 2026** (🔗 ADR-029). Il Tenant ha `garanzie.ricambio.view` e `.manage`, e il default dell'Ente è `modifica`. Ciò che resta vero, e che non va confuso con questo, è 🔗 ADR-020: il **pallino** è un aggregato dovuto a tutti, quindi il Tenant vede l'arancione che nasce dalla garanzia di un pezzo anche quando il suo Ente è su `nascosta` — e per questo la dashboard **non scompone i propri numeri per causa**, che sarebbe il modo di aggirare quella regola con un conteggio invece che con una riga.
+>
+> ⚠️ **Una voce resta aperta, dichiarata invece che nascosta.** *«Gestione Documentale: **area dedicata**»* — non esiste a livello di Ente. Esistono l'upload nel tab Documenti della scheda, il download mediato dall'applicazione (🔗 ADR-026) e l'export PDF dello storico macchina (🔗 ADR-031), tutti **per singolo strumento**; non c'è nessun elenco documenti d'Ente né un export aggregato. È una funzionalità intera — rotta, elenco, filtri, permessi, retention, privacy — non un blocco di pagina d'atterraggio, e costruirla dentro queste due caselle sarebbe stata proprio la seconda superficie che questo lavoro ha rifiutato di costruire per abitudine. Riga aperta in roadmap.
 
 **5. Interfaccia Manutentori / Tecnici**
 

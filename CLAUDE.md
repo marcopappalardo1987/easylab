@@ -16,6 +16,10 @@ Regole:
 
 ## Attenzione: SQLite e Postgres non si comportano allo stesso modo sulle date
 
+⛔ **E non solo sulle date: anche sull'ORDINE.** A parità di chiave di ordinamento l'ordine fra due pagine è una **proprietà del motore** — SQLite scansiona in modo stabile, Postgres può riordinare i pari fra la query di pagina 1 e quella di pagina 2, e una riga esce da **entrambe**. Ogni `orderBy` paginato vuole quindi un **tie-break su una colonna unica** (l'id). Trovato il 25 Ago 2026 girando la suite su `easylab_test`: 46 righe raccolte su 47, con SQLite verde.
+
+⚠️ E la prova va fatta **sull'SQL, non sui dati**: togliendo il tie-break la suite resta verde su entrambi i driver a seconda del piano scelto. Un test che coglie un difetto una volta su tre non è una rete, è un aneddoto — stessa conclusione già raggiunta sul tie-break del registro di audit.
+
 Su SQLite le colonne `date` sono memorizzate come stringhe `'YYYY-MM-DD 00:00:00'` e i confronti con `'YYYY-MM-DD'` sono **lessicografici**; su Postgres sono vere date. Conseguenza pratica: un confine sbagliato (`<` vs `<=`) su `data_scadenza` **passa in locale e fallisce in CI**, che gira su Postgres. Se una regola dipende da un confine di date, verificarla anche con `DB_DATABASE=easylab_test`.
 
 ## Convenzioni del progetto
@@ -25,6 +29,9 @@ Su SQLite le colonne `date` sono memorizzate come stringhe `'YYYY-MM-DD 00:00:00
 - **Multi-tenancy** (ADR-001/006/018): nessun ruolo bypassa i global scope; scoping fail-closed. Ogni nuovo modello di business usa `BelongsToTenant` — un meta-test lo verifica.
 - **Test**: Pest, descrizioni in inglese e fixture in italiano. Per le aree "rosse" della Policy di Code Review (autorizzazioni, tenancy, migrazioni) servono **test negativi**, non solo il caso felice.
 - **Prova di mutazione**: dopo aver scritto una guardia, verificarla rompendo il codice apposta e controllando che il test giusto diventi rosso. Assicurarsi che la mutazione sia stata **davvero applicata** (un `assert` che il pattern esista): è già capitato di "verificare" con replace che non sostituivano nulla.
+  - ⛔ **Mai `git checkout -- <file>` per ripristinare**: se il lavoro non è ancora committato, quel comando non annulla la mutazione — **annulla il blocco**. È successo due volte il 25 Ago 2026, a due agenti diversi nello stesso giro. Si ripristina da una copia (`cp file /tmp/… && … && cp /tmp/… file`), e si **committa ogni blocco appena chiude**, che è la sola rete vera.
+  - ⚠️ Dopo una mutazione su un file **Blade** serve `php artisan view:clear`, o la cache resta alla versione mutata e la misura successiva è falsa.
+- ⛔ **`expect()->toContain()` è VARIADICO, non accetta un messaggio.** Un testo passato come secondo argomento diventa un **secondo ago**, e se non compare mai nell'oggetto sotto esame l'asserzione negativa è soddisfatta **sempre**: il test non può fallire. È già costato un guardrail di privacy interamente vuoto (25 Ago 2026, ADR-020 sulla dashboard), e lo stesso errore è stato **rifatto tre ore dopo** in un altro file. La spiegazione va nel nome del test o in un commento, mai lì dentro.
 - **Commit**: Conventional Commits con lo sprint come scope (`feat(s3): ...`).
 - **Branch (dal 21 Ago 2026)**: si lavora **direttamente su `staging`**, e questa cartella resta puntata lì. Niente più `feature/*` né PR per il lavoro ordinario. **`main` è produzione**: ci si arriva solo **promuovendo** staging con una PR dedicata, dopo la verifica sull'ambiente. Mai un commit diretto su `main`.
   - ⚠️ **Conseguenza da tenere presente**: ogni push su `staging` **deploya**, e la CI gira *dopo* invece di fare da cancello. Un commit rotto arriva sull'ambiente prima che qualcuno lo sappia — quindi suite verde **in locale** prima di pushare, non dopo.

@@ -15,38 +15,57 @@
 
 ---
 
-## 1. Dashboard Semaforo (home Tenant / Admin)
+## 1. Dashboard per ruolo (home di **tutti** i ruoli) — `/dashboard`
 
-Vista d'ingresso per Tenant e Admin: stato di salute del parco strumenti a colpo d'occhio. 🔗 ADR-005, Funzionalità §1.
+Vista d'ingresso: lo stato del parco a colpo d'occhio, e la strada per andarci dentro. 🔗 ADR-005, ADR-014, Funzionalità per Ruolo §3 e §4.
+
+> **Riscritto il 25 Ago 2026 (S6).** La stesura precedente disegnava quattro KPI **più filtri e tabella**, ed è di Sprint 0: precede di due sprint l'esistenza di `/strumenti`, che quella tabella la implementa già — con ricerca, filtro per ubicazione, filtro per stato, «solo obsoleti», ordinamento su sette colonne, paginazione e il degrado privacy della colonna scadenza (🔗 ADR-020). Ridisegnarla qui sarebbe stata una **seconda superficie** che duplica l'elenco e poi ne diverge, cioè il difetto che questo progetto ha già pagato due volte.
+>
+> È la stessa rettifica già applicata al §3 il 17 Ago — «la schermata di destra *è* la scheda resa mobile; resta nuova la sola schermata di sinistra» — un livello più in su. Restano i **quattro numeri**, che non esistono da nessun'altra parte: l'elenco mostra il totale del paginatore, mai la ripartizione. Cambiano anche due cose nel disegno: le **etichette** sono ora quelle del Design System §4 («In regola / Azione richiesta / Non idoneo»), le stesse che ogni pallino dell'app porta nel proprio `title`; e il riquadro obsoleti dichiara **la soglia dell'Ente**, non «>10 anni», perché quella soglia è per-Ente da 🔗 ADR-014.
+>
+> E il titolo non dice più «home Tenant / Admin»: su `/dashboard` atterrano **tutti** i ruoli — Fortify dopo il login, lo switcher di sede a ogni cambio, la fuga da lockout.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ ☰  Easy Lab        Ente: Ospedale San Giovanni            🔔 3   👤 M.R. ▼ │
 ├──────────────────────────────────────────────────────────────────────────┤
 │                                                                            │
-│  Dashboard          ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌──────────────┐  │
-│                     │ 🟢  124 │ │ 🟠   18 │ │ 🔴   5  │ │ ⏳ Obsoleti 7│  │
-│                     │ in regola│ │ da fare │ │ fermi   │ │ (>10 anni)   │  │
-│                     └─────────┘ └─────────┘ └─────────┘ └──────────────┘  │
+│  Dashboard                                                                 │
+│  Lo stato delle macchine di Ospedale San Giovanni.                         │
 │                                                                            │
-│  Filtri: [ Stato ▼ ] [ Tipo ▼ ] [ Laboratorio ▼ ]   🔍 Cerca strumento…   │
+│  ┌────────────────┐┌────────────────┐┌────────────────┐┌────────────────┐ │
+│  │ ● In regola    ││ ◐ Azione rich. ││ ■ Non idoneo   ││ ⏳ Obsoleti     │ │
+│  │      124       ││       18       ││        5       ││        7       │ │
+│  │                ││                ││                ││ oltre 10 anni  │ │
+│  └────────────────┘└────────────────┘└────────────────┘└────────────────┘ │
+│    ‹click → /strumenti?stato=verde›  ‹?stato=arancione&sortBy=scadenza›     │
 │                                                                            │
-│  ┌────────────────────────────────────────────────────────────────────┐  │
-│  │ Stato │ Strumento          │ Ubicazione        │ Prossima scadenza  │  │
-│  ├────────────────────────────────────────────────────────────────────┤  │
-│  │  🔴⚑  │ Autoclave AC-200   │ Lab Microbiologia │ Tar./cert. scaduta │  │
-│  │  🟠   │ Centrifuga CF-12   │ Lab Analisi       │ Manut. tra 4 gg    │  │
-│  │  🟠   │ Spettrofotom. S-9  │ Lab Chimica       │ Garanzia tra 12 gg │  │
-│  │  🟢   │ Frigo -80 FR-3     │ Lab Biobanca      │ —                  │  │
-│  │  …                                                                   │  │
-│  └────────────────────────────────────────────────────────────────────┘  │
-│                                              ‹click riga → Scheda strumento›│
+│  Le prime tre coprono tutte le 147 macchine che vedi. Gli obsoleti sono    │
+│  una segnalazione sull'età e non uno stato manutentivo: sono già contati   │
+│  in una delle tre.                                                         │
+│                                                                            │
+│  ┌──────────────────────┐  ‹solo con tenants.view_all›                     │
+│  │ 🏢 Piattaforma       │                                                  │
+│  │ Vai alla cabina →    │                                                  │
+│  └──────────────────────┘                                                  │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Note.** Ordinamento default per gravità (🔴→🟠→🟢) e scadenza più vicina. `⚑` indica stato forzato (badge cliccabile → mostra chi/quando/perché, ADR-005). Il Tenant **non** vede colonne/filtri relativi a garanzie ricambio (ADR-004). Responsabile Reparto: stesso layout ma KPI/lista ristretti al sotto-albero. Mobile: KPI in colonna, tabella → lista di card.
+**Ogni riquadro è un link, e il numero deve combaciare con le righe che si trovano arrivando.** È ciò che rende «conta» ed «elenca» la stessa regola *per chi guarda* e non solo nel codice: conteggi e filtro passano entrambi da `Strumento::scopeConStato()`, e un test segue l'href e confronta il numero col totale del paginatore. Cliccando «Azione richiesta 18» si atterra su **esattamente diciotto righe**, ordinate per scadenza più vicina — l'ordinamento del wireframe originale, sulla superficie che lo implementa già.
 
-> **Colonna "Prossima scadenza" e garanzie ricambio** (🔗 ADR-020). La colonna nomina la fonte ("Taratura e certificazione — scaduta", "Garanzia tra 12 gg"); nei wireframe l'etichetta è abbreviata per stare nella colonna, ma il testo reale è quello di `TipoIntervento::label()`. Quando la scadenza più vicina è la **garanzia di un ricambio** e l'utente non ha `garanzie.ricambio.view`, la cella degrada a una dicitura neutra — **"Garanzia tra N gg"**, senza il nome del pezzo — mentre il **pallino resta arancione per tutti**. Il pallino è un aggregato, la colonna un dettaglio: due regole diverse sulla stessa riga, di proposito.
+**I primi tre riquadri sono una partizione, il quarto no.** Verde, arancione e rosso coprono tutto il parco e non si sovrappongono (il forzato vince, 🔗 ADR-005); l'obsolescenza «non tocca il semaforo» (🔗 ADR-014), quindi una macchina obsoleta è **già contata** in una delle tre. Quattro riquadri in fila si leggono come quattro fette di una torta: la pagina lo dice in chiaro invece di lasciarlo dedurre a chi prova a sommare.
+
+⛔ **Nessun riquadro scompone uno stato per CAUSA.** 🔗 ADR-020 legittima il *pallino* come aggregato dovuto a tutti — il Tenant non vede le righe garanzia-ricambio ma vede l'arancione che ne deriva — e **non** la sua scomposizione: un «di cui 4 da garanzie ricambio» direbbe a un Ente su `visibilita_garanzie_ricambio = nascosta` quanti pezzi sostituiti ha sulle proprie macchine, e lo direbbe senza passare da nessuno scope, perché un numero non è una riga.
+
+**A parco vuoto una frase, non quattro zeri**: «Nessuno strumento visibile.» Quattro zeri si leggono come «il sistema è vuoto», ed è la casella vuota che dice il falso già pagata due volte. La frase è scelta per essere vera **per tutti**: il cliente nuovo, l'Ente di piattaforma di Superadmin e Developer, il Responsabile senza nodi assegnati e il Tecnico esterno senza portafoglio — «Nessuno strumento in questo Ente» sarebbe falsa per gli ultimi due, che un Ente pieno ce l'hanno, solo non è loro.
+
+**Il perimetro si nomina** («Lo stato delle macchine di *X*», o «che segui» per chi un Ente non ce l'ha). Senza, il Superadmin legge un totale qui e un altro sulla cabina — entrambi corretti, uno per il proprio Ente e uno per tutti i clienti — e il primo screenshot in riunione fa il danno.
+
+**Il permesso si chiede blocco per blocco** (🔗 Policy di Code Review, Schema Ruoli §6): la rotta non ha `can:` perché è l'unica pagina che ogni autenticato deve poter aprire. Chi non ha `strumenti.view` — revocabile a runtime dall'editor permessi — non vede i riquadri, **e non li fa nemmeno calcolare**.
+
+**Ogni ruolo, senza diramazioni.** I numeri nascono da `Strumento::query()` con i global scope addosso, quindi il perimetro lo decide il dominio: Admin e Tenant sul proprio Ente, il Responsabile sul sotto-albero, il Tecnico su portafoglio ∪ assegnazione, e zero — non tutto — per un autenticato senza tenant. Il **Responsabile Reparto** vede quindi «stesso layout, KPI ristretti al sotto-albero» che la nota originale prometteva, senza che nessuno lo scriva.
+
+**Mobile**: i riquadri si impilano (`sm:grid-cols-2 lg:grid-cols-4`).
 
 ---
 
@@ -315,7 +334,7 @@ Hub di navigazione: albero Ente→Dipartimento→Sottolaboratorio a sinistra, st
 
 | Vista | Ruoli principali | Sprint di build |
 |---|---|---|
-| §1 Dashboard Semaforo | Tenant, Admin, Resp. Reparto | S3 (semaforo) / S6 (rifinitura per ruolo) |
+| §1 Dashboard per ruolo | **tutti** i ruoli | S3 (semaforo) / **S6 — chiusa il 25 Ago 2026** |
 | §2 Scheda Strumento (tab) | Admin, Tenant, Resp., Tecnico (ridotta) | S2 (anagrafica) → S3/S4 (tab) |
 | §3 Mobile Tecnico | Tecnico | S4 |
 | §4 Dashboard Superadmin | Superadmin, Developer | S6 |
