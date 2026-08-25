@@ -1,7 +1,23 @@
-@import 'tailwindcss';
+/* ⚠️ **`source(none)` disattiva la scoperta automatica delle sorgenti, e non è
+   un'ottimizzazione: è ciò che rende il foglio di stile *deterministico*.*
+
+   Senza, Tailwind parte dalla radice del progetto e legge tutto ciò che non è
+   gitignorato — quindi anche **`tests/`**. Misurato: una classe scritta in una
+   fixture di test finiva nel CSS che scaricano i clienti, sempre. E
+   `storage/framework/views` (le view compilate) aggiungeva la seconda metà del
+   guaio, quella intermittente: conteneva ciò che l'ultima esecuzione aveva
+   compilato, quindi **il bundle cambiava a seconda che si fosse lanciata la
+   suite prima del build o no**. Due build dallo stesso commit, due CSS diversi.
+
+   Le sorgenti dichiarate qui sotto sono le stesse che `PaletteGuardrailTest`
+   ispeziona, e un test tiene allineate le due liste: se divergessero, il
+   guardrail dei colori diventerebbe cieco proprio su ciò che Tailwind compila
+   (o viceversa). */
+@import 'tailwindcss' source(none);
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
+@source '../**/*.{php,html,js,ts,vue,jsx,tsx}';
+@source '../../app/**/*.php';
 
 /* Alpine: nasconde gli elementi x-cloak finché Alpine non è inizializzato */
 [x-cloak] {

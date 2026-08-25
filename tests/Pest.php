@@ -5,6 +5,7 @@ use App\Models\Errore;
 use App\Models\Strumento;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\File;
 use Livewire\Features\SupportTesting\Testable;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -227,4 +228,34 @@ function navDiPiattaforma(string $html): string
     expect($blocco)->not->toBeEmpty();
 
     return $blocco[0];
+}
+
+/**
+ * I file che **possono contenere una classe di stile**, cioè quelli che Tailwind
+ * deve scansionare e che i meta-test della palette ispezionano.
+ *
+ * ⚠️ **Sta qui e non in uno dei due file** perché è precisamente l'insieme su
+ * cui i due devono concordare: `PaletteGuardrailTest` chiede «ogni classe usata
+ * qui dentro esiste nel tema?» e `SorgentiTailwindGuardrailTest` chiede «ogni
+ * file qui dentro è davvero scansionato?». Due copie della stessa lista si
+ * separerebbero, e la metà che diverge lascerebbe un angolo del progetto in cui
+ * una classe non produce nulla **senza che nessuno dei due se ne accorga** — che
+ * è il guasto che entrambi esistono per rendere rumoroso.
+ *
+ * `resources/css/app.css` è escluso: è la **fonte** dei colori, non un uso.
+ *
+ * @return list<string> percorsi assoluti
+ */
+function sorgentiDiStile(): array
+{
+    return collect(File::allFiles(resource_path()))
+        ->reject(fn ($f) => str_contains($f->getPathname(), '/css/app.css'))
+        ->merge(File::allFiles(app_path()))
+        // ⚠️ **Anche `js`/`ts`/`vue`**: Tailwind non guarda l'estensione per
+        // decidere se un file può contenere una classe, e una stringa in un
+        // sorgente JavaScript finisce nel bundle come da una vista.
+        ->filter(fn ($f) => in_array($f->getExtension(), ['php', 'html', 'js', 'ts', 'vue', 'jsx', 'tsx'], true))
+        ->map(fn ($f) => $f->getRealPath())
+        ->values()
+        ->all();
 }

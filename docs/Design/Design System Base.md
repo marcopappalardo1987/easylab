@@ -344,6 +344,23 @@ andrà: `npm run build`, e poi la verifica **visiva** — nessun test guarda i *
 > `hover:text-warning-900` della cabina — un link già a `warning-800`, cioè il gradino più scuro — è
 > diventato `hover:no-underline`: la palette non si allarga per far posto a un hover.
 >
+> 🔴 **E una tonalità può mancare anche senza essere sbagliata: basta che Tailwind non legga il file che
+> la usa** *(25 Ago 2026)*. Il sintomo è identico — classe scritta, pagina 200, colore assente — ma la
+> causa è all'altro capo: le utility esistono solo per le classi che il compilatore **trova**.
+> `app.css` importa quindi Tailwind con `source(none)` e dichiara le proprie sorgenti, e
+> `tests/Feature/SorgentiTailwindGuardrailTest.php` verifica che ogni file capace di contenere una classe
+> sia coperto da almeno un `@source`.
+>
+> ⚠️ **Serviva anche nel verso opposto, ed era quello che stavamo pagando**: la scoperta automatica legge
+> tutto ciò che non è gitignorato, `tests/` compreso, quindi le classi delle fixture — comprese le
+> **mutazioni** scritte apposta per provare il guardrail della palette — finivano nel CSS dei clienti. E
+> `storage/framework/views` fra le sorgenti rendeva il bundle dipendente da *cosa era stato reso di
+> recente*: due build dallo stesso commit, due CSS diversi. Misurato: 176 selettori su 738 di troppo, il
+> 21% del peso, e nessuna classe di una vista vera fra quelli tolti.
+>
+> ⚠️ **Conseguenza pratica per chi aggiunge una cartella**: `resources/` e `app/` sono coperte; una
+> `moduli/` nuova alla radice **no**, e il guardrail lo dice invece di lasciare pagine senza colore.
+
 > ⚠️ **`primary-300` in `app.css` è il teal `#5eead4`, non il `#7fbde4` qui sopra**, e rientra nello scarto
 > dichiarato in testa: la scala in esercizio è ancora quella dello Sprint 0, e metterci dentro un solo blu
 > sarebbe attuare mezza ADR-033 senza la verifica visiva che quella decisione pretende.

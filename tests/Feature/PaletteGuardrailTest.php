@@ -1,7 +1,5 @@
 <?php
 
-use Illuminate\Support\Facades\File;
-
 /**
  * 🔴 Meta-test della **palette**: nessuna vista usa una tonalità che `@theme`
  * non definisce (🔗 `docs/Design/Design System Base.md` §2 e §6, ADR-033).
@@ -165,29 +163,33 @@ function tonalitaUsateNelSorgente(string $sorgente, array $famiglie): array
     return array_values(array_unique($tonalita));
 }
 
-/** @return array<string, list<string>> tonalità → i file che la usano */
+/**
+ * @return array<string, list<string>> tonalità → i file che la usano
+ *
+ * ⚠️ L'elenco dei sorgenti vive in `sorgentiDiStile()` (`tests/Pest.php`) e
+ * **non qui**: è lo stesso insieme che `SorgentiTailwindGuardrailTest` verifica
+ * essere davvero scansionato da Tailwind. Tenerne due copie significherebbe
+ * lasciare un angolo del progetto in cui una classe non produce nulla senza che
+ * nessuno dei due test se ne accorga.
+ */
 function usiDelleTonalita(): array
 {
     $famiglie = famiglieDelTema();
 
-    // ⚠️ **Tutta `resources/`, non le sole viste.** Tailwind scansiona l'intero
-    // repo, questa rete leggeva `views/` e `app/`: verificato, una classe di
-    // colore scritta in `resources/js/app.js` finiva nel bundle e il guardrail
-    // restava verde.
-    $sorgenti = collect(File::allFiles(resource_path()))
-        ->reject(fn ($f) => str_contains($f->getPathname(), '/css/app.css'))
-        ->merge(File::allFiles(app_path()))
-        // ⚠️ **E anche `js`/`vue`/`ts`**: Tailwind non guarda l'estensione per
-        // decidere se un file può contenere una classe, e una stringa in un
-        // sorgente JavaScript finisce nel bundle come da una vista. Il filtro
-        // fermo a `php`/`html` lasciava passare proprio quel caso.
-        ->filter(fn ($f) => in_array($f->getExtension(), ['php', 'html', 'js', 'ts', 'vue', 'jsx', 'tsx'], true));
-
+    // ⚠️ **Tutta `resources/` e non le sole viste**, ed è una correzione pagata:
+    // questa rete leggeva `views/` e `app/`, e una classe di colore scritta in
+    // `resources/js/app.js` finiva nel bundle mentre il guardrail restava verde.
+    //
+    // ⚠️ *La ragione di allora era «Tailwind scansiona l'intero repo», e dal 25
+    // Ago 2026 **non è più vera**: `app.css` importa con `source(none)` e le
+    // sorgenti sono dichiarate. La conclusione regge lo stesso — anzi meglio,
+    // perché ora i due insiemi sono lo stesso insieme, e a tenerli tali è
+    // `SorgentiTailwindGuardrailTest`.*
     $usi = [];
 
-    foreach ($sorgenti as $file) {
-        foreach (tonalitaUsateNelSorgente(file_get_contents($file->getPathname()), $famiglie) as $tonalita) {
-            $usi[$tonalita][] = str_replace(base_path().'/', '', $file->getRealPath());
+    foreach (sorgentiDiStile() as $file) {
+        foreach (tonalitaUsateNelSorgente(file_get_contents($file), $famiglie) as $tonalita) {
+            $usi[$tonalita][] = str_replace(base_path().'/', '', $file);
         }
     }
 
