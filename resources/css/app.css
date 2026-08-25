@@ -12,6 +12,29 @@
  | Design System Base — Easy Lab (docs/Design/Design System Base.md)
  | Token Tailwind v4: palette brand (Teal), neutri (Slate), stati semaforo
  | e accenti funzionali. Niente hex inline nei componenti: solo questi token.
+ |
+ | ⚠️ **Il `primary` è ancora il TEAL dello Sprint 0, e lo scarto col Design
+ | System è dichiarato** (🔗 ADR-033, DS §2.1): il documento descrive il blu del
+ | marchio, l'attuazione è un intervento a parte con la propria verifica visiva.
+ | Chi legge un colore qui e un altro là non ha trovato un bug.
+ |
+ | 🔴 **Una tonalità USATA e non definita qui non dà errore: dà un colore
+ | diverso, oppure niente.** Le due metà si comportano in modo opposto, ed è la
+ | ragione per cui la deriva è durata mesi senza che nessuno la vedesse:
+ |
+ |  - `neutral` è anche un nome di palette **nativa** di Tailwind, quindi
+ |    `text-neutral-500` **rende** — col grigio ACROMATICO di Tailwind
+ |    (`oklch(55.6% 0 0)`, croma zero) invece dello Slate del progetto. Due
+ |    famiglie di grigio nella stessa pagina, e nessuna delle due sbagliata
+ |    abbastanza da farsi notare. Misurato il 25 Ago 2026 sul bundle costruito;
+ |  - `primary`, `danger`, `success`, `warning` sono nomi **nostri**: una
+ |    tonalità assente non genera nessuna regola. `hover:bg-danger-700` sul
+ |    pulsante «Chiudi la porta» della cabina di regia era un hover che non
+ |    coloriva niente.
+ |
+ | La rete è `tests/Feature/PaletteGuardrailTest.php`, che deriva l'insieme
+ | usato dalle viste e quello definito qui sotto e li confronta. Non c'è nessun
+ | elenco da tenere allineato a mano.
  */
 @theme {
     --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
@@ -20,30 +43,50 @@
     /* Brand / Primary (Teal) */
     --color-primary-50: #f0fdfa;
     --color-primary-100: #ccfbf1;
+    /* Bordo di accento sugli hover di card e pill, sempre in coppia con
+       `hover:bg-primary-50`. ⚠️ Il gradino teal, perché teal è la scala **in
+       esercizio**: il DS §6 lo dà a `#7fbde4`, che è il blu, e scriverlo qui
+       metterebbe un blu dentro una scala verde-azzurra — cioè attuerebbe mezza
+       ADR-033 senza la verifica visiva che quella decisione pretende. Il blocco
+       intero si sostituisce il giorno del restyling. */
+    --color-primary-300: #5eead4;
     --color-primary-500: #14b8a6;
     --color-primary-600: #0d9488;
     --color-primary-700: #0f766e;
     --color-primary-900: #134e4a;
 
-    /* Neutri (Slate) */
+    /* Neutri (Slate) — 🔗 DS §2.2. I gradini 300/500/700 mancavano e le viste li
+       usavano già: ricadevano sul neutro acromatico di Tailwind (vedi sopra). Gli
+       hex sono quelli del DS, identici prima e dopo ADR-033: il restyling cambia
+       l'identità, non i neutri. */
     --color-neutral-50: #f8fafc;
     --color-neutral-100: #f1f5f9;
     --color-neutral-200: #e2e8f0;
+    --color-neutral-300: #cbd5e1;
     --color-neutral-400: #94a3b8;
+    --color-neutral-500: #64748b;
     --color-neutral-600: #475569;
+    --color-neutral-700: #334155;
     --color-neutral-800: #1e293b;
     --color-neutral-900: #0f172a;
 
-    /* Stati semaforo (semantici) — ADR-005 */
+    /* Stati semaforo (semantici) — ADR-005, invariati anche dopo ADR-033.
+       `success-700` e `danger-800` sono i due testi-su-badge di DS §2.3, che le
+       viste chiamavano `success-800` e `danger-700` — due nomi che il DS non ha
+       mai avuto, e che quindi non rendevano. Rinominati negli usi, non inventati
+       qui: la palette è quella del documento. */
     --color-success-100: #dcfce7;
     --color-success-500: #16a34a;
     --color-success-600: #15803d;
+    --color-success-700: #166534;
+    --color-warning-50: #fffbeb;
     --color-warning-100: #fef3c7;
     --color-warning-500: #f59e0b;
     --color-warning-800: #92400e;
     --color-danger-100: #fee2e2;
     --color-danger-500: #dc2626;
     --color-danger-600: #b91c1c;
+    --color-danger-800: #991b1b;
 
     /* Accenti funzionali */
     --color-info-500: #2563eb;

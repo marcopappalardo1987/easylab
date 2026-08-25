@@ -327,7 +327,26 @@ Tailwind ignora — senza nessun errore.*
 ```
 
 ⚠️ **Questo blocco non è ancora in `app.css`**: vedi lo Stato in testa al documento e ADR-033. Quando ci
-andrà: `npm run build`, e poi la verifica **visiva** — nessun test guarda i colori.
+andrà: `npm run build`, e poi la verifica **visiva** — nessun test guarda i *valori* dei colori.
+
+> 🛡️ **Un test guarda però che i token ESISTANO** *(25 Ago 2026)*. `tests/Feature/PaletteGuardrailTest.php`
+> deriva le tonalità dichiarate nell'`@theme` di `app.css` e quelle usate nelle viste, e diventa rosso su
+> una tonalità usata e non definita. Serviva: **otto ne erano sfuggite**, e le due metà sbagliavano in modo
+> opposto — `neutral-300/500/700` *rendevano*, col grigio acromatico di Tailwind al posto dello Slate (154
+> usi, diciotto viste), mentre `primary-300`, `warning-50` e altre tre non generavano alcuna regola: fra
+> queste, un `hover:bg-danger-700` su un pulsante distruttivo della cabina di regia, cioè un hover che non
+> colorava niente. È la §2.2 di questo documento — «un token assente non dà errore, dà un colore diverso» —
+> messa sotto una rete invece che sotto un'avvertenza.
+>
+> ⚠️ **Tre delle otto non erano nel DS e non sono state inventate in `app.css`**: le viste chiamavano
+> `danger-700`, `success-800` e `warning-900`, mentre §2.3/§6 dicono `danger-800` (`#991B1B`) e
+> `success-700` (`#166534`) e un nono gradino d'ambra non ce l'hanno. Sono state corrette **le viste**. Il
+> `hover:text-warning-900` della cabina — un link già a `warning-800`, cioè il gradino più scuro — è
+> diventato `hover:no-underline`: la palette non si allarga per far posto a un hover.
+>
+> ⚠️ **`primary-300` in `app.css` è il teal `#5eead4`, non il `#7fbde4` qui sopra**, e rientra nello scarto
+> dichiarato in testa: la scala in esercizio è ancora quella dello Sprint 0, e metterci dentro un solo blu
+> sarebbe attuare mezza ADR-033 senza la verifica visiva che quella decisione pretende.
 
 ---
 

@@ -83,11 +83,29 @@ use Spatie\Permission\Models\Role;
  * (non `scoped`) e `clearPermissionsCollection()` gira solo alla prima
  * risoluzione del `Gate` in boot: un `queue:work` che resta su tiene la propria
  * copia in memoria per tutta la vita del processo, e una modifica fatta dal web
- * gli è invisibile finché non riparte. Oggi l'esposizione è **nulla** — nessun
- * job in coda interroga permessi — quindi non si chiude in codice: chiuderla
+ * gli è invisibile finché non riparte. Oggi l'esposizione è **nulla** — niente,
+ * in coda, interroga permessi — quindi non si chiude in codice: chiuderla
  * costerebbe una lettura di cache per job (un listener su `JobProcessing`) per
- * un rischio che non ha superficie. Finché resta aperto: `php artisan
- * queue:restart` dopo ogni modifica alla matrice.
+ * un rischio che non ha superficie.
+ *
+ * 🛡️ **E «l'esposizione è nulla» ha smesso di essere un'affermazione**
+ * (25 Ago 2026): `PermessiInCodaGuardrailTest` deriva ciò che gira in coda —
+ * classi `ShouldQueue` **e** `Notification`, perché una notifica gira dove gira
+ * chi la manda — e diventa rosso appena una di esse legge un permesso o un
+ * ruolo. Il giorno in cui la superficie nasce, chi la fa nascere passa di lì e
+ * legge cosa fare, invece di doversene ricordare.
+ *
+ * 🔴 **E il rimedio scritto qui fino a quel giorno era sbagliato.** Diceva
+ * «`php artisan queue:restart` dopo ogni modifica alla matrice», che non regge
+ * più per due fatti: su Laravel Cloud i worker si riavviano **da soli a ogni
+ * deploy** (e `Setup Repository e Ambienti.md` §3.2 vieta `queue:restart` fra i
+ * deploy command); e da S6 la matrice **non cambia al rilascio**, cambia a
+ * runtime col click di un Superadmin su `/piattaforma/ruoli` — una checklist di
+ * rilascio non scatta su un gesto che non è un rilascio. Il rimedio vero, quando
+ * servirà, è `Queue::looping()` →
+ * `app(PermissionRegistrar::class)->clearPermissionsCollection()`, **mai**
+ * `forgetCachedPermissions()`, che cancella la chiave di cache condivisa e
+ * farebbe rileggere la matrice a ogni processo web a ogni job.
  *
  * ## Perché NON passa da `VistaPiattaforma`
  *

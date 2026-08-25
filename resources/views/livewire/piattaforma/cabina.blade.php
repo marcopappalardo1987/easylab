@@ -25,7 +25,7 @@
     </div>
 
     @if (session('provisioning'))
-        <div class="mt-4 rounded-md border border-success-500 bg-success-100 px-4 py-3 text-sm text-success-800">
+        <div class="mt-4 rounded-md border border-success-500 bg-success-100 px-4 py-3 text-sm text-success-700">
             {{ session('provisioning') }}
         </div>
     @endif
@@ -82,8 +82,16 @@
                 {{ $riepilogo->pianiSconosciuti === 1 ? 'account ha un piano' : 'account hanno un piano' }}
                 che non è più a catalogo: {{ $riepilogo->pianiSconosciuti === 1 ? 'vale' : 'valgono' }}
                 0 € nel ricavo qui sopra.
+                {{-- ⚠️ L'hover **toglie** la sottolineatura invece di scurire il
+                     testo, e non è un vezzo: il colore di riposo è già
+                     `warning-800`, cioè il gradino più scuro che l'ambra abbia
+                     nel Design System (§2.3/§6). Qui c'era `hover:text-warning-900`,
+                     un token che il DS non ha mai avuto e che quindi non generava
+                     nessuna regola — un hover che non faceva niente. Il rimedio
+                     non è inventare un nono gradino nella palette: è dare al
+                     bottone un'affordance che i token esistenti sanno esprimere. --}}
                 <button type="button" wire:click="$set('piano', '{{ $this::FUORI_CATALOGO }}')"
-                        class="font-medium underline hover:text-warning-900">Mostra{{ $riepilogo->pianiSconosciuti === 1 ? 'lo' : 'li' }}</button>
+                        class="font-medium underline hover:no-underline">Mostra{{ $riepilogo->pianiSconosciuti === 1 ? 'lo' : 'li' }}</button>
             </p>
         </x-ui.card>
     @endif
@@ -495,7 +503,7 @@
             <div class="rounded-md border border-neutral-200 p-3">
                 <p class="text-sm font-medium text-neutral-900">Blocco automatico (Stripe)</p>
                 @if ($inLavorazione->stripe_locked_at)
-                    <p class="mt-1 text-sm text-danger-700">
+                    <p class="mt-1 text-sm text-danger-800">
                         Chiuso dal webhook il {{ $inLavorazione->stripe_locked_at->format('d/m/Y H:i') }}@if ($inLavorazione->stripe_lock_reason) — {{ $inLavorazione->stripe_lock_reason }}@endif
                     </p>
                     <p class="mt-1 text-xs text-neutral-500">
@@ -512,7 +520,7 @@
                 @if ($inLavorazione->locked_at)
                     {{-- Il motivo si legge **qui**: `/bloccato` è muta di proposito,
                          quindi questo è il solo posto dove ritrovarlo fra sei mesi. --}}
-                    <p class="mt-1 text-sm text-danger-700">
+                    <p class="mt-1 text-sm text-danger-800">
                         Chiuso il {{ $inLavorazione->locked_at->format('d/m/Y H:i') }}@if ($inLavorazione->locked_reason) — {{ $inLavorazione->locked_reason }}@endif
                     </p>
 
@@ -539,7 +547,7 @@
                     </p>
 
                     <button type="button" wire:click="bloccaAccount"
-                            class="mt-3 rounded-md bg-danger-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-danger-700">
+                            class="mt-3 rounded-md bg-danger-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-danger-800">
                         Chiudi la porta
                     </button>
                 @endif

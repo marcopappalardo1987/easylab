@@ -88,7 +88,7 @@
                                     class="text-xs font-medium text-primary-600 hover:text-primary-700">Correggi</button>
                                 @can('ricambio_utilizzo.delete')
                                     <button type="button" wire:click="openRimuoviRicambio({{ $utilizzo->id }})"
-                                        class="ml-3 text-xs font-medium text-danger-600 hover:text-danger-700">Rimuovi</button>
+                                        class="ml-3 text-xs font-medium text-danger-600 hover:text-danger-800">Rimuovi</button>
                                 @endcan
                             </td>
                         @endif

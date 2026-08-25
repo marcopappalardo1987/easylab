@@ -57,7 +57,7 @@
                                 <button type="button" wire:click="openModificaGaranzia({{ $g->id }})"
                                     class="text-xs font-medium text-primary-600 hover:text-primary-700">Modifica</button>
                                 <button type="button" wire:click="openEliminaGaranzia({{ $g->id }})"
-                                    class="ml-3 text-xs font-medium text-danger-600 hover:text-danger-700">Elimina</button>
+                                    class="ml-3 text-xs font-medium text-danger-600 hover:text-danger-800">Elimina</button>
                             </td>
                         @endcan
                     </tr>

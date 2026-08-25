@@ -2,6 +2,7 @@
 
 use App\Models\Errore;
 use App\Models\OccorrenzaErrore;
+use App\Support\Errori\CatturaErrori;
 use App\Support\Retention;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Eloquent\Model;
@@ -399,4 +400,127 @@ it('blanks whatever the state, because a recurring issue is never pruned either'
         // E chi è ancora vivo tiene il proprio messaggio: l'oscuramento è un
         // orizzonte, non un'amnesia.
         ->and(Errore::find($recente->id)->messaggio)->toBe('Qualcosa non ha funzionato');
+});
+
+/*
+|--------------------------------------------------------------------------
+| 🔴 Il budget dei contesti, e la potatura che se lo portava via (25 Ago 2026)
+|--------------------------------------------------------------------------
+|
+| **Il difetto stava nell'INCROCIO fra il campionamento (blocco 4) e la
+| potatura (blocco 7), e nessuno degli otto blocchi lo copriva** — ciascuno era
+| corretto per conto proprio.
+|
+| Misurato: una issue `aperto` con `contesti = 20` e ultima occorrenza a 100
+| giorni. Le occorrenze hanno l'orizzonte più corto (90 giorni), la issue no
+| (180): dopo `model:prune` le prove sono **0** e il contatore dice ancora
+| **20**. `CatturaErrori::daCampionare()` legge quel contatore, quindi torna
+| `false` **per sempre** — nemmeno se l'errore succede mille volte al giorno.
+|
+| Cioè: una issue mai chiusa, che ha raccolto le sue venti prove nei primi
+| giorni, dopo tre mesi è un contatore **senza una sola prova**, e non ne
+| catturerà mai più. Ed è il caso peggiore, non il raro: `ultima_occorrenza_at`
+| si rinfresca a ogni avvenimento, quindi una issue che *continua a ripetersi*
+| non viene mai potata — resta viva, muta, e all'occhio di chi la guarda dice
+| «venti contesti» mostrandone zero.
+|
+| È la stessa forma del difetto che il blocco 3 aveva risolto azzerando il
+| budget alla riapertura («l'ho corretto, perché succede ancora?»), spostata da
+| «dopo un tentativo di correzione» a «dopo novanta giorni».
+|
+| ## Il rimedio scelto, e quello scartato
+|
+| Si riallinea `contesti` alle prove **superstiti** dentro
+| `OccorrenzaErrore::pruneAll()`. L'alternativa era derivare `daCampionare()` da
+| `occorrenzeErrore()->count()` invece che dal contatore: sarebbe il rimedio più
+| radicale — il contatore non potrebbe più mentire perché non esisterebbe — ma
+| aggiunge una `SELECT count(*)` **dentro il gestore delle eccezioni**, cioè sul
+| percorso più caldo che il progetto abbia, e su ogni eccezione riportata,
+| comprese quelle che la finestra scarterebbe un istante dopo. `CatturaErroriTest`
+| congela «due query sul percorso caldo» apposta. Il riallineamento costa invece
+| due query **una volta al giorno**, dentro un comando di manutenzione, e
+| ripristina l'INVARIANTE che il docblock di `Errore` già dichiarava — «`contesti`
+| = quante prove se ne sono **conservate**» — che oggi era vero solo finché
+| nessuno potava.
+*/
+
+it('gives an issue its context budget back when the pruning takes its evidence away', function () {
+    config([
+        'easylab.errori.contesti_per_errore' => 3,
+        // Finestra a zero: qui si prova il **tetto**, non il ritmo. Con la
+        // finestra viva le tre catture andrebbero a un contesto solo e il test
+        // proverebbe l'altra guardia.
+        'easylab.errori.finestra_contesto_secondi' => 0,
+    ]);
+
+    // ⚠️ **La stessa istanza di eccezione**, come in `CatturaErroriTest`:
+    // l'impronta nasce da dove il `throw` è avvenuto, quindi due `new` su due
+    // righe diverse sarebbero — correttamente — due issue.
+    $eccezione = new RuntimeException('succede da cento giorni');
+
+    $this->travelTo(now()->subDays(100));
+
+    foreach (range(1, 3) as $volta) {
+        CatturaErrori::cattura($eccezione);
+    }
+
+    $errore = Errore::query()->where('classe', RuntimeException::class)
+        ->where('messaggio', 'succede da cento giorni')->sole();
+
+    // Il budget è esaurito: al tetto, con le sue tre prove a database.
+    expect($errore->contesti)->toBe(3)
+        ->and(OccorrenzaErrore::query()->where('errore_id', $errore->id)->count())->toBe(3);
+
+    $this->travelBack();
+
+    $this->artisan('model:prune', ['--model' => [OccorrenzaErrore::class]])->assertSuccessful();
+
+    // Le prove se ne sono andate — è il loro orizzonte, ed è giusto così: sono
+    // la parte che porta dati personali (Privacy §T8).
+    expect(OccorrenzaErrore::query()->where('errore_id', $errore->id)->count())->toBe(0)
+        // 🔴 **E il contatore deve dire la verità su ciò che RESTA.** Qui stava
+        // il difetto: `contesti` restava a 3 su zero prove.
+        ->and($errore->fresh()->contesti)->toBe(0)
+        // ⚠️ E anche il timestamp, o `daCampionare()` passerebbe dal ramo della
+        // finestra invece che da quello della prima prova — che è il ramo che
+        // dice «questa vale più delle altre, si prende sempre».
+        ->and($errore->fresh()->ultimo_contesto_at)->toBeNull();
+
+    // 🔴 **Ciò che si vede davvero**: la issue torna a raccogliere prove. Senza
+    // il riallineamento questa cattura lascerebbe crescere il solo contatore
+    // delle occorrenze, e la tabella dei contesti resterebbe vuota per sempre.
+    CatturaErrori::cattura($eccezione);
+
+    expect(OccorrenzaErrore::query()->where('errore_id', $errore->id)->count())->toBe(1)
+        ->and($errore->fresh()->contesti)->toBe(1)
+        // Il contatore delle occorrenze non c'entra e non si tocca: dice quante
+        // volte è successo, e continua a dirlo attraverso la potatura.
+        ->and($errore->fresh()->occorrenze)->toBe(4);
+});
+
+it('only gives back the budget that was actually spent, never the whole of it', function () {
+    // ⚠️ **Il rovescio, e senza di lui il rimedio sarebbe peggio del male.** Un
+    // azzeramento secco («la potatura è passata → contesti = 0») regalerebbe il
+    // budget intero anche alle issue che hanno perso solo le prove vecchie, e il
+    // tetto dichiarato in Privacy §T8 non sarebbe più un tetto: basterebbe
+    // aspettare novanta giorni per ricominciare da capo. Il contatore si
+    // riallinea a **quante prove restano**, non a zero.
+    $this->freezeTime();
+
+    $issue = issueErrore(['stato' => 'aperto', 'ultima_occorrenza_at' => now()]);
+
+    $vecchia = occorrenza($issue, now()->subDays(91));
+    $recente = occorrenza($issue, now()->subDays(89));
+
+    $issue->forceFill(['contesti' => 2, 'ultimo_contesto_at' => now()->subDays(89)])->save();
+
+    $this->artisan('model:prune', ['--model' => [OccorrenzaErrore::class]])->assertSuccessful();
+
+    expect(OccorrenzaErrore::find($vecchia->id))->toBeNull()
+        ->and(OccorrenzaErrore::find($recente->id))->not->toBeNull()
+        ->and($issue->fresh()->contesti)->toBe(1)
+        // Il timestamp resta quello della prova superstite: la potatura porta
+        // via le **più vecchie**, quindi la più recente è per costruzione
+        // l'ultima conservata.
+        ->and($issue->fresh()->ultimo_contesto_at->toDateTimeString())->toBe(now()->subDays(89)->toDateTimeString());
 });

@@ -387,6 +387,120 @@ class Errore extends Model
     }
 
     /**
+     * 🔴 Rimette `contesti` in pari con le prove **superstiti**, dopo che la
+     * potatura delle occorrenze è passata (25 Ago 2026).
+     *
+     * ## Il difetto che chiude, e perché nessuno dei blocchi lo copriva
+     *
+     * Stava nell'**incrocio** fra il campionamento e la potatura, e ciascuno dei
+     * due era corretto per conto proprio. `contesti` è un **budget**:
+     * `CatturaErrori::daCampionare()` smette di conservare prove quando arriva a
+     * `contesti_per_errore`, e lo legge da questa riga già caricata — zero query
+     * sul percorso caldo, che è la ragione per cui la colonna esiste. Ma le due
+     * tabelle hanno **orizzonti diversi**: le prove se ne vanno a 90 giorni
+     * (`OccorrenzaErrore::GIORNI`), le issue aperte a 180. Nel mezzo, una issue
+     * `aperto` con `contesti = 20` e ultima occorrenza a 100 giorni restava con
+     * **zero prove e il contatore ancora a venti** — cioè `daCampionare()` falso
+     * **per sempre**, nemmeno se l'errore ricominciava a succedere mille volte
+     * al giorno.
+     *
+     * ⚠️ **Ed è il caso frequente, non quello raro.** `ultima_occorrenza_at` si
+     * rinfresca a ogni avvenimento, quindi una issue che *continua a ripetersi*
+     * non viene mai potata: resta viva, la scheda dice «venti contesti», e non
+     * ne mostra nessuno. È la stessa forma del difetto che `riapri()` qui sopra
+     * risolve azzerando il budget («l'ho corretto, perché succede ancora?»),
+     * spostata da «dopo un tentativo di correzione» a «dopo novanta giorni».
+     *
+     * ## Perché QUI e non dentro `daCampionare()`
+     *
+     * L'alternativa era derivare il budget da `occorrenzeErrore()->count()`: il
+     * contatore non potrebbe più mentire perché non servirebbe più. ⚠️ Ma quella
+     * `SELECT count(*)` girerebbe **dentro il gestore delle eccezioni**, su ogni
+     * eccezione riportata — comprese le moltissime che la finestra scarta un
+     * istante dopo — cioè sul percorso più caldo che il progetto abbia, e che
+     * `CatturaErroriTest::costs two queries on the hot path` congela apposta.
+     * Qui costa **due query una volta al giorno**, dentro un comando di
+     * manutenzione che sta già scandendo quelle righe.
+     *
+     * E soprattutto non introduce una regola nuova: **ripristina quella già
+     * dichiarata** in testa a questa classe — «`contesti` = quante prove se ne
+     * sono **conservate**» — che era vera solo finché nessuno potava.
+     *
+     * ## Perché sta in `Errore` e non in `OccorrenzaErrore`, che la invoca
+     *
+     * ⚠️ **Perché `ScrittureErroriGuardrailTest` ha bocciato la prima stesura**,
+     * che scriveva questi contatori da `OccorrenzaErrore::pruneAll()`. Aveva
+     * ragione: quelle due tabelle non passano da `VistaPiattaforma` e quel
+     * guardrail è la loro unica rete — un terzo file che scrive su `errori` è
+     * proprio ciò che esiste per fermare. Il *quando* resta di chi pota (solo
+     * lui sa quali issue hanno perso prove), il *come* sta qui, accanto a
+     * `oscuraMessaggiScaduti()`, che è una scrittura di manutenzione della
+     * stessa natura.
+     *
+     * ## Le scelte dentro il metodo
+     *
+     * ⚠️ **Si riconta, non si azzera**, ed è la metà che impedisce al rimedio di
+     * essere peggio del male: un azzeramento secco regalerebbe il budget intero
+     * anche a chi ha perso solo le prove più vecchie, e il tetto dichiarato in
+     * Privacy §T8 smetterebbe di essere un tetto — basterebbe aspettare novanta
+     * giorni per ricominciare da capo.
+     *
+     * ⚠️ **`ultimo_contesto_at` si tocca SOLO quando non resta niente**, e non
+     * per pigrizia: la potatura porta via le prove **più vecchie**, quindi
+     * finché una sopravvive la più recente è ancora lei e il timestamp è già
+     * giusto. A zero prove invece deve tornare `null`, o `daCampionare()`
+     * passerebbe dal ramo della finestra invece che da quello della prima prova
+     * — il ramo che dice «questa vale più delle altre, si prende sempre».
+     *
+     * ⚠️ **Le UPDATE si raggruppano per conteggio** invece di farne una per
+     * issue: i valori distinti sono al più `contesti_per_errore` (venti), quindi
+     * il costo non cresce col numero di issue toccate. E ogni ramo filtra sul
+     * valore già presente: senza, ogni notte si riscriverebbe `updated_at` su
+     * righe già in pari — la stessa disciplina di `oscuraMessaggiScaduti()`,
+     * dove il filtro sulla sentinella è la differenza fra un'operazione
+     * idempotente e una che ogni notte tocca tutto.
+     *
+     * ⚠️ **Limite dichiarato**: gli id viaggiano in un `IN`. Su questo tracker —
+     * interno, un'installazione sola — le issue toccate da una passata sono
+     * poche decine; il giorno in cui non lo fossero, è questo il punto da
+     * spezzare in chunk.
+     *
+     * @param  list<int>  $toccate  le issue che hanno appena perso delle prove
+     */
+    public static function riallineaContesti(array $toccate): void
+    {
+        if ($toccate === []) {
+            return;
+        }
+
+        $superstiti = OccorrenzaErrore::query()
+            ->selectRaw('errore_id, count(*) as quante')
+            ->whereIn('errore_id', $toccate)
+            ->groupBy('errore_id')
+            ->pluck('quante', 'errore_id');
+
+        $svuotate = array_values(array_diff($toccate, $superstiti->keys()->all()));
+
+        if ($svuotate !== []) {
+            static::query()
+                ->whereIn('id', $svuotate)
+                ->where(fn (Builder $q) => $q->where('contesti', '!=', 0)->orWhereNotNull('ultimo_contesto_at'))
+                ->update(['contesti' => 0, 'ultimo_contesto_at' => null]);
+        }
+
+        // ⚠️ `preserveKeys: true`, e senza è un bug muto: `groupBy()` **rinumera**
+        // per default, quindi `$issue->keys()` darebbe 0,1,2… al posto degli id
+        // delle issue — un UPDATE su righe scelte a caso. Verificato: il test del
+        // caso parziale resta rosso, quello del caso a zero prove resta verde.
+        foreach ($superstiti->groupBy(fn (int $quante) => $quante, true) as $quante => $issue) {
+            static::query()
+                ->whereIn('id', $issue->keys()->all())
+                ->where('contesti', '!=', (int) $quante)
+                ->update(['contesti' => (int) $quante]);
+        }
+    }
+
+    /**
      * I contesti conservati, che sono un **campione** e non tutte le occorrenze.
      *
      * ⚠️ **Il nome non può essere `occorrenze()`**, per quanto sarebbe quello

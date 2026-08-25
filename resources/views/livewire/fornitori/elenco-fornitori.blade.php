@@ -44,7 +44,7 @@
                                 @endcan
                                 @can('fornitori.delete')
                                     <button type="button" wire:click="confermaElimina({{ $fornitore->id }})"
-                                        class="ml-3 text-xs font-medium text-danger-600 hover:text-danger-700">Elimina</button>
+                                        class="ml-3 text-xs font-medium text-danger-600 hover:text-danger-800">Elimina</button>
                                 @endcan
                             </td>
                         </tr>
