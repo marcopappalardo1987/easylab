@@ -138,8 +138,18 @@
                             </x-app.nav-link>
                         @endcan
 
-                        <p class="px-3 pt-4 pb-1 text-xs font-semibold tracking-wide text-neutral-400 uppercase">Prossimamente</p>
-                        <x-app.nav-link :disabled="true">Interventi</x-app.nav-link>
+                        {{-- La sezione «Prossimamente» con la voce «Interventi»
+                             disabilitata è stata tolta il 25 Ago 2026, ed è la stessa
+                             bugia della card rimossa dalla dashboard il 21 Ago, in un
+                             altro punto dello schermo: gli interventi esistono da S3 —
+                             nel tab della scheda, in `/campo`, nel digest — e ciò che
+                             non esiste è un elenco **cross-macchina**, che con S6
+                             chiuso non ha più uno sprint che lo porti. Un
+                             «prossimamente» senza referente è peggio di un'assenza:
+                             promette a chi guarda una pagina che nessuno sta
+                             scrivendo. La lacuna è dichiarata in roadmap, con dove si
+                             rispondono oggi le due domande vere — «cosa scade» dalla
+                             dashboard, «cosa devo fare io» da `/campo`. --}}
                     </nav>
                 </aside>
 
