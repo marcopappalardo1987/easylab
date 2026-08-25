@@ -452,10 +452,14 @@ class Strumento extends Model implements ReachesStrumento
      * INCLUSIVO: installato esattamente N anni fa oggi è già obsoleto.
      *
      * @param  Builder<Strumento>  $query
+     * @param  array<int, int>|null  $soglie  gia lette, per non rileggerle
      */
-    public function scopeObsoleti(Builder $query): void
+    public function scopeObsoleti(Builder $query, ?array $soglie = null): void
     {
-        $soglie = self::soglieDegliEntiVisibili();
+        // Le soglie si possono passare gia lette: chi compone piu conteggi
+        // nella stessa passata (le metriche del parco) le paga una volta sola
+        // invece di una per conteggio.
+        $soglie ??= self::soglieDegliEntiVisibili();
 
         // ⚠️ **Oggi non è raggiungibile, e resta lo stesso.** Col fallback di
         // `soglieDegliEntiVisibili()` ogni `tenant_id` visibile ha sempre una
@@ -505,7 +509,7 @@ class Strumento extends Model implements ReachesStrumento
      *
      * @return array<int, int>
      */
-    protected static function soglieDegliEntiVisibili(): array
+    public static function soglieDegliEntiVisibili(): array
     {
         $tenantIds = self::query()->distinct()->pluck('tenant_id')->all();
 
