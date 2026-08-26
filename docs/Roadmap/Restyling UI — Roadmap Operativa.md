@@ -363,23 +363,25 @@ Le due revisioni e il cancello di §4 sono **impliciti in ogni task** e non si r
 
 ### 🧱 F0 — Fondamenta *(serie stretta: tutte le altre corsie sono ferme)*
 
-- [ ] `[CORE]` **F0.1 — La flotta esiste davvero.** Sette definizioni in `.claude/agents/` col modello e il
+- [x] `[CORE]` **F0.1 — La flotta esiste davvero.** Sette definizioni in `.claude/agents/` col modello e il
       ragionamento nel frontmatter, più `.restyling/` in `.gitignore` e lo scheletro `lock/ fatto/ scatti/`.
       *Esecutore: fondamenta (Opus, `xhigh`).* · **write-set:** `.claude/agents/**`, `.gitignore` ·
       **dipendenze:** nessuna.
       **DoD:** i sette agenti si elencano; un agente lanciato a vuoto riporta il proprio modello.
       *Perché per primo: senza, «agente specializzato» resta una convenzione di prompt, e il modello sbagliato
       si sceglie per distrazione invece che per decisione.*
+      ✅ *(26 Ago 2026 — sette agenti in `.claude/agents/`. ⚠️ **La DoD non è stata soddisfatta come scritta**: le definizioni si caricano all'**avvio** della sessione, quindi il primo giro è stato orchestrato forzando il modello a mano. Dal giro successivo sono registrate. Chi rilegge non ha trovato un bug: la riga era ottimistica)*
 
-- [ ] `[CORE]` **F0.2 — ADR-034: il tema chiaro/scuro.** La decisione di §1.3 messa per iscritto dove il
+- [x] `[CORE]` **F0.2 — ADR-034: il tema chiaro/scuro.** La decisione di §1.3 messa per iscritto dove il
       progetto tiene le decisioni: i tre stati, perché il DB è la verità e `localStorage` la cache, perché lo
       script degli ospiti è inline e sincrono, perché serve `color-scheme`, e la conseguenza scomoda —
       **la superficie di verifica raddoppia**, ogni pagina va guardata due volte.
       *Esecutore: fondamenta (Opus, `xhigh`).* · **write-set:** `../Architettura/Decisioni Architetturali.md` ·
       **dipendenze:** nessuna.
       **DoD:** ADR-034 presente, numerata dopo la 033, con Contesto/Decisione/Conseguenze.
+      ✅ *(26 Ago 2026 — ADR-034 scritta, con la conseguenza che la superficie di verifica **raddoppia**)*
 
-- [ ] `[CORE]` **F0.3 — Design System §8, «Tema scuro e strato semantico».** La tabella completa dei token
+- [x] `[CORE]` **F0.3 — Design System §8, «Tema scuro e strato semantico».** La tabella completa dei token
       semantici coi due valori affiancati (chiaro | scuro), la regola *«le scale non cambiano, i semantici
       sì»*, la mappatura di §1.2, il token `--overlay` con la sua motivazione, e le quattro eccezioni che
       restano su token di scala.
@@ -389,8 +391,9 @@ Le due revisioni e il cancello di §4 sono **impliciti in ogni task** e non si r
       dello storico e i test citano le sezioni **per numero**. Si aggiunge §8 in coda e si aggiorna il solo
       riquadro di **Stato** in testa.
       **DoD:** §8 esiste; i titoli §1–§7 sono **byte per byte** quelli di prima (verificato con `diff`).
+      ✅ *(26 Ago 2026 — §8 in coda, e §1–§7 verificate **byte per byte** identiche con `diff`. Il revisore ha aggiunto `--surface-code` e aveva ragione: l'app ha superfici monospazio (stack trace, matrice ruoli))*
 
-- [ ] `[CORE]` **F0.4 — `app.css`: ADR-033 attuata, e nasce lo strato semantico.** 🔗 DS §2, §6, §8.
+- [x] `[CORE]` **F0.4 — `app.css`: ADR-033 attuata, e nasce lo strato semantico.** 🔗 DS §2, §6, §8.
       *Esecutore: fondamenta (Opus, `xhigh`).* · **write-set:** `resources/css/app.css` · **dipendenze:** F0.3.
       Contenuto: il teal esce e la scala `primary` diventa i **11 gradini del blu** (400 e 600 ancorati agli
       hex del logo) · `neutral-950`, `success-50`, `warning-600`, `danger-50`, `obsolete-50/100/700`,
@@ -402,11 +405,13 @@ Le due revisioni e il cancello di §4 sono **impliciti in ogni task** e non si r
       ⚠️ Un solo `@theme`, piatto (§1.1).
       **DoD:** `npm run build` passa; `PaletteGuardrailTest` verde; un confronto a schermo fra il campione e
       l'app mostra lo **stesso blu**.
+      ✅ *(26 Ago 2026 — il teal è uscito. ⚠️ **L'architettura è stata misurata, non dedotta**: Tailwind v4 fa tree-shaking dei token `@theme` non usati, e lo strato semantico vive fuori da `@theme` — se il compilatore non seguisse i `var()`, `--ink: var(--color-neutral-900)` si risolverebbe nel nulla. Costruito il bundle e letto: segue. Verificato a schermo che `/login` renda `#06589C`, lo stesso blu del logo)*
 
-- [ ] `[CORE]` **F0.5 — Le tre reti, prima di migrare e non dopo.** 🛡️
+- [x] `[CORE]` **F0.5 — Le tre reti, prima di migrare e non dopo.** 🛡️
       *Esecutore: fondamenta (Opus, `xhigh`).* · **write-set:** `tests/Feature/PaletteGuardrailTest.php`,
       `tests/Feature/TemaScuroGuardrailTest.php` *(nuovo)*,
       `tests/Feature/SuperficiTokenizzateGuardrailTest.php` *(nuovo)*, `tests/Pest.php` · **dipendenze:** F0.4.
+      ✅ *(26 Ago 2026 — tre reti, 17 test nuovi, **sei** prove di mutazione. `DA_MIGRARE` parte da **51 file**. 🔴 Il difetto sospettato nel blocco `@media print` **esisteva, ed erano nove token**: stampando col tema scuro attivo, `--chart-band: #0e2740` disegnava una fascia quasi nera attraverso il foglio. La quarta asserzione su `DA_MIGRARE` — «non tenere un file già pulito» — fa **accorciare la lista da sola**)*
 
       1. **`PaletteGuardrailTest` esteso ai token senza gradino.** Oggi deriva le tonalità da
          `--color-([a-z]+)-(\d{2,3})`: `--color-surface` **non ha un numero**, quindi non entra né fra le

@@ -4,9 +4,35 @@
     $role = $user?->getRoleNames()->first();
     $initials = \Illuminate\Support\Str::of($user?->name ?? '')
         ->explode(' ')->filter()->map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)))->take(2)->implode('');
+
+    // Il tema, deciso QUI e non dal browser (🔗 ADR-034 punto 3 — DS §8.3).
+    //
+    // Per l'autenticato la preferenza sta in `users.tema` e il server la sa già
+    // mentre compone la pagina: renderla nell'`<html>` significa **zero lampo e
+    // zero JavaScript nel percorso critico**. Lo script che serve agli ospiti —
+    // che una preferenza a database non ce l'hanno — qui sarebbe un
+    // peggioramento: girerebbe dopo il primo layout, cioè dopo il lampo che
+    // esiste per evitare.
+    //
+    // `oSistema()` e non `->tema` nudo: la colonna è NOT NULL, ma un `User`
+    // costruito in memoria (una factory, un utente non ancora riletto) non ha
+    // riletto il default dello schema e porta `null`. Segue il sistema, come da
+    // default — mai un errore su ogni pagina per un attributo mancante.
+    $tema = \App\Enums\TemaUtente::oSistema($user?->tema);
+    $attributoTema = $tema->attributoHtml();
 @endphp
 <!DOCTYPE html>
-<html lang="it" class="h-full">
+{{-- ⚠️ Con `sistema` l'attributo `data-theme` **non si scrive affatto**: è
+     l'assenza a far decidere il sistema operativo (ADR-034 punto 2). Un
+     `data-theme=""` non sarebbe la stessa cosa — inciamperebbe nel
+     `:not([data-theme="light"])` di `app.css` e spegnerebbe in silenzio la
+     media query, cioè proprio la preferenza che si voleva rispettare.
+
+     `data-tema-utente` porta invece **sempre** il valore di dominio, i tre
+     stati distinti: serve al client per accorgersi che `localStorage` dice
+     un'altra cosa rispetto al database e riallinearsi. Senza di esso «segui il
+     sistema» e «il server non ha detto niente» sarebbero indistinguibili. --}}
+<html lang="it" class="h-full" data-tema-utente="{{ $tema->value }}"@if ($attributoTema !== null) data-theme="{{ $attributoTema }}"@endif>
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
