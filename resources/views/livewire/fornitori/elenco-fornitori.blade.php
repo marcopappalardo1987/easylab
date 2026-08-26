@@ -2,8 +2,8 @@
 
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-bold tracking-tight text-neutral-900">Fornitori</h1>
-            <p class="mt-1 text-sm text-neutral-600">
+            <h1 class="text-2xl font-bold tracking-tight text-ink">Fornitori</h1>
+            <p class="mt-1 text-sm text-ink-2">
                 Da chi sono state acquistate le macchine. Ogni macchina ha un fornitore solo.
             </p>
         </div>
@@ -12,8 +12,10 @@
         @endcan
     </div>
 
+    {{-- ⚠️ Il bordo era `border-warning-500`: come nel registro di audit, il
+         campione non porta un bordo colorato sull'alert — lo fa solo il fondo. --}}
     @if ($notice)
-        <div class="mt-4 rounded-md border border-warning-500 bg-warning-50 px-4 py-3 text-sm text-neutral-800">
+        <div class="mt-4 rounded-md border border-transparent bg-warn-soft px-4 py-3 text-sm text-warn-soft-ink">
             {{ $notice }}
         </div>
     @endif
@@ -21,7 +23,7 @@
     <x-ui.card class="mt-6 !p-0">
         <div class="overflow-x-auto">
             <table class="w-full text-left text-sm">
-                <thead class="border-b border-neutral-200 text-xs tracking-wide text-neutral-400 uppercase">
+                <thead class="border-b border-border text-xs tracking-wide text-ink-3 uppercase">
                     <tr>
                         <th class="px-4 py-3 font-semibold">Ragione sociale</th>
                         <th class="px-4 py-3 font-semibold">Email</th>
@@ -30,27 +32,27 @@
                         <th class="px-4 py-3 font-semibold"><span class="sr-only">Azioni</span></th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-neutral-100">
+                <tbody class="divide-y divide-border">
                     @forelse ($fornitori as $fornitore)
                         <tr wire:key="forn-{{ $fornitore->id }}">
-                            <td class="px-4 py-3 font-medium text-neutral-900">{{ $fornitore->ragione_sociale }}</td>
-                            <td class="px-4 py-3 text-neutral-600">{{ $fornitore->email ?: '—' }}</td>
-                            <td class="px-4 py-3 text-neutral-600">{{ $fornitore->telefono ?: '—' }}</td>
-                            <td class="px-4 py-3 tabular-nums text-neutral-600">{{ $fornitore->strumenti_count }}</td>
+                            <td class="px-4 py-3 font-medium text-ink">{{ $fornitore->ragione_sociale }}</td>
+                            <td class="px-4 py-3 text-ink-2">{{ $fornitore->email ?: '—' }}</td>
+                            <td class="px-4 py-3 text-ink-2">{{ $fornitore->telefono ?: '—' }}</td>
+                            <td class="px-4 py-3 tabular-nums text-ink-2">{{ $fornitore->strumenti_count }}</td>
                             <td class="px-4 py-3 text-right whitespace-nowrap">
                                 @can('fornitori.update')
                                     <button type="button" wire:click="edit({{ $fornitore->id }})"
-                                        class="text-xs font-medium text-primary-600 hover:text-primary-700">Modifica</button>
+                                        class="text-xs font-medium text-brand hover:text-brand-hover">Modifica</button>
                                 @endcan
                                 @can('fornitori.delete')
                                     <button type="button" wire:click="confermaElimina({{ $fornitore->id }})"
-                                        class="ml-3 text-xs font-medium text-danger-600 hover:text-danger-800">Elimina</button>
+                                        class="ml-3 text-xs font-medium text-bad-dot hover:brightness-90">Elimina</button>
                                 @endcan
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="px-4 py-10 text-center text-sm text-neutral-400">
+                            <td colspan="5" class="px-4 py-10 text-center text-sm text-ink-3">
                                 Nessun fornitore. Aggiungine uno per poterlo associare alle macchine.
                             </td>
                         </tr>
@@ -79,7 +81,7 @@
 
     @if ($deletingId !== null)
         <x-ui.modal title="Eliminare il fornitore?">
-            <p class="text-sm text-neutral-600">
+            <p class="text-sm text-ink-2">
                 L'operazione è reversibile (soft delete). Un fornitore ancora associato a delle macchine
                 non può essere eliminato: vanno prima riassegnate.
             </p>

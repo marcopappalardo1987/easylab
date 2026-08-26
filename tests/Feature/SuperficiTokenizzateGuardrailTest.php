@@ -86,33 +86,7 @@
  * @var list<string> percorsi relativi alla radice del progetto
  */
 const DA_MIGRARE = [
-    'resources/views/auth/confirm-password.blade.php',
-    'resources/views/auth/forgot-password.blade.php',
-    'resources/views/auth/imposta-password-invito.blade.php',
-    'resources/views/auth/login.blade.php',
-    'resources/views/auth/reset-password.blade.php',
-    'resources/views/auth/two-factor-challenge.blade.php',
-    'resources/views/auth/verify-email.blade.php',
-    'resources/views/bloccato.blade.php',
-    'resources/views/livewire/anagrafica/albero.blade.php',
-    'resources/views/livewire/campo/home.blade.php',
-    'resources/views/livewire/dashboard/home.blade.php',
-    'resources/views/livewire/fornitori/elenco-fornitori.blade.php',
-    'resources/views/livewire/notifiche/campanella.blade.php',
-    'resources/views/livewire/ricambi/ricerca-ricambi.blade.php',
-    'resources/views/livewire/settings/preferenze-notifiche.blade.php',
-    'resources/views/livewire/settings/two-factor-authentication.blade.php',
-    'resources/views/livewire/strumenti/_documenti.blade.php',
-    'resources/views/livewire/strumenti/_form-fields.blade.php',
-    'resources/views/livewire/strumenti/_garanzie.blade.php',
-    'resources/views/livewire/strumenti/_interventi.blade.php',
-    'resources/views/livewire/strumenti/_ricambi.blade.php',
-    'resources/views/livewire/strumenti/_tabs.blade.php',
-    'resources/views/livewire/strumenti/elenco-strumenti.blade.php',
-    'resources/views/livewire/strumenti/import-strumenti.blade.php',
-    'resources/views/livewire/strumenti/modelli-strumenti.blade.php',
     'resources/views/livewire/strumenti/stampa-qr.blade.php',
-    'resources/views/livewire/tenancy/switcher-ente.blade.php',
     'resources/views/vendor/livewire/tailwind.blade.php',
     'resources/views/welcome.blade.php',
 ];
@@ -164,6 +138,13 @@ function esenzioniDiSuperficie(): array
             // `bg-neutral-900` è il pulsante «Esci» dentro il banner, alle opacità
             // /10 e /20: sta sul giallo, non sulla superficie della pagina.
             'percorso' => 'resources/views/components/layouts/app.blade.php',
+            // ⚠️ **`bg-neutral-900` copre anche `bg-neutral-900/10` e `/20`**, che
+            //    sono le due opacità del pulsante «Esci» del banner: il rilevatore
+            //    normalizza la classe togliendo varianti **e suffisso di opacità**,
+            //    quindi elencare le opacità per esteso non funzionerebbe — verificato
+            //    provandolo, e la rete è diventata rossa su `bg-neutral-900`.
+            //    L'esenzione è quindi più larga di come si legge: vale per ogni
+            //    opacità di quel grigio, in questo file soltanto.
             'classi' => ['bg-warning-500', 'text-neutral-900', 'bg-neutral-900'],
             'ancora' => "app('impersonate')->isImpersonating()",
             'perche' => 'banner di impersonation: identico nei due temi, o non è più lo stesso segnale (DS §5.8)',

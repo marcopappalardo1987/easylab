@@ -20,8 +20,8 @@
 <div class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
 
     <div>
-        <h1 class="text-2xl font-bold tracking-tight text-neutral-900">Dashboard</h1>
-        <p class="mt-1 text-sm text-neutral-600">{{ $perimetro }}</p>
+        <h1 class="text-2xl font-bold tracking-tight text-ink">Dashboard</h1>
+        <p class="mt-1 text-sm text-ink-2">{{ $perimetro }}</p>
     </div>
 
     @can('strumenti.view')
@@ -35,7 +35,7 @@
                  «Nessuno strumento in questo Ente» sarebbe falsa per gli ultimi
                  due, che un Ente pieno ce l'hanno — semplicemente non è loro. --}}
             <x-ui.card class="mt-8">
-                <p class="py-6 text-center text-sm text-neutral-400">Nessuno strumento visibile.</p>
+                <p class="py-6 text-center text-sm text-ink-3">Nessuno strumento visibile.</p>
             </x-ui.card>
         @else
             <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -45,8 +45,8 @@
                      ragione per cui i conteggi passano dagli stessi scope del
                      filtro invece di avere una forma SQL propria. --}}
                 <a href="{{ route('strumenti.index', ['stato' => StatoSemaforo::Verde->value]) }}" wire:navigate
-                   class="rounded-lg transition hover:border-primary-600">
-                    <x-ui.stat-tile :valore="$parco->verdi" class="h-full hover:border-primary-600">
+                   class="rounded-lg transition hover:border-brand">
+                    <x-ui.stat-tile :valore="$parco->verdi" class="h-full hover:border-brand">
                         <x-ui.semaforo :stato="StatoSemaforo::Verde" :label="true" />
                     </x-ui.stat-tile>
                 </a>
@@ -58,15 +58,15 @@
                         'sortBy' => 'prossima_scadenza',
                         'sortDir' => 'asc',
                     ]) }}" wire:navigate
-                   class="rounded-lg transition hover:border-primary-600">
-                    <x-ui.stat-tile :valore="$parco->arancioni" class="h-full hover:border-primary-600">
+                   class="rounded-lg transition hover:border-brand">
+                    <x-ui.stat-tile :valore="$parco->arancioni" class="h-full hover:border-brand">
                         <x-ui.semaforo :stato="StatoSemaforo::Arancione" :label="true" />
                     </x-ui.stat-tile>
                 </a>
 
                 <a href="{{ route('strumenti.index', ['stato' => StatoSemaforo::Rosso->value]) }}" wire:navigate
-                   class="rounded-lg transition hover:border-primary-600">
-                    <x-ui.stat-tile :valore="$parco->rossi" class="h-full hover:border-primary-600">
+                   class="rounded-lg transition hover:border-brand">
+                    <x-ui.stat-tile :valore="$parco->rossi" class="h-full hover:border-brand">
                         <x-ui.semaforo :stato="StatoSemaforo::Rosso" :label="true" />
                     </x-ui.stat-tile>
                 </a>
@@ -76,10 +76,10 @@
                      auto-annulla su una macchina non obsoleta, mentre questa è
                      un'etichetta. Restano allineati i token, non il markup. --}}
                 <a href="{{ route('strumenti.index', ['soloObsoleti' => 1]) }}" wire:navigate
-                   class="rounded-lg transition hover:border-primary-600">
+                   class="rounded-lg transition hover:border-brand">
                     <x-ui.stat-tile :valore="$parco->obsoleti" :dettaglio="$parco->dettaglioObsoleti()"
-                                    class="h-full hover:border-primary-600">
-                        <span class="inline-flex items-center gap-1.5 text-obsolete-500">
+                                    class="h-full hover:border-brand">
+                        <span class="inline-flex items-center gap-1.5 text-obs-dot">
                             <span aria-hidden="true">⏳</span> Obsoleti
                         </span>
                     </x-ui.stat-tile>
@@ -93,9 +93,9 @@
                  il semaforo», quindi una macchina obsoleta è già contata in uno
                  dei tre. Chi prova a sommare deve trovare scritto perché non
                  torna, come già fa la cabina di regia coi propri KPI. --}}
-            <p class="mt-2 text-xs text-neutral-500">
+            <p class="mt-2 text-xs text-ink-3">
                 Le prime tre coprono tutte le {{ number_format($parco->totale(), 0, ',', '.') }} macchine che vedi.
-                Gli <span class="text-obsolete-500">obsoleti</span> sono una segnalazione sull'età e non uno stato
+                Gli <span class="text-obs-dot">obsoleti</span> sono una segnalazione sull'età e non uno stato
                 manutentivo: sono già contati in una delle tre.
             </p>
         @endif
@@ -115,10 +115,10 @@
     @can('tenants.view_all')
         <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <a href="{{ route('piattaforma.index') }}"
-               class="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm transition hover:border-primary-600">
-                <h2 class="font-semibold text-neutral-900">🏢 Piattaforma</h2>
-                <p class="mt-1 text-sm text-neutral-600">I clienti di EasyLab, le loro sedi e lo stato dei contratti.</p>
-                <p class="mt-3 text-sm font-medium text-primary-600">Vai alla cabina di regia &rarr;</p>
+               class="rounded-lg border border-border bg-surface p-6 shadow-sm transition hover:border-brand">
+                <h2 class="font-semibold text-ink">🏢 Piattaforma</h2>
+                <p class="mt-1 text-sm text-ink-2">I clienti di EasyLab, le loro sedi e lo stato dei contratti.</p>
+                <p class="mt-3 text-sm font-medium text-brand">Vai alla cabina di regia &rarr;</p>
             </a>
         </div>
     @endcan
