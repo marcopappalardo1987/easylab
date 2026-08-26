@@ -1,7 +1,16 @@
 <div class="mx-auto w-full max-w-2xl px-4 py-10 sm:px-6">
 
-    {{-- Header --}}
-    <h1 class="text-2xl font-bold tracking-tight text-neutral-900">Notifiche</h1>
+    {{-- Header.
+
+         ⚠️ **La pagina si chiama «Preferenze», l'indirizzo resta
+         `/settings/notifiche`.** Dal 26 Ago 2026 qui non c'è più solo il
+         digest: c'è anche il tema (ADR-034), e un titolo che dicesse
+         «Notifiche» nasconderebbe metà della pagina a chi la cerca. L'URL e il
+         nome della rotta **non** cambiano: sono citati dal menù utente, dal piè
+         di pagina del digest email — cioè da messaggi già spediti — e da due
+         test. Si cambia ciò che l'utente legge, non ciò che l'utente ha già in
+         posta. --}}
+    <h1 class="text-2xl font-bold tracking-tight text-neutral-900">Preferenze</h1>
 
     <div class="mt-8 rounded-lg border border-neutral-200 bg-white p-6 shadow-sm md:p-8">
 
@@ -42,5 +51,39 @@
                   x-show="visibile" x-cloak
                   class="text-sm text-success-600">Preferenze salvate.</span>
         </div>
+    </div>
+
+    {{-- Il tema (🔗 ADR-034 — DS §8.3).
+
+         ⚠️ **Questo blocco nasce già sui token semantici** (`bg-surface`,
+         `text-ink`, `border-border`) mentre il resto della pagina è ancora
+         sulle scale: il file è in `DA_MIGRARE` e ci resta finché F4-C3 non lo
+         migra per intero. Scriverlo qui con `bg-white` avrebbe voluto dire
+         scrivere del lavoro da rifare — e in tema chiaro le due forme sono
+         **lo stesso pixel**, quindi la pagina non si sfalsa nel frattempo.
+
+         ⚠️ **Nessun «Salva» qui**, a differenza del digest sopra: il tema si
+         applica nel millisecondo del click e la colonna si scrive nello stesso
+         gesto. Un bottone in mezzo significherebbe una pagina già scura e un
+         database ancora chiaro — cioè un tema che si dimentica al primo
+         ricaricamento. La differenza fra le due sezioni è dichiarata nel testo,
+         non lasciata indovinare. --}}
+    <div class="mt-6 rounded-lg border border-border bg-surface p-6 shadow-sm md:p-8">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+                <h2 class="font-semibold text-ink">Tema</h2>
+                <p class="mt-1 text-sm text-ink-2">
+                    <strong>Sistema</strong> segue il tuo dispositivo, e cambia da sé quando
+                    cambia lui. Chiaro e scuro valgono ovunque tu entri con questo account:
+                    la scelta è tua, non del browser.
+                </p>
+            </div>
+
+            {{-- `temaCorrente` arriva dal `render()`, cioè dalla colonna
+                 `users.tema`: è il server a dire quale dei tre è premuto. --}}
+            <x-ui.selettore-tema :corrente="$temaCorrente" class="shrink-0 self-start" />
+        </div>
+
+        <p class="mt-4 text-sm text-ink-3">La scelta si applica subito: non serve salvare.</p>
     </div>
 </div>

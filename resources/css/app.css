@@ -480,6 +480,64 @@
     }
 }
 
+/*
+ | IL MARCHIO SUL FONDO SCURO — 🔗 ADR-033/034, DS §8.2.
+ |
+ | ⚠️ **Il logo è un `<img>`, e un `<img>` non eredita le variabili CSS della
+ | pagina.** Lo dice ADR-033: un marchio che debba ricolorarsi va inlineato, e
+ | questo non lo fa — i suoi due blu sono il marchio, non un token. Su fondo
+ | scuro servono quindi **due file**, non una variabile, e questo blocco decide
+ | quale dei due si vede.
+ |
+ | Il blu profondo **si alza** da `#06589C` a `primary-200`, non si inverte: su
+ | `--surface` scuro `#111C2E` il blu del logo fa **1,9:1** e sparisce.
+ | L'azzurro `#2997D4` non cambia in nessuno dei due temi.
+ |
+ | ⚠️ **Ogni regola qui sotto NASCONDE, nessuna mostra**, ed è deliberato: il
+ | ripristino di `display` è la parte fragile — `revert` riporterebbe al valore
+ | dell'user agent, cancellando un eventuale `block` passato dal chiamante.
+ | Nascondendo soltanto, l'immagine visibile conserva il proprio display
+ | qualunque esso sia.
+ |
+ | ⛔ **Conseguenza per chi usa `x-brand-logo`:** le due immagini portano le
+ | stesse classi, quindi non passare una classe di `display`. Oggi nessuna delle
+ | due chiamate lo fa (`h-20 w-auto sm:h-24` sull'accesso, `h-7 w-auto` nella
+ | sidebar); il giorno in cui servisse, va sul contenitore.
+ */
+[data-marchio='scuro'] {
+    display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) [data-marchio='chiaro'] {
+        display: none;
+    }
+
+    :root:not([data-theme='light']) [data-marchio='scuro'] {
+        display: revert;
+    }
+}
+
+:root[data-theme='dark'] [data-marchio='chiaro'] {
+    display: none;
+}
+
+:root[data-theme='dark'] [data-marchio='scuro'] {
+    display: revert;
+}
+
+/* In stampa vince sempre il marchio chiaro: il foglio è bianco (vedi il blocco
+   `@media print` qui sopra), e il logo schiarito ci sparirebbe sopra. */
+@media print {
+    [data-marchio='scuro'] {
+        display: none !important;
+    }
+
+    [data-marchio='chiaro'] {
+        display: revert !important;
+    }
+}
+
 /* Dot semaforo (Design System §4): sm in tabella, md in card/header scheda.
    Il glifo porta la forma (● ◐ ■), il colore arriva dalle utility text-*.
    NB: la misura del DS (8px in tabella, 12px in card) è il DIAMETRO del pallino,
