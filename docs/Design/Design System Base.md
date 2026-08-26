@@ -198,6 +198,10 @@ Touch target minimo **44×44px** (campo mobile). Bottoni full-width su mobile ne
 
 > **Realizzata il 21 Ago 2026** come `x-ui.stat-tile` (props `label`, `valore`, `dettaglio`), costruita **sopra `x-ui.card`** invece di ripeterne le classi: la superficie è una decisione sola, e duplicarla qui vorrebbe dire che il giorno in cui cambia il bordo delle card questa resta indietro.
 >
+> ⚠️ **Dal 25 Ago 2026 la `label` accetta anche uno SLOT**, e serve a una cosa sola: la dashboard per ruolo (Wireframe §1) ci mette `x-ui.semaforo`, perché la tripletta di §4 è colore **+ forma + etichetta** e un riquadro che dicesse solo «Azione richiesta» in grigio perderebbe le prime due. Passando invece la parola come prop *e* il pallino accanto, l'etichetta comparirebbe **due volte** nel testo della pagina — una visibile e una in `sr-only` — e ogni asserzione su quel testo diventerebbe ambigua.
+>
+> ⛔ **Ma la label resta obbligatoria**, ed è rimessa a mano con un `throw_if`: prima era un prop senza default, quindi ometterlo era un errore rumoroso. Con `'label' => null` una tile senza etichetta renderebbe **un `<p>` vuoto sopra un numero** — cioè «il numero senza il suo contesto», la cosa che questo componente esiste per impedire, e in silenzio.
+>
 > Il terzo slot, `dettaglio`, non era nella specifica ed è stato aggiunto per una ragione che vale la pena scrivere: **un totale senza il suo contesto è la cifra che poi viene citata da sola**. «Ricavo mensile 588 €» diventa un dato di bilancio in una riunione; «588 € · a listino · 2 clienti bloccati» no. Vale per ogni numero aggregato, non solo per quello.
 >
 > ⚠️ Gli importi si formattano con `number_format` e **non** con `Number::currency()`: quest'ultimo richiede `ext-intl`, che è presente in locale ma **non è installata dalla CI** (`.github/workflows/ci.yml` monta `pdo_pgsql, redis, mbstring, bcmath`). Sarebbe verde sulla macchina e rossa in pipeline — la divergenza che `phpunit.xml` esiste per estirpare.
