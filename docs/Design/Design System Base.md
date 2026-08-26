@@ -511,7 +511,7 @@ semantici: non sono superfici della pagina, sono cose che ci galleggiano sopra. 
 
 | Superficie | Resta | Perché |
 |---|---|---|
-| **Banner di impersonation** (§5.8) | `warning-500` + `neutral-900`, identico nei due temi | è un allarme persistente: deve avere lo **stesso identico aspetto** nei due temi, o smette di essere lo stesso segnale. Già `print:hidden` |
+| **Banner di impersonation** (§5.8) | `warning-500` + `neutral-900`, **e `neutral-900/10` · `/20`** sul pulsante «Esci» | è un allarme persistente: deve avere lo **stesso identico aspetto** nei due temi, o smette di essere lo stesso segnale. Il pulsante sta **sul giallo**, non sulla superficie della pagina, quindi segue il banner e non il tema. Già `print:hidden` |
 | **Toast** (§5.9) | scala: `neutral-900` in chiaro, `neutral-700` in scuro | galleggia sopra tutto: la sua superficie è indipendente da quella della pagina, e su fondo scuro `neutral-900` sparirebbe dentro `--bg` |
 | **Tooltip** | scala: `neutral-900` in chiaro, `neutral-700` in scuro | stesso motivo del toast, ed è la stessa coppia di valori — il campione tratta i due nello stesso modo |
 | **Stampa** | sempre chiara, via `@media print` | il fondo scuro si stampa come una campitura che consuma toner e non dice niente |

@@ -400,6 +400,23 @@
  |
  | ⚠️ È il caso in cui un `@media print` mancante si vede solo stampando con il
  | tema scuro attivo — cioè quasi mai, finché non capita al cliente.
+ |
+ | 🔴 **E il «mancante» non è ipotetico: questo blocco ne aveva nove.** Il blocco
+ | di stampa ha lo **stesso selettore** dei blocchi scuri e vince solo perché
+ | viene dopo — ma vince **soltanto sulle proprietà che dichiara**. Ciò che non
+ | ridichiara conserva il valore scuro. Fino al 26 Ago 2026 qui mancavano gli
+ | otto `--chart-*` e `--ring`: stampando col tema scuro attivo, un grafico
+ | usciva con la griglia blu notte e con `--chart-band` a `#0e2740`, cioè una
+ | **fascia quasi nera** attraverso il foglio. Trovato da `TemaScuroGuardrailTest`,
+ | che da qui in poi tiene l'invariante: *tutto ciò che lo scuro sovrascrive, la
+ | stampa lo riporta*.
+ |
+ | ⚠️ **I valori sono quelli del tema CHIARO, non nuovi.** Questo blocco devia
+ | dal chiaro solo dove il toner lo impone — le superfici tenui a `#ffffff`, i
+ | bordi un gradino più scuro perché un grigio chiarissimo non si stampa — e per
+ | il grafico quella deviazione non è stata verificata su carta: il valore chiaro
+ | è invece esattamente ciò che si ottiene già oggi stampando dal tema chiaro,
+ | cioè l'unico comportamento di cui abbiamo la prova.
  */
 @media print {
     :root,
@@ -440,6 +457,22 @@
         --lock-dot: var(--color-locked-500);
         --lock-soft: #ffffff;
         --lock-soft-ink: var(--color-locked-700);
+
+        --chart-verde: #15803d;
+        --chart-arancione: #ca8a04;
+        --chart-rosso: #b91c1c;
+        --chart-obsoleto: #7c3aed;
+        --chart-brand: #06589c;
+        --chart-grid: var(--color-neutral-200);
+        --chart-axis: var(--color-neutral-400);
+        --chart-band: var(--color-primary-50);
+
+        /* ⚠️ L'anello di fuoco su carta non si vede mai, e proprio per questo
+           era il più facile da dimenticare: si ridichiara perché l'invariante
+           «tutto ciò che lo scuro sovrascrive, la stampa lo riporta» vale per
+           tutti o non vale — un'eccezione «tanto non si stampa» è la crepa da
+           cui rientrano le altre otto. */
+        --ring: var(--color-primary-500);
 
         --overlay: transparent;
         --ombra-sm: none;
