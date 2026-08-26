@@ -6,7 +6,9 @@
 
 {{--
     Riquadro di un numero aggregato (Design System §5.2 — «KPI card: numero
-    text-3xl font-semibold, label text-sm text-neutral-600»).
+    text-3xl font-semibold, label text-sm text-neutral-600»; il gradino di quella
+    citazione è pre-tema e oggi si legge sui semantici di DS §8.2: la label è
+    `text-ink-2`, il numero `text-ink`, il dettaglio `text-ink-3`).
 
     Costruito sopra `x-ui.card` invece di ripeterne le classi: la superficie è
     una decisione sola, e duplicarla qui vorrebbe dire che il giorno in cui
@@ -43,11 +45,11 @@
 @endphp
 
 <x-ui.card {{ $attributes }}>
-    <p class="text-sm text-neutral-600">{{ $label ?? $slot }}</p>
+    <p class="text-sm text-ink-2">{{ $label ?? $slot }}</p>
 
-    <p class="mt-1 text-3xl font-semibold tracking-tight text-neutral-900">{{ is_int($valore) ? number_format($valore, 0, ',', '.') : $valore }}</p>
+    <p class="mt-1 text-3xl font-semibold tracking-tight text-ink">{{ is_int($valore) ? number_format($valore, 0, ',', '.') : $valore }}</p>
 
     @if ($dettaglio)
-        <p class="mt-1 text-xs text-neutral-500">{{ $dettaglio }}</p>
+        <p class="mt-1 text-xs text-ink-3">{{ $dettaglio }}</p>
     @endif
 </x-ui.card>

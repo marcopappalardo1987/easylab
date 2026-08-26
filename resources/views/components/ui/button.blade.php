@@ -3,13 +3,35 @@
     'href' => null,
 ])
 
+{{-- Le quattro varianti di DS §5.1 sui token semantici (DS §8.2), nella forma
+     del campione `.el-btn` — 🔗 `docs/Design/design-system.html`.
+
+     Tre scelte non ovvie, scritte perché non si rifacciano al contrario:
+
+     1. il **secondario** porta il bordo FORTE (`border-border-strong`, il
+        contorno dei campi) e non quello dei divisori: è il bordo che lo tiene
+        distinto dalla superficie su cui sta, in entrambi i temi;
+     2. la **larghezza** del bordo sta nella base e il **colore** in ogni
+        variante. La larghezza perché senza il secondario sarebbe 2px più alto
+        degli altri e una fila «Annulla · Salva» non si allineerebbe; il colore
+        perché due utility di colore sul bordo nella stessa classe non si
+        risolvono nell'ordine in cui sono scritte, ma in quello del foglio
+        generato — verificato: il trasparente vinceva, e il secondario restava
+        senza contorno;
+     3. l'anello di fuoco è **un token solo** (`ring-ring`, DS §8.2 nota 3),
+        anche sul pericolo. ⚠️ Il colore dello *stacco* dell'anello va dichiarato:
+        il suo valore predefinito è il bianco, che in tema scuro disegnerebbe un
+        alone chiaro attorno a ogni bottone messo a fuoco. --}}
 @php
-    $base = 'inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed';
+    $base = 'inline-flex items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-canvas disabled:opacity-60 disabled:cursor-not-allowed';
     $variants = [
-        'primary' => 'bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-600',
-        'secondary' => 'border border-neutral-200 bg-white text-neutral-800 hover:bg-neutral-50 focus:ring-primary-600',
-        'danger' => 'bg-danger-500 text-white hover:bg-danger-600 focus:ring-danger-500',
-        'ghost' => 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 focus:ring-primary-600',
+        'primary' => 'border-transparent bg-brand text-brand-ink hover:bg-brand-hover',
+        'secondary' => 'border-border-strong bg-surface text-ink hover:bg-surface-sunken',
+        // Il campione scurisce il pericolo con un filtro invece che con un
+        // secondo gradino: `--bad-dot` è l'unico token del rosso pieno, e nei
+        // due temi parte da due valori diversi.
+        'danger' => 'border-transparent bg-bad-dot text-ink-inverse hover:brightness-90',
+        'ghost' => 'border-transparent text-ink-2 hover:bg-surface-sunken hover:text-ink',
     ];
     $classes = $base.' '.($variants[$variant] ?? $variants['primary']);
 @endphp
