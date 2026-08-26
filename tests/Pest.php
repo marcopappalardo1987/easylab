@@ -336,17 +336,20 @@ function famiglieDelTema(?string $css = null): array
  * Toglie da un sorgente ciò che **sembra** markup e non lo è.
  *
  * **Due difese contro il CSS letto come markup, e va detto quale delle due
- * lavora davvero.** Il repository *contiene* un foglio di stile dentro una
- * vista: `welcome.blade.php` — la pagina di benvenuto di Laravel, che questo
- * progetto non instrada da nessuna parte — porta inlinato un **intero build di
- * Tailwind v4.0.7**.
+ * lavora davvero.**
  *
- * ⚠️ **Misurato il 25 Ago 2026, e il risultato non è quello che sembrava**: di
- * quel foglio, ciò che nomina le nostre famiglie sono le **dichiarazioni**
- * `--color-neutral-300: …` nel `:root`, non delle utility — quel build genera
- * `.text-neutral-*` solo se la pagina le usa, e non le usa. A tenerle fuori è
- * quindi il vincolo sul **prefisso** (`bg|text|border|…`), che una dichiarazione
- * di variabile non ha; lo stripping dei `<style>` oggi non toglie **niente**.
+ * ⚠️ **Fino al 26 Ago 2026 il repository conteneva un foglio di stile dentro una
+ * vista**: `welcome.blade.php`, la pagina di benvenuto di Laravel che nessuna
+ * rotta serviva, portava inlinato un **intero build di Tailwind v4.0.7**. È
+ * stata cancellata dal restyling, quindi **oggi quel caso non esiste più nel
+ * repository** — e va detto, perché è la premessa che rendeva concreto ciò che
+ * segue.
+ *
+ * Già allora, misurato: di quel foglio ciò che nominava le nostre famiglie erano
+ * le **dichiarazioni** `--color-neutral-300: …` nel `:root`, non delle utility.
+ * A tenerle fuori era quindi il vincolo sul **prefisso** (`bg|text|border|…`),
+ * che una dichiarazione di variabile non ha; lo stripping dei `<style>` non
+ * toglieva **niente** nemmeno allora.
  *
  * Resta lo stesso, ed è una scelta: costa una `preg_replace`, la regola che
  * esprime è vera in generale («il CSS non è markup») e il giorno in cui quella

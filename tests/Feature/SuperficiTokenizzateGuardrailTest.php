@@ -57,9 +57,12 @@
  *   giusti e restare illeggibile: `text-ink-3` su `bg-surface-sunken` passa di
  *   qui indisturbato. Il contrasto nei due temi resta una verifica **visiva e
  *   manuale** (DS §8.5), e ADR-034 lo mette fra le proprie conseguenze.
- * - **Non vede la variante `dark:`**, che DS §8.1 vieta. Oggi ne esiste ancora
- *   in `welcome.blade.php`; il divieto non ha una rete propria, ed è un buco
- *   dichiarato — chi lo chiuderà troverà qui il posto giusto.
+ * - **Non vede la variante `dark:`**, che DS §8.1 vieta. Dal 26 Ago 2026 non ne
+ *   esiste **nessuna** nel repository (l'ultima stava in `welcome.blade.php`,
+ *   cancellata), quindi una rete nascerebbe verde e resterebbe verde per
+ *   assenza di caso — che è il modo in cui una guardia si crede al lavoro senza
+ *   esserlo. Il divieto resta senza rete: è un buco **dichiarato**, e chi lo
+ *   chiuderà troverà qui il posto giusto.
  * - **Non vede un colore scritto in CSS a mano** (`style="background:#fff"` o un
  *   `background-color` dentro `app.css`): legge classi Tailwind, non stili. È
  *   già successo — `@utility tabella-a-card` aveva `background-color: white` — e
@@ -79,16 +82,16 @@
  * lavorando — cioè esattamente il gesto contro cui la rete esiste. Se un file
  * nuovo usa classi di scala, la risposta è tokenizzarlo, non elencarlo.
  *
- * ⚠️ `welcome.blade.php` è la pagina di benvenuto di Laravel e **nessuna rotta
- * la serve**, ma resta in lista di proposito: «si migra o si cancella» è una
- * decisione, e una decisione va presa: esentarla sarebbe evitarla per sempre.
+ * ✅ *`welcome.blade.php` è stata **cancellata** il 26 Ago 2026 (F6.1). Era la
+ * pagina di benvenuto di Laravel, non servita da nessuna rotta, e da sola
+ * concentrava il 100% degli hex inline, delle classi `gray-*`/`blue-*` e delle
+ * varianti `dark:` del repository. Stava in questa lista di proposito — «si
+ * migra o si cancella» è una decisione, ed esentarla sarebbe stato evitarla per
+ * sempre.*
  *
  * @var list<string> percorsi relativi alla radice del progetto
  */
 const DA_MIGRARE = [
-    'resources/views/livewire/strumenti/stampa-qr.blade.php',
-    'resources/views/vendor/livewire/tailwind.blade.php',
-    'resources/views/welcome.blade.php',
 ];
 
 /**
@@ -273,15 +276,33 @@ function superficiNonTokenizzate(): array
     return $fuori;
 }
 
-it('finds scale classes somewhere, so the comparison cannot pass for being empty', function () {
+it('still detects a scale class, so the comparison cannot pass for being empty', function () {
     // 🔴 Tutta la rete poggia su una regex e su `famiglieDelTema()`. Se una delle
-    // due smettesse di trovare qualcosa, «nessun file migrato usa una scala»
-    // diventerebbe `[] ⊆ []`, cioè verde per sempre — e verde proprio mentre le
-    // viste tornano a riempirsi di `bg-white`. È la stessa rete che
-    // `PaletteGuardrailTest` e `SorgentiTailwindGuardrailTest` mettono davanti
-    // ai propri insiemi derivati.
-    expect(famiglieDelTema())->toContain('neutral', 'primary', 'danger')
-        ->and(superficiNonTokenizzate())->not->toBeEmpty();
+    // due smettesse di trovare qualcosa, «nessun file usa una scala» diventerebbe
+    // `[] ⊆ []`, cioè verde per sempre — e verde **proprio mentre** le viste
+    // tornano a riempirsi di `bg-white`. È la stessa rete che
+    // `PaletteGuardrailTest` e `SorgentiTailwindGuardrailTest` mettono davanti ai
+    // propri insiemi derivati.
+    //
+    // ⚠️ **Fino al 27 Ago 2026 questa guardia si appoggiava al repository**
+    // (`superficiNonTokenizzate()` non vuota), e funzionava solo perché la
+    // migrazione era in corso. Finita quella, l'assenza di classi di scala è
+    // diventata il **risultato atteso**, e la guardia sarebbe stata rossa per
+    // aver avuto successo. Ora si prova su un sorgente **sintetico**: il caso
+    // esiste sempre, perché lo scriviamo noi — invece di sperare che il
+    // repository contenga ancora un difetto da trovare.
+    $famiglie = famiglieDelTema();
+
+    expect($famiglie)->toContain('neutral', 'primary', 'danger');
+
+    // Ciò che DEVE essere visto, comprese le varianti e i lati.
+    expect(classiDiScalaNelSorgente('<div class="bg-white">x</div>', $famiglie))->toContain('bg-white')
+        ->and(classiDiScalaNelSorgente('<p class="text-neutral-800">x</p>', $famiglie))->toContain('text-neutral-800')
+        ->and(classiDiScalaNelSorgente('<a class="hover:bg-primary-600">x</a>', $famiglie))->toContain('hover:bg-primary-600')
+        ->and(classiDiScalaNelSorgente('<td class="border-t-neutral-200">x</td>', $famiglie))->toContain('border-t-neutral-200');
+
+    // E ciò che NON deve: i token semantici sono l'arrivo, non la partenza.
+    expect(classiDiScalaNelSorgente('<div class="bg-surface text-ink border-border">x</div>', $famiglie))->toBe([]);
 });
 
 it('never lets a migrated view go back to a scale colour', function () {
@@ -343,14 +364,30 @@ it('never lets DA_MIGRARE keep a file that is already clean', function () {
     );
 });
 
-it('keeps DA_MIGRARE non-empty until F6.3 says the migration is over', function () {
-    // ⚠️ **Il giorno in cui la lista si svuota, qualcuno deve venire qui a
-    // dirlo.** Senza questo test la fine della migrazione sarebbe un non-evento:
-    // la lista arriva a zero, i due controlli qui sopra restano verdi per vuoto,
-    // e nessuno registra che da quel momento **l'intero repository** è sotto
-    // rete — che è invece la notizia. F6.3 cancella questo test e la costante
-    // insieme.
-    expect(DA_MIGRARE)->not->toBeEmpty();
+it('records that the migration is over, and that the whole repository is now under the net', function () {
+    // ✅ **27 Ago 2026 — la lista è vuota, e questa riga è il gesto di dirlo.**
+    //
+    // Fino a ieri qui c'era l'asserzione opposta (`not->toBeEmpty()`), con una
+    // ragione: il giorno in cui la lista si fosse svuotata, qualcuno doveva
+    // **venire qui a scriverlo**. Senza, la fine della migrazione sarebbe stata
+    // un non-evento — la lista arriva a zero, i due controlli qui sopra restano
+    // verdi *per vuoto*, e nessuno registra la notizia.
+    //
+    // La notizia è questa: da adesso **`never lets a migrated view go back to a
+    // scale colour` copre l'intero repository**, non più un sottoinsieme. Ogni
+    // vista, ogni componente, ogni file che Tailwind scansiona.
+    //
+    // ⛔ **La costante resta, vuota, e non si cancella.** È il posto in cui si
+    // vedrebbe una regressione di processo: se qualcuno ci rimettesse dentro un
+    // file per far passare la suite, questo test diventerebbe rosso e direbbe
+    // che la migrazione è stata *disfatta*, invece di lasciarlo passare come una
+    // riga in più in un elenco.
+    expect(DA_MIGRARE)->toBe([],
+        "`DA_MIGRARE` è tornata a contenere qualcosa.\n\n".
+        "Quella lista si è svuotata il 27 Ago 2026 e da allora l'intera applicazione è sotto rete.\n".
+        "Rimetterci dentro un file significa spegnere il guardrail proprio sul file su cui si sta\n".
+        'lavorando — che è il gesto contro cui questa rete esiste. Si tokenizza, non si elenca.'
+    );
 });
 
 it('never lets an exemption survive what it exempts', function () {
