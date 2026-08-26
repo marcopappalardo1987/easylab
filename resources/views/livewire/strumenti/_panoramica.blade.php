@@ -61,18 +61,18 @@
 
     {{-- 1. Stato e motivi — il cuore del tab: perché il semaforo è così. --}}
     <x-ui.card>
-        <p class="text-sm font-medium text-neutral-600">Stato</p>
+        <p class="text-sm font-medium text-ink-2">Stato</p>
         <div class="mt-2">
             <x-ui.semaforo :stato="$diagnosi->stato" size="md" :label="true" />
         </div>
 
         @if (count($diagnosi->motivi) === 0)
-            <p class="mt-3 text-sm text-neutral-400">Nessuna scadenza aperta o imminente.</p>
+            <p class="mt-3 text-sm text-ink-3">Nessuna scadenza aperta o imminente.</p>
         @else
-            <p class="mt-4 text-xs font-medium tracking-wide text-neutral-400 uppercase">
+            <p class="mt-4 text-xs font-medium tracking-wide text-ink-3 uppercase">
                 Motivi ({{ count($diagnosi->motivi) }})
             </p>
-            <ul class="mt-2 divide-y divide-neutral-100">
+            <ul class="mt-2 divide-y divide-border">
                 @foreach ($diagnosi->motivi as $motivo)
                     @php
                         $visibile = $areaVisibile($motivo);
@@ -80,18 +80,18 @@
                     @endphp
                     <li wire:key="motivo-{{ $motivo->tipo->value }}-{{ $motivo->riferimentoId }}"
                         class="flex items-start justify-between gap-3 py-2.5 text-sm">
-                        <span class="text-neutral-800">
+                        <span class="text-ink">
                             {{-- Colore + simbolo + testo, mai il solo colore (Design System §4). --}}
-                            <span aria-hidden="true" class="{{ $motivo->scaduto ? 'text-danger-600' : 'text-warning-500' }}">{{ $motivo->scaduto ? '✗' : '◐' }}</span>
+                            <span aria-hidden="true" class="{{ $motivo->scaduto ? 'text-bad-dot' : 'text-warn-dot' }}">{{ $motivo->scaduto ? '✗' : '◐' }}</span>
                             {{ $testoMotivo($motivo, $visibile) }}
                             <span class="tabular-nums">{{ $motivo->scadenza->format('d/m/Y') }}</span>
                             @if ($visibile && $motivo->dettaglio)
-                                <span class="text-neutral-400">· {{ $motivo->dettaglio }}</span>
+                                <span class="text-ink-3">· {{ $motivo->dettaglio }}</span>
                             @endif
                         </span>
                         @if ($visibile && $tab !== null)
                             <button type="button" x-on:click="tab = '{{ $tab }}'"
-                                class="shrink-0 text-xs font-medium text-primary-600 hover:text-primary-700"
+                                class="shrink-0 text-xs font-medium text-brand hover:text-brand-hover"
                                 title="Vai alla riga che lo causa">›</button>
                         @endif
                     </li>
@@ -105,7 +105,7 @@
          nasconde i problemi reali (ADR-005), e qui lo si vede. --}}
     @if ($strumento->forced_state !== null)
         <x-ui.card>
-            <p class="text-sm font-medium text-neutral-600">Stato forzato</p>
+            <p class="text-sm font-medium text-ink-2">Stato forzato</p>
             <div class="mt-2">
                 <x-ui.semaforo :stato="$strumento->forced_state" size="md" :label="true" />
             </div>
@@ -116,14 +116,14 @@
                     .($strumento->forcedBy ? ' da '.$strumento->forcedBy->name : '')
                     .($strumento->forced_at ? ' il '.$strumento->forced_at->format('d/m/Y') : '');
             @endphp
-            <p class="mt-2 text-xs text-neutral-400">
+            <p class="mt-2 text-xs text-ink-3">
                 <span aria-hidden="true">⚑</span> {{ $tracciamento }}
             </p>
             @if ($strumento->forced_reason)
-                <p class="mt-1 text-sm text-neutral-600">{{ $strumento->forced_reason }}</p>
+                <p class="mt-1 text-sm text-ink-2">{{ $strumento->forced_reason }}</p>
             @endif
-            <p class="mt-3 border-t border-neutral-100 pt-3 text-xs text-neutral-400">
-                Il calcolato resta <span class="font-medium text-neutral-600">{{ $diagnosi->stato->value }}</span>:
+            <p class="mt-3 border-t border-border pt-3 text-xs text-ink-3">
+                Il calcolato resta <span class="font-medium text-ink-2">{{ $diagnosi->stato->value }}</span>:
                 i motivi qui accanto valgono comunque.
             </p>
         </x-ui.card>
@@ -132,30 +132,30 @@
     {{-- 3. Interventi: prossimo pianificato e ultimo eseguito. --}}
     @can('interventi.view')
         <x-ui.card>
-            <p class="text-sm font-medium text-neutral-600">Prossimo intervento</p>
+            <p class="text-sm font-medium text-ink-2">Prossimo intervento</p>
             @if ($prossimoIntervento)
-                <p class="mt-1 text-sm text-neutral-800">
+                <p class="mt-1 text-sm text-ink">
                     <span class="tabular-nums">{{ $prossimoIntervento->data_scadenza->format('d/m/Y') }}</span>
                     · {{ $prossimoIntervento->tipo->label() }}
                 </p>
-                <p class="mt-0.5 text-xs text-neutral-400">
+                <p class="mt-0.5 text-xs text-ink-3">
                     {{ $prossimoIntervento->descrizione }} · {{ $prossimoIntervento->tecnicoLabel() }}
                 </p>
             @else
                 {{-- Anche l'assenza è un'informazione, e va scritta. --}}
-                <p class="mt-1 text-sm text-neutral-400">Nessuno pianificato.</p>
+                <p class="mt-1 text-sm text-ink-3">Nessuno pianificato.</p>
             @endif
 
-            <hr class="my-4 border-neutral-200">
+            <hr class="my-4 border-border">
 
-            <p class="text-sm font-medium text-neutral-600">Ultimo eseguito</p>
+            <p class="text-sm font-medium text-ink-2">Ultimo eseguito</p>
             @if ($ultimoIntervento)
-                <p class="mt-1 text-sm text-neutral-800">
+                <p class="mt-1 text-sm text-ink">
                     <span class="tabular-nums">{{ $ultimoIntervento->data_esecuzione?->format('d/m/Y') }}</span>
                     · {{ $ultimoIntervento->tipo->label() }}
                 </p>
             @else
-                <p class="mt-1 text-sm text-neutral-400">Nessun intervento eseguito.</p>
+                <p class="mt-1 text-sm text-ink-3">Nessun intervento eseguito.</p>
             @endif
         </x-ui.card>
     @endcan
@@ -165,7 +165,7 @@
          permesso diverso, e vivono nel tab Ricambi (S4 blocco 5). --}}
     @can('garanzie.macchina.view')
         <x-ui.card>
-            <p class="text-sm font-medium text-neutral-600">Garanzia macchina</p>
+            <p class="text-sm font-medium text-ink-2">Garanzia macchina</p>
             @if ($garanziaMacchina)
                 @php
                     // Stessa soglia del semaforo e stessa regola di scadenza del
@@ -176,7 +176,7 @@
                             ? ['warning', '◐', 'In scadenza']
                             : ['success', '✓', 'Attiva']);
                 @endphp
-                <p class="mt-1 text-sm text-neutral-800">
+                <p class="mt-1 text-sm text-ink">
                     Scade il <span class="tabular-nums font-medium">{{ $garanziaMacchina->data_scadenza_effettiva->format('d/m/Y') }}</span>
                 </p>
                 <div class="mt-2">
@@ -185,23 +185,23 @@
                     </x-ui.badge>
                 </div>
             @else
-                <p class="mt-1 text-sm text-neutral-400">Nessuna garanzia macchina.</p>
+                <p class="mt-1 text-sm text-ink-3">Nessuna garanzia macchina.</p>
             @endif
         </x-ui.card>
     @endcan
 
     {{-- 5. Sintesi anagrafica. --}}
     <x-ui.card>
-        <p class="text-sm font-medium text-neutral-600">In sintesi</p>
-        <dl class="mt-2 divide-y divide-neutral-100 text-sm">
+        <p class="text-sm font-medium text-ink-2">In sintesi</p>
+        <dl class="mt-2 divide-y divide-border text-sm">
             {{-- Il fornitore ha il permesso della PROPRIA area, non quello
                  della card: senza `fornitori.view` sparisce la riga, e
                  ubicazione e installazione restano. Un solo @can in testa al
                  pannello è l'errore che ADR-024 nomina per non farlo. --}}
             @can('fornitori.view')
                 <div class="flex justify-between gap-4 py-2">
-                    <dt class="text-neutral-500">Fornitore</dt>
-                    <dd class="text-right text-neutral-800">
+                    <dt class="text-ink-3">Fornitore</dt>
+                    <dd class="text-right text-ink">
                         @if ($fornitore)
                             {{ $fornitore->ragione_sociale }}
                             {{-- ADR-023: `Strumento::fornitore()` è `withTrashed()`
@@ -215,18 +215,18 @@
                         @else
                             {{-- Nullable in schema per le righe storiche e per
                                  l'import, benché obbligatorio nel form. --}}
-                            <span class="text-neutral-400">—</span>
+                            <span class="text-ink-3">—</span>
                         @endif
                     </dd>
                 </div>
             @endcan
             <div class="flex justify-between gap-4 py-2">
-                <dt class="text-neutral-500">Ubicazione</dt>
-                <dd class="text-right text-neutral-800">{{ $percorso }}</dd>
+                <dt class="text-ink-3">Ubicazione</dt>
+                <dd class="text-right text-ink">{{ $percorso }}</dd>
             </div>
             <div class="flex justify-between gap-4 py-2">
-                <dt class="text-neutral-500">Installato</dt>
-                <dd class="text-right text-neutral-800">
+                <dt class="text-ink-3">Installato</dt>
+                <dd class="text-right text-ink">
                     {{ $strumento->data_installazione?->format('m/Y') ?: '—' }}
                     {{-- L'obsolescenza è una segnalazione sull'età e NON tocca il
                          semaforo (ADR-014): sta qui, non fra i motivi. --}}
@@ -249,23 +249,23 @@
     @endphp
     @if ($vedeStatInterventi || $vedeStatRicambi || $vedeStatDocumenti)
         <x-ui.card>
-            <p class="text-sm font-medium text-neutral-600">Statistiche</p>
-            <dl class="mt-2 divide-y divide-neutral-100 text-sm">
+            <p class="text-sm font-medium text-ink-2">Statistiche</p>
+            <dl class="mt-2 divide-y divide-border text-sm">
                 @if ($vedeStatInterventi)
                     <div class="flex justify-between gap-4 py-2">
-                        <dt class="text-neutral-500">Interventi ultimi 12 mesi</dt>
-                        <dd class="font-medium tabular-nums text-neutral-800">{{ $statInterventi['dodiciMesi'] }}</dd>
+                        <dt class="text-ink-3">Interventi ultimi 12 mesi</dt>
+                        <dd class="font-medium tabular-nums text-ink">{{ $statInterventi['dodiciMesi'] }}</dd>
                     </div>
                     <div class="flex justify-between gap-4 py-2">
-                        <dt class="text-neutral-500">Scaduti non fatti</dt>
-                        <dd class="font-medium tabular-nums text-neutral-800">{{ $statInterventi['scadutiAperti'] }}</dd>
+                        <dt class="text-ink-3">Scaduti non fatti</dt>
+                        <dd class="font-medium tabular-nums text-ink">{{ $statInterventi['scadutiAperti'] }}</dd>
                     </div>
                 @endif
 
                 @if ($vedeStatRicambi)
                     <div class="flex justify-between gap-4 py-2">
-                        <dt class="text-neutral-500">Ricambi montati</dt>
-                        <dd class="font-medium tabular-nums text-neutral-800">{{ $statRicambi['montati'] }}</dd>
+                        <dt class="text-ink-3">Ricambi montati</dt>
+                        <dd class="font-medium tabular-nums text-ink">{{ $statRicambi['montati'] }}</dd>
                     </div>
 
                     {{-- Riga separata e SOLO se ce n'è almeno uno: un pezzo con
@@ -276,8 +276,8 @@
                          una macchina che non ha nulla in sospeso. --}}
                     @if ($statRicambi['inAttesa'] > 0)
                         <div class="flex justify-between gap-4 py-2">
-                            <dt class="text-neutral-500">In attesa di montaggio</dt>
-                            <dd class="font-medium tabular-nums text-warning-800">{{ $statRicambi['inAttesa'] }}</dd>
+                            <dt class="text-ink-3">In attesa di montaggio</dt>
+                            <dd class="font-medium tabular-nums text-warn-soft-ink">{{ $statRicambi['inAttesa'] }}</dd>
                         </div>
                     @endif
 
@@ -294,8 +294,8 @@
                          ricambi e non le garanzie della macchina. --}}
                     @if ($vedeGaranzieRicambio)
                         <div class="flex justify-between gap-4 py-2">
-                            <dt class="text-neutral-500">Ricambi coperti da garanzia</dt>
-                            <dd class="font-medium tabular-nums text-neutral-800">{{ $statRicambi['copertiDaGaranzia'] }}</dd>
+                            <dt class="text-ink-3">Ricambi coperti da garanzia</dt>
+                            <dd class="font-medium tabular-nums text-ink">{{ $statRicambi['copertiDaGaranzia'] }}</dd>
                         </div>
                     @endif
                 @endif
@@ -308,8 +308,8 @@
                      libere di divergere. --}}
                 @if ($vedeStatDocumenti)
                     <div class="flex justify-between gap-4 py-2">
-                        <dt class="text-neutral-500">Documenti allegati</dt>
-                        <dd class="font-medium tabular-nums text-neutral-800">{{ $documenti->count() }}</dd>
+                        <dt class="text-ink-3">Documenti allegati</dt>
+                        <dd class="font-medium tabular-nums text-ink">{{ $documenti->count() }}</dd>
                     </div>
                 @endif
             </dl>

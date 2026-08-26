@@ -42,8 +42,8 @@
     <x-piattaforma.nav />
 
     <div class="mt-6">
-        <h1 class="text-2xl font-bold tracking-tight text-neutral-900">Ruoli e permessi</h1>
-        <p class="mt-1 text-sm text-neutral-600">
+        <h1 class="text-2xl font-bold tracking-tight text-ink">Ruoli e permessi</h1>
+        <p class="mt-1 text-sm text-ink-2">
             Chi può fare cosa, per tutti i clienti insieme.
         </p>
     </div>
@@ -54,8 +54,8 @@
          per-Ente su cui provarla prima. Va detto in pagina e non solo in un
          commento, perché chi guarda questa griglia sta per cambiare il
          comportamento di tutti i clienti. --}}
-    <x-ui.card class="mt-4 border-warning-500 bg-warning-100">
-        <p class="text-sm text-warning-800">
+    <x-ui.card class="mt-4 !border-warn-dot !bg-warn-soft">
+        <p class="text-sm text-warn-soft-ink">
             <span aria-hidden="true">⚠️</span>
             Questa matrice è <strong>globale</strong>: vale per tutti gli Enti insieme, senza rilascio
             progressivo. Le impostazioni per-Ente possono <strong>restringere</strong> questi permessi,
@@ -73,7 +73,7 @@
 
              L'elenco si deriva dalla config e non si scrive a mano: sarebbe
              l'ennesimo elenco parallelo. --}}
-        <p class="mt-2 text-sm text-warning-800" data-avviso-2fa="pagina">
+        <p class="mt-2 text-sm text-warn-soft-ink" data-avviso-2fa="pagina">
             <span aria-hidden="true">⚠️</span>
             Il secondo fattore è obbligatorio <strong>per nome di ruolo</strong>, non per permesso:
             oggi lo richiedono {{ implode(', ', App\Support\Rbac::twoFactorRequiredRoles()) }}.
@@ -81,7 +81,7 @@
             <strong>{{ implode(', ', array_diff(App\Support\Rbac::roleNames(), App\Support\Rbac::twoFactorRequiredRoles())) }}</strong>
             lo dà anche a chi accede con la sola password.
         </p>
-        <p class="mt-2 text-xs text-warning-800">
+        <p class="mt-2 text-xs text-warn-soft-ink">
             Ogni click scrive subito, e resta nel <a href="{{ route('piattaforma.audit') }}" class="underline">registro di audit</a>.
             Aggiungere o togliere un permesso dal <em>catalogo</em> resta un'operazione di codice.
         </p>
@@ -95,9 +95,9 @@
          vivesse solo dentro la modale, una richiesta forgiata a mano tornerebbe
          **muta**, e il rifiuto si leggerebbe come «non è successo niente». --}}
     @if ($errors->any())
-        <x-ui.card class="mt-4 border-danger-500 bg-danger-100" data-errore>
-            <p class="text-sm font-medium text-danger-600">Gesto rifiutato</p>
-            <ul class="mt-1 list-disc space-y-1 pl-5 text-sm text-danger-600">
+        <x-ui.card class="mt-4 !border-bad-dot !bg-bad-soft" data-errore>
+            <p class="text-sm font-medium text-bad-soft-ink">Gesto rifiutato</p>
+            <ul class="mt-1 list-disc space-y-1 pl-5 text-sm text-bad-soft-ink">
                 @foreach ($errors->all() as $errore)
                     <li>{{ $errore }}</li>
                 @endforeach
@@ -110,7 +110,7 @@
          può ridistribuire quel permesso, a nessun ruolo e in nessuna direzione.
          Le due cose si erano già confuse una volta, su `garanzie.ricambio.*`
          (ADR-027), e la confusione costò due voci nel set sbagliato per mesi. --}}
-    <dl class="mt-6 flex flex-wrap gap-x-6 gap-y-1 text-xs text-neutral-600">
+    <dl class="mt-6 flex flex-wrap gap-x-6 gap-y-1 text-xs text-ink-2">
         <div class="flex items-center gap-1.5">
             <dt aria-hidden="true">✅</dt>
             <dd>il ruolo ha il permesso</dd>
@@ -132,7 +132,7 @@
             <dd>le celle senza 🔒 e senza 🔑 sono bottoni: un click inverte la cella e scrive</dd>
         </div>
         <div class="flex items-center gap-1.5">
-            <dt class="text-primary-700">personalizzato</dt>
+            <dt class="text-brand">personalizzato</dt>
             <dd>la cella non dice ciò che dice <code>config/rbac.php</code>: il riseeding la riporterebbe indietro</dd>
         </div>
     </dl>
@@ -156,12 +156,12 @@
         <div class="flex flex-wrap items-start justify-between gap-3">
             <div class="min-w-0">
                 @if ($quantePersonalizzate === 0)
-                    <p class="text-sm text-neutral-700">
+                    <p class="text-sm text-ink-2">
                         La matrice a database <strong>coincide</strong> con <code class="text-xs">config/rbac.php</code>:
                         nessuna cella personalizzata.
                     </p>
                 @else
-                    <p class="text-sm text-neutral-800">
+                    <p class="text-sm text-ink">
                         <strong>{{ $quantePersonalizzate }}</strong>
                         {{ $quantePersonalizzate === 1 ? 'cella non dice' : 'celle non dicono' }} ciò che dice
                         <code class="text-xs">config/rbac.php</code>.
@@ -169,7 +169,7 @@
                     {{-- ⚠️ Il comando si scrive **per esteso**: chi arriva qui
                          dopo aver letto la riga di `CLAUDE.md` sta per lanciarlo,
                          e deve leggere accanto cosa fa davvero. --}}
-                    <p class="mt-1 text-xs text-neutral-600">
+                    <p class="mt-1 text-xs text-ink-2">
                         <span aria-hidden="true">⚠️</span>
                         <code class="text-xs">php artisan db:seed --class=RolesAndPermissionsSeeder</code>
                         le riporta <strong>tutte</strong> ai default:
@@ -188,7 +188,7 @@
                 <button type="button"
                         wire:click="$toggle('soloDifferenze')"
                         data-filtro-differenze="{{ $soloDifferenze ? 'attivo' : 'spento' }}"
-                        class="shrink-0 rounded-md border px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 {{ $soloDifferenze ? 'border-primary-600 bg-primary-600 text-white hover:bg-primary-700' : 'border-neutral-300 text-neutral-700 hover:bg-neutral-50' }}">
+                        class="shrink-0 rounded-md border px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring {{ $soloDifferenze ? 'border-brand bg-brand text-brand-ink hover:bg-brand-hover' : 'border-border-strong text-ink hover:bg-surface-sunken' }}">
                     {{ $soloDifferenze ? 'Mostra tutti i permessi' : 'Mostra solo le differenze' }}
                 </button>
             @endif
@@ -201,15 +201,15 @@
          proprio il comando che, sulle *altre* righe, distrugge. Le due cose
          vanno dette insieme o si sceglie alla cieca. --}}
     @if ($nonSeminati !== [])
-        <x-ui.card class="mt-4 border-warning-500 bg-warning-100" data-non-seminati="{{ count($nonSeminati) }}">
-            <p class="text-sm text-warning-800">
+        <x-ui.card class="mt-4 !border-warn-dot !bg-warn-soft" data-non-seminati="{{ count($nonSeminati) }}">
+            <p class="text-sm text-warn-soft-ink">
                 <span aria-hidden="true">⚠️</span>
                 <strong>{{ count($nonSeminati) }}</strong>
                 {{ count($nonSeminati) === 1 ? 'permesso del catalogo non esiste' : 'permessi del catalogo non esistono' }}
                 a database ({{ implode(', ', $nonSeminati) }}): la riga è segnata «da seminare» e
                 <strong>non è accendibile</strong> finché il permesso non viene creato.
             </p>
-            <p class="mt-2 text-xs text-warning-800">
+            <p class="mt-2 text-xs text-warn-soft-ink">
                 <code class="text-xs">php artisan db:seed --class=RolesAndPermissionsSeeder</code>
                 li crea — e nello stesso giro riporta l'intera matrice ai default, cancellando le
                 personalizzazioni elencate qui sopra.
@@ -237,12 +237,12 @@
                     catalogo per {{ count($ruoli) }} ruoli.
                 </caption>
 
-                <thead class="border-b border-neutral-200 bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500">
+                <thead class="border-b border-border bg-surface-sunken text-xs uppercase tracking-wide text-ink-3">
                     <tr>
                         {{-- L'angolo: ancorato su **due** lati, quindi sopra a
                              entrambe le fasce (z-30 > z-20 dell'intestazione
                              > z-10 della colonna dei nomi). --}}
-                        <th scope="col" class="sticky left-0 top-0 z-30 bg-neutral-50 py-3 pl-4 pr-3 text-left">Permesso</th>
+                        <th scope="col" class="sticky left-0 top-0 z-30 bg-surface-sunken py-3 pl-4 pr-3 text-left">Permesso</th>
 
                         @foreach ($ruoli as $ruolo)
                             @php $ruoloProtetto = isset($inerti[$ruolo]); @endphp
@@ -259,7 +259,7 @@
                             <th scope="col"
                                 data-ruolo="{{ $ruolo }}"
                                 @if ($ruoloProtetto) data-inerte="1" @endif
-                                class="sticky top-0 z-20 bg-neutral-50 px-3 py-3 text-center {{ $ruoloProtetto ? 'text-neutral-400' : '' }}">
+                                class="sticky top-0 z-20 bg-surface-sunken px-3 py-3 text-center {{ $ruoloProtetto ? 'text-ink-3' : '' }}">
                                 <span class="whitespace-nowrap">{{ $ruolo }}</span>
                                 @if ($ruoloProtetto)
                                     <span class="mt-0.5 block normal-case tracking-normal"
@@ -277,7 +277,7 @@
                                          dallo stesso elenco che
                                          `EnsureTwoFactorIsEnabled` legge: non c'è
                                          una seconda copia da tenere allineata. --}}
-                                    <span class="mt-0.5 block normal-case tracking-normal text-warning-800"
+                                    <span class="mt-0.5 block normal-case tracking-normal text-warn-soft-ink"
                                           title="EnsureTwoFactorIsEnabled richiede il secondo fattore per nome di ruolo, e questo ruolo non è nell'elenco: un permesso concesso qui arriva anche a chi entra con la sola password."
                                           data-senza-2fa="1">
                                         <span aria-hidden="true">⚠️</span> senza 2FA
@@ -296,8 +296,8 @@
                          completo del permesso resta scritto per esteso in ogni
                          riga, così ciò che si confronta col documento è sempre
                          la stringa vera. --}}
-                    <tbody wire:key="gruppo-{{ $prefisso }}" class="divide-y divide-neutral-100 border-b border-neutral-200">
-                        <tr class="bg-neutral-50/60">
+                    <tbody wire:key="gruppo-{{ $prefisso }}" class="divide-y divide-border border-b border-border">
+                        <tr class="bg-surface-sunken">
                             <th scope="colgroup" colspan="{{ count($ruoli) + 1 }}"
                                 data-gruppo="{{ $prefisso }}"
                                 {{-- Sfondo proprio e `z-10`: era ancorata a
@@ -305,7 +305,7 @@
                                      orizzontale il nome del gruppo si sarebbe
                                      letto **sopra** le celle che gli passavano
                                      sotto. --}}
-                                class="sticky left-0 z-10 bg-neutral-100 px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                                class="sticky left-0 z-10 bg-surface-sunken px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-ink-3">
                                 {{ ucfirst(str_replace('_', ' ', $prefisso)) }}
                             </th>
                         </tr>
@@ -329,11 +329,11 @@
                                 data-permesso="{{ $permesso }}"
                                 @if ($bloccato) data-bloccato="1" @endif
                                 @if ($daSeminare) data-da-seminare="1" @endif
-                                class="hover:bg-neutral-50">
-                                <th scope="row" class="sticky left-0 z-10 bg-white py-2 pl-4 pr-3 text-left font-normal hover:bg-neutral-50">
-                                    <span class="font-mono text-xs text-neutral-800">{{ $permesso }}</span>
+                                class="hover:bg-surface-sunken">
+                                <th scope="row" class="sticky left-0 z-10 bg-surface py-2 pl-4 pr-3 text-left font-normal hover:bg-surface-sunken">
+                                    <span class="font-mono text-xs text-ink">{{ $permesso }}</span>
                                     @if ($bloccato)
-                                        <span class="ml-1 whitespace-nowrap text-xs text-neutral-500"
+                                        <span class="ml-1 whitespace-nowrap text-xs text-ink-3"
                                               title="Nel set bloccato di config/rbac.php: la UI non può ridistribuirlo, a nessun ruolo e in nessuna direzione. Allargare o restringere il set è un'operazione di codice.">
                                             <span aria-hidden="true">🔒</span>
                                             <span class="sr-only">bloccato:</span> non modificabile
@@ -403,7 +403,7 @@
                                                     wire:click="chiedi('{{ $ruolo }}', '{{ $permesso }}')"
                                                     wire:loading.attr="disabled"
                                                     wire:target="chiedi"
-                                                    class="rounded-md px-2 py-1 hover:bg-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50">
+                                                    class="rounded-md px-2 py-1 hover:bg-brand-soft-strong focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50">
                                                 <span aria-hidden="true">{{ $ha ? '✅' : '❌' }}</span>
                                                 {{-- Il testo per chi ascolta dice
                                                      lo stato **e** il gesto: un
@@ -427,7 +427,7 @@
                                              che questo pannello esiste per
                                              togliere. --}}
                                         @if ($diverge)
-                                            <span class="mt-0.5 block text-[10px] font-medium leading-tight text-primary-700"
+                                            <span class="mt-0.5 block text-[10px] font-medium leading-tight text-brand"
                                                   data-personalizzato="{{ $diverge }}"
                                                   title="Il database dice il contrario di config/rbac.php. Un `db:seed --class=RolesAndPermissionsSeeder` riporterebbe questa cella al default.">
                                                 personalizzato:
@@ -449,7 +449,7 @@
                 @if ($gruppi === [])
                     <tbody>
                         <tr>
-                            <td colspan="{{ count($ruoli) + 1 }}" class="px-4 py-8 text-center text-sm text-neutral-500"
+                            <td colspan="{{ count($ruoli) + 1 }}" class="px-4 py-8 text-center text-sm text-ink-3"
                                 data-nessuna-differenza>
                                 Nessuna cella diversa da <code class="text-xs">config/rbac.php</code>:
                                 la matrice a database è quella dei default.
@@ -476,11 +476,11 @@
          una sezione vuota permanente insegna a non guardarla. --}}
     @if ($orfani !== [])
         <div class="mt-8" data-orfani>
-            <h2 class="text-sm font-semibold text-neutral-900">
+            <h2 class="text-sm font-semibold text-ink">
                 <span aria-hidden="true">⚠️</span>
                 Permessi non più nel catalogo
             </h2>
-            <p class="mt-1 text-xs text-neutral-600">
+            <p class="mt-1 text-xs text-ink-2">
                 Esistono a database ma <code>config/rbac.php</code> non li dichiara più. Non si riassegnano
                 dalla UI e non si cancellano di qui: vanno rimossi a mano.
             </p>
@@ -491,7 +491,7 @@
                  conoscere. È così che i `letture_contaore.*` sono rimasti
                  attaccati a quattro ruoli del database di sviluppo fino all'8
                  Ago 2026. --}}
-            <p class="mt-1 text-xs text-neutral-600">
+            <p class="mt-1 text-xs text-ink-2">
                 <code>php artisan db:seed --class=RolesAndPermissionsSeeder</code> <strong>non</strong> li rimuove:
                 il seeder usa <code>firstOrCreate</code> e non cancella ciò che il catalogo non dichiara più.
                 Li <strong>stacca</strong> però da ogni ruolo — <code>syncPermissions()</code> riattacca solo i
@@ -499,10 +499,10 @@
                 resta a database, senza più nessuno che la porti.
             </p>
 
-            <x-ui.card class="mt-3 !p-0 border-warning-500">
+            <x-ui.card class="mt-3 !p-0 !border-warn-dot">
                 <div class="overflow-x-auto">
                     <table class="w-full border-collapse text-sm">
-                        <thead class="border-b border-neutral-200 bg-warning-100 text-xs uppercase tracking-wide text-warning-800">
+                        <thead class="border-b border-border bg-warn-soft text-xs uppercase tracking-wide text-warn-soft-ink">
                             <tr>
                                 <th scope="col" class="py-3 pl-4 pr-3 text-left">Permesso orfano</th>
                                 @foreach ($ruoli as $ruolo)
@@ -512,11 +512,11 @@
                                 @endforeach
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-neutral-100">
+                        <tbody class="divide-y divide-border">
                             @foreach ($orfani as $orfano)
                                 <tr wire:key="orfano-{{ $orfano }}" data-orfano="{{ $orfano }}">
                                     <th scope="row" class="py-2 pl-4 pr-3 text-left font-normal">
-                                        <span class="font-mono text-xs text-neutral-800">{{ $orfano }}</span>
+                                        <span class="font-mono text-xs text-ink">{{ $orfano }}</span>
                                     </th>
                                     @foreach ($ruoli as $ruolo)
                                         @php $ha = isset($matrice[$ruolo][$orfano]); @endphp
@@ -555,7 +555,7 @@
         <x-ui.modal :title="($conferma['concede'] ? 'Concedere' : 'Revocare').' «'.$conferma['permesso'].'» a «'.$conferma['ruolo'].'»?'"
                     close="annulla">
             <div data-conferma="{{ $conferma['concede'] ? 'concessione' : 'revoca' }}">
-                <p class="text-sm text-neutral-700">
+                <p class="text-sm text-ink-2">
                     @if ($conferma['concede'])
                         <strong>{{ $conferma['ruolo'] }}</strong> otterrà <code class="text-xs">{{ $conferma['permesso'] }}</code>
                         in <strong>tutti gli Enti</strong> della piattaforma.
@@ -570,7 +570,7 @@
                          concessioni. Non è un avviso generico: nomina il
                          meccanismo, perché chi legge deve poter verificare che
                          sia vero. --}}
-                    <p class="mt-3 rounded-md bg-warning-100 p-3 text-sm text-warning-800" data-avviso-2fa="modale">
+                    <p class="mt-3 rounded-md bg-warn-soft p-3 text-sm text-warn-soft-ink" data-avviso-2fa="modale">
                         <span aria-hidden="true">⚠️</span>
                         <strong>{{ $conferma['ruolo'] }}</strong> non è fra i ruoli con secondo fattore
                         obbligatorio ({{ implode(', ', App\Support\Rbac::twoFactorRequiredRoles()) }}):
@@ -588,29 +588,29 @@
                          lo presentasse come «N persone perderanno l'accesso»
                          mentirebbe il giorno in cui i ruoli multipli arrivano,
                          cioè senza che nessuno tocchi questo file. --}}
-                    <p class="mt-3 text-sm text-neutral-700" data-utenti-col-ruolo="{{ $conferma['utenti'] }}">
+                    <p class="mt-3 text-sm text-ink-2" data-utenti-col-ruolo="{{ $conferma['utenti'] }}">
                         <strong>{{ $conferma['utenti'] }}</strong>
                         {{ $conferma['utenti'] === 1 ? 'utente ha' : 'utenti hanno' }} oggi il ruolo
                         <strong>{{ $conferma['ruolo'] }}</strong>.
                     </p>
-                    <p class="mt-1 text-xs text-neutral-500">
+                    <p class="mt-1 text-xs text-ink-3">
                         Non è detto che tutti perdano l'accesso: chi avesse anche un altro ruolo che porta
                         <code class="text-xs">{{ $conferma['permesso'] }}</code> lo conserva.
                     </p>
                 @endif
 
-                <p class="mt-3 text-xs text-neutral-500">
+                <p class="mt-3 text-xs text-ink-3">
                     Il gesto è reversibile con un altro click, e resta scritto nel registro di audit
                     col nome di chi l'ha fatto.
                 </p>
 
                 <div class="mt-4 flex justify-end gap-2">
                     <button type="button" wire:click="annulla"
-                            class="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50">
+                            class="rounded-md border border-border-strong px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-sunken">
                         Annulla
                     </button>
                     <button type="button" wire:click="procedi"
-                            class="rounded-md px-3 py-1.5 text-sm font-medium text-white {{ $conferma['concede'] ? 'bg-primary-600 hover:bg-primary-700' : 'bg-danger-500 hover:bg-danger-600' }}">
+                            class="rounded-md px-3 py-1.5 text-sm font-medium {{ $conferma['concede'] ? 'bg-brand text-brand-ink hover:bg-brand-hover' : 'bg-bad-dot text-ink-inverse hover:brightness-90' }}">
                         {{ $conferma['concede'] ? 'Concedi' : 'Revoca' }}
                     </button>
                 </div>
