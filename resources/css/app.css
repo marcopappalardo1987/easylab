@@ -26,55 +26,67 @@
 
 /*
  | Design System Base — Easy Lab (docs/Design/Design System Base.md)
- | Token Tailwind v4: palette brand (Teal), neutri (Slate), stati semaforo
- | e accenti funzionali. Niente hex inline nei componenti: solo questi token.
  |
- | ⚠️ **Il `primary` è ancora il TEAL dello Sprint 0, e lo scarto col Design
- | System è dichiarato** (🔗 ADR-033, DS §2.1): il documento descrive il blu del
- | marchio, l'attuazione è un intervento a parte con la propria verifica visiva.
- | Chi legge un colore qui e un altro là non ha trovato un bug.
+ | ══ DUE STRATI, e solo il secondo cambia col tema. 🔗 DS §8, ADR-034 ══
  |
- | 🔴 **Una tonalità USATA e non definita qui non dà errore: dà un colore
- | diverso, oppure niente.** Le due metà si comportano in modo opposto, ed è la
- | ragione per cui la deriva è durata mesi senza che nessuno la vedesse:
+ |  1. Le **SCALE** (`--color-primary-*`, `--color-neutral-*`, semaforo,
+ |     accenti, grafici) sono la palette: DS §2, **identiche nei due temi**.
+ |  2. I **SEMANTICI** (`--color-surface`, `--color-ink`, `--color-brand`,
+ |     `--color-ok-dot`…) dicono *a quale gradino della scala attinge ogni
+ |     ruolo*, e sono **gli unici** che il tema riscrive. Sono alias verso le
+ |     variabili grezze dichiarate più sotto in `:root`.
+ |
+ | **Le viste usano SOLO i semantici**: `bg-surface`, non `bg-white`;
+ | `text-ink`, non `text-neutral-800`; `border-border`, non `border-neutral-200`.
+ |
+ | ⛔ **E non usano mai la variante `dark:`.** Sarebbero ~1.190 varianti da
+ | tenere allineate a mano su 50 file, e la prima dimenticata **non dà errore**:
+ | dà testo nero su fondo nero. È lo stesso sintomo di tutte le altre trappole di
+ | colore di questo progetto — pagina 200, markup giusto, colore sbagliato. La
+ | scelta è quella già fatta per `tabella-a-card` in S4: *la duplicazione non si
+ | gestisce, non si crea.* La rete è `SuperficiTokenizzateGuardrailTest`.
+ |
+ | ⛔ **UN SOLO blocco `@theme`, piatto, senza graffe annidate.**
+ | `PaletteGuardrailTest` estrae con `/@theme\s*\{(.*?)\n\}/s`: legge il **primo**
+ | blocco e **fino alla prima `\n}`**. Un secondo `@theme`, o un `@media` qui
+ | dentro, renderebbe la rete cieca senza dirlo.
+ |
+ | 🔴 **Una tonalità USATA e non definita non dà errore: dà un colore diverso,
+ | oppure niente.** Le due metà si comportano in modo opposto, ed è la ragione
+ | per cui la deriva è durata mesi senza che nessuno la vedesse:
  |
  |  - `neutral` è anche un nome di palette **nativa** di Tailwind, quindi
  |    `text-neutral-500` **rende** — col grigio ACROMATICO di Tailwind
- |    (`oklch(55.6% 0 0)`, croma zero) invece dello Slate del progetto. Due
- |    famiglie di grigio nella stessa pagina, e nessuna delle due sbagliata
- |    abbastanza da farsi notare. Misurato il 25 Ago 2026 sul bundle costruito;
- |  - `primary`, `danger`, `success`, `warning` sono nomi **nostri**: una
- |    tonalità assente non genera nessuna regola. `hover:bg-danger-700` sul
- |    pulsante «Chiudi la porta» della cabina di regia era un hover che non
- |    coloriva niente.
+ |    (`oklch(55.6% 0 0)`, croma zero) invece dello Slate del progetto;
+ |  - `primary`, `danger`, `success`, `warning` e i semantici sono nomi
+ |    **nostri**: una tonalità assente non genera nessuna regola.
  |
- | La rete è `tests/Feature/PaletteGuardrailTest.php`, che deriva l'insieme
- | usato dalle viste e quello definito qui sotto e li confronta. Non c'è nessun
- | elenco da tenere allineato a mano.
+ | ✅ **Il teal dello Sprint 0 è uscito dal progetto il 26 Ago 2026** (🔗 ADR-033):
+ | `primary` è ora il blu del marchio, con `primary-400` e `primary-600`
+ | **ancorati agli hex reali** di `docs/Design/assets/Logo-EasyLab.svg` e non
+ | interpolati.
  */
 @theme {
     --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 
-    /* Brand / Primary (Teal) */
-    --color-primary-50: #f0fdfa;
-    --color-primary-100: #ccfbf1;
-    /* Bordo di accento sugli hover di card e pill, sempre in coppia con
-       `hover:bg-primary-50`. ⚠️ Il gradino teal, perché teal è la scala **in
-       esercizio**: il DS §6 lo dà a `#7fbde4`, che è il blu, e scriverlo qui
-       metterebbe un blu dentro una scala verde-azzurra — cioè attuerebbe mezza
-       ADR-033 senza la verifica visiva che quella decisione pretende. Il blocco
-       intero si sostituisce il giorno del restyling. */
-    --color-primary-300: #5eead4;
-    --color-primary-500: #14b8a6;
-    --color-primary-600: #0d9488;
-    --color-primary-700: #0f766e;
-    --color-primary-900: #134e4a;
+    /* ─────────────── STRATO 1 — LE SCALE (DS §2). Non cambiano col tema. ─────────────── */
 
-    /* Neutri (Slate) — 🔗 DS §2.2. I gradini 300/500/700 mancavano e le viste li
-       usavano già: ricadevano sul neutro acromatico di Tailwind (vedi sopra). Gli
-       hex sono quelli del DS, identici prima e dopo ADR-033: il restyling cambia
-       l'identità, non i neutri. */
+    /* Brand / Primary — il blu del marchio. 400 e 600 sono gli hex del logo. 🔗 DS §2.1, ADR-033 */
+    --color-primary-50: #eff7fc;
+    --color-primary-100: #d6eaf7;
+    --color-primary-200: #afd6ef;
+    --color-primary-300: #7fbde4;
+    --color-primary-400: #2997d4;
+    --color-primary-500: #1878b8;
+    --color-primary-600: #06589c;
+    --color-primary-700: #054880;
+    --color-primary-800: #063a66;
+    --color-primary-900: #072f52;
+    --color-primary-950: #041d33;
+
+    /* Neutri (Slate) — 🔗 DS §2.2. Invariati prima e dopo ADR-033: il restyling
+       cambia l'identità, non i neutri. */
     --color-neutral-50: #f8fafc;
     --color-neutral-100: #f1f5f9;
     --color-neutral-200: #e2e8f0;
@@ -85,12 +97,10 @@
     --color-neutral-700: #334155;
     --color-neutral-800: #1e293b;
     --color-neutral-900: #0f172a;
+    --color-neutral-950: #020617;
 
-    /* Stati semaforo (semantici) — ADR-005, invariati anche dopo ADR-033.
-       `success-700` e `danger-800` sono i due testi-su-badge di DS §2.3, che le
-       viste chiamavano `success-800` e `danger-700` — due nomi che il DS non ha
-       mai avuto, e che quindi non rendevano. Rinominati negli usi, non inventati
-       qui: la palette è quella del documento. */
+    /* Stati semaforo — 🔗 DS §2.3, ADR-005. Invariati anche dopo ADR-033. */
+    --color-success-50: #f0fdf4;
     --color-success-100: #dcfce7;
     --color-success-500: #16a34a;
     --color-success-600: #15803d;
@@ -98,16 +108,343 @@
     --color-warning-50: #fffbeb;
     --color-warning-100: #fef3c7;
     --color-warning-500: #f59e0b;
+    --color-warning-600: #d97706;
     --color-warning-800: #92400e;
+    --color-danger-50: #fef2f2;
     --color-danger-100: #fee2e2;
     --color-danger-500: #dc2626;
     --color-danger-600: #b91c1c;
     --color-danger-800: #991b1b;
 
-    /* Accenti funzionali */
-    --color-info-500: #2563eb;
+    /* Accenti funzionali — 🔗 DS §2.4.
+       ⚠️ `info` NON è più un secondo blu: nasceva `#2563eb` quando il brand era
+       teal, e col brand blu i due sarebbero **simili senza essere uguali** — il
+       caso peggiore, quello in cui chi guarda non sa se la differenza voglia
+       dire qualcosa. Il token resta perché `x-ui.badge` espone la variante;
+       il colore diventa un alias. Si toglie un colore, non se ne aggiunge uno. */
+    --color-info-500: var(--color-primary-600);
+    --color-obsolete-50: #f5f3ff;
+    --color-obsolete-100: #ede9fe;
     --color-obsolete-500: #7c3aed;
+    --color-obsolete-700: #6d28d9;
+    --color-locked-100: #e2e8f0;
     --color-locked-500: #64748b;
+    --color-locked-700: #334155;
+
+    /* Grafici — 🔗 DS §2.5. Mancavano del tutto.
+       Il pallino in tabella e il segmento nel grafico sono della stessa famiglia
+       ma **non dello stesso gradino**: un riempimento di superficie deve
+       staccarsi dal fondo di almeno 3:1, e il gradino chiaro non ci arriva. */
+    --color-chart-verde: var(--chart-verde);
+    --color-chart-arancione: var(--chart-arancione);
+    --color-chart-rosso: var(--chart-rosso);
+    --color-chart-obsoleto: var(--chart-obsoleto);
+    --color-chart-brand: var(--chart-brand);
+    --color-chart-grid: var(--chart-grid);
+    --color-chart-axis: var(--chart-axis);
+    --color-chart-band: var(--chart-band);
+
+    /* ────── STRATO 2 — I SEMANTICI (DS §8.2). Gli unici che cambiano col tema. ────── */
+
+    --color-canvas: var(--bg);
+    --color-surface: var(--surface);
+    --color-surface-sunken: var(--surface-sunken);
+    --color-surface-code: var(--surface-code);
+    --color-border: var(--border);
+    --color-border-strong: var(--border-strong);
+    --color-ink: var(--ink);
+    --color-ink-2: var(--ink-2);
+    --color-ink-3: var(--ink-3);
+    --color-ink-inverse: var(--ink-inverse);
+
+    --color-brand: var(--brand);
+    --color-brand-hover: var(--brand-hover);
+    --color-brand-ink: var(--brand-ink);
+    --color-brand-soft: var(--brand-soft);
+    --color-brand-soft-strong: var(--brand-soft-strong);
+    --color-brand-soft-ink: var(--brand-soft-ink);
+    --color-brand-line: var(--brand-line);
+
+    --color-ok-dot: var(--ok-dot);
+    --color-ok-soft: var(--ok-soft);
+    --color-ok-soft-ink: var(--ok-soft-ink);
+    --color-warn-dot: var(--warn-dot);
+    --color-warn-soft: var(--warn-soft);
+    --color-warn-soft-ink: var(--warn-soft-ink);
+    --color-bad-dot: var(--bad-dot);
+    --color-bad-soft: var(--bad-soft);
+    --color-bad-soft-ink: var(--bad-soft-ink);
+    --color-obs-dot: var(--obs-dot);
+    --color-obs-soft: var(--obs-soft);
+    --color-obs-soft-ink: var(--obs-soft-ink);
+    --color-lock-dot: var(--lock-dot);
+    --color-lock-soft: var(--lock-soft);
+    --color-lock-soft-ink: var(--lock-soft-ink);
+
+    --color-ring: var(--ring);
+    --color-overlay: var(--overlay);
+
+    /* Ombre — 🔗 DS §3, §8.2. In tema scuro sono più dense, o non si vedono.
+       ⚠️ I RAGGI non si ridichiarano: i valori di Tailwind v4 coincidono già con
+       DS §3 (sm 4px · md 6px · lg 8px · xl 12px). Ridichiararli sarebbe una
+       seconda copia da tenere allineata a mano, cioè il difetto che questo
+       foglio esiste per non avere. */
+    --shadow-sm: var(--ombra-sm);
+    --shadow-md: var(--ombra-md);
+}
+
+/*
+ | I VALORI dello strato semantico. Vivono FUORI da `@theme` perché il tema li
+ | riscrive, e `@theme` non può contenere né `@media` né selettori.
+ |
+ | ⚠️ **Il tema chiaro è il `:root` di base**: non esiste un blocco
+ | `[data-theme="light"]` coi propri valori. Esiste solo il
+ | `:not([data-theme="light"])` sulla media query, e senza di quello una scelta
+ | esplicita di *chiaro* verrebbe sovrascritta dal sistema operativo — cioè
+ | l'interruttore non funzionerebbe in una delle due direzioni.
+ |
+ | ⚠️ **`color-scheme` non è decorazione**: è l'unica riga che parla al browser
+ | invece che alla pagina. Senza, scrollbar, `<select>`, date picker e campi
+ | nativi restano chiari sul fondo scuro.
+ */
+:root {
+    color-scheme: light;
+
+    --bg: #f6f8fb;
+    --surface: #ffffff;
+    --surface-sunken: var(--color-neutral-50);
+    --surface-code: #f2f6fa;
+    --border: var(--color-neutral-200);
+    --border-strong: var(--color-neutral-300);
+    --ink: var(--color-neutral-900);
+    --ink-2: var(--color-neutral-600);
+    --ink-3: var(--color-neutral-500);
+    --ink-inverse: #ffffff;
+
+    --brand: var(--color-primary-600);
+    --brand-hover: var(--color-primary-700);
+    --brand-ink: #ffffff;
+    --brand-soft: var(--color-primary-50);
+    --brand-soft-strong: var(--color-primary-100);
+    --brand-soft-ink: var(--color-primary-700);
+    --brand-line: var(--color-primary-200);
+
+    --ok-dot: var(--color-success-500);
+    --ok-soft: var(--color-success-100);
+    --ok-soft-ink: var(--color-success-700);
+    --warn-dot: var(--color-warning-500);
+    --warn-soft: var(--color-warning-100);
+    --warn-soft-ink: var(--color-warning-800);
+    --bad-dot: var(--color-danger-500);
+    --bad-soft: var(--color-danger-100);
+    --bad-soft-ink: var(--color-danger-800);
+    --obs-dot: var(--color-obsolete-500);
+    --obs-soft: var(--color-obsolete-100);
+    --obs-soft-ink: var(--color-obsolete-700);
+    --lock-dot: var(--color-locked-500);
+    --lock-soft: var(--color-locked-100);
+    --lock-soft-ink: var(--color-locked-700);
+
+    --chart-verde: #15803d;
+    --chart-arancione: #ca8a04;
+    --chart-rosso: #b91c1c;
+    --chart-obsoleto: #7c3aed;
+    --chart-brand: #06589c;
+    --chart-grid: var(--color-neutral-200);
+    --chart-axis: var(--color-neutral-400);
+    --chart-band: var(--color-primary-50);
+
+    --ring: var(--color-primary-500);
+
+    /* Il velo dietro la modale. ⚠️ È l'unico token che il campione non aveva:
+       era `bg-neutral-900/40`, e sul fondo scuro `#0a1220` un velo così è quasi
+       invisibile — la modale smette di staccarsi dal contenuto. Non si allarga
+       la palette per un hover (è già stato deciso, e la risposta fu
+       `hover:no-underline`), ma qui mancava un RUOLO, non un gradino. */
+    --overlay: rgb(15 23 42 / 0.4);
+
+    --ombra-sm: 0 1px 2px rgb(15 23 42 / 0.06), 0 1px 3px rgb(15 23 42 / 0.05);
+    --ombra-md: 0 4px 6px -1px rgb(15 23 42 / 0.08), 0 10px 24px -8px rgb(15 23 42 / 0.18);
+}
+
+/*
+ | TEMA SCURO — 🔗 DS §8.2, ADR-034.
+ |
+ | ⚠️ I gradini sono **scelti per il fondo scuro, non ottenuti invertendo il
+ | chiaro**: è il lavoro già fatto e verificato in `design-system.html`, da cui
+ | questi valori sono presi uno per uno.
+ |
+ | ⚠️ **I due blocchi sono duplicati di proposito** e devono restare identici: la
+ | media query serve a chi non ha scelto, il `[data-theme="dark"]` a chi ha
+ | scelto. Un blocco solo non può fare entrambe le cose. 🛡️ Che dichiarino lo
+ | stesso insieme di nomi lo verifica `TemaScuroGuardrailTest` — due copie a mano
+ | divergono, e il giorno in cui divergono nessuno se ne accorge.
+ */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+        color-scheme: dark;
+
+        --bg: #0a1220;
+        --surface: #111c2e;
+        --surface-sunken: #0d1626;
+        --surface-code: #0b1728;
+        --border: #22314a;
+        --border-strong: #31435f;
+        --ink: #e8eef6;
+        --ink-2: #a3b4cb;
+        --ink-3: #7c8fa8;
+        --ink-inverse: #071019;
+
+        --brand: var(--color-primary-400);
+        --brand-hover: var(--color-primary-300);
+        --brand-ink: #04263f;
+        --brand-soft: #0e2740;
+        --brand-soft-strong: #123253;
+        --brand-soft-ink: var(--color-primary-200);
+        --brand-line: #1d4a77;
+
+        --ok-dot: #4ade80;
+        --ok-soft: #0c2a1b;
+        --ok-soft-ink: #86efac;
+        --warn-dot: #fbbf24;
+        --warn-soft: #33240a;
+        --warn-soft-ink: #fcd34d;
+        --bad-dot: #f87171;
+        --bad-soft: #3a1618;
+        --bad-soft-ink: #fca5a5;
+        --obs-dot: #a78bfa;
+        --obs-soft: #241b41;
+        --obs-soft-ink: #c4b5fd;
+        --lock-dot: #94a3b8;
+        --lock-soft: #1e2b40;
+        --lock-soft-ink: #cbd5e1;
+
+        --chart-verde: #15803d;
+        --chart-arancione: #c47f0f;
+        --chart-rosso: #dc2626;
+        --chart-obsoleto: #8b5cf6;
+        --chart-brand: #2997d4;
+        --chart-grid: #22314a;
+        --chart-axis: #5a6e88;
+        --chart-band: #0e2740;
+
+        --ring: var(--color-primary-300);
+        --overlay: rgb(2 6 23 / 0.68);
+
+        --ombra-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+        --ombra-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 10px 24px -8px rgb(0 0 0 / 0.7);
+    }
+}
+
+:root[data-theme='dark'] {
+    color-scheme: dark;
+
+    --bg: #0a1220;
+    --surface: #111c2e;
+    --surface-sunken: #0d1626;
+    --surface-code: #0b1728;
+    --border: #22314a;
+    --border-strong: #31435f;
+    --ink: #e8eef6;
+    --ink-2: #a3b4cb;
+    --ink-3: #7c8fa8;
+    --ink-inverse: #071019;
+
+    --brand: var(--color-primary-400);
+    --brand-hover: var(--color-primary-300);
+    --brand-ink: #04263f;
+    --brand-soft: #0e2740;
+    --brand-soft-strong: #123253;
+    --brand-soft-ink: var(--color-primary-200);
+    --brand-line: #1d4a77;
+
+    --ok-dot: #4ade80;
+    --ok-soft: #0c2a1b;
+    --ok-soft-ink: #86efac;
+    --warn-dot: #fbbf24;
+    --warn-soft: #33240a;
+    --warn-soft-ink: #fcd34d;
+    --bad-dot: #f87171;
+    --bad-soft: #3a1618;
+    --bad-soft-ink: #fca5a5;
+    --obs-dot: #a78bfa;
+    --obs-soft: #241b41;
+    --obs-soft-ink: #c4b5fd;
+    --lock-dot: #94a3b8;
+    --lock-soft: #1e2b40;
+    --lock-soft-ink: #cbd5e1;
+
+    --chart-verde: #15803d;
+    --chart-arancione: #c47f0f;
+    --chart-rosso: #dc2626;
+    --chart-obsoleto: #8b5cf6;
+    --chart-brand: #2997d4;
+    --chart-grid: #22314a;
+    --chart-axis: #5a6e88;
+    --chart-band: #0e2740;
+
+    --ring: var(--color-primary-300);
+    --overlay: rgb(2 6 23 / 0.68);
+
+    --ombra-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+    --ombra-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 10px 24px -8px rgb(0 0 0 / 0.7);
+}
+
+/*
+ | LA STAMPA È SEMPRE CHIARA — 🔗 DS §8.4.
+ |
+ | Vale **qualunque cosa dica `data-theme`**: il fondo scuro si stampa come una
+ | campitura che consuma toner e non dice niente. Il layout toglieva già il
+ | grigio dell'app con `print:bg-white`; da qui in poi la regola vale per tutte
+ | le superfici in una volta, e non una classe alla volta.
+ |
+ | ⚠️ È il caso in cui un `@media print` mancante si vede solo stampando con il
+ | tema scuro attivo — cioè quasi mai, finché non capita al cliente.
+ */
+@media print {
+    :root,
+    :root[data-theme='dark'] {
+        color-scheme: light;
+
+        --bg: #ffffff;
+        --surface: #ffffff;
+        --surface-sunken: #ffffff;
+        --surface-code: #ffffff;
+        --border: var(--color-neutral-300);
+        --border-strong: var(--color-neutral-400);
+        --ink: var(--color-neutral-900);
+        --ink-2: var(--color-neutral-700);
+        --ink-3: var(--color-neutral-600);
+        --ink-inverse: #ffffff;
+
+        --brand: var(--color-primary-600);
+        --brand-hover: var(--color-primary-700);
+        --brand-ink: #ffffff;
+        --brand-soft: #ffffff;
+        --brand-soft-strong: #ffffff;
+        --brand-soft-ink: var(--color-primary-700);
+        --brand-line: var(--color-neutral-300);
+
+        --ok-dot: var(--color-success-600);
+        --ok-soft: #ffffff;
+        --ok-soft-ink: var(--color-success-700);
+        --warn-dot: var(--color-warning-600);
+        --warn-soft: #ffffff;
+        --warn-soft-ink: var(--color-warning-800);
+        --bad-dot: var(--color-danger-600);
+        --bad-soft: #ffffff;
+        --bad-soft-ink: var(--color-danger-800);
+        --obs-dot: var(--color-obsolete-500);
+        --obs-soft: #ffffff;
+        --obs-soft-ink: var(--color-obsolete-700);
+        --lock-dot: var(--color-locked-500);
+        --lock-soft: #ffffff;
+        --lock-soft-ink: var(--color-locked-700);
+
+        --overlay: transparent;
+        --ombra-sm: none;
+        --ombra-md: none;
+    }
 }
 
 /* Dot semaforo (Design System §4): sm in tabella, md in card/header scheda.
@@ -147,6 +484,11 @@
  | fatto» è l'azione per cui si apre la pagina, e in tabella è l'ULTIMA colonna,
  | cioè quella che su un telefono resta fuori schermo: è il difetto che questo
  | blocco esiste per correggere, non un dettaglio estetico.
+ |
+ | ⚠️ **Tokenizzata il 26 Ago 2026** (🔗 DS §8): la scheda aveva
+ | `background-color: white` scritto a mano e i bordi su `--color-neutral-*`.
+ | In tema scuro avrebbe prodotto **schede bianche su fondo scuro** — e non
+ | avrebbe dato nessun errore.
  */
 @utility tabella-a-card {
     @media (width < 48rem) {
@@ -165,10 +507,10 @@
         & tbody tr {
             display: block;
             margin-bottom: 0.75rem;
-            border: 1px solid var(--color-neutral-200);
+            border: 1px solid var(--border);
             border-radius: 0.5rem;
             padding: 0.25rem 0.75rem;
-            background-color: white;
+            background-color: var(--surface);
         }
 
         & tbody td {
@@ -183,7 +525,7 @@
         }
 
         & tbody td + td {
-            border-top: 1px solid var(--color-neutral-100);
+            border-top: 1px solid var(--border);
         }
 
         & tbody td::before {
@@ -194,7 +536,7 @@
             font-weight: 500;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            color: var(--color-neutral-400);
+            color: var(--ink-3);
         }
 
         /* Una cella vuota resta muta: senza contenuto l'etichetta da sola

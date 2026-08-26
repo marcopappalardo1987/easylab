@@ -1048,3 +1048,42 @@ Il precedente indica la strada: il **Tecnico esterno** (🔗 ADR-030) è già og
   - ⚠️ **`<img>` e non SVG inline, e qui è lecito.** L'avvertenza sulle variabili CSS vale per un logo che debba **ricolorarsi**; questo non deve — i suoi due blu e il gradiente sulla «y» sono il marchio, non un token, e restano quelli su qualunque fondo. Vive su superfici bianche (sidebar, card di autenticazione); su un fondo scuro servirebbe comunque un secondo file, non una variabile.
   - ⚠️ **Il claim è testo trasformato in tracciati**, quindi invisibile a uno screen reader: la pagina di accesso tiene un `h1` in `sr-only`, o resterebbe senza intestazione. L'`alt` porta il solo nome — ripetere il claim lo farebbe annunciare a ogni pagina.
   - 🛡️ *Due test lo tengono onesto, e nascono da un fatto: un `<img src>` verso un file assente **non rompe niente** — la pagina risponde 200 e mostra un rettangolo vuoto. È lo stato in cui il progetto è stato per due mesi, e nessun test poteva accorgersene. Ora i percorsi si estraggono dal sorgente del componente e si verifica che i file esistano.*
+
+---
+
+**ADR-034 — Il tema chiaro e scuro: due strati di token, e la scelta dell'utente sopra quella del sistema**
+
+*Stato: Accettata (26 Ago 2026) — decisa nel restyling che attua ADR-033, e attuata insieme a esso. Nessuna decisione precedente viene superata: ADR-005 (semaforo) e ADR-014 (obsolescenza) restano validi alla lettera, e §4 del Design System — colore **+ forma + etichetta** — diventa qui più importante, non meno.*
+
+**Contesto.** Fino al 26 Ago 2026 l'applicazione ha un tema solo, e il Design System ne descrive uno solo. Il campione visivo `docs/Design/design-system.html`, però, ne dimostra **due**: una scala di token identica nei due temi e uno strato semantico che cambia, con i gradini scuri **scelti per il fondo scuro e non ottenuti invertendo il chiaro**. Quel tema scuro è dichiarato nel campione stesso come «una proposta: il DS del prodotto non ne definisce uno e l'app non lo espone». Questa ADR lo adotta.
+
+**Decisione — 1: due strati di token, e solo il secondo cambia col tema.**
+
+- **Le scale** (`primary`, `neutral`, semaforo, accenti, grafici) sono la palette e **non cambiano mai**: sono le stesse in chiaro e in scuro.
+- **I token semantici** (`--surface`, `--ink`, `--border`, `--brand`, `--ok-dot`…) dicono *a quale gradino della scala attinge ogni ruolo*, e sono **gli unici** che il tema riscrive.
+- Le viste usano **solo** i semantici: `bg-surface`, non `bg-white`; `text-ink`, non `text-neutral-800`.
+
+⚠️ **Il motivo per cui non si usa la variante `dark:` di Tailwind.** La strada ovvia — `bg-white dark:bg-neutral-900` su ogni superficie — sono **~1.190 varianti** da scrivere e da tenere allineate a mano su 50 file. E la prima che si dimentica **non dà errore**: dà testo nero su fondo nero, cioè lo stesso identico sintomo — pagina 200, markup giusto, colore assente — di tutte le altre trappole di colore già pagate da questo progetto. La scelta è la stessa già fatta per `tabella-a-card` in S4: *la duplicazione non si gestisce, non si crea*.
+
+**Decisione — 2: `data-theme` sull'`<html>`, a tre stati.** Assente = **segue il sistema operativo**; `"light"` e `"dark"` = scelta esplicita dell'utente, che vince sul sistema. Il chiaro è il `:root` di base: non esiste un blocco `[data-theme="light"]` con i propri valori, esiste solo un `:not([data-theme="light"])` che impedisce alla media query di sovrascrivere una scelta esplicita di chiaro.
+
+**Decisione — 3: il DB è la verità, `localStorage` è la cache che evita il lampo.** La preferenza vive in `users.tema` (`sistema|chiaro|scuro`).
+
+- **Utente autenticato**: il layout rende `data-theme` **dal server**. Zero lampo, zero JavaScript nel percorso critico.
+- **Ospite** (accesso, reset, invito, `/bloccato`): uno script **inline e sincrono** nel `<head>` legge `localStorage`; se non trova nulla non scrive l'attributo, e decide il sistema.
+- **Al cambio**: Livewire scrive il DB, Alpine scrive attributo e `localStorage` nello stesso gesto.
+
+*Il verso è quello giusto: chi entra da un dispositivo nuovo ritrova la propria scelta, e un tablet condiviso in laboratorio non impone a tutti quella dell'ultimo che l'ha toccato.* **Il costo, dichiarato:** uno schermo già aperto altrove non si aggiorna da solo — lo fa al login successivo. È accettato: la preferenza di tema non è un dato di dominio, e un giro di sincronizzazione costerebbe più di quanto vale.
+
+**Conseguenze e trappole.**
+
+- ⚠️ **La superficie di verifica raddoppia.** Ogni pagina va guardata due volte, e non è un adempimento: molti difetti del tema scuro **esistono solo lì** — un bordo che sparisce, un'ombra che diventa un buco nero, un velo di modale che non stacca più. Nessuno di questi rompe un test.
+- 🔴 **Un token definito solo nel chiaro non dà errore: resta chiaro sul fondo scuro.** È la stessa forma delle trappole di ADR-033 («un token assente non dà errore, dà un colore diverso»), e per questo la decisione arriva **con la propria rete**: `TemaScuroGuardrailTest` verifica che i due blocchi dichiarino lo stesso insieme di nomi, e `SuperficiTokenizzateGuardrailTest` che nessuna vista usi più una tonalità di scala per una superficie o per il testo.
+- ⚠️ **`color-scheme` va dichiarato**, o scrollbar, `<select>`, date picker e campi nativi restano chiari sul fondo scuro. È l'unica riga che parla al browser invece che alla pagina.
+- ⚠️ **Lo script degli ospiti deve essere inline e sincrono.** Un `defer`, un file esterno o un `DOMContentLoaded` producono il lampo bianco — che è il difetto del campione stesso, il cui toggle gira a fine documento. Si copia l'architettura, non quel dettaglio.
+- ⚠️ **`primary-400` non è un colore da testo su fondo chiaro** (3.24:1) **ma lo diventa su fondo scuro**, ed è infatti il `--brand` del tema scuro. Non è una contraddizione con ADR-033: è la stessa regola letta dal lato giusto — il contrasto è una relazione fra due colori, non una proprietà di uno.
+- 🔴 **In tema scuro i colori dei grafici scendono a ΔE 6,9 fra verde e arancione**, sotto la soglia di sicurezza (DS §2.5), contro 9,9 in chiaro. È **legittimo solo perché** ogni voce porta anche glifo ed etichetta: §4 del Design System, che in chiaro è una buona pratica, in scuro è **ciò che rende leggibile il grafico**. Toglierla romperebbe l'accessibilità, non l'estetica.
+- **Il marchio non si ricolora**: è un `<img>`, e un `<img>` non eredita le variabili CSS della pagina. Sul fondo scuro serve un **secondo file**, in cui il blu profondo **si alza** a `primary-200` invece di invertirsi. Lo diceva già ADR-033 fra le proprie conseguenze.
+- **Tre superfici restano su token di scala, di proposito**, e le reti le esentano per nome: il **banner di impersonation** (DS §5.8) — è un allarme persistente e deve avere lo stesso identico aspetto nei due temi, o smette di essere lo stesso segnale; il **toast**; e la **stampa**, che `@media print` riporta al chiaro qualunque cosa dica `data-theme`.
+- **Il PDF e le email non hanno un tema** e restano chiari: dompdf non vede Tailwind (ADR-031), e nessun client di posta ha un tema affidabile.
+- ⚠️ **Il numero delle sezioni del Design System non cambia**: il tema scuro entra come **§8**, in coda. §1–§7 sono citati per numero dai docblock del codice.
