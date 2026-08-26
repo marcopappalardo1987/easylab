@@ -94,8 +94,6 @@ const DA_MIGRARE = [
     'resources/views/auth/two-factor-challenge.blade.php',
     'resources/views/auth/verify-email.blade.php',
     'resources/views/bloccato.blade.php',
-    'resources/views/components/guest-layout.blade.php',
-    'resources/views/components/layouts/app.blade.php',
     'resources/views/livewire/anagrafica/albero.blade.php',
     'resources/views/livewire/campo/home.blade.php',
     'resources/views/livewire/dashboard/home.blade.php',

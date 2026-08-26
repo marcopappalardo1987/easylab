@@ -53,7 +53,15 @@
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="h-full bg-neutral-50 font-sans text-neutral-800 antialiased">
+{{-- Il fondo e l'inchiostro vengono dai **semantici** (DS §8.2): `bg-canvas`
+     e `text-ink` cambiano col tema senza una sola variante `dark:`, ed è ciò
+     che rende utile lo script qui sopra — che l'attributo lo scrive, ma non
+     avrebbe niente da colorare se questa riga fosse restata su `bg-neutral-50`.
+
+     ⚠️ **`/bloccato` monta questo layout pur essendo per utenti autenticati**
+     (ADR-034): là il tema lo decide `localStorage` e non la colonna. È
+     dichiarato, non è un difetto da correggere qui. --}}
+<body class="h-full bg-canvas font-sans text-ink antialiased">
     {{ $slot }}
 </body>
 </html>

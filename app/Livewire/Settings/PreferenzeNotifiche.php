@@ -3,8 +3,8 @@
 namespace App\Livewire\Settings;
 
 use App\Enums\TemaUtente;
+use App\Livewire\Settings\Concerns\ScegliTema;
 use App\Models\User;
-use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -31,7 +31,9 @@ use Livewire\Component;
  * stessa ragione questa classe conserva il proprio nome.
  *
  * **Le due colonne stanno fuori dall'attributo `Fillable` di `User`**, e si
- * scrivono solo da qui con `forceFill`. È la postura di
+ * scrivono con `forceFill`: `riceve_email_scadenze` da `salva()` qui sotto,
+ * `tema` dal trait `ScegliTema` — che dal 26 Ago 2026 questa classe **condivide**
+ * con la scorciatoia in top bar invece di ospitarne una copia. È la postura di
  * `visibilita_garanzie_ricambio` (ADR-029) e di `tenant_id` (ADR-032): la
  * preferenza di una persona non deve poter arrivare dal form di un'altra.
  */
@@ -39,6 +41,14 @@ use Livewire\Component;
 #[Layout('components.layouts.app')]
 class PreferenzeNotifiche extends Component
 {
+    // ⚠️ **`scegliTema()` arriva da qui e non è più scritto in questa classe.**
+    // Dal 26 Ago 2026 i consumatori sono due — questa pagina e la scorciatoia in
+    // top bar (`SelettoreTema`) — e due copie della stessa guardia divergono: il
+    // giorno in cui una delle due dimenticasse `tryFrom` non ci sarebbe nessun
+    // sintomo, solo un endpoint in più che scrive nella colonna ciò che il
+    // client gli manda. Il perché di ogni riga sta nel docblock del trait.
+    use ScegliTema;
+
     public bool $riceveEmailScadenze = true;
 
     public function mount(): void
@@ -53,40 +63,6 @@ class PreferenzeNotifiche extends Component
         ])->save();
 
         $this->dispatch('preferenze-salvate');
-    }
-
-    /**
-     * Sceglie il tema (🔗 ADR-034 — DS §8.3), e lo scrive subito.
-     *
-     * **Nessun «Salva» qui, a differenza del digest**, ed è deliberato: Alpine
-     * ha già cambiato il colore della pagina nel millisecondo del click. Se il
-     * database restasse indietro fino a un bottone, il primo ricaricamento
-     * riporterebbe il tema di prima — cioè l'interruttore sembrerebbe aver
-     * dimenticato, che è peggio del non averlo.
-     *
-     * ⚠️ **Il valore si converte con `tryFrom` prima di toccare la colonna.**
-     * Il parametro arriva dal client e un componente Livewire è un endpoint a
-     * tutti gli effetti: `from()` lancerebbe un `ValueError` (500), un cast
-     * cieco scriverebbe. La colonna ha un `CHECK` a database che rifiuterebbe
-     * comunque, ma un vincolo che scatta è un errore di sistema, non una
-     * risposta — e su SQLite e Postgres non ha nemmeno lo stesso testo.
-     *
-     * ⛔ **L'identità viene da `auth()`, mai da un parametro.** Non esiste una
-     * firma in cui si possa nominare *un altro utente*: è il solo modo per cui
-     * «cambiare il tema di qualcun altro» non è una richiesta esprimibile,
-     * invece che una richiesta respinta da un controllo che si può dimenticare.
-     */
-    public function scegliTema(string $tema): void
-    {
-        $scelto = TemaUtente::tryFrom($tema);
-
-        if ($scelto === null) {
-            throw ValidationException::withMessages([
-                'tema' => 'Tema non riconosciuto.',
-            ]);
-        }
-
-        $this->user()->forceFill(['tema' => $scelto])->save();
     }
 
     private function user(): User
