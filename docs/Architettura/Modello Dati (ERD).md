@@ -244,7 +244,7 @@ I membri che amministrano il rapporto commerciale (condizione della Policy dietr
 | `data_installazione` | date nullable | Base del calcolo obsolescenza (ADR-014). |
 | `qr_token` | string unique | Token incluso nella URL firmata del QR (ADR-003). |
 | **Override semaforo (ADR-005)** | | |
-| `forced_state` | enum nullable: `verde` \| `arancione` \| `rosso` | Se valorizzato, vince sul calcolato. |
+| `forced_state` | `string` nullable con **CHECK**: `verde` \| `arancione` \| `rosso` | Se valorizzato, vince sul calcolato. Il vincolo è a **database** dal 26 Ago 2026 — vedi la nota sotto la tabella. |
 | `forced_by` | bigint nullable FK → `users.id` | |
 | `forced_at` | datetime nullable | |
 | `forced_reason` | string nullable | Motivo (raccomandato). |
@@ -254,6 +254,12 @@ I membri che amministrano il rapporto commerciale (condizione della Policy dietr
 - `stato_semaforo_calcolato` — funzione pura su `interventi` + `garanzie` (ADR-005): 🟢 nessuna attività scaduta-non-fatta né scadenza imminente; 🟠 ≥1 attività scaduta-non-fatta o scadenza/garanzia imminente. 🔴 solo via `forced_state`.
   > **La fonte "garanzie" comprende due insiemi** (ADR-020): le garanzie `macchina` dello strumento **∪** le garanzie `ricambio` dei pezzi montati sullo strumento (`garanzie → ricambio_utilizzo → strumento_id`). Le seconde vanno lette **senza** `GaranziaRicambioPrivacyScope`: il pallino è un aggregato dovuto a tutti, il dettaglio no.
 - `stato_semaforo_effettivo` = `forced_state` se presente, altrimenti `stato_semaforo_calcolato`.
+
+> 🔴 **`forced_state` porta un CHECK a database dal 26 Ago 2026** (S6, dopo le dashboard per ruolo). La colonna nasce `string` nullable senza vincolo, e l'invariante era sostenuta dalla sola forma del codice: sta fuori da `$fillable` e l'unica via di scrittura è `Strumento::forzaSemaforo()`. Ha retto — 5.105 strumenti sul database di sviluppo, 16 forzati, **zero** fuori enum — ma ciò che non copriva è una **migration di correzione o un import**, che scrivono col query builder senza incontrare né `$fillable` né gli eventi del model.
+>
+> ⚠️ **Il peso è cambiato con S6.** I quattro numeri della dashboard poggiano sulla partizione «verde + arancione + rosso = tutto il parco», e con un valore fuori enum le tre letture del progetto rispondono **tre cose diverse**: il filtro (`scopeConStato`) fa sparire la riga da tutti e tre gli insiemi, l'ordinamento (`scopeOrdinaPerStato`) la tratta come **verde** per via del ramo `else 0`, e il calcolo per-model **lancia** sul cast dell'enum. Una riga sola basta a far dire alla dashboard un numero plausibile e sbagliato.
+>
+> ⚠️ **Su SQLite il vincolo non c'è**, e va saputo: quel driver non aggiunge vincoli a una tabella esistente. La suite in locale gira su SQLite, quindi lì l'invariante non esiste; in CI, su Postgres, sì. I due test che toccano il confine si escludono a vicenda per driver e ciascuno dice nel proprio nome quale metà del mondo descrive.
 - `obsoleta` = `(oggi − data_installazione) ≥ soglia_obsolescenza_anni` del tenant (ADR-014).
 - **`diagnosi_semaforo`** (ADR-024) — non solo lo stato ma i **motivi** che lo determinano: elenco tipizzato `{tipo, scadenza, riferimento}` da cui il tab Panoramica costruisce testo e link. Alimenta anche l'"email del futuro" (S5), che altrimenti ricostruirebbe le stesse ragioni per conto proprio. Derivato come gli altri: **mai persistito**.
 

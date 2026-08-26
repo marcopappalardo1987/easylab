@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\Parco\MetricheParco;
 use App\Support\Parco\RiepilogoParco;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -84,17 +85,36 @@ it('adds up to the whole parco, because the three states are a partition', funct
         ->and(Strumento::count())->toBe(6);
 });
 
-it('makes a rogue forced_state visible instead of hiding it', function () {
-    // 🔴 **Perché il totale è DERIVATO dalla somma e non contato a parte.**
-    // `strumenti.forced_state` è una `string` nullable senza CHECK: fuori enum
-    // la riga cade fuori da tutti e tre i rami di `scopeConStato()`. Con un
+it('refuses a forced_state outside the enum, where the database can say so', function () {
+    // 🔴 **L'invariante su cui poggiano i quattro numeri è ora una regola del
+    // DATABASE** (migration del 26 Ago 2026), non più un'ipotesi sostenuta dalla
+    // forma del codice. Fino a ieri reggeva perché `forced_state` sta fuori da
+    // `$fillable` e l'unica via è `forzaSemaforo()`; ciò che non copriva era una
+    // migration di correzione o un import, che scrivono col query builder.
+    //
+    // Si scrive col query builder apposta: è la strada che il vincolo esiste per
+    // chiudere, e l'unica su cui il model non ha voce.
+    $rognosa = ($this->macchina)('Con uno stato che non esiste');
+
+    expect(fn () => DB::table('strumenti')->where('id', $rognosa->id)->update(['forced_state' => 'giallo']))
+        ->toThrow(QueryException::class);
+})->skip(
+    fn () => DB::connection()->getDriverName() === 'sqlite',
+    'SQLite non aggiunge vincoli a una tabella esistente: il CHECK non c\'è, e il test gemello qui sotto descrive quel mondo.'
+);
+
+it('makes a rogue forced_state visible instead of hiding it, where the check is missing', function () {
+    // 🔴 **Perché il totale è DERIVATO dalla somma e non contato a parte.** Fuori
+    // enum la riga cade fuori da tutti e tre i rami di `scopeConStato()`: con un
     // totale letto da una quarta query i numeri tornerebbero singolarmente e
-    // **non fra loro**, cioè l'anomalia sarebbe muta; derivandolo, la somma
+    // **non fra loro**, cioè l'anomalia sarebbe muta. Derivandolo, la somma
     // smette di combaciare col parco e qualcuno se ne accorge.
     //
-    // Si scrive col query builder, scavalcando gli eventi, perché è così che
-    // arriverebbe davvero: da una migration o da un import, mai dal form —
-    // la colonna è fuori da `$fillable` e l'unica via è `forzaSemaforo()`.
+    // ⚠️ **Questo test descrive il mondo SENZA il CHECK**, che dal 26 Ago 2026 è
+    // il solo SQLite — cioè la suite in locale. In CI, su Postgres, la scrittura
+    // è rifiutata e vale il gemello qui sopra. La scelta del totale derivato
+    // resta comunque quella giusta: il vincolo protegge questa colonna, non
+    // rende vera per sempre l'aritmetica di chi la legge.
     ($this->macchina)('Sana');
     $rognosa = ($this->macchina)('Con uno stato che non esiste');
     DB::table('strumenti')->where('id', $rognosa->id)->update(['forced_state' => 'giallo']);
@@ -105,7 +125,10 @@ it('makes a rogue forced_state visible instead of hiding it', function () {
     expect(Strumento::count())->toBe(2)
         ->and($r->totale())->toBe(1)
         ->and($r->totale())->toBeLessThan(Strumento::count());
-});
+})->skip(
+    fn () => DB::connection()->getDriverName() !== 'sqlite',
+    'Qui il CHECK esiste e la riga rognosa non si può creare: vale il test gemello qui sopra.'
+);
 
 it('counts the obsolete ones without moving them out of their semaforo state', function () {
     // ADR-014: l'obsolescenza «non tocca il semaforo». La quarta cifra è
