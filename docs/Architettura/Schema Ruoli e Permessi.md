@@ -27,15 +27,15 @@ Nomi ruolo **identici** a ERD §3.1 (usati così come stringa spatie).
 
 | Ruolo (spatie) | Livello | `users.tenant_id` | Bypass Global Scope | Sintesi |
 |---|---|---|---|---|
-| `Developer` | Piattaforma | NULL | ✅ | Accesso tecnico totale: codice, log di sistema, impersonation. |
-| `Superadmin` | Piattaforma | NULL | ✅ | Cabina di regia EasyLab. ⊇ tutte le funzionalità di `Admin` + gestione globale (clienti, MRR, billing, provisioning, lockout). |
+| `Developer` | Piattaforma | NULL | ❌ | Accesso tecnico totale: codice, log di sistema, impersonation. |
+| `Superadmin` | Piattaforma | valorizzato (Ente di piattaforma) | ❌ | Cabina di regia EasyLab. ⊇ tutte le funzionalità di `Admin` + gestione globale (clienti, MRR, billing, provisioning, lockout). |
 | `Admin` | Tenant-bound | valorizzato | ❌ | "Piccolo EasyLab" sul proprio Ente: anagrafica, interventi, garanzie (incl. ricambio), fornitori, forzatura semaforo, abbonamento proprio. |
 | `Responsabile Reparto` | Tenant-bound | valorizzato | ❌ | Come Admin sull'operatività, ma ristretto al **sotto-albero** assegnato (pivot `responsabile_unita`); niente billing/audit/provisioning. |
-| `Tenant` | Tenant-bound | valorizzato | ❌ | Laboratorio/Ente finale: vista semaforo, interventi, documenti, garanzia **macchina**. Mai garanzie ricambio (privacy). |
+| `Tenant` | Tenant-bound | valorizzato | ❌ | Laboratorio/Ente finale: vista semaforo, interventi, documenti, garanzia **macchina**. Garanzie ricambio secondo l'impostazione del **proprio Ente** (🔗 ADR-029), non secondo la matrice. |
 | `Tecnico` | Piattaforma **o** Ente | NULL (esterno) **o** valorizzato (interno) | ❌ (accesso derivato) | Personale sul campo: accesso a strumenti = **portafoglio ∪ assegnazione** (ADR-007/030) per **entrambe** le forme, ogni accesso loggato. Per l'interno il `tenant_id` è difesa in profondità (in AND), non un criterio: appartenere all'Ente non dà accesso alle sue macchine. |
 
 **Note sulla gerarchia.**
-- `Developer` e `Superadmin` bypassano il Global Scope (vedono tutti i tenant) — indispensabile per dashboard globali e assistenza (🔗 ADR-001).
+- 🔴 **Nessun ruolo bypassa il Global Scope**, Developer e Superadmin compresi. *Questa riga diceva il contrario fino al 26 Ago 2026 — «vedono tutti i tenant, indispensabile per le dashboard globali» — ed era la premessa che 🔗 **ADR-018** ha scartato: un bypass per ruolo è un secondo percorso di accesso, e il giorno che sbaglia non lo dice.* Ciò che rende possibili le viste globali è **una porta unica e non-scopata** (`App\Support\Tenancy\VistaPiattaforma`), che toglie gli scope **per nome** e chiede `tenants.view_all`; l'accesso ai dati di un cliente passa invece dall'**impersonazione**, tracciata. Il Superadmin è a tutti gli effetti tenant-bound su un proprio Ente di piattaforma (`SuperadminSeeder`), e il Developer **non ha `tenant_id`**: per `TenantScope` questo è fail-closed, quindi vede **zero righe** di dominio — non tutte. È il motivo per cui la dashboard per ruolo gli mostra «Nessuno strumento visibile.» e non quattro zeri.
 - `Superadmin` eredita *funzionalmente* tutti i permessi di `Admin` (Funzionalità per Ruolo §2: "tutte le funzionalità dell'Admin sono integrate nel superadmin").
 - `Tecnico` è un ruolo con accesso **derivato** (non bypassa lo scope, ma ne ha uno proprio come unione di due insiemi — §6, ADR-007/030). Ne esistono **due forme**: l'**esterno** (staff EasyLab, `tenant_id` NULL, con portafoglio clienti) e l'**interno** (dipendente del laboratorio, `tenant_id` valorizzato). La regola di visibilità è la stessa per entrambi: la forma cambia solo *da dove* arriva l'accesso, non *quanto* se ne ottiene.
 
