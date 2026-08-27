@@ -11,10 +11,15 @@
 > **qui le regole e il perché, lì la dimostrazione.** Se un componente si può *mostrare*, si mostra lì e qui
 > se ne cita solo il vincolo.
 >
-> ⚠️ **`resources/css/app.css` non è ancora allineato a questo documento.** La palette qui sotto è il blu del
-> marchio (§2.1); i token in esecuzione sono ancora il teal dello Sprint 0. È uno scarto **noto e voluto**: il
-> restyling è un intervento a parte, con la sua verifica visiva. Fino ad allora, chi legge un colore in
-> `app.css` e uno qui **non ha trovato un bug**. 🔗 ADR-033.
+> ✅ **Dal 27 Ago 2026 `resources/css/app.css` è allineato a questo documento.** Lo scarto dichiarato qui —
+> il blu nel documento, il teal in esecuzione — è stato chiuso dal restyling: 🔗 ADR-033 è **attuata**, e
+> §8 aggiunge lo strato semantico e il tema scuro (🔗 ADR-034). Chi oggi legge un colore in `app.css` e uno
+> qui e li trova **diversi** ha trovato un bug, non uno scarto voluto.
+>
+> ⚠️ **E c'è una rete, ma non guarda i valori.** `PaletteGuardrailTest`, `TemaScuroGuardrailTest` e
+> `SuperficiTokenizzateGuardrailTest` verificano che ogni token esista, sia definito in **entrambi** i temi e
+> non sia stato sostituito da una classe di scala. Nessuno dei tre guarda **quale** colore sia: quella
+> verifica resta visiva, e questo documento resta la sua unica fonte.
 
 ---
 

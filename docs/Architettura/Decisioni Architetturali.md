@@ -1026,7 +1026,7 @@ Il precedente indica la strada: il **Tecnico esterno** (🔗 ADR-030) è già og
 
 **ADR-033 — Il primary è il blu del marchio; il teal dello Sprint 0 decade**
 
-*Stato: Accettata (21 Ago 2026) — decisa da Marco dopo la consegna dei file di brand in `docs/Design/assets/`. **Documentale, non ancora attuata**: `docs/Design/Design System Base.md` §2 e §6 e il campione `docs/Design/design-system.html` sono allineati al blu; `resources/css/app.css` porta ancora i token teal. Il restyling è un intervento a parte. Nessuna decisione precedente viene superata: ADR-005 (semaforo) e ADR-014 (obsolescenza) restano validi alla lettera, e i loro colori non cambiano di un grado.*
+*Stato: Accettata (21 Ago 2026), **ATTUATA il 26-27 Ago 2026** col restyling (branch `restyling/design-system`, 🔗 `docs/Roadmap/Restyling UI — Roadmap Operativa.md`). Il teal è uscito dal progetto: `resources/css/app.css` porta gli undici gradini del blu, con `primary-400` e `primary-600` ancorati agli hex reali del logo. Verificato **a schermo** — che è la sola verifica che questa decisione ammette: `/login` rende il bottone primario `rgb(6,88,156)`, cioè lo stesso blu della «Easy» del marchio. Nessuna decisione precedente è stata superata: ADR-005 (semaforo) e ADR-014 (obsolescenza) restano validi alla lettera, e i loro colori non sono cambiati di un grado.*
 
 **Contesto.** Il Design System nasce allo Sprint 0 (task S0.4) quando il logo non esisteva ancora, e sceglie un primary **teal** `#0D9488` per ragioni di tono — «affidabile, lab/medicale». Il 20 Ago 2026 arrivano i file di marchio definitivi: `Logo-EasyLab.svg` è **blu**, costruito su due soli colori, `#06589C` e `#2997D4`, legati da un gradiente sulla curva della «y». Da quel momento l'applicazione e il proprio marchio sono di due colori diversi, e il documento che dovrebbe essere il contratto dei colori descrive un colore che il brand non usa.
 
@@ -1038,7 +1038,15 @@ Il precedente indica la strada: il **Tecnico esterno** (🔗 ADR-030) è già og
 - **I grafici usano un gradino diverso dal badge** (§2.5 del DS): un riempimento di superficie deve staccarsi dal fondo di almeno 3:1 e il gradino chiaro non ci arriva. Stessa famiglia, gradino scelto per il lavoro.
 
 **Conseguenze e trappole.**
-- ⚠️ **Nessun test si accorgerà mai di questa decisione**, né della sua attuazione, né di una sua attuazione sbagliata: la suite non guarda i colori. La verifica è **visiva e manuale**. È la stessa forma dell'errore già pagato due volte dal progetto — le migration non applicate al DB di sviluppo, `config/rbac.php` non riseminato: *ciò che non vive nello schema non viene allineato da un comando.*
+- ⚠️ ~~**Nessun test si accorgerà mai di questa decisione**~~ — **non è più vero dal 26 Ago 2026.** Restava
+  vero finché nessuno costruiva la rete; il restyling ne ha costruite tre (🔗 DS §8.5). Oggi
+  `PaletteGuardrailTest` verifica che ogni tonalità **e ogni token semantico** usati siano definiti,
+  `TemaScuroGuardrailTest` che nessun token esista in un tema solo, e
+  `SuperficiTokenizzateGuardrailTest` che **nessuna vista** dell'intero repository torni a una classe
+  di scala. ⚠️ **Ciò che resta vero è la metà che conta**: nessuna di quelle reti guarda un *valore*.
+  Verificano che il token esista e sia definito nei due temi, non che sia il colore giusto. **La
+  verifica del valore resta visiva e manuale**, ed è la stessa forma dell'errore già pagato due volte
+  dal progetto: *ciò che non vive nello schema non viene allineato da un comando.*
 - ⚠️ **Fino all'attuazione, `app.css` e il Design System dicono due cose diverse, e lo dicono apposta.** Lo scarto è dichiarato in testa al DS. Chi lo incontra non ha trovato un bug; chi lo «corregge» di sorpresa fa un restyling non verificato.
 - **Il PDF dello storico non è toccato**: ha colori scritti a mano (dompdf non vede Tailwind), ma sono neutri più `#15803d` e `#b91c1c` — nessun primary. Verificato il 21 Ago 2026. Le viste di autenticazione usano `primary-50/600/700`, cioè token, e si ridipingono da sole.
 - **Due difetti trovati misurando, non guardando**, corretti nel DS con la stessa decisione: il **placeholder era a `neutral-400`** (2.56:1 su bianco, sotto AA) e va a `neutral-500`; la scala neutra era **rada**, e `app.blade.php` usava già un `text-neutral-500` inesistente nel tema, che ricadeva in silenzio sulla scala di default di Tailwind. Un token assente non dà errore: dà un colore diverso.
