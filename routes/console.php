@@ -37,6 +37,26 @@ Schedule::command('easylab:notifica-scadenze')
     ->onOneServer();
 
 /*
+ * L'alert di obsolescenza (🔗 ADR-014), fratello minore del digest qui sopra.
+ *
+ * **06:15 e non 06:00**, e i quindici minuti non sono decorativi. I due comandi
+ * mandano due email diverse alla stessa persona: separarli mette il digest
+ * operativo per primo nella casella — è quello che chiede un'azione oggi — e
+ * toglie l'unico caso in cui il lock `withoutOverlapping` non protegge da
+ * niente, cioè **due comandi diversi** che scrivono su `avvisi_scadenza` nello
+ * stesso secondo (il lock è per comando, non per tabella).
+ *
+ * Il fuso `Europe/Rome` ha la stessa ragione scritta sopra la riga del digest:
+ * `today()` è calcolato in UTC, e alle sei italiane le due date coincidono
+ * sempre — in ora solare come legale.
+ */
+Schedule::command('easylab:notifica-obsolescenza')
+    ->dailyAt('06:15')
+    ->timezone('Europe/Rome')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+/*
  * 🔴 **La potatura, ed è QUI che una retention smette di essere un'intenzione.**
  *
  * È la «rotazione» che il registro dei trattamenti dichiara per T4 (avvisi) e

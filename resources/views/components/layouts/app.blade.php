@@ -181,13 +181,24 @@
                              bugia della card rimossa dalla dashboard il 21 Ago, in un
                              altro punto dello schermo: gli interventi esistono da S3 —
                              nel tab della scheda, in `/campo`, nel digest — e ciò che
-                             non esiste è un elenco **cross-macchina**, che con S6
-                             chiuso non ha più uno sprint che lo porti. Un
+                             non esisteva era un elenco **cross-macchina**. Un
                              «prossimamente» senza referente è peggio di un'assenza:
                              promette a chi guarda una pagina che nessuno sta
-                             scrivendo. La lacuna è dichiarata in roadmap, con dove si
-                             rispondono oggi le due domande vere — «cosa scade» dalla
-                             dashboard, «cosa devo fare io» da `/campo`. --}}
+                             scrivendo.
+
+                             ✅ **Aggiornato il 27 Ago 2026**: metà di quella lacuna
+                             è chiusa — «cosa scade su tutto il parco» ha una pagina,
+                             ed è la voce «Scadenzario» qui sopra. La voce si chiama
+                             così e **non** «Interventi» di proposito: `AppShellTest`
+                             asserisce che quella parola non compaia in questo blocco,
+                             perché rimetterla riaprirebbe la promessa che è costata
+                             la rimozione del 25 Ago.
+
+                             ⚠️ Resta scoperta l'altra metà: gli **spostamenti**.
+                             `spostamenti.view` ha un solo consumatore, il tab della
+                             scheda, e non c'è nessuna vista «dov'è stata questa
+                             macchina» che attraversi il parco. La lacuna è dichiarata
+                             in roadmap come voce V1.1. --}}
                     </nav>
                 </aside>
 

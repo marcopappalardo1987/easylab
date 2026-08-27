@@ -72,3 +72,41 @@ it('prunes avvisi older than 24 months and keeps the recent ones', function () {
     expect(AvvisoScadenza::find($vecchio->id))->toBeNull()
         ->and(AvvisoScadenza::find($recente->id))->not->toBeNull();
 });
+
+// --- La transizione `obsoleta` (🔗 ADR-014, 27 Ago 2026) ---
+//
+// Il vincolo, non il comando: che lo schema esistente ospiti davvero il morph
+// verso `Strumento` e il valore nuovo dell'enum — senza migration, perché
+// `transizione` è una `string` e `riferimento` un `morphs()` — e che la unique a
+// quattro colonne sia la **seconda rete** sotto la query del servizio. Se
+// cadesse, il «niente duplicati» dell'obsolescenza dipenderebbe da un posto solo.
+
+it('accepts an obsolescence avviso pointing at a Strumento', function () {
+    $riga = AvvisoScadenza::create([
+        'tenant_id' => $this->strumento->tenant_id,
+        'riferimento_type' => $this->strumento->getMorphClass(),
+        'riferimento_id' => $this->strumento->id,
+        'transizione' => TransizioneAvviso::Obsoleta,
+        // La data è la `data_installazione` NUDA: è ciò che rende la chiave
+        // stabile sotto i cambi di soglia (vedi `AvvisiObsolescenza`).
+        'data_scadenza' => '2012-04-01',
+    ]);
+
+    expect($riga->fresh()->transizione)->toBe(TransizioneAvviso::Obsoleta)
+        ->and($riga->fresh()->riferimento)->toBeInstanceOf(Strumento::class)
+        ->and($riga->fresh()->riferimento->id)->toBe($this->strumento->id);
+});
+
+it('rejects a second obsolescence avviso for the same machine and installation date', function () {
+    $riga = fn () => AvvisoScadenza::create([
+        'tenant_id' => $this->strumento->tenant_id,
+        'riferimento_type' => $this->strumento->getMorphClass(),
+        'riferimento_id' => $this->strumento->id,
+        'transizione' => TransizioneAvviso::Obsoleta,
+        'data_scadenza' => '2012-04-01',
+    ]);
+
+    $riga();
+
+    expect($riga)->toThrow(QueryException::class);
+});

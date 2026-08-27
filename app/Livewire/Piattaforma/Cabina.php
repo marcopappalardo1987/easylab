@@ -7,6 +7,7 @@ use App\Livewire\Piattaforma\Concerns\ElencaClienti;
 use App\Livewire\Piattaforma\Concerns\FissaVisibilitaSede;
 use App\Livewire\Piattaforma\Concerns\OffreImpersonazione;
 use App\Livewire\Piattaforma\Concerns\ProvisionaCliente;
+use App\Support\Piattaforma\AndamentiPiattaforma;
 use App\Support\Piattaforma\MetrichePiattaforma;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
@@ -90,11 +91,25 @@ class Cabina extends Component
         // confine è stato passato davvero, perché `accounts()` da solo non
         // attraversa alcuno scope (Account è modello di piattaforma) e lo stesso
         // numero lo darebbe una query nuda di un Tenant qualunque.
+        //
+        // Gli **andamenti** stanno accanto e non altrove per la stessa ragione:
+        // passano dalla stessa porta (quindi non serve e non si scrive una
+        // guardia nuova — sono gli stessi dati dei quattro KPI, dalla stessa
+        // pagina) e partono dallo stesso `PerimetroClienti`, così la curva chiude
+        // sul numero della tile che le sta a due centimetri invece che su uno
+        // plausibile e diverso.
+        //
+        // ⚠️ Costano **tre query costanti** — non una per mese e non una per
+        // tile — e girano a **ogni** update di Livewire, ricerca compresa
+        // (`wire:model.live.debounce.300ms` su `search`): quel costo si ripaga a
+        // ogni tasto, ed è il motivo per cui il vincolo delle tre query non si
+        // molla. La risposta al giorno in cui pesasse è un indice, non una cache.
         $clienti = $this->clienti();
         $dettagli = $this->dettagliDellaPagina($clienti->getCollection());
 
         return view('livewire.piattaforma.cabina', [
             'riepilogo' => MetrichePiattaforma::riepilogo(),
+            'andamento' => AndamentiPiattaforma::ultimiDodiciMesi(),
             'clienti' => $clienti,
             'sediPerAccount' => $dettagli['sedi'],
             'strumentiPerAccount' => $dettagli['strumenti'],

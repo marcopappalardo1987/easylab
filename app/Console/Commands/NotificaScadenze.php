@@ -4,7 +4,6 @@ namespace App\Console\Commands;
 
 use App\Enums\SoggettoGaranzia;
 use App\Enums\TipoMotivoSemaforo;
-use App\Enums\TipoUnitaOrganizzativa;
 use App\Enums\TransizioneAvviso;
 use App\Models\AvvisoScadenza;
 use App\Models\Garanzia;
@@ -13,8 +12,9 @@ use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Notifications\DigestScadenze;
+use App\Support\Notifiche\DestinatariEnte;
+use App\Support\Notifiche\EntiNotificabili;
 use App\Support\Notifiche\RigaAvviso;
-use App\Support\Tenancy\AccessibleNodes;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -87,30 +87,13 @@ class NotificaScadenze extends Command
 
     public function handle(): int
     {
-        // Gli Enti degli account in lockout restano fuori (ADR-013): il blocco
-        // per insoluto è **totale**, e mandare a un cliente a cui abbiamo
-        // chiuso la porta un promemoria operativo — con un link che lo sbatte
-        // su /bloccato — la contraddirebbe due volte, dicendogli «fai la
-        // manutenzione» e «non puoi entrare» nello stesso minuto. Gli avvisi
-        // non si perdono: `avvisi_scadenza` non viene scritto per loro, quindi
-        // allo sblocco le scadenze ancora aperte tornano a essere novità.
-        //
-        // `whereDoesntHave` e NON `whereNotIn(...)`: su un Ente con
-        // `account_id` NULL — legittimo, fail-open come nel middleware — il
-        // `NOT IN` darebbe UNKNOWN e lo escluderebbe in silenzio.
-        // ⚠️ Query cross-tenant SENZA `VistaPiattaforma` (S6), e deve restare così:
-        // quella porta chiede `Gate::authorize`, che senza utente nega sempre —
-        // farla passare di qui manderebbe lo scheduler notturno in
-        // AuthorizationException, e il sintomo sarebbe un digest che non arriva.
-        // In console il confine non c'è già: TenantScope non si applica quando
-        // manca un utente, quindi la query nuda è la forma corretta.
-        $enti = UnitaOrganizzativa::query()
-            ->where('tipo', TipoUnitaOrganizzativa::Ente->value)
-            ->whereDoesntHave('account', fn ($query) => $query->where('is_locked', true))
-            ->orderBy('id')
-            ->get(['id', 'nome']);
-
-        foreach ($enti as $ente) {
+        // Chi resta fuori — gli Enti degli account in lockout (ADR-013) — e
+        // perché la query sia cross-tenant senza passare da `VistaPiattaforma`
+        // sono spiegati per intero nel docblock di `EntiNotificabili`, che dal
+        // 27 Ago 2026 è l'unico posto in cui quella lista si costruisce: la
+        // condivide con `easylab:notifica-obsolescenza`, e due copie sarebbero
+        // state due posti liberi di divergere su chi NON riceve.
+        foreach (EntiNotificabili::tutti() as $ente) {
             $this->perEnte($ente);
         }
 
@@ -358,28 +341,28 @@ class NotificaScadenze extends Command
             }
         };
 
-        $utenti = User::query()->where('tenant_id', $tenantId)->get();
-
-        foreach ($utenti as $utente) {
-            if ($utente->hasRole('Admin')) {
-                $aggiungi($utente, $righe);
-
-                continue;
-            }
-
-            if ($utente->hasRole(User::TENANT_ROLE)) {
-                $aggiungi($utente, $this->senzaRicambiNascosti($utente, $righe));
-
-                continue;
-            }
-
-            if ($utente->isDepartmentScoped()) {
-                $nodi = AccessibleNodes::forUser($utente) ?? [];
-                $aggiungi($utente, array_values(array_filter(
+        // Il «chi» e i «suoi nodi» arrivano da `DestinatariEnte`, condiviso con
+        // l'avviso di obsolescenza (27 Ago 2026). Il filtro delle RIGHE resta
+        // qui, e con esso il filtro dei ricambi nascosti: è proprio del digest,
+        // e l'altro comando non deve ereditarlo per distrazione.
+        foreach (DestinatariEnte::perEnte($tenantId) as ['utente' => $utente, 'nodi' => $nodi]) {
+            $sue = $nodi === null
+                ? $righe
+                : array_values(array_filter(
                     $righe,
                     fn (RigaAvviso $riga) => $riga->unitaId !== null && in_array($riga->unitaId, $nodi, true),
-                )));
+                ));
+
+            // ⚠️ `! hasRole('Admin')` e non solo `hasRole(TENANT_ROLE)`: nella
+            // stesura precedente il ramo Admin veniva PRIMA e faceva `continue`,
+            // quindi chi fosse Admin *e* Tenant riceveva tutto senza passare dal
+            // filtro di ADR-029. L'estrazione non deve cambiarlo di straforo —
+            // sarebbe una modifica di comportamento travestita da refactoring.
+            if (! $utente->hasRole('Admin') && $utente->hasRole(User::TENANT_ROLE)) {
+                $sue = $this->senzaRicambiNascosti($utente, $sue);
             }
+
+            $aggiungi($utente, $sue);
         }
 
         $perTecnico = [];

@@ -56,3 +56,68 @@
         </table>
     </div>
 @endcomponent
+
+{{-- I tre pezzi dei grafici — 🔗 DS §2.5 (tinte dei grafici), §8.2 (token), ADR-034.
+
+     ⚠️ **Costruiti in memoria, come tutto il banco**: `SerieMensile` è un
+     value object senza database, e le voci della composizione sono array
+     letterali. Il banco resta una pagina che non tocca un dato.
+
+     ⛔ **Perché sono qui, e non solo nella cabina.** `BancoTest` pretende che
+     ogni componente della libreria sia montato in questa pagina, e non è
+     burocrazia: un pezzo che vive solo dentro una schermata reale è un pezzo
+     che nessuno guarda **nei due temi** — ed è nel tema scuro che i grafici
+     hanno il loro punto fragile dichiarato (§2.5: verde↔arancione a ΔE 6,9). --}}
+
+@php
+    use App\Support\Piattaforma\SerieMensile;
+
+    $andamento = new SerieMensile(
+        mesi: ['2025-09', '2025-10', '2025-11', '2025-12', '2026-01', '2026-02'],
+        etichette: ['Set', 'Ott', 'Nov', 'Dic', 'Gen', 'Feb'],
+        valori: [4, 6, 5, 9, 12, 14],
+        base: 3,
+    );
+
+    // ⚠️ Il caso limite che il banco deve mostrare **accanto** a quello pieno:
+    // su serie vuota la microlinea non disegna nulla, che è diverso dal
+    // disegnare una linea piatta a zero — quella si leggerebbe come un dato.
+    $serieVuota = new SerieMensile(mesi: [], etichette: [], valori: []);
+@endphp
+
+@component('banco.pezzo', [
+    'titolo' => 'x-ui.sparkline — la microlinea, e la stessa a serie vuota',
+    'token' => 'stroke-chart-brand · fill-chart-band · stroke-surface',
+    'nota' => "⚠️ È DECORATIVA: `aria-hidden`, nessun `role`, nessuna etichetta. Chi la usa DEVE metterle accanto il numero a parole («+11 in 6 mesi»), o il dato esiste solo per chi vede. A destra la serie vuota: non disegna nulla, perché una linea piatta a zero si leggerebbe come una misura.",
+])
+    <div class="flex items-center gap-6">
+        <span class="flex items-center gap-2">
+            <span class="block w-24"><x-ui.sparkline :valori="$andamento->valori" /></span>
+            <span class="text-sm tabular-nums text-ink-2">{{ $andamento->variazioneConSegno() }} in 6 mesi</span>
+        </span>
+        <span class="block w-24"><x-ui.sparkline :valori="$serieVuota->valori" /></span>
+    </div>
+@endcomponent
+
+@component('banco.pezzo', [
+    'titolo' => 'x-ui.grafico-barre — l\'andamento mensile, con la sua tabella',
+    'token' => 'fill-chart-brand · text-ink-3 · tabular-nums',
+    'nota' => "⛔ Sotto il disegno c'è la STESSA serie in tabella, e non è un ripiego per gli screen reader: è il modo in cui il dato si copia, si verifica e si legge quando il colore non basta (DS §2.5). Ogni barra porta un `<title>` col mese esteso e il valore.",
+])
+    <x-ui.grafico-barre :serie="$andamento" titolo="Nuovi strumenti" unita="strumenti" />
+@endcomponent
+
+@component('banco.pezzo', [
+    'titolo' => 'x-ui.barra-composizione — le quote di un totale',
+    'token' => 'bg-chart-brand · bg-chart-obsoleto · bg-chart-rosso',
+    'nota' => "⛔ Ogni voce porta etichetta E glifo, mai il solo colore: in tema scuro la coppia verde↔arancione scende sotto la soglia di sicurezza (DS §2.5, ADR-034), ed è la ridondanza a renderla legittima.",
+])
+    <x-ui.barra-composizione
+        titolo="Clienti per piano"
+        unita="clienti"
+        :voci="[
+            ['etichetta' => 'SaaS', 'valore' => 25, 'classe' => 'bg-chart-brand', 'glifo' => '●'],
+            ['etichetta' => 'Free', 'valore' => 12, 'classe' => 'bg-chart-obsoleto', 'glifo' => '◆'],
+            ['etichetta' => 'Bloccati', 'valore' => 2, 'classe' => 'bg-chart-rosso', 'glifo' => '■'],
+        ]" />
+@endcomponent

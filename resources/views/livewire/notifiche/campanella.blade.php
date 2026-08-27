@@ -38,6 +38,13 @@
                     $dati = $notifica->data;
                     $scadute = $dati['scadute'] ?? 0;
                     $imminenti = $dati['imminenti'] ?? 0;
+                    // ⚠️ La campanella rende DUE notifiche diverse dallo stesso
+                    // blocco: il digest delle scadenze e l'avviso di
+                    // obsolescenza. Finché questa chiave non veniva letta, il
+                    // secondo usciva col paragrafo VUOTO — nome dell'Ente, una
+                    // riga bianca, «0 secondi fa» — e per chi ha spento le email
+                    // era l'unico canale. Non dava errore: dava il nulla.
+                    $obsoleti = $dati['obsoleti'] ?? 0;
                 @endphp
                 <div class="border-b border-border px-4 py-3 last:border-b-0 {{ $notifica->read_at === null ? 'bg-brand-soft' : '' }}">
                     <p class="text-sm font-medium text-ink">{{ $dati['ente_nome'] ?? 'Easy Lab' }}</p>
@@ -46,7 +53,17 @@
                             {{ $scadute }} {{ $scadute === 1 ? 'scadenza superata' : 'scadenze superate' }}@if ($imminenti > 0), @endif
                         @endif
                         @if ($imminenti > 0)
-                            {{ $imminenti }} in arrivo
+                            {{-- ⛔ La virgola è un'espressione e NON un `@if` inline, e la
+                                 differenza è fatale: Blade compila le direttive con `\B@`,
+                                 quindi un `@if` attaccato a una LETTERA («arrivo@if») non
+                                 viene riconosciuto — resta testo, e il suo `@endif` diventa
+                                 orfano: ParseError, pagina 500. La riga qui sopra se la cava
+                                 solo perché lì il carattere precedente è `}`, che non è una
+                                 lettera. Provato: la shell intera andava in 500. --}}
+                            {{ $imminenti }} in arrivo{{ $obsoleti > 0 ? ',' : '' }}
+                        @endif
+                        @if ($obsoleti > 0)
+                            {{ $obsoleti }} {{ $obsoleti === 1 ? 'macchina' : 'macchine' }} oltre la soglia di età
                         @endif
                     </p>
                     <p class="mt-1 text-xs text-ink-3">{{ $notifica->created_at->diffForHumans() }}</p>

@@ -2,7 +2,6 @@
 
 namespace App\Support\Piattaforma;
 
-use App\Enums\TipoUnitaOrganizzativa;
 use App\Support\Piani;
 use App\Support\Tenancy\VistaPiattaforma;
 
@@ -89,38 +88,28 @@ final class MetrichePiattaforma
         $perPiano = $ordinati;
 
         // ⚠️ **Sedi e strumenti si legano alla stessa nozione di «cliente» dei
-        // due numeri sopra**, con una sottoquery sugli id degli account. Senza,
-        // contavano anche l'Ente di EasyLab e le sue macchine: sul database di
-        // sviluppo erano una sede di nessun cliente e **1.217 strumenti su
-        // 5.105**, cioè il 24% di un numero etichettato «macchine di tutti i
-        // clienti». La migration che ha creato `di_piattaforma` lo aveva scritto
-        // per esteso — «falserebbe tutti e quattro i KPI» — e la prima stesura
-        // di questo blocco ne aveva coperti due.
+        // due numeri sopra**, e quella nozione vive ora in un posto solo:
+        // `PerimetroClienti`. Il commento lungo che stava qui — l'Ente di
+        // EasyLab, i 1.217 strumenti su 5.105, il cestinato che lasciava le
+        // proprie macchine nei totali per sempre — è nel docblock di quella
+        // classe, perché è là che la definizione si legge e si corregge.
         //
-        // Chiude gratis anche il caso opposto: un account **cestinato** lasciava
-        // le proprie sedi e macchine nei totali per sempre, perché `Account` non
-        // propaga il soft delete ai figli. La sottoquery passa da `accounts()`,
-        // che il soft delete ce l'ha.
+        // 🔗 Estratta il 27 Ago 2026 perché `AndamentiPiattaforma` ricostruisce
+        // le stesse tre grandezze mese per mese: due passate sullo stesso
+        // perimetro non possono avere due definizioni, o il grafico chiude su un
+        // numero diverso dalla tile che gli sta accanto — plausibile e sbagliato.
         //
-        // Resta **una query per tabella**: la sottoquery è annidata, non una
-        // chiamata in più.
-        $clientiVeri = VistaPiattaforma::accounts()->select('accounts.id');
-
-        $sediDeiClienti = VistaPiattaforma::enti()
-            ->where('tipo', TipoUnitaOrganizzativa::Ente)
-            ->whereIn('account_id', $clientiVeri);
+        // Resta **una query per tabella**: le sottoquery sono annidate, non
+        // chiamate in più.
+        $sediDeiClienti = PerimetroClienti::sedi();
 
         return new RiepilogoPiattaforma(
             mrrCent: $mrrCent,
             mrrBloccatoCent: $mrrBloccatoCent,
             clienti: $clienti,
             clientiBloccati: $bloccati,
-            sedi: (clone $sediDeiClienti)->count(),
-            // `strumenti.tenant_id` punta al nodo radice, che è quello che porta
-            // `account_id`: la stessa definizione, un salto più in là.
-            strumenti: VistaPiattaforma::strumenti()
-                ->whereIn('tenant_id', $sediDeiClienti->select('unita_organizzativa.id'))
-                ->count(),
+            sedi: $sediDeiClienti->count(),
+            strumenti: PerimetroClienti::strumenti()->count(),
             perPiano: $perPiano,
             pianiSconosciuti: $sconosciuti,
         );

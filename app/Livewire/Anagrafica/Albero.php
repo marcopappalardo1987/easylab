@@ -9,6 +9,7 @@ use App\Livewire\Concerns\ManagesStrumentoForm;
 use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
+use App\Support\Notifiche\AvvisiObsolescenza;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -200,6 +201,32 @@ class Albero extends Component
                 $node->fissaVisibilitaGaranzieRicambio(
                     VisibilitaGaranzieRicambio::from($validated['visibilitaGaranzieRicambio'])
                 );
+            }
+
+            // 🔔 ADR-014: abbassare la soglia fa attraversare la linea dell'età
+            // a delle macchine, e l'avviso parte **subito** invece di aspettare
+            // il giro delle 06:15. Il comando notturno resta la garanzia — se la
+            // soglia cambiasse da un altro punto (un tinker, una futura
+            // schermata di piattaforma) l'invariante si ricompone comunque entro
+            // ventiquattr'ore: questo è un acceleratore, non l'unica strada.
+            //
+            // `wasChanged` e NON `isDirty`: dopo `update()` gli attributi non
+            // sono più dirty, quindi `isDirty` sarebbe sempre falso — una
+            // guardia che sembra proteggere e in realtà spegne la funzione.
+            //
+            // Sincrono e non in coda, per `PermessiInCodaGuardrailTest`: la
+            // scelta dei destinatari legge ruoli, e nel worker la cache dei
+            // permessi può essere quella di un altro processo. Le email partono
+            // comunque in coda, perché la Notification è `ShouldQueue`.
+            //
+            // ⚠️ E qui i global scope sono ATTIVI, al contrario di quando lo
+            // stesso servizio gira da console: chi salva potrebbe essere
+            // department-scoped e non vedere metà del parco. `AvvisiObsolescenza`
+            // è scritto per reggere entrambi i contesti — il suo reset cancella
+            // solo le righe di macchine che ha positivamente letto — e chi lo
+            // modifica deve saperlo prima di accorciarlo.
+            if ($isEnte && $node->wasChanged('soglia_obsolescenza_anni')) {
+                AvvisiObsolescenza::perEnte($node);
             }
         } else {
             $this->authorize('unita_organizzativa.create');

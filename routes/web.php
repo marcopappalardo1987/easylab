@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AccessoQr;
+use App\Http\Controllers\EsportaElencoDocumenti;
 use App\Http\Controllers\EsportaStoricoPdf;
 use App\Http\Controllers\FugaDaLockout;
 use App\Http\Controllers\ImpostaPasswordInvito;
@@ -75,6 +76,22 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     Route::get('/documenti', ElencoDocumenti::class)
         ->middleware('can:documenti.view')
         ->name('documenti.index');
+    // Indice PDF dell'archivio, con gli stessi filtri della pagina.
+    //
+    // ⛔ DUE `can:`, e il secondo è quello che conta: `documenti.view` è «puoi
+    // vedere l'elenco», `documenti.export_pdf` è «puoi portartene via un
+    // foglio». Il **Tecnico ha il primo e non il secondo** — con la sola forma
+    // naturale (`can:documenti.view`, copiata dalla riga qui sopra) si
+    // porterebbe via in PDF l'intero archivio documentale del cliente. È la
+    // stessa coppia di `strumenti.storico-pdf`, e il Tecnico è ciò che rende
+    // la guardia falsificabile invece che decorativa.
+    //
+    // ⚠️ Registrata **prima** di `/documenti/{documento}`: hanno la stessa
+    // forma a due segmenti. Il `whereNumber` sul download è già una seconda
+    // rete, ma l'ordine resta la prima.
+    Route::get('/documenti/export.pdf', EsportaElencoDocumenti::class)
+        ->middleware(['can:documenti.view', 'can:documenti.export_pdf'])
+        ->name('documenti.export-pdf');
     // Download mediato dall'applicazione (ADR-026): l'autorizzazione si
     // ricontrolla a ogni richiesta, e il binding scopato dà 404 fuori Ente.
     //

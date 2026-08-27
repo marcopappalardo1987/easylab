@@ -37,8 +37,15 @@ it('shows the impersonation banner while impersonating', function () {
 it('no longer promises a page nobody is writing', function () {
     // 🔴 La sezione «Prossimamente → Interventi» era la stessa bugia della card
     // tolta dalla dashboard il 21 Ago, in un altro punto dello schermo: gli
-    // interventi esistono da S3, e ciò che non esiste è un elenco cross-macchina
-    // che con S6 chiuso non ha più uno sprint che lo porti.
+    // interventi esistono da S3, e ciò che non esisteva era un elenco
+    // cross-macchina.
+    //
+    // ✅ Aggiornato il 27 Ago 2026: «cosa scade su tutto il parco» ora esiste,
+    // è `/scadenzario`, ed è in barra laterale. L'asserzione qui sotto NON
+    // cambia — anzi ora vale doppio: la voce si chiama «Scadenzario», e se
+    // qualcuno la ribattezzasse «Interventi» questo test tornerebbe rosso,
+    // che è esattamente il verso giusto. Resta scoperta l'altra metà della
+    // lacuna, gli **spostamenti** (voce V1.1 in roadmap).
     //
     // ⚠️ Si asserisce sul **blocco `<nav>` della sidebar estratto**, non sulla
     // pagina: «Interventi» è una parola che vive altrove (il tab della scheda,

@@ -97,6 +97,118 @@
         </x-ui.card>
     @endif
 
+    {{-- ── Gli andamenti ────────────────────────────────────────────────────
+         Gli stessi dati dei quattro numeri qui sopra, letti nel tempo: stessa
+         porta (`tenants.view_all`), stesso `PerimetroClienti`, tre query
+         costanti. Stanno **dopo** l'avviso sui piani fuori catalogo perché
+         quell'avviso è un'azione da fare, e i grafici sono una lettura.
+
+         🔴 **Il ricavo non riceve un andamento, e la pagina lo dice.**
+         `accounts.piano` è lo stato di oggi: ricostruire l'MRR di sei mesi fa
+         applicando il piano attuale alle date d'ingresso darebbe una curva
+         plausibile e falsa. Al suo posto c'è la composizione **al presente**,
+         che è vera. --}}
+    <div class="mt-6 grid gap-4 lg:grid-cols-3">
+
+        <x-ui.card class="lg:col-span-2">
+            <x-ui.grafico-barre
+                :serie="$andamento->nuoviClienti"
+                titolo="Nuovi clienti per mese"
+                sottotitolo="Ultimi 12 mesi, per data di ingresso; il mese in corso è parziale. Un cliente cestinato sparisce da tutta la serie: la curva racconta chi c'è oggi, non chi c'era allora."
+                unita="clienti" />
+        </x-ui.card>
+
+        <div class="grid gap-4">
+
+            @php
+                use App\Support\Piattaforma\AndamentoPiattaforma;
+
+                // ⛔ Le classi di colore sono stringhe LETTERALI e complete, e
+                // arrivano da una costante PHP: `'bg-chart-'.$codice` non
+                // genererebbe nulla (Tailwind scansiona il sorgente, non valuta
+                // PHP) e il sintomo sarebbe un segmento invisibile su una pagina
+                // che risponde 200. Il glifo accanto al colore non è decorazione:
+                // in tema scuro verde↔arancione scendono a ΔE 6,9 (DS §2.5).
+                $vociPiano = [];
+
+                foreach (array_values($riepilogo->perPiano) as $i => $quanti) {
+                    [$classe, $glifo] = AndamentoPiattaforma::coloreDelPiano($i);
+
+                    $vociPiano[] = [
+                        'etichetta' => Piani::etichetta(array_keys($riepilogo->perPiano)[$i]),
+                        'valore' => $quanti,
+                        'classe' => $classe,
+                        'glifo' => $glifo,
+                    ];
+                }
+
+                if ($riepilogo->pianiSconosciuti > 0) {
+                    [$classe, $glifo] = AndamentoPiattaforma::COLORE_FUORI_CATALOGO;
+
+                    $vociPiano[] = [
+                        'etichetta' => 'Fuori catalogo',
+                        'valore' => $riepilogo->pianiSconosciuti,
+                        'classe' => $classe,
+                        'glifo' => $glifo,
+                    ];
+                }
+            @endphp
+
+            <x-ui.card>
+                <x-ui.barra-composizione
+                    :voci="$vociPiano"
+                    titolo="Clienti per piano"
+                    sottotitolo="Il ricavo non ha un andamento: il piano di oggi non dice quale fosse allora."
+                    unita="clienti" />
+            </x-ui.card>
+
+            {{-- ⚠️ Le sparkline sono `aria-hidden`: l'informazione sta nella
+                 riga di testo accanto («+7 in 12 mesi»), non nell'SVG. È la
+                 stessa disciplina di `x-ui.semaforo` — mai il solo colore, mai
+                 la sola forma.
+
+                 ⛔ **Una serie tutta a zero non riceve una sparkline.**
+                 `GeometriaGrafico` fa cadere la serie piatta a metà altezza per
+                 non dividere per zero, quindi dodici mesi a zero disegnerebbero
+                 la stessa identica linea che si vedrebbe con 5.000 strumenti
+                 fermi da un anno: un'assenza di dato che si legge come un dato.
+                 `eVuota()` è la distinzione, e va **chiamata** — scritta e non
+                 collegata varrebbe quanto il commento che la descrive. --}}
+            <x-ui.card>
+                <p class="text-sm font-semibold text-ink">Andamento a 12 mesi</p>
+                <p class="mt-0.5 text-xs text-ink-3">
+                    Cumulato per data di inserimento in EasyLab, non per data di installazione.
+                </p>
+
+                <dl class="mt-3 space-y-3">
+                    @foreach ([
+                        ['Clienti', $andamento->clientiCumulati],
+                        ['Sedi', $andamento->sediCumulate],
+                        ['Strumenti', $andamento->strumentiCumulati],
+                    ] as [$titoloSerie, $serie])
+                        <div>
+                            <div class="flex items-baseline justify-between gap-2">
+                                <dt class="text-sm text-ink-2">{{ $titoloSerie }}</dt>
+                                <dd class="text-xs tabular-nums text-ink-3">
+                                    @if ($serie->eVuota())
+                                        Nessun dato in 12 mesi
+                                    @else
+                                        {{ $serie->variazioneConSegno() }} in 12 mesi
+                                    @endif
+                                </dd>
+                            </div>
+
+                            @unless ($serie->eVuota())
+                                <x-ui.sparkline :valori="$serie->valori" />
+                            @endunless
+                        </div>
+                    @endforeach
+                </dl>
+            </x-ui.card>
+
+        </div>
+    </div>
+
     {{-- Filtri. Ogni valore è in query string, quindi una vista filtrata si
          manda a qualcuno per link — che è come si chiede aiuto su un cliente.
 

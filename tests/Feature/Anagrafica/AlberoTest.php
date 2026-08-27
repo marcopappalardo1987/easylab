@@ -6,6 +6,7 @@ use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
 
 beforeEach(function () {
@@ -305,4 +306,29 @@ it('drops the pointer once inside an Ente, where it would be noise', function ()
         ->test(Albero::class)
         ->assertSet('currentId', $ente->id)
         ->assertDontSee('Crea un Ente dalla Piattaforma');
+});
+
+// --- Soglia di obsolescenza: l'alert non deve poter rompere il salvataggio ---
+//
+// Dal 27 Ago 2026 salvare una soglia più bassa fa partire l'avviso di
+// obsolescenza (ADR-014, `AvvisiObsolescenza`). Questo caso appartiene alla
+// sezione «Soglia di obsolescenza» qui sopra e sta in coda solo per non
+// riscrivere il file: serve a impedire che l'alert diventi un modo per far
+// fallire il gesto che lo innesca. Il comportamento dell'alert vero è misurato
+// in `tests/Feature/Notifiche/SogliaObsolescenzaTest.php`.
+
+it('still saves the threshold when no machine crosses the line', function () {
+    Notification::fake();
+
+    [$ente, $admin] = enteWithAdmin('Ente Senza Macchine');
+
+    Livewire::actingAs($admin->fresh())
+        ->test(Albero::class)
+        ->call('edit', $ente->id)
+        ->set('sogliaObsolescenzaAnni', 4)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($ente->fresh()->soglia_obsolescenza_anni)->toBe(4);
+    Notification::assertNothingSent();
 });

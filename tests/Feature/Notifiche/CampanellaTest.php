@@ -5,8 +5,10 @@ use App\Models\Intervento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
+use App\Notifications\AvvisoObsolescenza;
 use App\Notifications\DigestScadenze;
 use App\Support\Notifiche\RigaAvviso;
+use App\Support\Notifiche\RigaObsolescenza;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Livewire\Livewire;
 
@@ -97,4 +99,58 @@ it('appears in the app shell for an authenticated user', function () {
         ->get('/dashboard')
         ->assertOk()
         ->assertSeeLivewire(Campanella::class);
+});
+
+// --- La terza transizione, che usciva muta ---
+//
+// 🔴 La campanella rende DUE notifiche diverse dallo stesso blocco: il digest
+// delle scadenze e l'avviso di obsolescenza. Il secondo è nato leggendo solo
+// `scadute` e `imminenti`, che nel suo payload non esistono — quindi il
+// paragrafo usciva VUOTO: nome dell'Ente, una riga bianca, «0 secondi fa».
+// Non dava errore. Dava il nulla, e per chi ha spento le email era l'unico
+// canale che gli restava.
+
+it('says what an obsolescence notice is about, instead of showing a blank line', function () {
+    $this->actingAs($this->admin);
+
+    $vecchia = Strumento::factory()->forNode($this->ente)->create([
+        'nome' => 'Centrifuga CF-12',
+        'data_installazione' => today()->subYears(14)->toDateString(),
+    ]);
+
+    $this->admin->notify(new AvvisoObsolescenza(
+        enteId: $this->ente->id,
+        enteNome: $this->ente->nome,
+        soglia: 10,
+        righe: [RigaObsolescenza::daStrumento($vecchia)],
+    ));
+
+    Livewire::test(Campanella::class)
+        ->call('apri')
+        // ⚠️ Ago SENZA apostrofi: `assertSee` di Livewire escapa, quindi
+        // «soglia di età» combacia mentre «l'età» non combacerebbe mai.
+        ->assertSee('1 macchina oltre la soglia');
+});
+
+it('pluralises the obsolescence notice, and keeps the two counts apart', function () {
+    $this->actingAs($this->admin);
+
+    $righe = collect(['Autoclave AC-200', 'Frigo -80 FR-3'])
+        ->map(fn (string $nome) => RigaObsolescenza::daStrumento(
+            Strumento::factory()->forNode($this->ente)->create([
+                'nome' => $nome,
+                'data_installazione' => today()->subYears(12)->toDateString(),
+            ])
+        ))
+        ->all();
+
+    $this->admin->notify(new AvvisoObsolescenza($this->ente->id, $this->ente->nome, 10, $righe));
+
+    Livewire::test(Campanella::class)
+        ->call('apri')
+        ->assertSee('2 macchine oltre la soglia')
+        // E NON deve prendere in prestito il vocabolario del digest: le due
+        // notifiche vivono nello stesso blocco e leggono chiavi diverse.
+        ->assertDontSee('scadenze superate')
+        ->assertDontSee('in arrivo');
 });

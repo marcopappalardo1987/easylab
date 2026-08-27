@@ -20,6 +20,13 @@
                 <p class="mt-1 text-sm text-ink-2">
                     Un'email al giorno con le scadenze appena superate e quelle in arrivo
                     nei prossimi 30 giorni. Nessuna email nei giorni in cui non cambia nulla.
+                    {{-- ⚠️ Questa frase non è un dettaglio: `AvvisoObsolescenza::via()`
+                         legge lo STESSO flag `riceve_email_scadenze`, quindi finché il
+                         sottotitolo parlava solo del digest l'interruttore governava
+                         un'email in più di quante ne dichiarasse — ed è l'unica pagina
+                         in cui l'utente esercita il diritto di opposizione (T4). --}}
+                    Con lo stesso interruttore ricevi anche l'avviso delle macchine che
+                    superano la soglia di età del tuo Ente.
                 </p>
             </div>
 
