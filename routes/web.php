@@ -9,7 +9,9 @@ use App\Http\Controllers\ScaricaDocumento;
 use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Campo\Home as CampoHome;
 use App\Livewire\Dashboard\Home as DashboardHome;
+use App\Livewire\Documenti\ElencoDocumenti;
 use App\Livewire\Fornitori\ElencoFornitori;
+use App\Livewire\Interventi\Scadenzario;
 use App\Livewire\Piattaforma\Cabina;
 use App\Livewire\Piattaforma\EditorRuoli;
 use App\Livewire\Piattaforma\Errori;
@@ -66,9 +68,22 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     Route::get('/strumenti/{strumento}/qr', StampaQr::class)
         ->middleware('can:strumenti.qr_generate')
         ->name('strumenti.qr');
+    // Archivio documentale d'Ente: l'elenco cross-macchina di ciò che il tab
+    // Documenti mostra una macchina alla volta. Nessun dato nuovo — la stessa
+    // query senza il vincolo sullo strumento — quindi `documenti.view` basta:
+    // QUALI righe si vedono lo dicono i global scope, non il permesso.
+    Route::get('/documenti', ElencoDocumenti::class)
+        ->middleware('can:documenti.view')
+        ->name('documenti.index');
     // Download mediato dall'applicazione (ADR-026): l'autorizzazione si
     // ricontrolla a ogni richiesta, e il binding scopato dà 404 fuori Ente.
+    //
+    // ⛔ `whereNumber` è difesa in profondità, non decorazione: `/documenti` e
+    // `/documenti/qualcosa` hanno la stessa forma, e senza il vincolo un
+    // segmento non numerico finirebbe qui a farsi risolvere come id, dando un
+    // 404 dal messaggio incomprensibile invece della pagina giusta.
     Route::get('/documenti/{documento}', ScaricaDocumento::class)
+        ->whereNumber('documento')
         ->middleware('can:documenti.view')
         ->name('documenti.download');
     Route::get('/fornitori', ElencoFornitori::class)
@@ -88,6 +103,14 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     Route::get('/campo', CampoHome::class)
         ->middleware('can:interventi.view')
         ->name('campo.index');
+    // Scadenzario aggregato: «cosa scade su tutto il parco». `/campo` risponde
+    // a «cosa devo fare io» e il tab della scheda a «cosa è successo a questa
+    // macchina» — questa è la terza domanda, che finora non aveva una pagina.
+    // `interventi.view` per la stessa ragione di `/campo`: il perimetro lo
+    // decidono i global scope, non il nome di un ruolo nella rotta.
+    Route::get('/scadenzario', Scadenzario::class)
+        ->middleware('can:interventi.view')
+        ->name('scadenzario.index');
     // Storico macchina in PDF (ADR-031). Due middleware perché sono due
     // domande diverse: `strumenti.view` è «puoi vedere le macchine», e il
     // route-model binding scopato dice QUALE; `documenti.export_pdf` è «puoi
