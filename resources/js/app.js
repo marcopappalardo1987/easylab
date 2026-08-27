@@ -275,3 +275,85 @@ document.addEventListener('alpine:init', () => {
         },
     }))
 })
+
+/**
+ * Mostra/nascondi la password (🔗 `x-ui.input`, prop `rivelabile`; DS §5.1, §5.6).
+ *
+ * ⛔ **Non è Alpine, e non è una scelta di stile.** `guest-layout` non carica
+ * `@livewireScripts`, e Alpine arriva **da quel bundle**: su `/login` un
+ * `x-data` sarebbe **inerte** — nessun errore, semplicemente non succede
+ * niente. È la stessa trappola del `wire:click` fuori da Livewire già
+ * incontrata nel menù utente della top bar. Questo file invece lo carica
+ * `@vite`, cioè **entrambi** i layout.
+ *
+ * ⚠️ **Ascoltatore delegato su `document`**, non un listener per pulsante: il
+ * markup può essere rimpiazzato da un morph di Livewire dove Livewire c'è, e
+ * un listener agganciato al nodo morirebbe con lui.
+ *
+ * ⚠️ **Il fuoco NON si sposta sul campo.** È deliberato: chi ha premuto il
+ * pulsante deve restare sul pulsante, o con uno screen reader perderebbe
+ * l'annuncio di `aria-pressed` che ha appena provocato.
+ */
+document.addEventListener('click', (evento) => {
+    const bottone = evento.target.closest('[data-mostra-password]');
+
+    if (!bottone) {
+        return;
+    }
+
+    const campo = document.getElementById(bottone.getAttribute('aria-controls'));
+
+    if (!campo) {
+        return;
+    }
+
+    // `type === 'password'` è la **verità del DOM**, non un flag tenuto a parte:
+    // due copie dello stesso stato divergono, e quella che diverge è sempre
+    // quella che nessuno guarda.
+    const siRivela = campo.type === 'password';
+
+    campo.type = siRivela ? 'text' : 'password';
+    bottone.setAttribute('aria-pressed', String(siRivela));
+    bottone.setAttribute('aria-label', siRivela ? 'Nascondi la password' : 'Mostra la password');
+
+    // 🔴 **`toggleAttribute` e NON `icona.hidden = …`**, ed è un difetto pagato:
+    // `hidden` è una proprietà di `HTMLElement`, e un `<svg>` è un
+    // `SVGSVGElement` — **non ce l'ha**. `icona.hidden = true` crea quindi una
+    // proprietà JavaScript inerte: nessun errore, l'attributo non cambia, il
+    // `display` calcolato resta quello di prima e **l'icona non si scambia mai**.
+    // Misurato nel browser: `proprietaHidden` si ribaltava e `attributoHidden`
+    // no. Una sonda che avesse letto la proprietà avrebbe detto che funzionava.
+    bottone.querySelectorAll('[data-icona]').forEach((icona) => {
+        icona.toggleAttribute('hidden', (icona.dataset.icona === 'mostra') === siRivela);
+    });
+});
+
+/**
+ * ⚠️ **Il pulsante nasce `hidden` nel markup e lo rivela questo codice.**
+ *
+ * Senza JavaScript non comparirebbe affatto — invece di restare in pagina come
+ * un comando morto che non fa nulla quando lo si preme. È la stessa disciplina
+ * del combobox, che senza JS resta usabile a click.
+ *
+ * ⚠️ `@vite` carica questo file come **modulo**, quindi differito: al momento in
+ * cui gira, il documento può essere già pronto e `DOMContentLoaded` non
+ * arriverebbe più. Da qui il controllo su `readyState`.
+ */
+function rivelaPulsantiPassword() {
+    // Qui il bersaglio è un `<button>`, cioè un `HTMLElement`, quindi `.hidden`
+    // funzionerebbe — ma si usa la stessa forma di sopra: due modi di fare la
+    // stessa cosa nello stesso file sono un invito a copiare quello sbagliato.
+    document.querySelectorAll('[data-mostra-password][hidden]').forEach((bottone) => {
+        bottone.removeAttribute('hidden');
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', rivelaPulsantiPassword);
+} else {
+    rivelaPulsantiPassword();
+}
+
+// Dove Livewire c'è, un morph può reinserire il markup originale (quindi di
+// nuovo `hidden`): lo si rivela anche dopo una navigazione.
+document.addEventListener('livewire:navigated', rivelaPulsantiPassword);

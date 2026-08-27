@@ -1,6 +1,6 @@
 🗺️ Roadmap Completa — Easy Lab
 
-*Piano cronologico di progetto: fasi progettuali + sprint datati fino al rilascio della V1 (MVP) e backlog delle versioni successive. Questo documento è il **master roadmap**: incorpora e supera i due ToDo originali (`Fase 1 - ToDo List Installazione Stack.md` e `Fase 2 - ToDo List.md`), che restano come materiale di origine. Tutte le scelte qui riflesse sono tracciate in `../Architettura/Decisioni Architetturali.md` (ADR-001 → ADR-031).*
+*Piano cronologico di progetto: fasi progettuali + sprint datati fino al rilascio della V1 (MVP) e backlog delle versioni successive. Questo documento è il **master roadmap**: incorpora e supera i due ToDo originali (`Fase 1 - ToDo List Installazione Stack.md` e `Fase 2 - ToDo List.md`), che restano come materiale di origine. Tutte le scelte qui riflesse sono tracciate in `../Architettura/Decisioni Architetturali.md` (ADR-001 → ADR-034).*
 
 > **Revisione del 3 Agosto 2026 — briefing col cliente destinatario** (🔗 ADR-019 ÷ ADR-024). Sei chiarimenti di dominio, di cui uno **revoca** lavoro già consegnato in S3. Le date restano invariate: il rientro è contenuto (vedi **Sprint 3-bis**) e cade dentro la coda di S3 (3–7 Ago), mentre le voci nuove sono assorbite da S4, che già prevedeva ricambi, garanzia pezzo e fornitori. L'unica aggiunta di sostanza è il **tab Panoramica** (ADR-024), messo in S3-bis di proposito: tocca `Semaforo`, la stessa classe che S4 dovrà estendere, e farlo prima evita di rimetterci mano due volte con criteri diversi.
 
@@ -25,7 +25,47 @@
 - **Versione Laravel:** in uso Laravel 13, Livewire 4, PHP 8.4 (installati in S1). La scelta di Livewire 4 (anziché 3) è stata fatta in fase di setup essendo il progetto greenfield.
 - **Email:** SMTP (provider tipo Postmark/SES/Mailgun), invii accodati su Redis.
 
-**Legenda.** `[CORE]` essenziale MVP · `[STRETCH]` slitta per primo · `[V1.1]` fuori MVP · ⚠ rischio/nota · 🔗 ADR collegato.
+### 🎨 Vincolo permanente: tutto si attiene al Design System
+
+*Aggiunto il 27 Ago 2026, a restyling concluso — 🔗 `../Design/Design System Base.md`, ADR-033, ADR-034,
+`Restyling UI — Roadmap Operativa.md`.*
+
+**Ogni schermata, componente o vista scritta da qui in avanti — in questi sprint, nel backlog V1.1/V1.2 e in
+qualunque lavoro futuro — si attiene al Design System.** Non è una raccomandazione di stile: è il contratto
+da cui dipende che l'applicazione abbia **due temi che funzionano**, e le regole qui sotto sono tutte state
+pagate almeno una volta.
+
+- **Solo token semantici.** `bg-surface`, `text-ink`, `border-border`, `bg-brand`, `text-ok-dot`… — **mai**
+  `bg-white`, `text-neutral-800`, `border-neutral-200`. Le scale (§2) sono la palette; i semantici (§8.2)
+  dicono a quale gradino attinge ogni **ruolo**, e sono gli unici che il tema riscrive.
+- ⛔ **Mai una variante `dark:`.** Il tema si scambia sotto, nei token. Una variante dimenticata **non dà
+  errore**: dà testo nero su fondo nero.
+- **Il semaforo è colore + forma + etichetta** (§4, 🔗 ADR-005), e in tema scuro conta **di più**: la coppia
+  verde↔arancione scende a ΔE 6,9, sotto la soglia di sicurezza, ed è leggibile **solo** grazie a glifo e
+  parola.
+- **Mobile-first**: ogni componente usabile a **360px**, bersagli tattili ≥ **44px** (§5.1), tabelle che
+  diventano schede (`tabella-a-card`, §5.3 e §7).
+- **Contrasto ≥ 4,5:1** per il testo e **≥ 3:1** per gli elementi non testuali, verificato **in tutti e due i
+  temi** (§2.5, §8.5): §2.5 vale due volte, non una.
+- **Un componente si cerca prima in `design-system.html` e sul banco `/design-system`** (attivo solo in
+  ambiente locale): se c'è già, si riusa invece di riscriverlo.
+- **La checklist di adozione è §7 più §8.5**, e vanno lette insieme.
+
+🛡️ **Tre reti lo tengono onesto**, e falliscono da sole: `PaletteGuardrailTest` (ogni tonalità e ogni token
+usati esistono), `TemaScuroGuardrailTest` (nessun token esiste in un tema solo), `SuperficiTokenizzateGuardrailTest`
+(**nessuna vista dell'intero repository** torna a una classe di scala).
+
+⚠️ **Ma nessuna delle tre guarda un *valore*.** Verificano che il token esista e sia definito nei due temi,
+non che sia il colore giusto: **quella verifica resta visiva e manuale**, e il Design System resta la sua
+unica fonte. È la metà che si dimentica.
+
+⚠️ **Il Design System è normativo e la sua numerazione non si cambia**: i docblock del codice citano le
+sezioni **per numero**. Una migliorìa che il DS già prevede si applica; una che lo **cambierebbe** si discute
+e si scrive lì prima di comparire in una vista.
+
+---
+
+**Legenda.** `[CORE]` essenziale MVP · `[STRETCH]` slitta per primo · `[V1.1]` fuori MVP · ⚠ rischio/nota · 🔗 ADR collegato · 🎨 vincolo di Design System.
 
 ---
 

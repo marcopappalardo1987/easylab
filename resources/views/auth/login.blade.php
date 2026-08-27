@@ -56,7 +56,7 @@
                             <a href="{{ route('password.request') }}" class="text-sm font-medium text-brand hover:text-brand-hover">Password dimenticata?</a>
                         </div>
                         <x-ui.input name="password" type="password" autocomplete="current-password" required
-                            placeholder="••••••••" />
+                            placeholder="••••••••" rivelabile />
                     </div>
 
                     {{-- Ricordami --}}
