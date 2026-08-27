@@ -20,23 +20,23 @@
     <x-piattaforma.nav />
 
     <div class="mt-6">
-        <a href="{{ route('piattaforma.errori') }}" class="text-sm text-primary-700 hover:underline">
+        <a href="{{ route('piattaforma.errori') }}" class="text-sm text-brand hover:underline">
             <span aria-hidden="true">←</span> Torna agli errori
         </a>
     </div>
 
     <div class="mt-3">
-        <h1 class="text-2xl font-bold tracking-tight text-neutral-900">
+        <h1 class="text-2xl font-bold tracking-tight text-ink">
             {{ class_basename($errore->classe) }}
         </h1>
-        <p class="mt-1 font-mono text-xs text-neutral-500">{{ $errore->classe }}</p>
-        <p class="mt-1 font-mono text-sm text-neutral-700">{{ $errore->file }}:{{ $errore->riga }}</p>
+        <p class="mt-1 font-mono text-xs text-ink-3">{{ $errore->classe }}</p>
+        <p class="mt-1 font-mono text-sm text-ink-2">{{ $errore->file }}:{{ $errore->riga }}</p>
     </div>
 
     <div class="mt-4 flex flex-wrap items-center gap-3">
         @if ($errore->stato === 'risolto')
             <x-ui.badge variant="success">Risolto</x-ui.badge>
-            <span class="text-xs text-neutral-500">
+            <span class="text-xs text-ink-3">
                 da {{ $errore->risoltoDa?->name ?? 'un utente non più presente' }}
                 @if ($errore->risolto_at) il {{ $errore->risolto_at->format('d/m/Y H:i') }} @endif
             </span>
@@ -45,7 +45,7 @@
         @else
             <x-ui.badge variant="danger">Aperto</x-ui.badge>
             @if ($errore->riaperto_automaticamente_at)
-                <span class="text-xs text-warning-800">
+                <span class="text-xs text-warn-soft-ink">
                     riaperto automaticamente il {{ $errore->riaperto_automaticamente_at->format('d/m/Y H:i') }}
                 </span>
             @endif
@@ -97,7 +97,7 @@
          altrove: «risolto» e «ignorato» si somigliano finché non si scopre che
          **solo il primo si riapre da sé**, e scoprirlo dopo aver zittito un bug
          vero è tardi. --}}
-    <p class="mt-2 max-w-3xl text-xs text-neutral-600">
+    <p class="mt-2 max-w-3xl text-xs text-ink-2">
         <strong>Risolto</strong> vuol dire «credo di averlo sistemato»: una nuova occorrenza lo contraddice e
         riapre l'errore da sé, azzerando il conteggio dei contesti conservati per poter raccogliere la prova
         successiva al tentativo di correzione. <strong>Ignorato</strong> vuol dire «so che c'è e non me ne
@@ -109,11 +109,14 @@
          dell'elenco: qui pesa più che là, perché è questa la pagina in cui si
          scorrono le occorrenze conservate — e vederne dieci sotto un contatore
          che dice diecimila, senza la seconda cifra a spiegarlo, si legge come
-         una perdita di dati. --}}
-    <p class="mt-4 text-sm text-neutral-700">
+         una perdita di dati.
+
+         Il colore lo decide questo contenitore: `x-errori.cifre` eredita la
+         tinta e non va toccato. --}}
+    <p class="mt-4 text-sm text-ink-2">
         <x-errori.cifre :errore="$errore" />
     </p>
-    <p class="mt-1 text-sm text-neutral-600 tabular-nums">
+    <p class="mt-1 text-sm text-ink-2 tabular-nums">
         prima volta: {{ $errore->prima_occorrenza_at?->format('d/m/Y H:i:s') ?? '—' }}
         ·
         ultima volta: {{ $errore->ultima_occorrenza_at?->format('d/m/Y H:i:s') ?? '—' }}
@@ -133,19 +136,21 @@
          quello della **prima** volta, non l'ultimo visto. Ogni occorrenza qui
          sotto porta il proprio, ed è là che si guarda per vedere come varia. --}}
     <div class="mt-6">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-ink-3">
             Messaggio <span class="font-normal normal-case">— campione, non «il» messaggio</span>
         </h2>
-        <p class="mt-1 text-xs text-neutral-500">
+        <p class="mt-1 text-xs text-ink-3">
             L'impronta non include il messaggio, quindi occorrenze diverse della stessa issue possono averne
             di diversi. Questo è quello della <strong>prima volta</strong>; ogni occorrenza qui sotto porta il proprio.
         </p>
-        <p class="mt-2 whitespace-pre-wrap break-words rounded-md bg-neutral-50 p-3 font-mono text-xs text-neutral-900">{{ $errore->messaggio }}</p>
+        {{-- ⚠️ `bg-surface-code`: superficie monospazio (DS §8.2), non un incasso
+             qualunque — è la ragione per cui il token esiste. --}}
+        <p class="mt-2 whitespace-pre-wrap break-words rounded-md bg-surface-code p-3 font-mono text-xs text-ink">{{ $errore->messaggio }}</p>
     </div>
 
     <div class="mt-8">
-        <h2 class="text-lg font-semibold text-neutral-900">Occorrenze conservate</h2>
-        <p class="mt-1 text-sm text-neutral-600">
+        <h2 class="text-lg font-semibold text-ink">Occorrenze conservate</h2>
+        <p class="mt-1 text-sm text-ink-2">
             Un <strong>campione</strong>, non l'elenco completo: al più
             {{ config('easylab.errori.contesti_per_errore') }} per errore, e non più di una ogni
             {{ config('easylab.errori.finestra_contesto_secondi') }} secondi.
@@ -156,26 +161,26 @@
         @forelse ($occorrenze as $occorrenza)
             <details wire:key="occorrenza-{{ $occorrenza->id }}"
                      @if ($loop->first && $occorrenze->onFirstPage()) open @endif
-                     class="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
-                <summary class="cursor-pointer text-sm text-neutral-800">
+                     class="rounded-lg border border-border bg-surface p-4 shadow-sm">
+                <summary class="cursor-pointer text-sm text-ink">
                     <span class="font-medium tabular-nums">{{ $occorrenza->avvenuta_at?->format('d/m/Y H:i:s') ?? '—' }}</span>
                     {{-- `contesto` dice come leggere le colonne accanto: fuori
                          da `http`, `percorso` è il comando o la classe del job e
                          `codice_http` è null. --}}
                     <x-ui.badge variant="info" class="ml-2">{{ $occorrenza->contesto }}</x-ui.badge>
-                    <span class="ml-2 font-mono text-xs text-neutral-600">{{ $occorrenza->metodo }} {{ $occorrenza->percorso }}</span>
+                    <span class="ml-2 font-mono text-xs text-ink-2">{{ $occorrenza->metodo }} {{ $occorrenza->percorso }}</span>
                     @if ($occorrenza->codice_http)
-                        <span class="ml-2 font-mono text-xs text-neutral-500">HTTP {{ $occorrenza->codice_http }}</span>
+                        <span class="ml-2 font-mono text-xs text-ink-3">HTTP {{ $occorrenza->codice_http }}</span>
                     @endif
                 </summary>
 
-                <div class="mt-3 border-t border-neutral-200 pt-3">
+                <div class="mt-3 border-t border-border pt-3">
                     <dl class="grid gap-x-4 gap-y-1 text-xs sm:grid-cols-[max-content_1fr]">
-                        <dt class="font-medium text-neutral-700">Messaggio</dt>
-                        <dd class="whitespace-pre-wrap break-words font-mono text-neutral-900">{{ $occorrenza->messaggio }}</dd>
+                        <dt class="font-medium text-ink-2">Messaggio</dt>
+                        <dd class="whitespace-pre-wrap break-words font-mono text-ink">{{ $occorrenza->messaggio }}</dd>
 
-                        <dt class="font-medium text-neutral-700">Utente</dt>
-                        <dd class="text-neutral-900">
+                        <dt class="font-medium text-ink-2">Utente</dt>
+                        <dd class="text-ink">
                             @if ($occorrenza->user_id === null)
                                 {{-- **Non** «Sistema»: sarebbe un'affermazione.
                                      Copre ospiti, console e coda.
@@ -189,7 +194,9 @@
                                      valorizzato sarebbe un'affermazione falsa,
                                      cioè il difetto che questo ramo evita
                                      rifiutando «Sistema». --}}
-                                <span class="text-neutral-400"
+                                {{-- ⚠️ `text-neutral-400` era sotto AA per il testo (DS §2.2):
+                                     questo trattino è un'informazione, non un separatore. --}}
+                                <span class="text-ink-3"
                                       title="{{ $occorrenza->impersonato_da === null
                                           ? 'Nessun utente autenticato'
                                           : 'L\'utente non è più presente: resta solo chi lo stava impersonando' }}">—</span>
@@ -207,21 +214,21 @@
                                  davvero. Si stampa allora il numero, che è meno
                                  di un nome ma è molto più di niente: dice che
                                  dietro quella sessione c'era qualcun altro. --}}
-                            <dt class="font-medium text-warning-800">Per conto di</dt>
-                            <dd class="text-warning-800">
+                            <dt class="font-medium text-warn-soft-ink">Per conto di</dt>
+                            <dd class="text-warn-soft-ink">
                                 @if (isset($utenti[$occorrenza->impersonato_da]))
                                     {{ $utenti[$occorrenza->impersonato_da] }}
                                 @else
-                                    #{{ $occorrenza->impersonato_da }} <span class="text-neutral-500">(utente non più presente)</span>
+                                    #{{ $occorrenza->impersonato_da }} <span class="text-ink-3">(utente non più presente)</span>
                                 @endif
                             </dd>
                         @endif
 
-                        <dt class="font-medium text-neutral-700">IP</dt>
-                        <dd class="font-mono text-neutral-900">{{ $occorrenza->ip ?? '—' }}</dd>
+                        <dt class="font-medium text-ink-2">IP</dt>
+                        <dd class="font-mono text-ink">{{ $occorrenza->ip ?? '—' }}</dd>
 
-                        <dt class="font-medium text-neutral-700">User agent</dt>
-                        <dd class="break-words font-mono text-neutral-900">{{ $occorrenza->user_agent ?? '—' }}</dd>
+                        <dt class="font-medium text-ink-2">User agent</dt>
+                        <dd class="break-words font-mono text-ink">{{ $occorrenza->user_agent ?? '—' }}</dd>
                     </dl>
 
                     {{-- L'input della richiesta, **già ripulito in scrittura**:
@@ -230,34 +237,40 @@
                          arrivano fin qui in chiaro (`App\Support\ChiaviSensibili`). --}}
                     @if (! empty($occorrenza->input))
                         <div class="mt-3">
-                            <h3 class="text-xs font-semibold uppercase tracking-wide text-neutral-500">Input</h3>
+                            <h3 class="text-xs font-semibold uppercase tracking-wide text-ink-3">Input</h3>
                             <dl class="mt-1 grid gap-x-4 gap-y-1 text-xs sm:grid-cols-[max-content_1fr]">
                                 @foreach ($occorrenza->input as $chiave => $valore)
-                                    <dt class="font-mono font-medium text-neutral-700">{{ $chiave }}</dt>
+                                    <dt class="font-mono font-medium text-ink-2">{{ $chiave }}</dt>
                                     {{-- Un valore annidato si rende come JSON e
                                          non con `{{ }}` nudo, che su un array
                                          andrebbe in «Array to string conversion»
                                          — cioè romperebbe la pagina proprio sul
                                          dato che serve a capire l'errore. --}}
-                                    <dd class="whitespace-pre-wrap break-words font-mono text-neutral-900">{{ is_scalar($valore) || $valore === null ? var_export($valore, true) : json_encode($valore, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}</dd>
+                                    <dd class="whitespace-pre-wrap break-words font-mono text-ink">{{ is_scalar($valore) || $valore === null ? var_export($valore, true) : json_encode($valore, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}</dd>
                                 @endforeach
                             </dl>
                         </div>
                     @endif
 
                     <div class="mt-3">
-                        <h3 class="text-xs font-semibold uppercase tracking-wide text-neutral-500">Stack trace</h3>
+                        <h3 class="text-xs font-semibold uppercase tracking-wide text-ink-3">Stack trace</h3>
                         {{-- ⚠️ **Senza argomenti di funzione**, e non per
                              troncamento: `CatturaErrori::traccia()` fa
                              `unset($frame['args'])` su ogni frame prima di
                              salvare. `getTrace()` li restituirebbe **integri** —
-                             password, codici di recupero, oggetti vivi. --}}
-                        <pre class="mt-1 overflow-x-auto rounded-md bg-neutral-900 p-3 text-xs leading-relaxed text-neutral-100">{{ $occorrenza->stack_trace }}</pre>
+                             password, codici di recupero, oggetti vivi.
+
+                             ⚠️ `bg-surface-code`, non più `bg-neutral-900` fisso:
+                             era letteralmente il caso che ha fatto nascere il
+                             token (DS §8.2, F0.3). Prima restava sempre scuro
+                             anche in tema chiaro; ora segue il tema come ogni
+                             altra superficie monospazio. --}}
+                        <pre class="mt-1 overflow-x-auto rounded-md bg-surface-code p-3 text-xs leading-relaxed text-ink">{{ $occorrenza->stack_trace }}</pre>
                     </div>
                 </div>
             </details>
         @empty
-            <x-ui.card class="text-center text-sm text-neutral-500">
+            <x-ui.card class="text-center text-sm text-ink-3">
                 {{-- ⚠️ **Non «nessuna occorrenza»**: le occorrenze ci sono — le
                      conta la cifra qui sopra. A mancare è il **contesto**, e i
                      due fatti si confondono solo se li si dice con la stessa
@@ -269,7 +282,7 @@
     </div>
 
     <div class="mt-4 flex flex-wrap items-center justify-between gap-2">
-        <p class="text-xs text-neutral-500">
+        <p class="text-xs text-ink-3">
             @if ($occorrenze->total() > 0)
                 {{ $occorrenze->firstItem() }}–{{ $occorrenze->lastItem() }} di {{ number_format($occorrenze->total(), 0, ',', '.') }} prove conservate in tutto
             @endif

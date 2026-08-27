@@ -11,10 +11,15 @@
 > **qui le regole e il perché, lì la dimostrazione.** Se un componente si può *mostrare*, si mostra lì e qui
 > se ne cita solo il vincolo.
 >
-> ⚠️ **`resources/css/app.css` non è ancora allineato a questo documento.** La palette qui sotto è il blu del
-> marchio (§2.1); i token in esecuzione sono ancora il teal dello Sprint 0. È uno scarto **noto e voluto**: il
-> restyling è un intervento a parte, con la sua verifica visiva. Fino ad allora, chi legge un colore in
-> `app.css` e uno qui **non ha trovato un bug**. 🔗 ADR-033.
+> ✅ **Dal 27 Ago 2026 `resources/css/app.css` è allineato a questo documento.** Lo scarto dichiarato qui —
+> il blu nel documento, il teal in esecuzione — è stato chiuso dal restyling: 🔗 ADR-033 è **attuata**, e
+> §8 aggiunge lo strato semantico e il tema scuro (🔗 ADR-034). Chi oggi legge un colore in `app.css` e uno
+> qui e li trova **diversi** ha trovato un bug, non uno scarto voluto.
+>
+> ⚠️ **E c'è una rete, ma non guarda i valori.** `PaletteGuardrailTest`, `TemaScuroGuardrailTest` e
+> `SuperficiTokenizzateGuardrailTest` verificano che ogni token esista, sia definito in **entrambi** i temi e
+> non sia stato sostituito da una classe di scala. Nessuno dei tre guarda **quale** colore sia: quella
+> verifica resta visiva, e questo documento resta la sua unica fonte.
 
 ---
 
@@ -381,3 +386,155 @@ andrà: `npm run build`, e poi la verifica **visiva** — nessun test guarda i *
       delle azioni porta `data-azioni`, e una cella su **due righe** va avvolta in un solo figlio — in
       modalità card il `<td>` diventa flex, e ogni figlio diretto finirebbe affiancato agli altri.
 - [ ] Componente cercato prima in `design-system.html`: se là c'è già, si riusa invece di riscriverlo.
+
+---
+
+## 8. Tema scuro e strato semantico — 🔗 ADR-034
+
+*Aggiunta il 26 Ago 2026. §1–§7 non sono state toccate: la numerazione è citata per numero dai docblock del
+codice, e questa sezione si aggiunge in coda senza spostare nulla.*
+
+### 8.1 Il principio: due strati, e solo il secondo cambia
+
+Il campione lo scrive nei propri commenti, ed è la regola:
+
+> **Le SCALE** (`primary`, `neutral`, semaforo, accenti, grafici — §2) sono la palette, e sono **identiche nei
+> due temi**. **I token SEMANTICI** dicono *a quale gradino della scala attinge ogni ruolo*, e sono **gli unici
+> che cambiano col tema**. È il motivo per cui nessun componente contiene un colore letterale o una regola
+> dentro un `@media`.
+
+**Le viste usano solo i semantici.** `bg-surface`, non `bg-white`. `text-ink`, non `text-neutral-800`.
+`border-border`, non `border-neutral-200`.
+
+⛔ **E non usano mai la variante `dark:`.** Sarebbero ~1.190 varianti da tenere allineate a mano, e la prima
+dimenticata **non dà errore**: dà testo nero su fondo nero. È lo stesso sintomo di §2.2 — «un token assente non
+dà errore, dà un colore diverso» — un livello più su. *La duplicazione non si gestisce: non si crea.*
+
+### 8.2 I token semantici, coi due valori affiancati
+
+Il tema chiaro è il `:root` di base. Non esiste un blocco `[data-theme="light"]` con valori propri.
+
+| Token | Classe Tailwind | **Chiaro** | **Scuro** | Ruolo |
+|---|---|---|---|---|
+| `--bg` | `bg-canvas` | `#F6F8FB` | `#0A1220` | fondo della pagina |
+| `--surface` | `bg-surface` | `#FFFFFF` | `#111C2E` | card, modale, dropdown, top bar |
+| `--surface-sunken` | `bg-surface-sunken` | `neutral-50` | `#0D1626` | `<thead>`, hover riga, footer card, campo disabilitato, skeleton, **sidebar** |
+| `--surface-code` | `bg-surface-code` | `#F2F6FA` | `#0B1728` | superfici monospazio: stack trace della scheda errore, matrice dei ruoli, righe di audit |
+| `--border` | `border-border` · `divide-border` | `neutral-200` | `#22314A` | bordi e divisori |
+| `--border-strong` | `border-border-strong` | `neutral-300` | `#31435F` | contorno dei campi, bottone secondario |
+| `--ink` | `text-ink` | `neutral-900` | `#E8EEF6` | testo primario e titoli |
+| `--ink-2` | `text-ink-2` | `neutral-600` | `#A3B4CB` | testo secondario |
+| `--ink-3` | `text-ink-3` | `neutral-500` | `#7C8FA8` | testo terziario, **placeholder**, `.muted` |
+| `--ink-inverse` | `text-ink-inverse` | `#FFFFFF` | `#071019` | testo sul pieno di un colore di stato |
+| `--brand` | `bg-brand` `text-brand` | `primary-600` | `primary-400` | bottone primario, link, tab attivo |
+| `--brand-hover` | `hover:bg-brand-hover` | `primary-700` | `primary-300` | |
+| `--brand-ink` | `text-brand-ink` | `#FFFFFF` | `#04263F` | testo sul bottone primario |
+| `--brand-soft` | `bg-brand-soft` | `primary-50` | `#0E2740` | riga selezionata, alert info, nodo attivo |
+| `--brand-soft-strong` | `bg-brand-soft-strong` | `primary-100` | `#123253` | voce di menù attiva |
+| `--brand-soft-ink` | `text-brand-soft-ink` | `primary-700` | `primary-200` | testo su superficie brand tenue |
+| `--brand-line` | `border-brand-line` | `primary-200` | `#1D4A77` | bordo d'accento |
+| `--ok-dot` / `--ok-soft` / `--ok-soft-ink` | `text-ok-dot` · `bg-ok-soft` · `text-ok-soft-ink` | `#16A34A` / `#DCFCE7` / `#166534` | `#4ADE80` / `#0C2A1B` / `#86EFAC` | 🟢 in regola |
+| `--warn-dot` / `--warn-soft` / `--warn-soft-ink` | idem | `#F59E0B` / `#FEF3C7` / `#92400E` | `#FBBF24` / `#33240A` / `#FCD34D` | 🟠 azione richiesta |
+| `--bad-dot` / `--bad-soft` / `--bad-soft-ink` | idem | `#DC2626` / `#FEE2E2` / `#991B1B` | `#F87171` / `#3A1618` / `#FCA5A5` | 🔴 non idoneo, **e il testo d'errore dei form** |
+| `--obs-dot` / `--obs-soft` / `--obs-soft-ink` | idem | `#7C3AED` / `#EDE9FE` / `#6D28D9` | `#A78BFA` / `#241B41` / `#C4B5FD` | ⏳ obsoleto (ADR-014) |
+| `--lock-dot` / `--lock-soft` / `--lock-soft-ink` | idem | `#64748B` / `#E2E8F0` / `#334155` | `#94A3B8` / `#1E2B40` / `#CBD5E1` | 🔒 lockout (ADR-013) |
+| `--ring` | `ring-ring` | `primary-500` | `primary-300` | anello di fuoco |
+| `--overlay` | `bg-overlay` | `rgb(15 23 42 / .40)` | `rgb(2 6 23 / .68)` | velo dietro la modale |
+| `--chart-verde` · `--chart-arancione` · `--chart-rosso` · `--chart-obsoleto` · `--chart-brand` | `fill-chart-verde` … `text-chart-brand` | §2.5, colonna «Tema chiaro» | §2.5, colonna «Tema scuro» | le cinque serie |
+| `--chart-grid` / `--chart-axis` / `--chart-band` | `stroke-chart-grid` · `stroke-chart-axis` · `fill-chart-band` | `neutral-200` / `neutral-400` / `primary-50` | `#22314A` / `#5A6E88` / `#0E2740` | griglia, assi, banda evidenziata. ⚠️ **Non sono in §2.5**, che dà le sole cinque serie |
+| `--shadow-sm` / `--shadow-md` | `shadow-sm` / `shadow-md` | ombre di §3 | `0 1px 2px rgb(0 0 0/.5)` / `0 4px 6px -1px rgb(0 0 0/.5), 0 10px 24px -8px rgb(0 0 0/.7)` | in scuro l'ombra è più densa, o non si vede |
+
+> **`--overlay` è l'unico token che il campione non aveva, ed è stato aggiunto con una ragione.** Il velo della
+> modale era `bg-neutral-900/40`: sul fondo scuro `#0A1220` un velo così è quasi invisibile e la modale smette
+> di staccarsi dal contenuto. **Non si allarga la palette per un hover** — è già stato deciso una volta, e la
+> risposta fu `hover:no-underline` — ma qui mancava un **ruolo**, non un gradino.
+
+> ⚠️ **`primary-400` non è un colore da testo su fondo chiaro (3.24:1) ma lo è su fondo scuro**, dove infatti è
+> il `--brand`. Non contraddice §2.1: il contrasto è una **relazione fra due colori**, non una proprietà di uno.
+
+**Quattro cose da leggere prima di trascrivere questa tabella in `@theme`.**
+
+1. ⚠️ **La colonna «Token» porta i nomi del campione, la colonna «Classe» quelli di `@theme`, e per uno solo
+   non coincidono.** In Tailwind v4 la classe si genera da `--color-<nome>`, quindi `bg-surface` vuole
+   `--color-surface`. Il fondo pagina fa eccezione: nel campione è `--bg`, in `@theme` va dichiarato
+   **`--color-canvas`** — `bg-bg` non è un nome. Tutti gli altri si trascrivono alla lettera.
+2. ⚠️ **`--ink` è `neutral-900`, cioè il gradino che §2.2 assegna ai *titoli*** (§2.2 mette il *testo primario*
+   a `neutral-800`). Il campione unifica i due sul gradino più scuro, e vince il campione: §8 non riapre §2.2,
+   che resta la mappa della **scala**; qui si dichiara a quale gradino attinge il **ruolo**.
+3. ⚠️ **L'anello di fuoco è `primary-500`, mentre §5.6 scrive `focus:ring-primary-600`.** Vince `--ring`: dal
+   passaggio ai semantici il fuoco è un token solo, e in tema scuro deve poter salire a `primary-300`. L'hex
+   di §5.6 va letto come esempio pre-tema, non come una seconda verità.
+4. 🔴 **Il testo d'errore dei form è `text-bad-soft-ink`, e §5.6 va letta come esempio pre-tema.** §5.6 scrive
+   `text-danger-600` (`#B91C1C`): sul `--surface` scuro `#111C2E` fa **2,64:1**, cioè sarebbe illeggibile
+   proprio nel tema in cui un errore conta di più. Il campione ha già deciso — `.el-field .err{color:var(--bad-soft-ink)}`
+   — e i numeri gli danno ragione, misurati e non stimati:
+
+   | | su `--surface` chiaro | su `--surface` scuro |
+   |---|---|---|
+   | **`--bad-soft-ink`** (`#991B1B` / `#FCA5A5`) | **8,31:1** ✅ | **9,00:1** ✅ |
+   | `--bad-dot` (`#DC2626` / `#F87171`) | 4,83:1 ✅ | 6,18:1 ✅ |
+   | `danger-600` fisso, come da §5.6 | 6,45:1 ✅ | **2,64:1** ❌ |
+
+   Vince `--bad-soft-ink`: è il più leggibile in tutti e due, ed è già ciò che il campione monta. **Non serve
+   un `--bad-ink` in più** — si toglie un colore, non se ne aggiunge uno (§2.4).
+
+> **I quattro `--el-logo-*` del campione non entrano in questa tabella, di proposito.** Là il marchio è un SVG
+> inline e si ricolora (in scuro `--el-logo-deep` sale a `primary-200`); qui è un `<img>`, che non eredita le
+> variabili CSS della pagina. Sul fondo scuro serve un **secondo file**, non un token. 🔗 ADR-033/034.
+
+### 8.3 Il meccanismo: `data-theme`, tre stati
+
+| `data-theme` sull'`<html>` | Significato |
+|---|---|
+| **assente** | segue il sistema operativo (`prefers-color-scheme`) |
+| `"light"` | chiaro, **anche se il sistema dice scuro** |
+| `"dark"` | scuro, anche se il sistema dice chiaro |
+
+```css
+:root                      { color-scheme: light; /* i valori chiari */ }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { color-scheme: dark; /* i valori scuri */ }
+}
+:root[data-theme="dark"]   { color-scheme: dark; /* gli stessi valori scuri */ }
+@media print { :root, :root[data-theme="dark"] { /* la stampa è SEMPRE chiara */ } }
+```
+
+- ⚠️ **Il `:not([data-theme="light"])` non è pedanteria**: senza, una scelta esplicita di *chiaro* verrebbe
+  sovrascritta dal sistema operativo, cioè l'interruttore non funzionerebbe in una delle due direzioni.
+- ⚠️ **`color-scheme` va dichiarato**, o scrollbar, `<select>`, date picker e campi nativi restano chiari sul
+  fondo scuro. È l'unica riga che parla al browser invece che alla pagina.
+- La preferenza vive in `users.tema` (`sistema|chiaro|scuro`): **il DB è la verità, `localStorage` è la cache
+  che evita il lampo**. Per l'autenticato l'attributo lo rende il server; per l'ospite lo scrive uno script
+  **inline e sincrono** nel `<head>`. 🔗 ADR-034.
+
+### 8.4 Ciò che non passa dai token semantici, e perché
+
+⚠️ **Due righe diverse, sotto lo stesso titolo.** Il banner, il PDF, le email e la stampa **non cambiano
+affatto** col tema. Il toast e il tooltip **cambiano**, ma restano su token di **scala** invece che sui
+semantici: non sono superfici della pagina, sono cose che ci galleggiano sopra. In tutti i casi le due reti di
+§8.5 li **esentano per nome**, quindi chi ne aggiunge o toglie uno aggiorna anche questa tabella.
+
+| Superficie | Resta | Perché |
+|---|---|---|
+| **Banner di impersonation** (§5.8) | `warning-500` + `neutral-900`, **e `neutral-900/10` · `/20`** sul pulsante «Esci» | è un allarme persistente: deve avere lo **stesso identico aspetto** nei due temi, o smette di essere lo stesso segnale. Il pulsante sta **sul giallo**, non sulla superficie della pagina, quindi segue il banner e non il tema. Già `print:hidden` |
+| **Toast** (§5.9) | scala: `neutral-900` in chiaro, `neutral-700` in scuro | galleggia sopra tutto: la sua superficie è indipendente da quella della pagina, e su fondo scuro `neutral-900` sparirebbe dentro `--bg` |
+| **Tooltip** | scala: `neutral-900` in chiaro, `neutral-700` in scuro | stesso motivo del toast, ed è la stessa coppia di valori — il campione tratta i due nello stesso modo |
+| **Stampa** | sempre chiara, via `@media print` | il fondo scuro si stampa come una campitura che consuma toner e non dice niente |
+| **PDF** (`pdf/*`) | hex a mano, sempre chiaro | dompdf non vede Tailwind né il tema — 🔗 ADR-031 |
+| **Email** (`mail/*`) | chiare | nessun client di posta ha un tema affidabile |
+
+### 8.5 Checklist aggiuntiva per §7
+
+Da leggere **insieme** alla checklist di §7, non al posto suo.
+
+- [ ] Nessuna classe di **scala** per una superficie o per il testo: `bg-white`, `text-neutral-*`,
+      `border-neutral-*` non compaiono nelle viste. 🛡️ `SuperficiTokenizzateGuardrailTest`.
+- [ ] Nessuna variante **`dark:`** in nessuna vista.
+- [ ] Ogni token semantico usato ha un valore in **entrambi** i temi. 🛡️ `TemaScuroGuardrailTest`.
+      *Un token definito solo nel chiaro non dà errore: resta chiaro sul fondo scuro.*
+- [ ] La pagina guardata **nei due temi**, a 360px e a 1280px. ⚠️ Molti difetti del tema scuro esistono **solo
+      lì**: un bordo che sparisce, un'ombra che diventa un buco nero, un velo che non stacca più.
+- [ ] Contrasto verificato **in tutti e due**: §2.5 vale due volte, non una.
+- [ ] Il **semaforo** conserva colore **+ forma + etichetta** (§4). ⚠️ In tema scuro i colori dei grafici
+      scendono a **ΔE 6,9** fra verde e arancione (§2.5), sotto la soglia di sicurezza: la forma e la parola
+      non sono più una buona pratica, sono **ciò che rende leggibile il grafico**.

@@ -15,20 +15,23 @@
             </div>
 
             {{-- Card --}}
-            <div class="mt-8 rounded-lg border border-neutral-200 bg-white p-6 shadow-sm md:p-8">
-                <h2 class="text-lg font-semibold text-neutral-900">Accedi al tuo account</h2>
-                <p class="mt-1 text-sm text-neutral-600">Inserisci le tue credenziali per continuare.</p>
+            <div class="mt-8 rounded-lg border border-border bg-surface p-6 shadow-sm md:p-8">
+                <h2 class="text-lg font-semibold text-ink">Accedi al tuo account</h2>
+                <p class="mt-1 text-sm text-ink-2">Inserisci le tue credenziali per continuare.</p>
 
-                {{-- Messaggio di stato (es. stub auth) --}}
+                {{-- Messaggio di stato (es. stub auth). ⚠️ Era `info-500` (alias del
+                     brand, DS §2.4) su un'opacità calcolata sul fondo sottostante:
+                     il campione tratta l'alert «info» con `--brand-soft` /
+                     `--brand-line`, non con un'opacità (trappola nota). --}}
                 @if (session('status'))
-                    <div class="mt-4 rounded-md border border-info-500/20 bg-info-500/5 px-3 py-2 text-sm text-info-500">
+                    <div class="mt-4 rounded-md border border-brand-line bg-brand-soft px-3 py-2 text-sm text-brand-soft-ink">
                         {{ session('status') }}
                     </div>
                 @endif
 
                 {{-- Errori di validazione (operativi da Sprint 4 con Fortify) --}}
                 @if ($errors->any())
-                    <div class="mt-4 rounded-md border border-danger-500/20 bg-danger-100 px-3 py-2 text-sm text-danger-600">
+                    <div class="mt-4 rounded-md border border-bad-dot bg-bad-soft px-3 py-2 text-sm text-bad-soft-ink">
                         {{ $errors->first() }}
                     </div>
                 @endif
@@ -36,42 +39,42 @@
                 <form method="POST" action="{{ route('login') }}" class="mt-6 space-y-5">
                     @csrf
 
-                    {{-- Email --}}
-                    <div>
-                        <label for="email" class="block text-sm font-medium text-neutral-800">Email</label>
-                        <input id="email" name="email" type="email" autocomplete="username" required autofocus
-                               value="{{ old('email') }}"
-                               placeholder="nome@laboratorio.it"
-                               class="mt-1 block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 placeholder:text-neutral-400 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
-                    </div>
+                    {{-- Email. ⚠️ Consolidato su `x-ui.input`: il campo era ripetuto
+                         a mano due volte in questo file (email e password), con lo
+                         stesso markup di `x-ui.input` copiato invece che riusato —
+                         da qui in poi la definizione del campo vive in un posto
+                         solo (DS §8.2, componente `.el-field`). --}}
+                    <x-ui.input label="Email" name="email" type="email" autocomplete="username" required autofocus
+                        value="{{ old('email') }}" placeholder="nome@laboratorio.it" />
 
-                    {{-- Password --}}
+                    {{-- Password: il link "dimenticata" vive accanto all'etichetta,
+                         quindi l'etichetta non passa da `x-ui.input` ma resta qui a
+                         fianco del link, e solo il campo usa il componente. --}}
                     <div>
                         <div class="flex items-center justify-between">
-                            <label for="password" class="block text-sm font-medium text-neutral-800">Password</label>
-                            <a href="{{ route('password.request') }}" class="text-sm font-medium text-primary-600 hover:text-primary-700">Password dimenticata?</a>
+                            <label for="password" class="block text-sm font-medium text-ink">Password</label>
+                            <a href="{{ route('password.request') }}" class="text-sm font-medium text-brand hover:text-brand-hover">Password dimenticata?</a>
                         </div>
-                        <input id="password" name="password" type="password" autocomplete="current-password" required
-                               placeholder="••••••••"
-                               class="mt-1 block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 placeholder:text-neutral-400 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
+                        <x-ui.input name="password" type="password" autocomplete="current-password" required
+                            placeholder="••••••••" />
                     </div>
 
                     {{-- Ricordami --}}
                     <div class="flex items-center">
                         <input id="remember" name="remember" type="checkbox"
-                               class="h-4 w-4 rounded border-neutral-200 text-primary-600 focus:ring-primary-600">
-                        <label for="remember" class="ml-2 text-sm text-neutral-600">Ricordami su questo dispositivo</label>
+                               class="h-4 w-4 rounded border border-border text-brand focus:ring-ring">
+                        <label for="remember" class="ml-2 text-sm text-ink-2">Ricordami su questo dispositivo</label>
                     </div>
 
                     {{-- Submit (touch target ≥ 44px, full-width mobile) --}}
                     <button type="submit"
-                            class="flex w-full items-center justify-center rounded-md bg-primary-600 px-4 py-2.5 font-medium text-white transition hover:bg-primary-700 focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 focus:outline-none">
+                            class="flex w-full items-center justify-center rounded-md bg-brand px-4 py-2.5 font-medium text-brand-ink transition hover:bg-brand-hover focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-canvas focus:outline-none">
                         Accedi
                     </button>
                 </form>
             </div>
 
-            <p class="mt-6 text-center text-xs text-neutral-400">
+            <p class="mt-6 text-center text-xs text-ink-3">
                 &copy; {{ date('Y') }} Easy Lab · Accesso protetto
             </p>
         </div>

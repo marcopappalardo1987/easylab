@@ -259,3 +259,132 @@ function sorgentiDiStile(): array
         ->values()
         ->all();
 }
+
+/**
+ * Le tonalità di **scala** dichiarate in `@theme`, come `famiglia-gradino`.
+ *
+ * ⚠️ **Sta qui e non in un file di test** per la stessa ragione di
+ * `sorgentiDiStile()` e di `snapshotDa()`: la usano **due** suite —
+ * `PaletteGuardrailTest` («ogni tonalità usata esiste?») e
+ * `SuperficiTokenizzateGuardrailTest` («nessuna vista usa più una tonalità di
+ * scala per una superficie?»). Una funzione condivisa da due suite non può
+ * abitare in una delle due: i file di test si caricano solo se selezionati,
+ * quindi `php artisan test tests/Feature/SuperficiTokenizzateGuardrailTest.php`
+ * andrebbe in **fatal per funzione non definita**. Verificato il 26 Ago 2026,
+ * non dedotto.
+ *
+ * ⚠️ Si legge **solo il blocco `@theme`** e non tutto il foglio: più in basso
+ * `app.css` *usa* `var(--color-neutral-200)` dentro `:root` (per `--border`), e
+ * un uso non è una definizione. Confonderli renderebbe verde il guardrail della
+ * palette su una variabile che nessuno ha mai dichiarato.
+ *
+ * ⚠️ **Il gradino vuole 2–3 cifre**, e non è pedanteria: `--color-ink-2` è un
+ * token **semantico** con un numero d'ordine a una cifra, non la tonalità `2`
+ * della famiglia `ink`. Con `\d+` finirebbe qui dentro e `ink` diventerebbe una
+ * «famiglia di scala», con la conseguenza che `text-ink-2` — l'uso corretto —
+ * risulterebbe una violazione.
+ *
+ * @return list<string> ordinate, es. `['danger-100', 'danger-500', …]`
+ */
+function tonalitaDefiniteNelTema(?string $css = null): array
+{
+    // ⚠️ **Il foglio si può passare, e non è per comodità**: è il solo modo di
+    // provare che l'estrazione legge davvero il **solo** `@theme`. Oggi
+    // `app.css` non ha nessuna definizione `--color-*` fuori da quel blocco,
+    // quindi la mutazione «leggi tutto il foglio» è un no-op e il test che la
+    // cercava era verde per assenza di caso — non per merito. Con un foglio
+    // sintetico il caso esiste. È la stessa forma di `CatturaErrori::identifica()`,
+    // che prende le posizioni già estratte per poter provare l'impronta contro
+    // un deploy diverso.
+    $css ??= file_get_contents(resource_path('css/app.css'));
+
+    preg_match('/@theme\s*\{(.*?)\n\}/s', $css, $blocco);
+
+    // Non `?? ''`: un `@theme` che non si trova più darebbe insieme vuoto, e il
+    // confronto diventerebbe «tutto è indefinito» oppure — peggio — verde per
+    // vuoto dall'altro verso. Meglio rompersi qui, dove si legge il perché.
+    expect($blocco)->not->toBeEmpty('Blocco @theme non trovato in resources/css/app.css');
+
+    preg_match_all('/--color-([a-z]+)-(\d{2,3})\s*:/', $blocco[1], $token, PREG_SET_ORDER);
+
+    $tonalita = array_map(fn (array $t) => $t[1].'-'.$t[2], $token);
+    sort($tonalita);
+
+    return array_values(array_unique($tonalita));
+}
+
+/**
+ * Le famiglie di colore **di scala** (`primary`, `neutral`, `danger`…), derivate
+ * dalle tonalità definite.
+ *
+ * ⚠️ **Derivate e non elencate**: il giorno in cui nascesse un `--color-brand-500`,
+ * `brand` entrerebbe nei controlli senza che nessuno debba ricordarsene, e il
+ * giorno in cui `obsolete` sparisse ne uscirebbe. È la differenza fra una rete
+ * che segue il progetto e una che va aggiornata a mano dopo.
+ *
+ * @return list<string>
+ */
+function famiglieDelTema(?string $css = null): array
+{
+    $famiglie = array_map(fn (string $t) => explode('-', $t)[0], tonalitaDefiniteNelTema($css));
+    sort($famiglie);
+
+    return array_values(array_unique($famiglie));
+}
+
+/**
+ * Toglie da un sorgente ciò che **sembra** markup e non lo è.
+ *
+ * **Due difese contro il CSS letto come markup, e va detto quale delle due
+ * lavora davvero.**
+ *
+ * ⚠️ **Fino al 26 Ago 2026 il repository conteneva un foglio di stile dentro una
+ * vista**: `welcome.blade.php`, la pagina di benvenuto di Laravel che nessuna
+ * rotta serviva, portava inlinato un **intero build di Tailwind v4.0.7**. È
+ * stata cancellata dal restyling, quindi **oggi quel caso non esiste più nel
+ * repository** — e va detto, perché è la premessa che rendeva concreto ciò che
+ * segue.
+ *
+ * Già allora, misurato: di quel foglio ciò che nominava le nostre famiglie erano
+ * le **dichiarazioni** `--color-neutral-300: …` nel `:root`, non delle utility.
+ * A tenerle fuori era quindi il vincolo sul **prefisso** (`bg|text|border|…`),
+ * che una dichiarazione di variabile non ha; lo stripping dei `<style>` non
+ * toglieva **niente** nemmeno allora.
+ *
+ * Resta lo stesso, ed è una scelta: costa una `preg_replace`, la regola che
+ * esprime è vera in generale («il CSS non è markup») e il giorno in cui quella
+ * pagina — o una futura email in HTML — inlinasse davvero delle utility sarebbe
+ * già a posto. ⚠️ **Ma è falsificabile solo dai test sintetici qui sotto**, non
+ * dal repository: togliendola, il resto della suite resta verde. Dirlo qui è il
+ * punto — una guardia che si crede coperta dai dati veri e non lo è vale meno di
+ * una dichiarata inerte.
+ *
+ * ⚠️ **I commenti Blade si tolgono** per la ragione già imparata dal guardrail
+ * della copertura audit: un docblock che spiega *perché* una classe non si usa
+ * più non è un uso di quella classe, e un meta-test che legge il testo invece
+ * del codice punisce chi documenta.
+ */
+function sorgenteSenzaStileNeCommenti(string $sorgente): string
+{
+    $sorgente = preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $sorgente);
+
+    return preg_replace('/\{\{--.*?--\}\}/s', '', $sorgente);
+}
+
+/**
+ * I prefissi delle utility che prendono un colore.
+ *
+ * La lista è di **prefissi** e non di colori: è stabile quanto Tailwind, e non è
+ * la copia di niente che viva nel progetto.
+ *
+ * ⚠️ **`border` e `divide` prendono anche il lato**, e senza il suffisso
+ * opzionale questa rete era cieca proprio alla classe di guasto per cui è nata:
+ * verificato, `border-t-neutral-950` passava indisturbato mentre
+ * `text-neutral-950` era rosso — e `border-t-neutral-950` genera davvero una
+ * regola col grigio **acromatico** di Tailwind, cioè il difetto che questo file
+ * esiste per rendere rumoroso.
+ */
+function prefissiDiColore(): string
+{
+    return '(?:border|divide)(?:-[trblxyse])?|bg|text|ring|from|to|via|fill|stroke|outline|decoration|accent|caret|placeholder|shadow';
+}

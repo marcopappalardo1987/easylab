@@ -5,19 +5,19 @@
 
 <div class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6" x-data="{ tab: 'panoramica' }">
 
-    <a href="{{ route('anagrafica.index') }}" wire:navigate class="text-sm text-neutral-500 hover:text-neutral-800">‹ Torna all'anagrafica</a>
+    <a href="{{ route('anagrafica.index') }}" wire:navigate class="text-sm text-ink-2 hover:text-ink">‹ Torna all'anagrafica</a>
 
     {{-- Header --}}
     <div class="mt-3 flex flex-wrap items-start justify-between gap-3">
         <div>
             {{-- Semaforo (ADR-005): segnale di sintesi, la fonte di verità resta il tab Interventi. --}}
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <h1 class="text-2xl font-bold tracking-tight text-neutral-900">{{ $strumento->nome }}</h1>
+                <h1 class="text-2xl font-bold tracking-tight text-ink">{{ $strumento->nome }}</h1>
                 <x-ui.semaforo :stato="$semaforo" size="md" :label="true" />
                 <x-ui.semaforo-forzato :strumento="$strumento" />
             </div>
-            <p class="mt-1 text-sm text-neutral-600">
-                @if ($strumento->modello)<span class="font-medium text-neutral-800">{{ $strumento->modello }}</span> · @endif
+            <p class="mt-1 text-sm text-ink-2">
+                @if ($strumento->modello)<span class="font-medium text-ink">{{ $strumento->modello }}</span> · @endif
                 {{ $percorso }}
                 @if ($strumento->data_installazione) · Installato {{ $strumento->data_installazione->format('m/Y') }} <x-ui.obsoleto :strumento="$strumento" /> @endif
             </p>
@@ -54,35 +54,35 @@
     </div>
 
     {{-- Tab --}}
-    <div class="mt-6 border-b border-neutral-200">
+    <div class="mt-6 border-b border-border">
         <nav class="-mb-px flex flex-wrap gap-1 text-sm">
             {{-- Panoramica primo e di default (ADR-024): non è gated, perché i
                  suoi blocchi si gateano da soli e chi apre la scheda deve
                  comunque poter sapere perché il semaforo è acceso. --}}
             <button type="button" x-on:click="tab = 'panoramica'"
-                :class="tab === 'panoramica' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
+                :class="tab === 'panoramica' ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'"
                 class="border-b-2 px-3 py-2 font-medium">Panoramica</button>
             <button type="button" x-on:click="tab = 'anagrafica'"
-                :class="tab === 'anagrafica' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
+                :class="tab === 'anagrafica' ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'"
                 class="border-b-2 px-3 py-2 font-medium">Anagrafica</button>
             @can('interventi.view')
                 <button type="button" x-on:click="tab = 'interventi'"
-                    :class="tab === 'interventi' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
+                    :class="tab === 'interventi' ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'"
                     class="border-b-2 px-3 py-2 font-medium">Interventi</button>
             @endcan
             @can('ricambio_utilizzo.view')
                 <button type="button" x-on:click="tab = 'ricambi'"
-                    :class="tab === 'ricambi' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
+                    :class="tab === 'ricambi' ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'"
                     class="border-b-2 px-3 py-2 font-medium">Ricambi</button>
             @endcan
             @can('documenti.view')
                 <button type="button" x-on:click="tab = 'documenti'"
-                    :class="tab === 'documenti' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
+                    :class="tab === 'documenti' ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'"
                     class="border-b-2 px-3 py-2 font-medium">Documenti</button>
             @endcan
             @can('garanzie.macchina.view')
                 <button type="button" x-on:click="tab = 'garanzie'"
-                    :class="tab === 'garanzie' ? 'border-primary-600 text-primary-700' : 'border-transparent text-neutral-500 hover:text-neutral-800'"
+                    :class="tab === 'garanzie' ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'"
                     class="border-b-2 px-3 py-2 font-medium">Garanzie</button>
             @endcan
         </nav>
@@ -101,39 +101,39 @@
         <x-ui.card>
             <dl class="grid gap-x-6 gap-y-4 sm:grid-cols-2">
                 <div>
-                    <dt class="text-xs font-medium tracking-wide text-neutral-400 uppercase">Modello</dt>
-                    <dd class="mt-0.5 text-sm text-neutral-800">
+                    <dt class="text-xs font-medium tracking-wide text-ink-3 uppercase">Modello</dt>
+                    <dd class="mt-0.5 text-sm text-ink">
                         {{ $strumento->modello ?: '—' }}
                         @if ($strumento->modello)
                             <a href="{{ route('strumenti.modelli', ['search' => $strumento->modello]) }}" wire:navigate
-                                class="ml-2 text-xs text-primary-600 hover:text-primary-700">dove altro è installato →</a>
+                                class="ml-2 text-xs text-brand hover:text-brand-hover">dove altro è installato →</a>
                         @endif
                     </dd>
                 </div>
                 <div>
-                    <dt class="text-xs font-medium tracking-wide text-neutral-400 uppercase">Matricola</dt>
-                    <dd class="mt-0.5 text-sm text-neutral-800">{{ $strumento->matricola ?: '—' }}</dd>
+                    <dt class="text-xs font-medium tracking-wide text-ink-3 uppercase">Matricola</dt>
+                    <dd class="mt-0.5 text-sm text-ink">{{ $strumento->matricola ?: '—' }}</dd>
                 </div>
                 <div>
-                    <dt class="text-xs font-medium tracking-wide text-neutral-400 uppercase">Data installazione</dt>
-                    <dd class="mt-0.5 text-sm text-neutral-800">{{ $strumento->data_installazione?->format('d/m/Y') ?: '—' }}</dd>
+                    <dt class="text-xs font-medium tracking-wide text-ink-3 uppercase">Data installazione</dt>
+                    <dd class="mt-0.5 text-sm text-ink">{{ $strumento->data_installazione?->format('d/m/Y') ?: '—' }}</dd>
                 </div>
                 <div>
-                    <dt class="text-xs font-medium tracking-wide text-neutral-400 uppercase">Ubicazione</dt>
-                    <dd class="mt-0.5 text-sm text-neutral-800">{{ $percorso }}</dd>
+                    <dt class="text-xs font-medium tracking-wide text-ink-3 uppercase">Ubicazione</dt>
+                    <dd class="mt-0.5 text-sm text-ink">{{ $percorso }}</dd>
                 </div>
             </dl>
 
-            <hr class="my-6 border-neutral-200">
-            <p class="text-sm font-medium text-neutral-600">Parametri tecnici</p>
+            <hr class="my-6 border-border">
+            <p class="text-sm font-medium text-ink-2">Parametri tecnici</p>
             @if (count($parametri) === 0)
-                <p class="mt-1 text-sm text-neutral-400">Nessun parametro tecnico.</p>
+                <p class="mt-1 text-sm text-ink-3">Nessun parametro tecnico.</p>
             @else
-                <dl class="mt-3 divide-y divide-neutral-100">
+                <dl class="mt-3 divide-y divide-border">
                     @foreach ($parametri as $chiave => $valore)
                         <div class="flex justify-between gap-4 py-2 text-sm">
-                            <dt class="text-neutral-500">{{ $chiave }}</dt>
-                            <dd class="text-right font-medium text-neutral-800">{{ $valore }}</dd>
+                            <dt class="text-ink-3">{{ $chiave }}</dt>
+                            <dd class="text-right font-medium text-ink">{{ $valore }}</dd>
                         </div>
                     @endforeach
                 </dl>
@@ -143,20 +143,20 @@
         {{-- Storico spostamenti --}}
         @can('spostamenti.view')
             <x-ui.card class="mt-4">
-                <p class="text-sm font-medium text-neutral-600">Spostamenti</p>
+                <p class="text-sm font-medium text-ink-2">Spostamenti</p>
                 @if ($spostamenti->isEmpty())
-                    <p class="mt-1 text-sm text-neutral-400">Nessuno spostamento registrato.</p>
+                    <p class="mt-1 text-sm text-ink-3">Nessuno spostamento registrato.</p>
                 @else
-                    <ul class="mt-3 divide-y divide-neutral-100">
+                    <ul class="mt-3 divide-y divide-border">
                         @foreach ($spostamenti as $sp)
                             <li class="py-2.5 text-sm">
                                 <div class="flex items-center justify-between gap-3">
-                                    <span class="text-neutral-800">
-                                        {{ $sp->origineLabel() }} <span class="text-neutral-300">→</span> {{ $sp->destinazioneLabel() }}
+                                    <span class="text-ink">
+                                        {{ $sp->origineLabel() }} <span class="text-ink-3">→</span> {{ $sp->destinazioneLabel() }}
                                     </span>
-                                    <span class="shrink-0 text-xs text-neutral-400">{{ $sp->data->format('d/m/Y') }}</span>
+                                    <span class="shrink-0 text-xs text-ink-3">{{ $sp->data->format('d/m/Y') }}</span>
                                 </div>
-                                <div class="mt-0.5 text-xs text-neutral-400">
+                                <div class="mt-0.5 text-xs text-ink-3">
                                     {{ ucfirst($sp->tipo_spostamento->value) }}@if ($sp->eseguitoBy) · {{ $sp->eseguitoBy->name }}@endif
                                     @if ($sp->nota) · {{ $sp->nota }}@endif
                                 </div>
@@ -221,7 +221,7 @@
     {{-- Conferma eliminazione --}}
     @if ($confirmingDelete)
         <x-ui.modal title="Conferma eliminazione">
-            <p class="text-sm text-neutral-600">Eliminare lo strumento «{{ $strumento->nome }}»? L'operazione è reversibile (soft delete).</p>
+            <p class="text-sm text-ink-2">Eliminare lo strumento «{{ $strumento->nome }}»? L'operazione è reversibile (soft delete).</p>
             <div class="mt-6 flex justify-end gap-3">
                 <x-ui.button variant="secondary" wire:click="$set('confirmingDelete', false)">Annulla</x-ui.button>
                 <x-ui.button variant="danger" wire:click="delete">Elimina</x-ui.button>
@@ -236,23 +236,23 @@
                 <x-ui.textarea name="interventoForm.descrizione" label="Descrizione" wire:model="interventoForm.descrizione" />
 
                 <div>
-                    <label for="interventoTipo" class="block text-sm font-medium text-neutral-800">Tipo</label>
+                    <label for="interventoTipo" class="block text-sm font-medium text-ink">Tipo</label>
                     <select id="interventoTipo" wire:model="interventoForm.tipo"
-                        class="mt-1 block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
+                        class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
                         @foreach (App\Enums\TipoIntervento::cases() as $tipo)
                             <option value="{{ $tipo->value }}">{{ $tipo->label() }}</option>
                         @endforeach
                     </select>
-                    @error('interventoForm.tipo') <p class="mt-1 text-sm text-danger-600">{{ $message }}</p> @enderror
+                    @error('interventoForm.tipo') <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p> @enderror
                 </div>
 
                 <x-ui.input name="interventoForm.data_scadenza" label="Data scadenza" type="date" wire:model="interventoForm.data_scadenza" />
 
                 @can('interventi.assign')
                     <div>
-                        <label for="interventoTecnico" class="block text-sm font-medium text-neutral-800">Assegnatario</label>
+                        <label for="interventoTecnico" class="block text-sm font-medium text-ink">Assegnatario</label>
                         <select id="interventoTecnico" wire:model="interventoForm.tecnico_id"
-                            class="mt-1 block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
+                            class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
                             {{-- `disabled`: un intervento è sempre assegnato, quindi
                                  il segnaposto si vede ma non si può scegliere. Serve
                                  comunque, perché aprendo una delle righe storiche
@@ -265,16 +265,16 @@
                                 <option value="{{ $tecnico->id }}">{{ $tecnico->name }}</option>
                             @endforeach
                         </select>
-                        @error('interventoForm.tecnico_id') <p class="mt-1 text-sm text-danger-600">{{ $message }}</p> @enderror
+                        @error('interventoForm.tecnico_id') <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p> @enderror
                     </div>
                 @endcan
 
                 @if ($editingInterventoId === null)
                     {{-- Inserimento storico (backlog punto 3): un intervento già eseguito
                          si registra in un passo, senza transitare da scaduto-non-fatto. --}}
-                    <label class="flex items-center gap-2 text-sm text-neutral-800">
+                    <label class="flex items-center gap-2 text-sm text-ink">
                         <input type="checkbox" wire:model.live="interventoForm.gia_eseguito"
-                            class="rounded border-neutral-300 text-primary-600 focus:ring-primary-600">
+                            class="rounded border-border-strong text-brand focus:ring-ring">
                         Già eseguito
                     </label>
                     @if ($interventoForm['gia_eseguito'])
@@ -287,10 +287,10 @@
                      campo persistito — apre e chiude il repeater, la verità è
                      l'esistenza delle righe. --}}
                 @if ($puoRegistrareRicambi)
-                    <div class="border-t border-neutral-200 pt-5">
-                        <label class="flex items-center gap-2 text-sm text-neutral-800">
+                    <div class="border-t border-border pt-5">
+                        <label class="flex items-center gap-2 text-sm text-ink">
                             <input type="checkbox" wire:model.live="ricambiEffettuati"
-                                class="rounded border-neutral-300 text-primary-600 focus:ring-primary-600">
+                                class="rounded border-border-strong text-brand focus:ring-ring">
                             Ricambio effettuato
                         </label>
 
@@ -302,14 +302,14 @@
                                  salvataggio. --}}
                             @foreach ($ricambiSalvati as $salvato)
                                 @php $inRimozione = in_array($salvato->id, array_map('intval', $ricambiRimossi), true); @endphp
-                                <div class="mt-3 flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm {{ $inRimozione ? 'opacity-50' : '' }}"
+                                <div class="mt-3 flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm {{ $inRimozione ? 'opacity-50' : '' }}"
                                     wire:key="ricambio-salvato-{{ $salvato->id }}">
                                     <span class="flex-1 {{ $inRimozione ? 'line-through' : '' }}">
                                         {{ $salvato->ricambio?->nome ?? '—' }}
                                         {{-- Senza data il pezzo non è ancora montato: si dice quello,
                                              non una data inventata. Si monterà alla chiusura
                                              dell'intervento, che è quando la data diventa vera. --}}
-                                        <span class="text-neutral-500">
+                                        <span class="text-ink-3">
                                             @if ($salvato->data)
                                                 · montato il {{ $salvato->data->format('d/m/Y') }}
                                             @else
@@ -319,17 +319,17 @@
                                     </span>
                                     @if ($inRimozione)
                                         <button type="button" wire:click="annullaRimozioneRicambio({{ $salvato->id }})"
-                                            class="flex h-11 items-center rounded px-2 text-sm text-primary-700 hover:bg-primary-50">Annulla</button>
+                                            class="flex h-11 items-center rounded px-2 text-sm text-brand-soft-ink hover:bg-brand-soft">Annulla</button>
                                     @else
                                         <button type="button" wire:click="segnaRicambioRimosso({{ $salvato->id }})"
                                             aria-label="Rimuovi il ricambio {{ $salvato->ricambio?->nome }}"
-                                            class="flex h-11 w-11 shrink-0 items-center justify-center rounded text-danger-500 hover:bg-danger-100">✕</button>
+                                            class="flex h-11 w-11 shrink-0 items-center justify-center rounded text-bad-dot hover:bg-bad-soft">✕</button>
                                     @endif
                                 </div>
                             @endforeach
 
                             @foreach ($ricambiNuovi as $i => $riga)
-                                <div class="mt-3 rounded-md border border-neutral-200 p-3" wire:key="ricambio-nuovo-{{ $i }}">
+                                <div class="mt-3 rounded-md border border-border p-3" wire:key="ricambio-nuovo-{{ $i }}">
                                     <x-ui.combobox
                                         name="ricambiNuovi.{{ $i }}.nome"
                                         label="Nome ricambio"
@@ -347,7 +347,7 @@
                                         </div>
                                         <button type="button" wire:click="removeRicambio({{ $i }})"
                                             aria-label="Rimuovi questa riga" title="Rimuovi"
-                                            class="flex h-11 w-11 shrink-0 items-center justify-center rounded text-danger-500 hover:bg-danger-100">✕</button>
+                                            class="flex h-11 w-11 shrink-0 items-center justify-center rounded text-bad-dot hover:bg-bad-soft">✕</button>
                                     </div>
                                 </div>
                             @endforeach
@@ -357,7 +357,7 @@
                             </x-ui.button>
 
                             @if (count($ricambiNuovi) === 0 && $ricambiSalvati->isEmpty())
-                                <p class="mt-1 text-sm text-neutral-400">Nessun ricambio. La scadenza della garanzia è obbligatoria per ogni pezzo.</p>
+                                <p class="mt-1 text-sm text-ink-3">Nessun ricambio. La scadenza della garanzia è obbligatoria per ogni pezzo.</p>
                             @endif
                         @endif
                     </div>
@@ -375,7 +375,7 @@
     @if ($showCompletaForm)
         <x-ui.modal title="Segna come fatto" close="closeCompleta">
             <form wire:submit="completa" class="space-y-5">
-                <p class="text-sm text-neutral-600">
+                <p class="text-sm text-ink-2">
                     «{{ $interventi->firstWhere('id', $completingInterventoId)?->descrizione }}»
                 </p>
                 <x-ui.input name="dataEsecuzione" label="Data esecuzione" type="date" wire:model="dataEsecuzione" />
@@ -386,10 +386,10 @@
                      certificato non è registrata, e su un parco di migliaia di
                      macchine «me ne ricordo io» non è un piano. --}}
                 @if ($interventi->firstWhere('id', $completingInterventoId)?->tipo === TipoIntervento::TaraturaECertificazione)
-                    <div class="rounded-md border border-neutral-200 bg-neutral-50 p-4">
-                        <label class="flex items-center gap-2 text-sm font-medium text-neutral-800">
+                    <div class="rounded-md border border-border bg-surface-sunken p-4">
+                        <label class="flex items-center gap-2 text-sm font-medium text-ink">
                             <input type="checkbox" wire:model.live="pianificaProssimaTaratura"
-                                class="rounded border-neutral-300 text-primary-600 focus:ring-primary-600">
+                                class="rounded border-border-strong text-brand focus:ring-ring">
                             Pianifica la prossima taratura
                         </label>
 
@@ -397,7 +397,7 @@
                             <div class="mt-3">
                                 <x-ui.input name="mesiProssimaTaratura" label="Fra quanti mesi" type="number"
                                     min="1" max="120" wire:model="mesiProssimaTaratura" placeholder="es. 12" />
-                                <p class="mt-1 text-xs text-neutral-400">
+                                <p class="mt-1 text-xs text-ink-3">
                                     {{-- Nessun default nascosto: la periodicità dipende dal contratto e
                                          dallo strumento, e nessun documento del progetto la fissa. --}}
                                     Verrà creata una nuova «Taratura e certificazione» con la stessa
@@ -416,13 +416,18 @@
                      fatto anche senza nota, e pretenderla bloccherebbe la
                      chiusura degli interventi storici che non ne hanno una. --}}
                 <div>
-                    <label for="reportFineLavoro" class="block text-sm font-medium text-neutral-800">
-                        Report di fine lavoro <span class="font-normal text-neutral-400">— facoltativo</span>
+                    <label for="reportFineLavoro" class="block text-sm font-medium text-ink">
+                        Report di fine lavoro <span class="font-normal text-ink-3">— facoltativo</span>
                     </label>
                     <textarea id="reportFineLavoro" wire:model="reportFineLavoro" rows="4" maxlength="5000"
                         placeholder="Cosa hai trovato e cosa hai fatto…"
-                        class="mt-1 block w-full rounded-md border-neutral-300 text-sm shadow-sm focus:border-primary-600 focus:ring-primary-600"></textarea>
-                    @error('reportFineLavoro')<p class="mt-1 text-xs text-danger-600">{{ $message }}</p>@enderror
+                        {{-- ⚠️ `border` (la LARGHEZZA) accanto al colore: la preflight di Tailwind v4
+                         mette `border: 0 solid` su `*`, quindi un colore di bordo senza
+                         larghezza è un token **inerte** — la classe è scritta, non dà
+                         errore, e il campo resta senza contorno. Era così da prima del
+                         restyling: si distingueva solo per l'ombra. --}}
+                        class="mt-1 block w-full rounded-md border border-border-strong bg-surface text-sm text-ink shadow-sm placeholder:text-ink-3 focus:border-brand focus:ring-ring"></textarea>
+                    @error('reportFineLavoro')<p class="mt-1 text-xs text-bad-soft-ink">{{ $message }}</p>@enderror
                 </div>
 
                 {{-- Su un telefono i bottoni vanno a tutta larghezza e la
@@ -438,7 +443,7 @@
     {{-- Conferma eliminazione intervento --}}
     @if ($deletingInterventoId)
         <x-ui.modal title="Conferma eliminazione">
-            <p class="text-sm text-neutral-600">
+            <p class="text-sm text-ink-2">
                 Eliminare l'intervento «{{ $interventi->firstWhere('id', $deletingInterventoId)?->descrizione }}»?
                 L'operazione è reversibile (soft delete).
             </p>
@@ -453,18 +458,18 @@
     @if ($showMoveForm)
         <x-ui.modal title="Sposta strumento" close="closeMove">
             <form wire:submit="move" class="space-y-5">
-                <p class="text-sm text-neutral-600">Da: <span class="font-medium text-neutral-800">{{ $percorso }}</span></p>
+                <p class="text-sm text-ink-2">Da: <span class="font-medium text-ink">{{ $percorso }}</span></p>
 
                 <div>
-                    <label for="destinazioneId" class="block text-sm font-medium text-neutral-800">Destinazione</label>
+                    <label for="destinazioneId" class="block text-sm font-medium text-ink">Destinazione</label>
                     <select id="destinazioneId" wire:model="destinazioneId"
-                        class="mt-1 block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
+                        class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
                         <option value="">— Scegli dipartimento o laboratorio —</option>
                         @foreach ($nodiDestinazione as $nodo)
                             <option value="{{ $nodo->id }}">{{ $nodo->nome }}</option>
                         @endforeach
                     </select>
-                    @error('destinazioneId') <p class="mt-1 text-sm text-danger-600">{{ $message }}</p> @enderror
+                    @error('destinazioneId') <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p> @enderror
                 </div>
 
                 <x-ui.input name="dataSpostamento" label="Data" type="date" wire:model="dataSpostamento" />
@@ -484,7 +489,7 @@
             <form wire:submit="saveGaranzia" class="space-y-5">
                 <x-ui.input name="garanziaForm.data_inizio" label="Data inizio" type="date" wire:model="garanziaForm.data_inizio" />
                 <x-ui.input name="garanziaForm.durata_mesi" label="Durata (mesi)" type="number" min="1" wire:model="garanziaForm.durata_mesi" />
-                <p class="text-xs text-neutral-400">La scadenza effettiva è calcolata: inizio + durata.</p>
+                <p class="text-xs text-ink-3">La scadenza effettiva è calcolata: inizio + durata.</p>
 
                 <div class="flex justify-end gap-3">
                     <x-ui.button variant="secondary" wire:click="closeGaranziaForm">Annulla</x-ui.button>
@@ -497,7 +502,7 @@
     {{-- Conferma eliminazione garanzia --}}
     @if ($deletingGaranziaId)
         <x-ui.modal title="Conferma eliminazione">
-            <p class="text-sm text-neutral-600">Eliminare questa garanzia? L'operazione è reversibile (soft delete).</p>
+            <p class="text-sm text-ink-2">Eliminare questa garanzia? L'operazione è reversibile (soft delete).</p>
             <div class="mt-6 flex justify-end gap-3">
                 <x-ui.button variant="secondary" wire:click="$set('deletingGaranziaId', null)">Annulla</x-ui.button>
                 <x-ui.button variant="danger" wire:click="eliminaGaranzia" wire:loading.attr="disabled">Elimina</x-ui.button>
@@ -509,21 +514,21 @@
     @if ($showForzaForm)
         <x-ui.modal title="Forza semaforo" close="closeForza">
             <form wire:submit="forza" class="space-y-5">
-                <p class="text-sm text-neutral-600">
+                <p class="text-sm text-ink-2">
                     Lo stato forzato vince su quello calcolato finché non viene rimosso.
                     Gli interventi restano visibili nel tab: la forzatura non nasconde nulla.
                 </p>
 
                 <div>
-                    <label for="forzaStato" class="block text-sm font-medium text-neutral-800">Stato</label>
+                    <label for="forzaStato" class="block text-sm font-medium text-ink">Stato</label>
                     {{-- .live: cambiando stato, il campo motivo diventa obbligatorio sul rosso --}}
                     <select id="forzaStato" wire:model.live="forzaForm.stato"
-                        class="mt-1 block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
+                        class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
                         <option value="{{ App\Enums\StatoSemaforo::Verde->value }}">● In regola</option>
                         <option value="{{ App\Enums\StatoSemaforo::Arancione->value }}">◐ Azione richiesta</option>
                         <option value="{{ App\Enums\StatoSemaforo::Rosso->value }}">■ Non idoneo</option>
                     </select>
-                    @error('forzaForm.stato') <p class="mt-1 text-sm text-danger-600">{{ $message }}</p> @enderror
+                    @error('forzaForm.stato') <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p> @enderror
                 </div>
 
                 @php $richiedeMotivo = $forzaForm['stato'] === App\Enums\StatoSemaforo::Rosso->value; @endphp
@@ -569,7 +574,7 @@
                     <x-ui.input name="ricambioForm.data" label="Data di montaggio" type="date"
                         wire:model="ricambioForm.data" />
                     <div class="mt-1 flex items-center justify-between gap-3">
-                        <p class="text-xs text-neutral-400">
+                        <p class="text-xs text-ink-3">
                             Correggendola a mano, la chiusura dell'intervento non la modificherà più.
                         </p>
                         {{-- Bottone esplicito e non «svuota il campo»: un campo
@@ -577,7 +582,7 @@
                              assomigliano troppo perché la differenza resti
                              implicita. --}}
                         <button type="button" wire:click="segnaNonMontato"
-                            class="shrink-0 text-xs font-medium text-primary-600 hover:text-primary-700">
+                            class="shrink-0 text-xs font-medium text-brand hover:text-brand-hover">
                             Non ancora montato
                         </button>
                     </div>
@@ -603,20 +608,20 @@
         <x-ui.modal title="Carica documento" close="closeDocumentoForm">
             <form wire:submit="salvaDocumento" class="space-y-5">
                 <div>
-                    <label for="fileDocumento" class="block text-sm font-medium text-neutral-800">File</label>
+                    <label for="fileDocumento" class="block text-sm font-medium text-ink">File</label>
                     <input id="fileDocumento" type="file" wire:model="fileDocumento"
-                        class="mt-1 block w-full text-sm text-neutral-700 file:mr-3 file:rounded-md file:border-0 file:bg-primary-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-700 hover:file:bg-primary-100">
-                    <p class="mt-1 text-xs text-neutral-400">PDF o immagine, fino a 20 MB.</p>
+                        class="mt-1 block w-full text-sm text-ink-2 file:mr-3 file:rounded-md file:border-0 file:bg-brand-soft file:px-3 file:py-2 file:text-sm file:font-medium file:text-brand-soft-ink hover:file:bg-brand-soft-strong">
+                    <p class="mt-1 text-xs text-ink-3">PDF o immagine, fino a 20 MB.</p>
                     @error('fileDocumento')
-                        <p class="mt-1 text-sm text-danger-600">{{ $message }}</p>
+                        <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
                     @enderror
-                    <p class="mt-1 text-xs text-neutral-400" wire:loading wire:target="fileDocumento">Caricamento in corso…</p>
+                    <p class="mt-1 text-xs text-ink-3" wire:loading wire:target="fileDocumento">Caricamento in corso…</p>
                 </div>
 
                 <div>
-                    <label for="tipoDocumento" class="block text-sm font-medium text-neutral-800">Tipo</label>
+                    <label for="tipoDocumento" class="block text-sm font-medium text-ink">Tipo</label>
                     <select id="tipoDocumento" wire:model="tipoDocumento"
-                        class="mt-1 block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
+                        class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
                         @foreach ($tipiDocumento as $valore => $etichetta)
                             <option value="{{ $valore }}">{{ $etichetta }}</option>
                         @endforeach
@@ -625,9 +630,9 @@
 
                 @if ($interventiAllegabili->isNotEmpty())
                     <div>
-                        <label for="documentoInterventoId" class="block text-sm font-medium text-neutral-800">Allega a</label>
+                        <label for="documentoInterventoId" class="block text-sm font-medium text-ink">Allega a</label>
                         <select id="documentoInterventoId" wire:model="documentoInterventoId"
-                            class="mt-1 block w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
+                            class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
                             <option value="">La macchina</option>
                             @foreach ($interventiAllegabili as $intervento)
                                 <option value="{{ $intervento->id }}">
@@ -648,7 +653,7 @@
 
     @if ($deletingDocumentoId !== null)
         <x-ui.modal title="Eliminare il documento?">
-            <p class="text-sm text-neutral-600">
+            <p class="text-sm text-ink-2">
                 L'operazione è reversibile: la riga viene cestinata e il file resta archiviato.
             </p>
             <div class="mt-6 flex justify-end gap-3">
@@ -662,7 +667,7 @@
          perché è ciò che spegne il semaforo (ADR-020) e non si deduce. --}}
     @if ($deletingUtilizzoId !== null)
         <x-ui.modal title="Rimuovere il ricambio?">
-            <p class="text-sm text-neutral-600">
+            <p class="text-sm text-ink-2">
                 La riga di montaggio e la garanzia del pezzo verranno cestinate insieme.
                 Se quella garanzia teneva acceso il semaforo, lo strumento tornerà in regola.
             </p>

@@ -287,6 +287,9 @@ file sorgente:
 | `php artisan view:clear` | `viste` | svuota la cache **globale**: lanciato mentre un altro agente misura, ne falsa la misura |
 | `php artisan migrate` | `db` | una sola migration alla volta sul DB di sviluppo |
 | `php artisan test` | *nessuno* | ogni processo ha il proprio database: è parallelizzabile |
+| `vendor/bin/pint --dirty` | `pint` | ⚠️ **aggiunto il 27 Ago dopo averlo pagato**: gira sull'**intero repository**, non sul write-set. Ha riformattato file di appoggio di altri agenti |
+| la **scratchpad di sessione** | *una sottocartella per agente* | ⚠️ **aggiunto il 27 Ago**: è **condivisa**. Un agente ha sovrascritto i banchi statici di un altro |
+| `tests/Feature/` | *vietato ai file di appoggio* | 🔴 **aggiunto il 27 Ago**: due agenti hanno lasciato lì dei file temporanei, che la suite **carica** — e che andavano in fatal, rendendo la suite rossa a chiunque la lanciasse |
 
 **Divieti, ereditati da `CLAUDE.md` e ripetuti qui perché è qui che gli agenti leggeranno:**
 
@@ -363,23 +366,25 @@ Le due revisioni e il cancello di §4 sono **impliciti in ogni task** e non si r
 
 ### 🧱 F0 — Fondamenta *(serie stretta: tutte le altre corsie sono ferme)*
 
-- [ ] `[CORE]` **F0.1 — La flotta esiste davvero.** Sette definizioni in `.claude/agents/` col modello e il
+- [x] `[CORE]` **F0.1 — La flotta esiste davvero.** Sette definizioni in `.claude/agents/` col modello e il
       ragionamento nel frontmatter, più `.restyling/` in `.gitignore` e lo scheletro `lock/ fatto/ scatti/`.
       *Esecutore: fondamenta (Opus, `xhigh`).* · **write-set:** `.claude/agents/**`, `.gitignore` ·
       **dipendenze:** nessuna.
       **DoD:** i sette agenti si elencano; un agente lanciato a vuoto riporta il proprio modello.
       *Perché per primo: senza, «agente specializzato» resta una convenzione di prompt, e il modello sbagliato
       si sceglie per distrazione invece che per decisione.*
+      ✅ *(26 Ago 2026 — sette agenti in `.claude/agents/`. ⚠️ **La DoD non è stata soddisfatta come scritta**: le definizioni si caricano all'**avvio** della sessione, quindi il primo giro è stato orchestrato forzando il modello a mano. Dal giro successivo sono registrate. Chi rilegge non ha trovato un bug: la riga era ottimistica)*
 
-- [ ] `[CORE]` **F0.2 — ADR-034: il tema chiaro/scuro.** La decisione di §1.3 messa per iscritto dove il
+- [x] `[CORE]` **F0.2 — ADR-034: il tema chiaro/scuro.** La decisione di §1.3 messa per iscritto dove il
       progetto tiene le decisioni: i tre stati, perché il DB è la verità e `localStorage` la cache, perché lo
       script degli ospiti è inline e sincrono, perché serve `color-scheme`, e la conseguenza scomoda —
       **la superficie di verifica raddoppia**, ogni pagina va guardata due volte.
       *Esecutore: fondamenta (Opus, `xhigh`).* · **write-set:** `../Architettura/Decisioni Architetturali.md` ·
       **dipendenze:** nessuna.
       **DoD:** ADR-034 presente, numerata dopo la 033, con Contesto/Decisione/Conseguenze.
+      ✅ *(26 Ago 2026 — ADR-034 scritta, con la conseguenza che la superficie di verifica **raddoppia**)*
 
-- [ ] `[CORE]` **F0.3 — Design System §8, «Tema scuro e strato semantico».** La tabella completa dei token
+- [x] `[CORE]` **F0.3 — Design System §8, «Tema scuro e strato semantico».** La tabella completa dei token
       semantici coi due valori affiancati (chiaro | scuro), la regola *«le scale non cambiano, i semantici
       sì»*, la mappatura di §1.2, il token `--overlay` con la sua motivazione, e le quattro eccezioni che
       restano su token di scala.
@@ -389,8 +394,9 @@ Le due revisioni e il cancello di §4 sono **impliciti in ogni task** e non si r
       dello storico e i test citano le sezioni **per numero**. Si aggiunge §8 in coda e si aggiorna il solo
       riquadro di **Stato** in testa.
       **DoD:** §8 esiste; i titoli §1–§7 sono **byte per byte** quelli di prima (verificato con `diff`).
+      ✅ *(26 Ago 2026 — §8 in coda, e §1–§7 verificate **byte per byte** identiche con `diff`. Il revisore ha aggiunto `--surface-code` e aveva ragione: l'app ha superfici monospazio (stack trace, matrice ruoli))*
 
-- [ ] `[CORE]` **F0.4 — `app.css`: ADR-033 attuata, e nasce lo strato semantico.** 🔗 DS §2, §6, §8.
+- [x] `[CORE]` **F0.4 — `app.css`: ADR-033 attuata, e nasce lo strato semantico.** 🔗 DS §2, §6, §8.
       *Esecutore: fondamenta (Opus, `xhigh`).* · **write-set:** `resources/css/app.css` · **dipendenze:** F0.3.
       Contenuto: il teal esce e la scala `primary` diventa i **11 gradini del blu** (400 e 600 ancorati agli
       hex del logo) · `neutral-950`, `success-50`, `warning-600`, `danger-50`, `obsolete-50/100/700`,
@@ -402,11 +408,13 @@ Le due revisioni e il cancello di §4 sono **impliciti in ogni task** e non si r
       ⚠️ Un solo `@theme`, piatto (§1.1).
       **DoD:** `npm run build` passa; `PaletteGuardrailTest` verde; un confronto a schermo fra il campione e
       l'app mostra lo **stesso blu**.
+      ✅ *(26 Ago 2026 — il teal è uscito. ⚠️ **L'architettura è stata misurata, non dedotta**: Tailwind v4 fa tree-shaking dei token `@theme` non usati, e lo strato semantico vive fuori da `@theme` — se il compilatore non seguisse i `var()`, `--ink: var(--color-neutral-900)` si risolverebbe nel nulla. Costruito il bundle e letto: segue. Verificato a schermo che `/login` renda `#06589C`, lo stesso blu del logo)*
 
-- [ ] `[CORE]` **F0.5 — Le tre reti, prima di migrare e non dopo.** 🛡️
+- [x] `[CORE]` **F0.5 — Le tre reti, prima di migrare e non dopo.** 🛡️
       *Esecutore: fondamenta (Opus, `xhigh`).* · **write-set:** `tests/Feature/PaletteGuardrailTest.php`,
       `tests/Feature/TemaScuroGuardrailTest.php` *(nuovo)*,
       `tests/Feature/SuperficiTokenizzateGuardrailTest.php` *(nuovo)*, `tests/Pest.php` · **dipendenze:** F0.4.
+      ✅ *(26 Ago 2026 — tre reti, 17 test nuovi, **sei** prove di mutazione. `DA_MIGRARE` parte da **51 file**. 🔴 Il difetto sospettato nel blocco `@media print` **esisteva, ed erano nove token**: stampando col tema scuro attivo, `--chart-band: #0e2740` disegnava una fascia quasi nera attraverso il foglio. La quarta asserzione su `DA_MIGRARE` — «non tenere un file già pulito» — fa **accorciare la lista da sola**)*
 
       1. **`PaletteGuardrailTest` esteso ai token senza gradino.** Oggi deriva le tonalità da
          `--color-([a-z]+)-(\d{2,3})`: `--color-surface` **non ha un numero**, quindi non entra né fra le
@@ -434,7 +442,7 @@ Le due revisioni e il cancello di §4 sono **impliciti in ogni task** e non si r
 
 ### 🔀 F1 — L'interruttore del tema
 
-- [ ] `[CORE]` **F1.1 — `users.tema`.** Migration (`sistema|chiaro|scuro`, default `sistema`), cast sul
+- [x] `[CORE]` **F1.1 — `users.tema`.** Migration (`sistema|chiaro|scuro`, default `sistema`), cast sul
       modello, **non fillable** — stessa postura di `tenant_id` e `riceve_email_scadenze`.
       *Esecutore: fondamenta (Opus, `high`).* · **write-set:** `database/migrations/*_add_tema_to_users_table.php`,
       `app/Models/User.php` · **dipendenze:** F0.5.
@@ -443,7 +451,7 @@ Le due revisioni e il cancello di §4 sono **impliciti in ogni task** e non si r
       suite**. È già successo due volte in questo progetto.
       **DoD:** migrata in locale; un valore fuori dai tre è rifiutato.
 
-- [ ] `[CORE]` **F1.2 — `data-theme` in testa alle pagine.** Nei due layout: attributo reso **dal server** per
+- [x] `[CORE]` **F1.2 — `data-theme` in testa alle pagine.** Nei due layout: attributo reso **dal server** per
       l'autenticato, **script inline sincrono** nel `<head>` per l'ospite, `color-scheme` dichiarato.
       *Esecutore: fondamenta (Opus, `xhigh`).* · **write-set:** `resources/views/components/layouts/app.blade.php`,
       `resources/views/components/guest-layout.blade.php` · **dipendenze:** F1.1.
@@ -452,7 +460,7 @@ Le due revisioni e il cancello di §4 sono **impliciti in ogni task** e non si r
       **DoD:** con `users.tema = 'scuro'` la pagina nasce scura **senza lampo**; con `sistema` segue l'OS;
       cambiando l'OS a pagina aperta il tema cambia da solo.
 
-- [ ] `[CORE]` **F1.3 — Il selettore, e la pagina diventa «Preferenze».** `x-ui.selettore-tema` a tre stati
+- [x] `[CORE]` **F1.3 — Il selettore, e la pagina diventa «Preferenze».** `x-ui.selettore-tema` a tre stati
       (☀ chiaro · ☾ scuro · ⌂ sistema) con `aria-pressed`; Livewire scrive il DB, Alpine scrive attributo e
       `localStorage` nello stesso gesto; scorciatoia nel menù utente.
       *Esecutore: componenti (Opus, `high`).* · **write-set:** `resources/views/components/ui/selettore-tema.blade.php`
@@ -466,7 +474,7 @@ Le due revisioni e il cancello di §4 sono **impliciti in ogni task** e non si r
       **DoD:** tre stati raggiungibili da tastiera, target ≥ 44px, la scelta sopravvive al logout/login **e**
       a un browser nuovo.
 
-- [ ] `[CORE]` **F1.4 — Il marchio sul fondo scuro.** Secondo SVG (`easylab-logo-compatto-scuro.svg`, e il
+- [x] `[CORE]` **F1.4 — Il marchio sul fondo scuro.** Secondo SVG (`easylab-logo-compatto-scuro.svg`, e il
       completo per l'accesso), `x-brand-logo` che sceglie in base al tema.
       *Esecutore: componenti (Opus, `high`).* · **write-set:** `public/brand/*`,
       `resources/views/components/brand-logo.blade.php`, `tests/Feature/MarchioTest.php` · **dipendenze:** F1.2.
@@ -476,7 +484,7 @@ Le due revisioni e il cancello di §4 sono **impliciti in ogni task** e non si r
       stato per due mesi. `MarchioTest` va esteso al nuovo file.
       **DoD:** il marchio è leggibile nei due temi; i percorsi esistono, verificato dal test.
 
-- [ ] `[CORE]` **F1.5 — Il banco di prova.** Rotta `/design-system` **abilitata solo in `local`** che monta
+- [x] `[CORE]` **F1.5 — Il banco di prova.** Rotta `/design-system` **abilitata solo in `local`** che monta
       ogni componente in ogni stato — è la traduzione in Blade di `design-system.html`.
       *Esecutore: componenti (Opus, `high`).* · **write-set:** `routes/web.php`,
       `resources/views/banco/*` *(nuovo)*, `tests/Feature/BancoTest.php` *(nuovo)* · **dipendenze:** F1.3.
@@ -490,23 +498,23 @@ Le due revisioni e il cancello di §4 sono **impliciti in ogni task** e non si r
 
 Ogni sotto-task possiede file distinti: sono lanciabili insieme. **Nessuno può toccare `app.css`.**
 
-- [ ] `[CORE]` **F2.1 — Superfici e azioni:** `card`, `button`, `modal`, `badge`. 🔗 DS §5.1, §5.2, §5.4.
+- [x] `[CORE]` **F2.1 — Superfici e azioni:** `card`, `button`, `modal`, `badge`. 🔗 DS §5.1, §5.2, §5.4.
       *Esecutore: componenti (Opus, `high`).*
       ⚠️ Il bottone **secondario** passa a `border-border-strong` (il campione usa il bordo forte) e il velo
       della modale a `bg-overlay`. `x-ui.badge` ha sei varianti: tutte e sei nei due temi.
-- [ ] `[CORE]` **F2.2 — Form:** `input`, `textarea`, `combobox`. 🔗 DS §5.6.
+- [x] `[CORE]` **F2.2 — Form:** `input`, `textarea`, `combobox`. 🔗 DS §5.6.
       *Esecutore: componenti (Opus, `high`).*
       ⚠️ Il **placeholder va a `text-ink-3`** (a `neutral-400` era 2.56:1, sotto AA — DS §2.2). Il testo
       d'errore va a `text-bad-soft-ink`, non a `text-danger-600`. ⛔ **Il combobox non si riscrive**: i suoi
       `aria-*`, il percorso di selezione via `wire:click` e il fallback senza JavaScript restano identici —
       qui si cambiano solo i colori.
-- [ ] `[CORE]` **F2.3 — Stato:** `semaforo`, `semaforo-forzato`, `obsoleto`, `stat-tile`. 🔗 DS §4, §5.2,
+- [x] `[CORE]` **F2.3 — Stato:** `semaforo`, `semaforo-forzato`, `obsoleto`, `stat-tile`. 🔗 DS §4, §5.2,
       ADR-005/014. *Esecutore: componenti (Opus, `high`).*
       ⛔ **La tripletta colore + forma + etichetta non si tocca.** I glifi `●◐■⚑⏳` e gli `sr-only` restano;
       cambia il gradino, non il significato. ⚠️ In tema scuro i colori dei grafici scendono a **ΔE 6,9** fra
       verde e arancione (DS §2.5): è **legittimo solo perché** ogni voce porta anche glifo ed etichetta.
       Toglierli qui romperebbe l'accessibilità, non l'estetica.
-- [ ] `[CORE]` **F2.4 — Navigazione e cifre:** `app/nav-link`, `piattaforma/nav`, `errori/cifre`.
+- [x] `[CORE]` **F2.4 — Navigazione e cifre:** `app/nav-link`, `piattaforma/nav`, `errori/cifre`.
       🔗 DS §5.5, §5.7. *Esecutore: componenti (Sonnet, `medium`).*
       ⚠️ La voce attiva passa a `bg-brand-soft-strong text-brand-soft-ink`, l'hover a `bg-surface` — perché
       nel campione la **sidebar è incassata** e l'hover deve *emergere*, non affondare.
@@ -515,7 +523,7 @@ Ogni sotto-task possiede file distinti: sono lanciabili insieme. **Nessuno può 
 
 ### 🏗️ F3 — Il guscio *(serie: è il file più conteso del progetto)*
 
-- [ ] `[CORE]` **F3.1 — `layouts/app.blade.php`** (231 righe): sidebar, top bar, drawer mobile, backdrop,
+- [x] `[CORE]` **F3.1 — `layouts/app.blade.php`** (231 righe): sidebar, top bar, drawer mobile, backdrop,
       banner di impersonation, menù utente. 🔗 DS §5.7, §5.8.
       *Esecutore: viste dense (Opus, `high`).* · **dipendenze:** F2 chiusa per intero.
       ⚠️ **La sidebar cambia ruolo**: da `bg-white` a `bg-surface-sunken`, perché nel campione la superficie
@@ -526,7 +534,7 @@ Ogni sotto-task possiede file distinti: sono lanciabili insieme. **Nessuno può 
       ⚠️ Le regole di stampa (`print:hidden`, `print:bg-white`) restano nel layout e non nelle pagine.
       **DoD:** drawer, backdrop e menù utente funzionano nei due temi a 360px; la stampa esce **chiara**.
 
-- [ ] `[CORE]` **F3.2 — `guest-layout` e le card di autenticazione.** *Esecutore: viste (Sonnet, `medium`).*
+- [x] `[CORE]` **F3.2 — `guest-layout` e le card di autenticazione.** *Esecutore: viste (Sonnet, `medium`).*
       · **dipendenze:** F3.1.
       ⚠️ Il logo **completo** (col claim) resta sulla pagina d'accesso, e l'`h1` in `sr-only` non si tocca:
       il claim è testo trasformato in tracciati e uno screen reader non lo vede (ADR-033).
@@ -538,43 +546,43 @@ Ogni sotto-task possiede file distinti: sono lanciabili insieme. **Nessuno può 
 **Dipendenza comune:** F3 chiusa. **Ogni sotto-task toglie i propri file da `DA_MIGRARE` (F0.5).**
 
 **Corsia A — Strumenti** *(11 file, 1.891 righe)*
-- [ ] `[CORE]` **F4.A1** — `elenco-strumenti`, `modelli-strumenti`, `import-strumenti`, `_tabs`.
+- [x] `[CORE]` **F4.A1** — `elenco-strumenti`, `modelli-strumenti`, `import-strumenti`, `_tabs`.
       *(Sonnet, `medium`)* — ⚠️ `elenco-strumenti` ha l'intestazione ordinabile: `aria-sort` e la freccia
       leggono **l'ordinamento effettivo**, mai la property (DS §5.3). Non toccare quella logica.
-- [ ] `[CORE]` **F4.A2** — `scheda-strumento` (675 righe) e `_panoramica` (319). *(Opus, `high`)* —
+- [x] `[CORE]` **F4.A2** — `scheda-strumento` (675 righe) e `_panoramica` (319). *(Opus, `high`)* —
       ⚠️ Il tab Panoramica **spiega il semaforo** (ADR-024): ogni riga di spiegazione conserva glifo e
       parola. I tab nascosti per permesso restano nascosti per permesso.
-- [ ] `[CORE]` **F4.A3** — `_interventi`, `_ricambi`, `_garanzie`, `_documenti`, `_form-fields`. *(Opus, `high`)* —
+- [x] `[CORE]` **F4.A3** — `_interventi`, `_ricambi`, `_garanzie`, `_documenti`, `_form-fields`. *(Opus, `high`)* —
       ⚠️ Le quattro tabelle usano `tabella-a-card`: ogni `<td>` conserva `data-etichetta` **uguale al proprio
       `<th>`** (🛡️ `TabellaCardMobileTest`), la cella azioni conserva `data-azioni`, e una cella su due righe
       resta **un solo figlio diretto**. ⚠️ `_form-fields` è il file conteso con la corsia C.
 
 **Corsia B — Piattaforma** *(5 file, 1.951 righe)*
-- [ ] `[CORE]` **F4.B1** — `cabina.blade.php` (603). *(Opus, `high`)* — ⚠️ contiene il debito dichiarato «non
+- [x] `[CORE]` **F4.B1** — `cabina.blade.php` (603). *(Opus, `high`)* — ⚠️ contiene il debito dichiarato «non
       applicata `tabella-a-card`»: il commento che lo dichiara **resta**, o il debito diventa invisibile.
-- [ ] `[CORE]` **F4.B2** — `editor-ruoli.blade.php` (621). *(Opus, `high`)* — ⚠️ la matrice ha un'intestazione
+- [x] `[CORE]` **F4.B2** — `editor-ruoli.blade.php` (621). *(Opus, `high`)* — ⚠️ la matrice ha un'intestazione
       che era già uscita dallo schermo una volta; il marcatore «personalizzato» coi due valori affiancati e la
       striscia dei permessi orfani devono restare leggibili nei due temi. ⛔ Nessuna riga di logica sui
       permessi.
-- [ ] `[CORE]` **F4.B3** — `registro-audit`, `errori`, `scheda-errore`. *(Sonnet, `medium`)* —
+- [x] `[CORE]` **F4.B3** — `registro-audit`, `errori`, `scheda-errore`. *(Sonnet, `medium`)* —
       ⚠️ `scheda-errore` mostra dati oscurati a 180 giorni: la dicitura «cosa non mostro» non si accorcia.
 
 **Corsia C — Resto dell'app** *(9 file, 792 righe)*
-- [ ] `[CORE]` **F4.C1** — `dashboard/home`, `campo/home`, `notifiche/campanella`, `tenancy/switcher-ente`.
+- [x] `[CORE]` **F4.C1** — `dashboard/home`, `campo/home`, `notifiche/campanella`, `tenancy/switcher-ente`.
       *(Sonnet, `medium`)* — ⚠️ La dashboard passa `x-ui.semaforo` **nello slot** `label` di `x-ui.stat-tile`:
       la parola non va anche come prop, o comparirebbe due volte (DS §5.2). I quattro numeri restano quattro
       link all'elenco filtrato.
-- [ ] `[CORE]` **F4.C2** — `anagrafica/albero` (216). *(Sonnet, `medium`)* · **attende il segnale di F4.A3**
+- [x] `[CORE]` **F4.C2** — `anagrafica/albero` (216). *(Sonnet, `medium`)* · **attende il segnale di F4.A3**
       (include `_form-fields`). — 🔗 DS §5.7: nodo attivo `bg-brand-soft`, drawer su mobile.
-- [ ] `[CORE]` **F4.C3** — `fornitori/elenco-fornitori`, `ricambi/ricerca-ricambi`,
+- [x] `[CORE]` **F4.C3** — `fornitori/elenco-fornitori`, `ricambi/ricerca-ricambi`,
       `settings/preferenze-notifiche`, `settings/two-factor-authentication`. *(Sonnet, `medium`)* ·
       **attende il segnale di F1.3**.
 
 **Corsia D — Autenticazione** *(8 file, 382 righe)*
-- [ ] `[CORE]` **F4.D1** — `login`, `two-factor-challenge`, `imposta-password-invito`. *(Sonnet, `medium`)* —
+- [x] `[CORE]` **F4.D1** — `login`, `two-factor-challenge`, `imposta-password-invito`. *(Sonnet, `medium`)* —
       ⚠️ `login` ripete a mano le classi degli input invece di usare `x-ui.input`: **la duplicazione si toglie
       qui**, o il restyling la consolida.
-- [ ] `[CORE]` **F4.D2** — `forgot-password`, `reset-password`, `confirm-password`, `verify-email`,
+- [x] `[CORE]` **F4.D2** — `forgot-password`, `reset-password`, `confirm-password`, `verify-email`,
       `bloccato`. *(Sonnet, `medium`)* — ⚠️ `bloccato` è la pagina che vede chi non può fare altro: il motivo
       del lockout e la via d'uscita restano i due elementi più leggibili della pagina (ADR-013).
 
@@ -582,14 +590,14 @@ Ogni sotto-task possiede file distinti: sono lanciabili insieme. **Nessuno può 
 
 ### 🖨️ F5 — Le superfici che non hanno un tema *(3 in parallelo)*
 
-- [ ] `[CORE]` **F5.1 — Il PDF dello storico.** 12 hex scritti a mano, allineati alla palette del blu.
+- [x] `[CORE]` **F5.1 — Il PDF dello storico.** 12 hex scritti a mano, allineati alla palette del blu.
       🔗 ADR-031. *(Sonnet, `medium`)* — ⛔ **Resta chiaro sempre**: dompdf non vede Tailwind né il tema. ⚠️ E
       resta **senza `primary`**: oggi sono neutri più `#15803d` e `#b91c1c`, e va bene così.
-- [ ] `[CORE]` **F5.2 — Le email.** `digest-scadenze`, `invito-utente`. *(Sonnet, `medium`)* — ⛔ **Restano
+- [x] `[CORE]` **F5.2 — Le email.** `digest-scadenze`, `invito-utente`. *(Sonnet, `medium`)* — ⛔ **Restano
       chiare**: nessun client di posta ha un tema affidabile. Si allinea il solo colore del marchio.
       ⚠️ Il digest è la prima cosa che molti utenti vedono del prodotto: gli stati semaforo vi arrivano come
       **testo**, e devono restare comprensibili senza colore.
-- [ ] `[CORE]` **F5.3 — Stampa e paginazione.** `stampa-qr` (l'unica vista con `@push('styles')` e regole
+- [x] `[CORE]` **F5.3 — Stampa e paginazione.** `stampa-qr` (l'unica vista con `@push('styles')` e regole
       `@page`) e `vendor/livewire/tailwind`. *(Sonnet, `medium`)* — ⚠️ L'etichetta QR si stampa: va
       **verificata su carta**, cioè in anteprima di stampa **con il tema scuro attivo**, che è il caso in cui
       un `@media print` mancante si vede.
@@ -598,28 +606,28 @@ Ogni sotto-task possiede file distinti: sono lanciabili insieme. **Nessuno può 
 
 ### 🧹 F6 — Chiusura *(serie)*
 
-- [ ] `[CORE]` **F6.1 — `welcome.blade.php` esce dal progetto.** *(Haiku, `low`)* — È la pagina di benvenuto
+- [x] `[CORE]` **F6.1 — `welcome.blade.php` esce dal progetto.** *(Haiku, `low`)* — È la pagina di benvenuto
       di Laravel, **non instradata**, e da sola concentra il 100% degli hex inline, il 100% delle classi
       `gray-*`/`blue-*` e il 100% dei `dark:` del repository.
       ⚠️ **I docblock di `PaletteGuardrailTest` e `SorgentiTailwindGuardrailTest` la citano per nome** come
       esempio del «foglio di stile dentro una vista»: vanno riscritti, o due reti si mettono a spiegare un
       file che non esiste. **DoD:** nessun riferimento residuo; suite verde.
-- [ ] `[CORE]` **F6.2 — I due residui misurabili.** *(Sonnet, `medium`)* — I **103 `text-neutral-400`**
+- [x] `[CORE]` **F6.2 — I due residui misurabili.** *(Sonnet, `medium`)* — I **103 `text-neutral-400`**
       classificati uno per uno (decorativo → resta non testuale; testo → `text-ink-3`), e `locked-500`,
       **definito e mai usato**: o lo si usa dove il DS §2.4 dice (lockout 🔒), o esce.
-- [ ] `[CORE]` **F6.3 — L'audit visivo e di contrasto.** *(verificatore, Sonnet + Playwright, poi giudizio
+- [x] `[CORE]` **F6.3 — L'audit visivo e di contrasto.** *(verificatore, Sonnet + Playwright, poi giudizio
       Opus)* — Tutte le rotte × **2 temi** × **3 viewport** (360, 768, 1280). Testo ≥ **4.5:1**, elementi non
       testuali ≥ **3:1** (DS §2.5, §7). ⚠️ **Il pallino arancione su bianco fa 2.15:1 e non può fare di
       meglio**: non è un difetto da correggere alzando il gradino — è l'aritmetica che rende §4 obbligatorio.
       **DoD:** `DA_MIGRARE` **vuota** salvo le quattro eccezioni motivate; la terza rete verde senza esenzioni.
-- [ ] `[CORE]` **F6.4 — La documentazione smette di dire il falso.** *(Opus, `high`)* — ADR-033 passa a
+- [x] `[CORE]` **F6.4 — La documentazione smette di dire il falso.** *(Opus, `high`)* — ADR-033 passa a
       **«Attuata»** con la data; il riquadro di **Stato** in testa al DS perde l'avvertenza sullo scarto; il
       docblock di `app.css` smette di dire «il primary è ancora il TEAL»; la roadmap master registra
       l'intervento.
       ⚠️ **Non è cosmesi.** Finché quei tre punti dicono «non attuata», il prossimo lettore crede allo scarto e
       lo «ripristina» — cioè rimette il teal credendo di correggere un bug. Chiudere la documentazione **fa
       parte** del lavoro.
-- [ ] `[CORE]` **F6.5 — Il dossier per la revisione umana.** *(Haiku, `low`)* — Un indice degli scatti
+- [x] `[CORE]` **F6.5 — Il dossier per la revisione umana.** *(Haiku, `low`)* — Un indice degli scatti
       (pagina × tema × viewport), l'elenco delle migliorie **proposte e non applicate** (§4 ③) col loro
       perché, le deviazioni dal DS con la ragione, e ciò che gli agenti **non hanno potuto verificare**.
       ⚠️ Quest'ultima voce è la più importante: **ciò che vive in Alpine non è coperto dai test** — tastiera,
@@ -680,3 +688,77 @@ porsi: **assomiglia a Easy Lab?**
 *🔗 `../Design/Design System Base.md` (normativo) · `../Design/design-system.html` (campione) ·
 `../Design/Wireframe Viste Chiave.md` · `../Architettura/Decisioni Architetturali.md` (ADR-005/013/014/024/031/033/034) ·
 `../Architettura/Policy di Code Review.md` · `Roadmap Completa Easy Lab.md`*
+
+---
+
+## 9. Consuntivo — cosa il piano ha sbagliato *(27 Ago 2026)*
+
+*Scritto a lavoro finito, e non per completezza: le quattro falle qui sotto sono
+tutte del **protocollo di §3**, cioè della parte che avevo progettato con più
+cura. Vale la pena che il prossimo le trovi già scritte.*
+
+### 9.1 🔴 Il divieto su `DA_MIGRARE` combatteva contro il disegno del test, e ha perso
+
+§3 vietava agli agenti di toccare la lista, perché è un file solo e più
+scritture concorrenti si sovrascrivono. **Quattro agenti su otto l'hanno toccata
+lo stesso**, costruendosi da soli una giustificazione.
+
+E avevano una ragione strutturale: **il guardrail è progettato per chiedere quel
+gesto** — la sua asserzione «non tenere un file già pulito» resta rossa finché
+la riga non viene tolta. Un agente che vede la suite rossa e ha il file
+sott'occhio la aggiusta: sta facendo esattamente ciò per cui quel test esiste.
+
+⚠️ **Non è esploso**, e va detto perché: gli edit sono chirurgici e la finestra
+di collisione è di millisecondi contro corse di venti minuti. E soprattutto **il
+modo in cui fallirebbe è rilevabile**: una scrittura persa lascerebbe in lista un
+file già pulito, e la suite lo direbbe al cancello. Si perde una riga di elenco,
+non del lavoro.
+
+**La lezione**: una lista condivisa non si protegge con un **divieto** ma con un
+**meccanismo** — un file per corsia, o una lista **derivata** invece che scritta
+a mano. Un vincolo che l'agente deve *ricordarsi* di rispettare, contro un test
+che lo spinge nella direzione opposta, non tiene.
+
+### 9.2 Le risorse globali erano più di tre
+
+§3.4 elencava `npm run build`, `view:clear` e `migrate`. Mancavano
+**`pint --dirty`** (gira sull'intero repository, non sul write-set), la
+**scratchpad di sessione** (è condivisa) e — la più seria — **`tests/Feature/`**,
+dove due agenti hanno lasciato file di appoggio che la suite **carica**: andavano
+in fatal e rendevano la suite rossa a chiunque la lanciasse.
+
+*Il difetto comune: avevo protetto i file **sorgente** e dimenticato tutto ciò
+che è **stato condiviso**.*
+
+### 9.3 La DoD di F0.1 era ottimistica
+
+Diceva «un agente lanciato a vuoto riporta il proprio modello». Le definizioni in
+`.claude/agents/` si caricano all'**avvio** della sessione, quindi il primo giro
+è stato orchestrato forzando il modello a mano. Dal giro successivo hanno
+funzionato.
+
+### 9.4 Un prompt può contenere premesse false, e un agente che le assume produce lavoro fantasma
+
+Ho chiesto a un agente di misurare il contrasto di due diciture che **non
+esistono nel codice**. Le ha cercate, non le ha trovate, e **ha riportato il
+fatto invece di inventarle**. È il comportamento giusto — ma è successo perché
+l'agente ha verificato, non perché il prompt fosse corretto.
+
+⚠️ Vale anche per l'orchestratore: durante F4 ho «corretto» un'esenzione del
+guardrail sulla base di una lettura sbagliata di `grep`, e **la suite mi ha
+smentito**. Il ripristino è costato due minuti perché il lavoro non era ancora
+committato e la rete era verde prima.
+
+### 9.5 Cosa invece ha retto
+
+- **Le corsie a write-set disgiunti**: 56 file partizionati, zero duplicati,
+  zero viste dimenticate — verificato prima di cominciare, non dopo.
+- **Il briefing comune in un file solo** (`.restyling/brief-F4.md`): ha permesso
+  di aggiornare le trappole scoperte in un'ondata **prima** che la successiva ci
+  sbattesse contro.
+- **Il cancello con la suite intera e non solo i file toccati**: un agente ha
+  introdotto un `ParseError` che mandava in 500 ogni vista con paginazione. Chi
+  avesse verificato solo la propria vista avrebbe consegnato l'applicazione rotta.
+- **La regola «una migliorìa che il DS prevede si applica, una che lo
+  cambierebbe si annota»**: gli agenti hanno segnalato **undici** cose senza
+  toccarne nessuna, comprese tre che cambierebbero il Design System.

@@ -10,22 +10,22 @@
 
     <div class="mt-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-bold tracking-tight text-neutral-900">Piattaforma</h1>
-            <p class="mt-1 text-sm text-neutral-600">
+            <h1 class="text-2xl font-bold tracking-tight text-ink">Piattaforma</h1>
+            <p class="mt-1 text-sm text-ink-2">
                 I clienti di EasyLab, le loro sedi e lo stato dei contratti.
             </p>
         </div>
 
         @can('tenants.provision')
             <button type="button" wire:click="apriProvisioning"
-                    class="rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700">
+                    class="rounded-md bg-brand px-3 py-2 text-sm font-medium text-brand-ink hover:bg-brand-hover">
                 <span aria-hidden="true">＋</span> Nuovo cliente
             </button>
         @endcan
     </div>
 
     @if (session('provisioning'))
-        <div class="mt-4 rounded-md border border-success-500 bg-success-100 px-4 py-3 text-sm text-success-700">
+        <div class="mt-4 rounded-md border border-ok-dot bg-ok-soft px-4 py-3 text-sm text-ok-soft-ink">
             {{ session('provisioning') }}
         </div>
     @endif
@@ -65,7 +65,7 @@
 
     </div>
 
-    <p class="mt-2 text-xs text-neutral-500">
+    <p class="mt-2 text-xs text-ink-3">
         I quattro numeri sono totali di piattaforma: non cambiano con i filtri qui sotto.
     </p>
 
@@ -75,8 +75,8 @@
          avviso che segnala un problema senza dare la strada per raggiungerlo,
          su trecento clienti, è peggio che tacere. --}}
     @if ($riepilogo->pianiSconosciuti > 0)
-        <x-ui.card class="mt-4 border-warning-500 bg-warning-100">
-            <p class="text-sm text-warning-800">
+        <x-ui.card class="mt-4 border-warn-dot bg-warn-soft">
+            <p class="text-sm text-warn-soft-ink">
                 <span aria-hidden="true">⚠️</span>
                 {{ $riepilogo->pianiSconosciuti }}
                 {{ $riepilogo->pianiSconosciuti === 1 ? 'account ha un piano' : 'account hanno un piano' }}
@@ -97,19 +97,31 @@
     @endif
 
     {{-- Filtri. Ogni valore è in query string, quindi una vista filtrata si
-         manda a qualcuno per link — che è come si chiede aiuto su un cliente. --}}
+         manda a qualcuno per link — che è come si chiede aiuto su un cliente.
+
+         ⚠️ **I campi di questa pagina portano `border` e `focus:ring-2` scritti
+         a mano, e non è ridondanza.** Il progetto non monta `@tailwindcss/forms`
+         e la preflight di Tailwind v4 azzera la larghezza dei bordi e rende
+         **trasparenti** i controlli di form: il `border-neutral-300` e il
+         `focus:ring-primary-500` di prima erano token che non coloravano
+         niente — un contorno spesso zero e un anello largo zero — e il campo
+         era un rettangolo invisibile posato sulla card. Sul fondo scuro il
+         difetto diventava anche una perdita di leggibilità, perché il testo
+         digitato ereditava il fondo della pagina. La forma è quella di
+         `x-ui.input` (DS §5.6/§8.2): contorno forte, `bg-surface` dichiarato,
+         placeholder a `text-ink-3` e un solo anello di fuoco. --}}
     <div class="mt-8 flex flex-wrap items-end gap-3">
         <div class="min-w-56 flex-1">
-            <label for="cerca-cliente" class="block text-sm font-medium text-neutral-700">Cerca</label>
+            <label for="cerca-cliente" class="block text-sm font-medium text-ink">Cerca</label>
             <input id="cerca-cliente" type="search" wire:model.live.debounce.300ms="search"
                    placeholder="Ragione sociale, P.IVA o nome della sede"
-                   class="mt-1 block w-full rounded-md border-neutral-300 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500">
+                   class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
         </div>
 
         <div>
-            <label for="filtro-piano" class="block text-sm font-medium text-neutral-700">Piano</label>
+            <label for="filtro-piano" class="block text-sm font-medium text-ink">Piano</label>
             <select id="filtro-piano" wire:model.live="piano"
-                    class="mt-1 block rounded-md border-neutral-300 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500">
+                    class="mt-1 block rounded-md border border-border-strong bg-surface px-2 py-2 text-sm text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
                 <option value="">Tutti</option>
                 @foreach (Piani::codici() as $codice)
                     <option value="{{ $codice }}">{{ Piani::etichetta($codice) }}</option>
@@ -119,9 +131,9 @@
         </div>
 
         <div>
-            <label for="filtro-stato" class="block text-sm font-medium text-neutral-700">Stato</label>
+            <label for="filtro-stato" class="block text-sm font-medium text-ink">Stato</label>
             <select id="filtro-stato" wire:model.live="stato"
-                    class="mt-1 block rounded-md border-neutral-300 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500">
+                    class="mt-1 block rounded-md border border-border-strong bg-surface px-2 py-2 text-sm text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
                 <option value="">Tutti</option>
                 <option value="attivo">Attivi</option>
                 {{-- Due voci e non una: fondere le sorgenti nel filtro rifà in
@@ -132,9 +144,9 @@
         </div>
 
         <div>
-            <label for="per-pagina" class="block text-sm font-medium text-neutral-700">Per pagina</label>
+            <label for="per-pagina" class="block text-sm font-medium text-ink">Per pagina</label>
             <select id="per-pagina" wire:model.live="perPage"
-                    class="mt-1 block rounded-md border-neutral-300 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500">
+                    class="mt-1 block rounded-md border border-border-strong bg-surface px-2 py-2 text-sm text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
                 @foreach ($this->opzioniPerPage() as $taglia)
                     <option value="{{ $taglia }}">{{ $taglia }}</option>
                 @endforeach
@@ -158,7 +170,7 @@
                      `sortBy` può valere `password` mentre la query ha usato il
                      fallback, e una freccia che indica una colonna diversa da
                      quella applicata è una bugia piccola e quindi credibile. --}}
-                <thead class="border-b border-neutral-200 bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-500">
+                <thead class="border-b border-border bg-surface-sunken text-left text-xs uppercase tracking-wide text-ink-3">
                     <tr>
                         @foreach ([
                             'ragione_sociale' => ['Cliente', 'py-3 pl-4 pr-3'],
@@ -167,7 +179,7 @@
                             <th scope="col" class="{{ $classi }}"
                                 aria-sort="{{ $ordinatoPer === $colonna ? ($direzione === 'asc' ? 'ascending' : 'descending') : 'none' }}">
                                 <button type="button" wire:click="ordina('{{ $colonna }}')"
-                                        class="uppercase tracking-wide hover:text-neutral-800">
+                                        class="uppercase tracking-wide hover:text-ink">
                                     {{ $etichetta }}
                                     @if ($ordinatoPer === $colonna)
                                         <span aria-hidden="true">{{ $direzione === 'asc' ? '▲' : '▼' }}</span>
@@ -183,7 +195,7 @@
                         <th scope="col" class="px-3 py-3"
                             aria-sort="{{ $ordinatoPer === 'created_at' ? ($direzione === 'asc' ? 'ascending' : 'descending') : 'none' }}">
                             <button type="button" wire:click="ordina('created_at')"
-                                    class="uppercase tracking-wide hover:text-neutral-800">
+                                    class="uppercase tracking-wide hover:text-ink">
                                 Cliente dal
                                 @if ($ordinatoPer === 'created_at')
                                     <span aria-hidden="true">{{ $direzione === 'asc' ? '▲' : '▼' }}</span>
@@ -195,7 +207,7 @@
                     </tr>
                 </thead>
 
-                <tbody class="divide-y divide-neutral-200">
+                <tbody class="divide-y divide-border">
                     @forelse ($clienti as $cliente)
                         @php
                             $sue = $sediPerAccount[$cliente->id] ?? collect();
@@ -203,21 +215,21 @@
                             $max = $aCatalogo ? Piani::maxEnti($cliente->piano) : null;
                         @endphp
 
-                        <tr wire:key="cliente-{{ $cliente->id }}" class="align-top hover:bg-neutral-50">
+                        <tr wire:key="cliente-{{ $cliente->id }}" class="align-top hover:bg-surface-sunken">
                             <td class="py-3 pl-4 pr-3">
                                 {{-- Un solo figlio diretto: la checklist §7 del Design
                                      System avverte che in modalità card i figli del
                                      `<td>` finirebbero affiancati. --}}
                                 <div>
                                     <button type="button" wire:click="espandi({{ $cliente->id }})"
-                                            class="text-left font-medium text-neutral-900 hover:text-primary-700"
+                                            class="text-left font-medium text-ink hover:text-brand"
                                             aria-expanded="{{ $espanso === $cliente->id ? 'true' : 'false' }}"
                                             aria-controls="sedi-{{ $cliente->id }}">
                                         <span aria-hidden="true">{{ $espanso === $cliente->id ? '▾' : '▸' }}</span>
                                         {{ $cliente->ragione_sociale }}
                                     </button>
                                     @if ($cliente->partita_iva)
-                                        <p class="mt-0.5 text-xs text-neutral-500">P.IVA {{ $cliente->partita_iva }}</p>
+                                        <p class="mt-0.5 text-xs text-ink-3">P.IVA {{ $cliente->partita_iva }}</p>
                                     @endif
                                 </div>
                             </td>
@@ -254,14 +266,14 @@
                                  il caso corrotto come il più permissivo dei due —
                                  proprio sulla riga che la pagina invita a riparare. --}}
                             <td class="px-3 py-3 text-right tabular-nums">
-                                {{ $sue->count() }}<span class="text-neutral-400"> / {{ $aCatalogo ? ($max ?? '∞') : '?' }}</span>
+                                {{ $sue->count() }}<span class="text-ink-3"> / {{ $aCatalogo ? ($max ?? '∞') : '?' }}</span>
                             </td>
 
                             <td class="px-3 py-3 text-right tabular-nums">
                                 {{ number_format($strumentiPerAccount[$cliente->id] ?? 0, 0, ',', '.') }}
                             </td>
 
-                            <td class="whitespace-nowrap px-3 py-3 text-neutral-600 tabular-nums">
+                            <td class="whitespace-nowrap px-3 py-3 text-ink-2 tabular-nums">
                                 {{ $cliente->created_at?->format('d/m/Y') }}
                             </td>
 
@@ -282,7 +294,7 @@
                                 @endphp
 
                                 @unless ($qualcosaDaFare)
-                                    <span class="text-xs text-neutral-400" title="Nessuna leva disponibile">—</span>
+                                    <span class="text-xs text-ink-3" title="Nessuna leva disponibile">—</span>
                                 @endunless
 
                                 @can('utenti.impersonate')
@@ -293,31 +305,31 @@
                                              Livewire lascerebbe in pagina un componente montato
                                              per l'utente precedente, col suo scope. --}}
                                         <a href="{{ route('impersonate', $candidati->first()) }}"
-                                           class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-primary-700 hover:bg-primary-50"
+                                           class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-brand hover:bg-brand-soft"
                                            title="Impersona {{ $candidati->first()->name }}">
                                             <span aria-hidden="true">👁</span> Impersona
                                         </a>
                                     @elseif ($candidati->count() > 1)
                                         <button type="button" wire:click="apriScelta({{ $cliente->id }})"
-                                                class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-primary-700 hover:bg-primary-50">
+                                                class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-brand hover:bg-brand-soft">
                                             <span aria-hidden="true">👁</span> Impersona ({{ $candidati->count() }})
                                         </button>
                                     @else
                                         {{-- Nessuno: o l'account non ha membri, o l'unico è chi
                                              sta guardando. Si dice, invece di lasciare una cella
                                              vuota che si legge come «funzione non disponibile». --}}
-                                        <span class="text-xs text-neutral-400" title="Nessun membro impersonabile">—</span>
+                                        <span class="text-xs text-ink-3" title="Nessun membro impersonabile">—</span>
                                     @endif
                                 @else
                                     {{-- Una cella vuota si legge come «manca qualcosa»; il
                                          trattino dice «niente da fare qui», che è la verità
                                          anche per chi non ha il permesso. --}}
-                                    <span class="text-xs text-neutral-400">—</span>
+                                    <span class="text-xs text-ink-3">—</span>
                                 @endcan
 
                                 @can('lockout', $cliente)
                                     <button type="button" wire:click="apriLockout({{ $cliente->id }})"
-                                            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-100"
+                                            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-2 hover:bg-surface-sunken hover:text-ink"
                                             title="{{ $cliente->locked_at ? 'Riapri la porta' : 'Blocca per insoluto' }}">
                                         <span aria-hidden="true">🔒</span> Lockout
                                     </button>
@@ -325,7 +337,7 @@
 
                                 @can('tenants.provision')
                                     <button type="button" wire:click="apriProvisioning({{ $cliente->id }})"
-                                            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-100"
+                                            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-2 hover:bg-surface-sunken hover:text-ink"
                                             title="Aggiungi una sede a questo cliente">
                                         <span aria-hidden="true">＋</span> Sede
                                     </button>
@@ -333,7 +345,7 @@
 
                                 @can('manage', $cliente)
                                     <button type="button" wire:click="apriFiscali({{ $cliente->id }})"
-                                            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-100"
+                                            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-2 hover:bg-surface-sunken hover:text-ink"
                                             title="Dati fiscali">
                                         <span aria-hidden="true">🧾</span> Dati
                                     </button>
@@ -342,7 +354,7 @@
                         </tr>
 
                         @if ($espanso === $cliente->id)
-                            <tr wire:key="sedi-{{ $cliente->id }}" class="bg-neutral-50">
+                            <tr wire:key="sedi-{{ $cliente->id }}" class="bg-surface-sunken">
                                 <td colspan="7" class="px-4 py-3" id="sedi-{{ $cliente->id }}">
                                     {{-- `$sue` e non `$sediPerAccount` intero: la riga
                                          aperta mostra le sedi di QUESTO cliente, e la
@@ -350,10 +362,10 @@
                                          che tiene i clienti separati in pagina. --}}
                                     @forelse ($sue as $sede)
                                         <div wire:key="sede-{{ $sede->id }}"
-                                             class="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200 py-2 last:border-0">
-                                            <span class="text-sm text-neutral-800">{{ $sede->nome }}</span>
+                                             class="flex flex-wrap items-center justify-between gap-2 border-b border-border py-2 last:border-0">
+                                            <span class="text-sm text-ink">{{ $sede->nome }}</span>
                                             <span class="flex flex-wrap items-center gap-3">
-                                                <span class="text-xs tabular-nums text-neutral-500">
+                                                <span class="text-xs tabular-nums text-ink-3">
                                                     {{ number_format($strumentiPerSede[$sede->id] ?? 0, 0, ',', '.') }} strumenti
                                                 </span>
 
@@ -361,10 +373,10 @@
                                                      anagrafica: il gate è `roles.manage`, che
                                                      l'Admin dell'Ente non ha (ADR-029). --}}
                                                 @can('roles.manage')
-                                                    <label class="flex items-center gap-2 text-xs text-neutral-600">
+                                                    <label class="flex items-center gap-2 text-xs text-ink-2">
                                                         <span>Garanzie ricambio</span>
                                                         <select wire:change="fissaVisibilita({{ $sede->id }}, $event.target.value)"
-                                                                class="rounded-md border-neutral-300 py-1 text-xs shadow-sm focus:border-primary-500 focus:ring-primary-500">
+                                                                class="rounded-md border border-border-strong bg-surface px-2 py-1 text-xs text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
                                                             @foreach ($this->statiVisibilita() as $stato)
                                                                 <option value="{{ $stato->value }}" @selected($sede->visibilita_garanzie_ricambio === $stato)>{{ $stato->label() }}</option>
                                                             @endforeach
@@ -374,14 +386,14 @@
                                             </span>
                                         </div>
                                     @empty
-                                        <p class="text-sm text-neutral-500">Nessuna sede: il cliente esiste ma non ha ancora un Ente.</p>
+                                        <p class="text-sm text-ink-3">Nessuna sede: il cliente esiste ma non ha ancora un Ente.</p>
                                     @endforelse
                                 </td>
                             </tr>
                         @endif
                     @empty
                         <tr>
-                            <td colspan="7" class="px-4 py-8 text-center text-sm text-neutral-500">
+                            <td colspan="7" class="px-4 py-8 text-center text-sm text-ink-3">
                                 Nessun cliente con questi filtri.
                             </td>
                         </tr>
@@ -410,20 +422,20 @@
 
             @if ($scelto)
             <x-ui.modal :title="'Impersona un membro di '.$scelto->ragione_sociale" close="chiudiScelta">
-                <p class="text-sm text-neutral-600">
+                <p class="text-sm text-ink-2">
                     Si entra come una persona: permessi, Ente attivo e visibilità saranno i suoi.
                     L'ingresso è registrato e resta un banner in cima a ogni pagina.
                 </p>
 
-                <ul class="mt-4 divide-y divide-neutral-200">
+                <ul class="mt-4 divide-y divide-border">
                     @foreach ($suoi as $membro)
                         <li wire:key="candidato-{{ $membro->id }}" class="flex items-center justify-between gap-3 py-2">
                             <span>
-                                <span class="block text-sm font-medium text-neutral-900">{{ $membro->name }}</span>
-                                <span class="block text-xs text-neutral-500">{{ $membro->email }}</span>
+                                <span class="block text-sm font-medium text-ink">{{ $membro->name }}</span>
+                                <span class="block text-xs text-ink-3">{{ $membro->email }}</span>
                             </span>
                             <a href="{{ route('impersonate', $membro) }}"
-                               class="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700">
+                               class="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-ink hover:bg-brand-hover">
                                 <span aria-hidden="true">👁</span> Entra
                             </a>
                         </li>
@@ -439,7 +451,7 @@
 
         <x-ui.modal :title="$perCliente ? 'Nuova sede — '.$perCliente->ragione_sociale : 'Nuovo cliente'" close="chiudiProvisioning">
             @if ($perCliente)
-                <p class="text-sm text-neutral-600">
+                <p class="text-sm text-ink-2">
                     La sede si aggiunge al contratto di <strong>{{ $perCliente->ragione_sociale }}</strong>
                     (piano {{ App\Support\Piani::esiste($perCliente->piano) ? App\Support\Piani::etichetta($perCliente->piano) : $perCliente->piano }},
                     sedi {{ $this->slotDelPiano($perCliente) }}).
@@ -451,7 +463,7 @@
                      senza subscription, cioè un cliente che risulta pagante e non
                      paga. Si dice come stanno le cose, invece di offrire una
                      scelta che non esiste. --}}
-                <p class="text-sm text-neutral-600">
+                <p class="text-sm text-ink-2">
                     Il cliente nasce sul piano <strong>Free</strong>. Il passaggio a un piano a pagamento
                     si fa da Stripe (<code class="text-xs">easylab:abbona</code>), non da qui.
                 </p>
@@ -464,18 +476,18 @@
                     'adminEmail' => ['Email dell\'amministratore', 'anna.bianchi@sangiovanni.it'],
                 ] as $campo => [$etichetta, $esempio])
                     <div wire:key="prov-{{ $campo }}">
-                        <label for="prov-{{ $campo }}" class="block text-sm font-medium text-neutral-800">{{ $etichetta }}</label>
+                        <label for="prov-{{ $campo }}" class="block text-sm font-medium text-ink">{{ $etichetta }}</label>
                         <input id="prov-{{ $campo }}" type="text" wire:model="nuovo.{{ $campo }}"
                                placeholder="{{ $esempio }}"
-                               class="mt-1 block w-full rounded-md border-neutral-300 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500">
+                               class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
                         @error('nuovo.'.$campo)
-                            <p class="mt-1 text-sm text-danger-600">{{ $message }}</p>
+                            <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
                         @enderror
                     </div>
                 @endforeach
             </div>
 
-            <p class="mt-3 text-xs text-neutral-500">
+            <p class="mt-3 text-xs text-ink-3">
                 All'amministratore non si consegna una password: riceve un invito con un link firmato
                 e la sceglie lui (ADR-012). Se l'indirizzo esiste già, resta sul suo Ente e raggiunge
                 il nuovo con lo switcher.
@@ -483,9 +495,9 @@
 
             <div class="mt-4 flex justify-end gap-2">
                 <button type="button" wire:click="chiudiProvisioning"
-                        class="rounded-md px-3 py-1.5 text-sm font-medium text-neutral-600 hover:bg-neutral-100">Annulla</button>
+                        class="rounded-md px-3 py-1.5 text-sm font-medium text-ink-2 hover:bg-surface-sunken hover:text-ink">Annulla</button>
                 <button type="button" wire:click="creaCliente"
-                        class="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700">Crea e invita</button>
+                        class="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-brand-ink hover:bg-brand-hover">Crea e invita</button>
             </div>
         </x-ui.modal>
     @endif
@@ -500,54 +512,54 @@
                  — nel frattempo il cliente sarebbe rientrato senza pagare
                  (ADR-013). Il gesto inverso non è esposto in nessuna forma, e un
                  test cerca la chiamata sui token del sorgente. --}}
-            <div class="rounded-md border border-neutral-200 p-3">
-                <p class="text-sm font-medium text-neutral-900">Blocco automatico (Stripe)</p>
+            <div class="rounded-md border border-border p-3">
+                <p class="text-sm font-medium text-ink">Blocco automatico (Stripe)</p>
                 @if ($inLavorazione->stripe_locked_at)
-                    <p class="mt-1 text-sm text-danger-800">
+                    <p class="mt-1 text-sm text-bad-soft-ink">
                         Chiuso dal webhook il {{ $inLavorazione->stripe_locked_at->format('d/m/Y H:i') }}@if ($inLavorazione->stripe_lock_reason) — {{ $inLavorazione->stripe_lock_reason }}@endif
                     </p>
-                    <p class="mt-1 text-xs text-neutral-500">
+                    <p class="mt-1 text-xs text-ink-3">
                         Si riapre da sé al primo pagamento riuscito. Non c'è un pulsante, ed è voluto.
                     </p>
                 @else
-                    <p class="mt-1 text-sm text-neutral-600">Nessun insoluto in corso.</p>
+                    <p class="mt-1 text-sm text-ink-2">Nessun insoluto in corso.</p>
                 @endif
             </div>
 
-            <div class="mt-4 rounded-md border border-neutral-200 p-3">
-                <p class="text-sm font-medium text-neutral-900">Blocco manuale</p>
+            <div class="mt-4 rounded-md border border-border p-3">
+                <p class="text-sm font-medium text-ink">Blocco manuale</p>
 
                 @if ($inLavorazione->locked_at)
                     {{-- Il motivo si legge **qui**: `/bloccato` è muta di proposito,
                          quindi questo è il solo posto dove ritrovarlo fra sei mesi. --}}
-                    <p class="mt-1 text-sm text-danger-800">
+                    <p class="mt-1 text-sm text-bad-soft-ink">
                         Chiuso il {{ $inLavorazione->locked_at->format('d/m/Y H:i') }}@if ($inLavorazione->locked_reason) — {{ $inLavorazione->locked_reason }}@endif
                     </p>
 
                     <button type="button" wire:click="sbloccaAccount"
-                            class="mt-3 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700">
+                            class="mt-3 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-brand-ink hover:bg-brand-hover">
                         Riapri la porta
                     </button>
 
                     @if ($inLavorazione->stripe_locked_at)
-                        <p class="mt-2 text-xs text-warning-800">
+                        <p class="mt-2 text-xs text-warn-soft-ink">
                             ⚠️ L'insoluto Stripe resta acceso: l'account resterà chiuso comunque.
                         </p>
                     @endif
                 @else
-                    <label for="motivo-lockout" class="mt-3 block text-sm font-medium text-neutral-800">Motivo</label>
+                    <label for="motivo-lockout" class="mt-3 block text-sm font-medium text-ink">Motivo</label>
                     <input id="motivo-lockout" type="text" wire:model="motivoLockout"
                            placeholder="Fattura 2026/114 scaduta da 60 giorni"
-                           class="mt-1 block w-full rounded-md border-neutral-300 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500">
+                           class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
                     @error('motivoLockout')
-                        <p class="mt-1 text-sm text-danger-600">{{ $message }}</p>
+                        <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
                     @enderror
-                    <p class="mt-1 text-xs text-neutral-500">
+                    <p class="mt-1 text-xs text-ink-3">
                         Non lo vedrà il cliente: la pagina di blocco è muta. Lo leggerà chi riapre questo caso fra sei mesi.
                     </p>
 
                     <button type="button" wire:click="bloccaAccount"
-                            class="mt-3 rounded-md bg-danger-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-danger-800">
+                            class="mt-3 rounded-md bg-bad-dot px-3 py-1.5 text-sm font-medium text-ink-inverse hover:brightness-90">
                         Chiudi la porta
                     </button>
                 @endif
@@ -566,32 +578,32 @@
                     'codice_destinatario_sdi' => 'Codice destinatario SDI',
                 ] as $campo => $etichetta)
                     <div wire:key="fisc-{{ $campo }}">
-                        <label for="fisc-{{ $campo }}" class="block text-sm font-medium text-neutral-800">{{ $etichetta }}</label>
+                        <label for="fisc-{{ $campo }}" class="block text-sm font-medium text-ink">{{ $etichetta }}</label>
                         <input id="fisc-{{ $campo }}" type="text" wire:model="fiscali.{{ $campo }}"
-                               class="mt-1 block w-full rounded-md border-neutral-300 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500">
+                               class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
                         @error('fiscali.'.$campo)
-                            <p class="mt-1 text-sm text-danger-600">{{ $message }}</p>
+                            <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
                         @enderror
                     </div>
                 @endforeach
             </div>
 
-            <p class="mt-3 text-xs text-neutral-500">
+            <p class="mt-3 text-xs text-ink-3">
                 Il codice destinatario è di 6 caratteri per la Pubblica Amministrazione, 7 per i privati.
                 I dati si riallineano a Stripe alla prossima operazione di fatturazione, non da qui.
             </p>
 
             <div class="mt-4 flex justify-end gap-2">
                 <button type="button" wire:click="chiudiPannello"
-                        class="rounded-md px-3 py-1.5 text-sm font-medium text-neutral-600 hover:bg-neutral-100">Annulla</button>
+                        class="rounded-md px-3 py-1.5 text-sm font-medium text-ink-2 hover:bg-surface-sunken hover:text-ink">Annulla</button>
                 <button type="button" wire:click="salvaFiscali"
-                        class="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700">Salva</button>
+                        class="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-brand-ink hover:bg-brand-hover">Salva</button>
             </div>
         </x-ui.modal>
     @endif
 
     <div class="mt-4 flex flex-wrap items-center justify-between gap-2">
-        <p class="text-xs text-neutral-500">
+        <p class="text-xs text-ink-3">
             @if ($clienti->total() > 0)
                 {{ $clienti->firstItem() }}–{{ $clienti->lastItem() }} di {{ number_format($clienti->total(), 0, ',', '.') }} clienti
             @endif

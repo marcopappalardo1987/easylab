@@ -1,12 +1,15 @@
 <div class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
 
-    <a href="{{ route('strumenti.index') }}" wire:navigate class="text-sm text-neutral-500 hover:text-neutral-800">‹ Torna agli strumenti</a>
-    <h1 class="mt-3 text-2xl font-bold tracking-tight text-neutral-900">Importa strumenti da CSV</h1>
+    <a href="{{ route('strumenti.index') }}" wire:navigate class="text-sm text-ink-3 hover:text-ink">‹ Torna agli strumenti</a>
+    <h1 class="mt-3 text-2xl font-bold tracking-tight text-ink">Importa strumenti da CSV</h1>
 
     {{-- Esito import --}}
     @if ($importate !== null)
-        <x-ui.card class="mt-6 border-success-600/30 bg-success-100">
-            <p class="text-sm font-medium text-success-600">
+        {{-- ⚠️ `!` davanti a bordo/fondo: senza, `bg-ok-soft` perde contro il
+             `bg-surface` interno di `x-ui.card` nell'ordine alfabetico del
+             foglio generato (o < s), e la card resta bianca/scura di base. --}}
+        <x-ui.card class="mt-6 !border-ok-dot !bg-ok-soft">
+            <p class="text-sm font-medium text-ok-soft-ink">
                 Importati {{ $importate }} strumenti.
                 @if ($scartate > 0) {{ $scartate }} righe scartate (con errori). @endif
             </p>
@@ -19,17 +22,19 @@
 
     {{-- Istruzioni --}}
     <x-ui.card class="mt-6">
-        <h2 class="text-sm font-semibold text-neutral-900">Formato del file</h2>
-        <p class="mt-1 text-sm text-neutral-600">
-            CSV (separatore <code class="rounded bg-neutral-100 px-1">;</code> o <code class="rounded bg-neutral-100 px-1">,</code>), prima riga con le intestazioni:
+        <h2 class="text-sm font-semibold text-ink">Formato del file</h2>
+        <p class="mt-1 text-sm text-ink-2">
+            CSV (separatore <code class="rounded bg-surface-code px-1">;</code> o <code class="rounded bg-surface-code px-1">,</code>), prima riga con le intestazioni:
         </p>
-        <pre class="mt-3 overflow-x-auto rounded-md bg-neutral-100 p-3 text-xs text-neutral-700">nome;modello;matricola;data_installazione;ubicazione;provenienza
+        {{-- Superficie monospazio (DS §8.2, `--surface-code`): stessa famiglia dello
+             stack trace della scheda errore e della matrice dei ruoli. --}}
+        <pre class="mt-3 overflow-x-auto rounded-md bg-surface-code p-3 text-xs text-ink-2">nome;modello;matricola;data_installazione;ubicazione;provenienza
 Autoclave AC-200;AC-200;SN-0001;2015-03-01;Terapia intensiva;
 Incubatrice INC-9;INC-9;SN-0002;01/07/2020;Neonatologia &gt; Terapia intensiva;Ospedale San Paolo</pre>
-        <ul class="mt-3 space-y-1 text-sm text-neutral-600">
+        <ul class="mt-3 space-y-1 text-sm text-ink-2">
             <li>• <strong>nome</strong> e <strong>ubicazione</strong> sono obbligatori; gli altri campi sono facoltativi.</li>
-            <li>• <strong>ubicazione</strong>: nome del dipartimento/laboratorio. Se esistono nodi omonimi, usa il percorso (<code class="rounded bg-neutral-100 px-1">Dipartimento &gt; Laboratorio</code>).</li>
-            <li>• <strong>data_installazione</strong>: <code class="rounded bg-neutral-100 px-1">AAAA-MM-GG</code> oppure <code class="rounded bg-neutral-100 px-1">GG/MM/AAAA</code>.</li>
+            <li>• <strong>ubicazione</strong>: nome del dipartimento/laboratorio. Se esistono nodi omonimi, usa il percorso (<code class="rounded bg-surface-code px-1">Dipartimento &gt; Laboratorio</code>).</li>
+            <li>• <strong>data_installazione</strong>: <code class="rounded bg-surface-code px-1">AAAA-MM-GG</code> oppure <code class="rounded bg-surface-code px-1">GG/MM/AAAA</code>.</li>
             <li>• <strong>provenienza</strong>: ente esterno da cui arriva la macchina → registra un movimento di <em>ingresso</em>.</li>
             <li>• Massimo {{ \App\Livewire\Strumenti\ImportStrumenti::MAX_RIGHE }} righe per file (max 2 MB).</li>
         </ul>
@@ -39,12 +44,12 @@ Incubatrice INC-9;INC-9;SN-0002;01/07/2020;Neonatologia &gt; Terapia intensiva;O
     {{-- Upload --}}
     @unless ($analizzato)
         <x-ui.card class="mt-4">
-            <label for="file" class="block text-sm font-medium text-neutral-800">File CSV</label>
+            <label for="file" class="block text-sm font-medium text-ink">File CSV</label>
             <input id="file" type="file" wire:model="file" accept=".csv,text/csv,text/plain"
-                class="mt-2 block w-full text-sm text-neutral-700 file:mr-3 file:rounded-md file:border-0 file:bg-primary-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-700 hover:file:bg-primary-100">
-            @error('file') <p class="mt-1 text-sm text-danger-600">{{ $message }}</p> @enderror
+                class="mt-2 block w-full text-sm text-ink-2 file:mr-3 file:rounded-md file:border-0 file:bg-brand-soft file:px-4 file:py-2 file:text-sm file:font-medium file:text-brand-soft-ink hover:file:bg-brand-soft-strong">
+            @error('file') <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p> @enderror
 
-            <div wire:loading wire:target="file" class="mt-2 text-sm text-neutral-400">Caricamento…</div>
+            <div wire:loading wire:target="file" class="mt-2 text-sm text-ink-3">Caricamento…</div>
 
             <x-ui.button class="mt-4" wire:click="analizza" wire:loading.attr="disabled" wire:target="analizza,file">
                 Analizza
@@ -73,14 +78,14 @@ Incubatrice INC-9;INC-9;SN-0002;01/07/2020;Neonatologia &gt; Terapia intensiva;O
             </div>
 
             @if ($troncato)
-                <p class="mt-3 rounded-md border border-warning-500/30 bg-warning-100 px-3 py-2 text-sm text-warning-800">
+                <p class="mt-3 rounded-md border border-warn-dot bg-warn-soft px-3 py-2 text-sm text-warn-soft-ink">
                     Il file supera {{ \App\Livewire\Strumenti\ImportStrumenti::MAX_RIGHE }} righe: sono state considerate solo le prime.
                 </p>
             @endif
 
             <div class="mt-4 overflow-x-auto">
                 <table class="w-full text-left text-sm">
-                    <thead class="border-b border-neutral-200 text-xs tracking-wide text-neutral-400 uppercase">
+                    <thead class="border-b border-border bg-surface-sunken text-xs tracking-wide text-ink-3 uppercase">
                         <tr>
                             <th class="px-3 py-2 font-semibold">Riga</th>
                             <th class="px-3 py-2 font-semibold">Nome</th>
@@ -88,17 +93,20 @@ Incubatrice INC-9;INC-9;SN-0002;01/07/2020;Neonatologia &gt; Terapia intensiva;O
                             <th class="px-3 py-2 font-semibold">Esito</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-neutral-100">
+                    <tbody class="divide-y divide-border">
+                        {{-- L'opacità si calcola sul fondo sottostante (§brief, trappola
+                             3): niente `bg-danger-100/40`, la riga con errori passa
+                             direttamente al token `bg-bad-soft`. --}}
                         @foreach ($righe as $riga)
-                            <tr wire:key="riga-{{ $riga['numero'] }}" @class(['bg-danger-100/40' => $riga['errori'] !== []])>
-                                <td class="px-3 py-2 text-neutral-400">{{ $riga['numero'] }}</td>
-                                <td class="px-3 py-2 text-neutral-800">{{ $riga['dati']['nome'] ?: '—' }}</td>
-                                <td class="px-3 py-2 text-neutral-600">{{ $riga['nodoNome'] ?? ($riga['dati']['ubicazione'] ?: '—') }}</td>
+                            <tr wire:key="riga-{{ $riga['numero'] }}" @class(['bg-bad-soft' => $riga['errori'] !== []])>
+                                <td class="px-3 py-2 text-ink-3">{{ $riga['numero'] }}</td>
+                                <td class="px-3 py-2 text-ink">{{ $riga['dati']['nome'] ?: '—' }}</td>
+                                <td class="px-3 py-2 text-ink-2">{{ $riga['nodoNome'] ?? ($riga['dati']['ubicazione'] ?: '—') }}</td>
                                 <td class="px-3 py-2">
                                     @if ($riga['errori'] === [])
-                                        <span class="text-success-600">✔ valida</span>
+                                        <span class="text-ok-dot">✔ valida</span>
                                     @else
-                                        <span class="text-danger-600">✖ {{ implode(' · ', $riga['errori']) }}</span>
+                                        <span class="text-bad-dot">✖ {{ implode(' · ', $riga['errori']) }}</span>
                                     @endif
                                 </td>
                             </tr>

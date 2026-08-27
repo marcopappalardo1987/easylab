@@ -241,3 +241,41 @@ Route::middleware('auth')->group(function () {
     Route::post('/bloccato/passa/{ente}', FugaDaLockout::class)
         ->whereNumber('ente')->name('bloccato.passa');
 });
+
+/*
+ | 🔬 Il banco dei componenti — `/design-system` (F1.5 del restyling, 🔗 ADR-034,
+ | DS §8.5).
+ |
+ | **Perché esiste.** Guardare un componente nei due temi richiedeva di
+ | autenticarsi sul database di sviluppo — che contiene dati di lavoro reali — e
+ | di avere in pancia uno strumento obsoleto, uno forzato e una tabella piena:
+ | cioè una verifica non deterministica su dati che nessuno controlla. Ogni
+ | agente delle fasi F2 e F4 si è costruito un banco statico usa-e-getta, e
+ | quattro l'hanno fatto in quattro modi diversi. Questa rotta è quella cosa
+ | sola, permanente: monta ogni componente in ogni suo stato con oggetti
+ | costruiti **in memoria**, e non tocca un dato.
+ |
+ | 🔴 **In produzione la rotta NON ESISTE — 404, non 403.** La differenza non è
+ | estetica: un 403 dichiarerebbe che quella pagina c'è e che qualcuno la può
+ | aprire, cioè un invito a bussare. Qui il `Route::view()` non viene proprio
+ | registrato, quindi il router non ha nulla da negare.
+ |
+ | ⚠️ **È una lista di ammessi, non una lista di esclusi**, ed è la sola forma
+ | che regge: `! environment('production')` avrebbe pubblicato il banco anche su
+ | **staging**, che è un ambiente raggiungibile da internet, e ogni ambiente
+ | inventato domani sarebbe dentro per default invece che fuori.
+ |   · `local`   — l'unico posto in cui il banco serve a qualcuno: si apre, si guarda;
+ |   · `testing` — perché `BancoTest` **renda davvero la pagina**. Senza, un
+ |                 errore di sintassi in un Blade del banco non lo scoprirebbe
+ |                 nessun test, e un banco che va in 500 si scopre nel momento
+ |                 peggiore, cioè quando lo si apre per verificare altro.
+ |
+ | ⛔ **Nessun `auth`, nessun `can:`, e non è una dimenticanza.** La rotta è
+ | aperta **perché non esiste in produzione**, non perché sia stata autorizzata:
+ | il banco non legge né scrive un solo dato di dominio. Aggiungere qui un
+ | permesso sposterebbe la protezione su una regola RBAC modificabile a runtime
+ | (ADR-016) — cioè la renderebbe più debole, non più forte.
+ */
+if (app()->environment(['local', 'testing'])) {
+    Route::view('/design-system', 'banco.index')->name('banco');
+}

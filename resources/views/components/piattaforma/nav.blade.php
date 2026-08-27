@@ -33,6 +33,26 @@
     `Errori::PERMESSO`), le prime due sono della **porta di tenancy**
     (`VistaPiattaforma::PERMESSO`), perché né `Cabina` né `RegistroAudit` ne
     dichiarano una — è la porta a custodire il loro permesso.
+
+    ⚠️ **I colori vengono dai token semantici, mai dalla scala** (DS §8.2): il
+    tab attivo è `border-brand text-brand`, l'inattivo `text-ink-2` che
+    all'hover sale a `text-ink` facendo comparire il bordo `border-border-strong`.
+    È la traduzione uno-a-uno di `.el-tabs` nel campione, dove il tab selezionato
+    porta anche `font-weight:600`: il **grassetto e il bordo** sono ciò che
+    distingue la sezione corrente per chi non vede la tinta, e `aria-current="page"`
+    per chi non vede affatto. ⚠️ Il peso del carattere sta **solo** dentro il
+    ternario e mai nella base — `font-medium` e `font-semibold` sono la stessa
+    proprietà, e a decidere quale vince non è l'ordine nell'attributo `class` ma
+    l'ordine nel foglio di stile generato.
+
+    ⚠️ **Due misure vengono dal campione e non sono colore**, e vanno dette:
+    `min-h-11` sono le `2.75rem` di `.el-tabs [role="tab"]`, cioè il bersaglio da
+    44px di DS §5.1 (con `py-2` erano 36); `overflow-x-auto` + `whitespace-nowrap`
+    perché a 360px queste quattro etichette misurano ~420px, e senza lo
+    scorrimento della **barra** a scorrere sarebbe la **pagina** (DS §5.5,
+    «mobile: scroll orizzontale»). Il campione nasconde anche la scrollbar; qui
+    no, perché servirebbe una regola in `app.css` — file che questo task non
+    tocca — e una barra visibile resta comunque un invito a scorrere.
 --}}
 @php
     $voci = collect([
@@ -43,7 +63,7 @@
     ])->filter(fn (array $voce) => auth()->user()?->can($voce['permesso']));
 @endphp
 
-<nav class="flex gap-1 border-b border-neutral-200" aria-label="Sezioni della piattaforma">
+<nav class="flex gap-1 overflow-x-auto border-b border-border" aria-label="Sezioni della piattaforma">
     @foreach ($voci as $voce)
         {{-- ⚠️ Anche le **sotto-rotte** della voce, non solo la sua: da S6 la
              quarta voce ha una scheda propria (`piattaforma.errori.mostra`), e
@@ -54,9 +74,9 @@
         @php $attiva = request()->routeIs($voce['rotta'], $voce['rotta'].'.*'); @endphp
         <a href="{{ route($voce['rotta']) }}"
            @if ($attiva) aria-current="page" @endif
-           class="-mb-px border-b-2 px-3 py-2 text-sm font-medium {{ $attiva
-               ? 'border-primary-600 text-primary-700'
-               : 'border-transparent text-neutral-600 hover:border-neutral-300 hover:text-neutral-800' }}">
+           class="-mb-px flex min-h-11 items-center whitespace-nowrap border-b-2 px-3 text-sm {{ $attiva
+               ? 'border-brand font-semibold text-brand'
+               : 'border-transparent font-medium text-ink-2 hover:border-border-strong hover:text-ink' }}">
             {{ $voce['etichetta'] }}
         </a>
     @endforeach

@@ -28,10 +28,17 @@
     ⚠️ Non coperto dai test (i test Livewire non eseguono Alpine): tastiera,
     click-outside, aggiornamento degli aria dinamici, target da 44px reali,
     sopravvivenza dello stato al morph. Vedi la checklist manuale in roadmap.
+
+    **I colori sono solo token semantici** (DS §8.2, campione `.el-drop`): il
+    tema si scambia sotto, e per questo qui non compare nessuna variante
+    `dark:`. 🔴 Il testo d'errore è `text-bad-soft-ink` e non `text-danger-600`
+    come scrive §5.6: su `--surface` scuro `danger-600` fa 2,64:1 — le misure e
+    la decisione sono in DS §8.2, nota 4. Il placeholder è `text-ink-3`, mai
+    più chiaro (DS §2.2). `min-h-[44px]` resta il bersaglio touch di DS §5.1.
 --}}
 <div class="relative" x-data="uiCombobox()" @click.outside="chiudi()">
     @if ($label)
-        <label for="{{ $name }}" class="block text-sm font-medium text-neutral-800">{{ $label }}</label>
+        <label for="{{ $name }}" class="block text-sm font-medium text-ink">{{ $label }}</label>
     @endif
 
     <input
@@ -50,7 +57,7 @@
         x-on:keydown.escape.stop="chiudi()"
         @if ($placeholder) placeholder="{{ $placeholder }}" @endif
         {{ $attributes }}
-        class="mt-1 block min-h-[44px] w-full rounded-md border border-neutral-200 px-3 py-2.5 text-neutral-900 focus:border-primary-600 focus:ring-2 focus:ring-primary-600 focus:outline-none">
+        class="mt-1 block min-h-[44px] w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink placeholder:text-ink-3 focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
 
     {{-- ⚠️ La lista esiste **se e solo se** il server ha dei suggerimenti, e la
          sua visibilità NON dipende da uno stato Alpine "aperto".
@@ -70,13 +77,13 @@
             role="listbox"
             x-ref="lista"
             x-show="!chiuso"
-            class="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-neutral-200 bg-white shadow-md">
+            class="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-border bg-surface shadow-md">
             @foreach ($suggerimenti as $i => $s)
                 <li id="{{ $name }}-opt-{{ $i }}" role="option" :aria-selected="attivo === {{ $i }} ? 'true' : 'false'">
                     <button
                         type="button"
-                        class="flex min-h-[44px] w-full items-center px-3 text-left text-sm text-neutral-800 hover:bg-primary-50"
-                        :class="attivo === {{ $i }} && 'bg-primary-50 font-medium'"
+                        class="flex min-h-[44px] w-full items-center px-3 text-left text-sm text-ink hover:bg-brand-soft"
+                        :class="attivo === {{ $i }} && 'bg-brand-soft font-medium'"
                         wire:click="{{ $onSelect }}({{ $index }}, @js($s['nome']))">{{ $s['nome'] }}</button>
                 </li>
             @endforeach
@@ -89,12 +96,12 @@
          il dropdown non si vedeva era pure l'unico segno di vita, il che lo
          rendeva fuorviante. Glifo + testo, mai solo colore (DS §1/§4). --}}
     @if ($stato === 'nuovo')
-        <p class="mt-1 flex items-center gap-1 text-sm text-neutral-600" role="status" aria-live="polite">
+        <p class="mt-1 flex items-center gap-1 text-sm text-ink-2" role="status" aria-live="polite">
             <span aria-hidden="true">＋</span> Nuovo ricambio: verrà creato a catalogo.
         </p>
     @endif
 
     @error($name)
-        <p class="mt-1 text-sm text-danger-600">{{ $message }}</p>
+        <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
     @enderror
 </div>

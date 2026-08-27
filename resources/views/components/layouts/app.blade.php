@@ -4,9 +4,35 @@
     $role = $user?->getRoleNames()->first();
     $initials = \Illuminate\Support\Str::of($user?->name ?? '')
         ->explode(' ')->filter()->map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)))->take(2)->implode('');
+
+    // Il tema, deciso QUI e non dal browser (🔗 ADR-034 punto 3 — DS §8.3).
+    //
+    // Per l'autenticato la preferenza sta in `users.tema` e il server la sa già
+    // mentre compone la pagina: renderla nell'`<html>` significa **zero lampo e
+    // zero JavaScript nel percorso critico**. Lo script che serve agli ospiti —
+    // che una preferenza a database non ce l'hanno — qui sarebbe un
+    // peggioramento: girerebbe dopo il primo layout, cioè dopo il lampo che
+    // esiste per evitare.
+    //
+    // `oSistema()` e non `->tema` nudo: la colonna è NOT NULL, ma un `User`
+    // costruito in memoria (una factory, un utente non ancora riletto) non ha
+    // riletto il default dello schema e porta `null`. Segue il sistema, come da
+    // default — mai un errore su ogni pagina per un attributo mancante.
+    $tema = \App\Enums\TemaUtente::oSistema($user?->tema);
+    $attributoTema = $tema->attributoHtml();
 @endphp
 <!DOCTYPE html>
-<html lang="it" class="h-full">
+{{-- ⚠️ Con `sistema` l'attributo `data-theme` **non si scrive affatto**: è
+     l'assenza a far decidere il sistema operativo (ADR-034 punto 2). Un
+     `data-theme=""` non sarebbe la stessa cosa — inciamperebbe nel
+     `:not([data-theme="light"])` di `app.css` e spegnerebbe in silenzio la
+     media query, cioè proprio la preferenza che si voleva rispettare.
+
+     `data-tema-utente` porta invece **sempre** il valore di dominio, i tre
+     stati distinti: serve al client per accorgersi che `localStorage` dice
+     un'altra cosa rispetto al database e riallinearsi. Senza di esso «segui il
+     sistema» e «il server non ha detto niente» sarebbero indistinguibili. --}}
+<html lang="it" class="h-full" data-tema-utente="{{ $tema->value }}"@if ($attributoTema !== null) data-theme="{{ $attributoTema }}"@endif>
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -30,7 +56,7 @@
          solo la prima, e i report PDF di S5/S7 avranno lo stesso bisogno.
          Il fondo torna bianco: il grigio dell'app si stampa come una campitura
          che consuma toner e non dice niente. --}}
-    <body class="h-full bg-neutral-50 font-sans text-neutral-800 antialiased print:bg-white">
+    <body class="h-full bg-canvas font-sans text-ink antialiased print:bg-white">
         <div x-data="{ sidebarOpen: false }" class="min-h-full">
 
             {{-- Banner impersonation persistente (Design System §5.8).
@@ -70,12 +96,12 @@
 
                 {{-- Backdrop drawer mobile --}}
                 <div x-show="sidebarOpen" x-cloak x-transition.opacity @click="sidebarOpen = false"
-                     class="fixed inset-0 z-30 bg-neutral-900/40 md:hidden"></div>
+                     class="fixed inset-0 z-30 bg-overlay md:hidden"></div>
 
                 {{-- Sidebar (fissa su desktop, drawer su mobile) --}}
-                <aside class="fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col border-r border-neutral-200 bg-white transition-transform duration-200 md:static md:min-h-screen md:translate-x-0 print:hidden"
+                <aside class="fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col border-r border-border bg-surface-sunken transition-transform duration-200 md:static md:min-h-screen md:translate-x-0 print:hidden"
                        :class="sidebarOpen && 'translate-x-0'">
-                    <div class="flex h-14 items-center border-b border-neutral-200 px-4">
+                    <div class="flex h-14 items-center border-b border-border px-4">
                         {{-- Il marchio vero (ADR-033), al posto dell'icona a becher
                              disegnata a mano e del testo «Easy Lab»: il logo porta già
                              il nome, e ripeterlo accanto lo direbbe due volte. --}}
@@ -168,21 +194,39 @@
                 <div class="flex min-h-screen min-w-0 flex-1 flex-col">
 
                     {{-- Top bar (Design System §5.7) --}}
-                    <header class="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-neutral-200 bg-white px-4 shadow-sm print:hidden">
-                        <div class="flex items-center gap-2">
+                    <header class="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border bg-surface px-4 shadow-sm print:hidden">
+                        {{-- ⚠️ **`min-w-0` + `overflow-hidden` qui, `shrink-0` sul gruppo
+                             di destra**, ed è la stessa lezione che questo file porta già
+                             scritta sulla colonna del contenuto (S4 blocco 10): un flex
+                             item ha `min-width:auto` e **si rifiuta** di restringersi sotto
+                             la larghezza del proprio contenuto. Misurato a 360px prima di
+                             toccarlo: hamburger + «Easy Lab» + il nome dell'Ente
+                             (`livewire:tenancy.switcher-ente`) fanno ~340px, e i 88px della
+                             campanella e del menù utente venivano **spinti fuori dallo
+                             schermo** — cioè il logout raggiungibile solo scorrendo in
+                             orizzontale. Il difetto è precedente a questo task, verificato
+                             rendendo il layout di prima.
+
+                             ⚠️ **Resta un pezzo, e non è chiudibile da qui**: il nome
+                             dell'Ente si taglia di netto invece di finire in `…`. I puntini
+                             li fa il `truncate` che lo switcher ha già, ma solo se **la sua
+                             radice** riceve a sua volta `min-w-0` — e quel file è ancora da
+                             migrare (F4). Fino ad allora si sceglie fra un nome tagliato e
+                             un menù utente irraggiungibile. --}}
+                        <div class="flex min-w-0 items-center gap-2 overflow-hidden">
                             <button type="button" @click="sidebarOpen = true"
-                                    class="-ml-1 flex h-10 w-10 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-100 md:hidden"
+                                    class="-ml-1 flex size-11 items-center justify-center rounded-md text-ink-2 hover:bg-surface-sunken hover:text-ink md:hidden"
                                     aria-label="Apri menù">
                                 <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
                             </button>
-                            <span class="text-base font-semibold text-neutral-900 md:hidden">Easy Lab</span>
+                            <span class="text-base font-semibold text-ink md:hidden">Easy Lab</span>
 
                             {{-- Contesto Ente + switcher fra le proprie sedi
                                  (ADR-032, Design System §5.7). --}}
                             <livewire:tenancy.switcher-ente />
                         </div>
 
-                        <div class="flex items-center gap-2">
+                        <div class="flex shrink-0 items-center gap-2">
                             {{-- Notifiche in-app (ADR-011). Unico componente
                                  Livewire annidato del progetto: si monta su ogni
                                  pagina, quindi al mount fa solo un conteggio. --}}
@@ -191,28 +235,65 @@
                             {{-- Menù utente --}}
                             <div class="relative" x-data="{ open: false }" @click.outside="open = false">
                                 <button type="button" @click="open = !open"
-                                        class="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-neutral-100">
-                                    <span class="flex h-8 w-8 items-center justify-center rounded-full bg-primary-600 text-sm font-semibold text-white">{{ $initials ?: '·' }}</span>
+                                        class="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface-sunken">
+                                    <span class="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-sm font-semibold text-brand-ink">{{ $initials ?: '·' }}</span>
                                     <span class="hidden text-left sm:block">
-                                        <span class="block text-sm font-medium text-neutral-900">{{ $user->name }}</span>
+                                        <span class="block text-sm font-medium text-ink">{{ $user->name }}</span>
                                         @if ($role)
-                                            <span class="block text-xs text-neutral-500">{{ $role }}</span>
+                                            <span class="block text-xs text-ink-3">{{ $role }}</span>
                                         @endif
                                     </span>
-                                    <svg class="h-4 w-4 text-neutral-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+                                    <svg class="h-4 w-4 text-ink-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
                                 </button>
 
                                 <div x-show="open" x-cloak x-transition
-                                     class="absolute right-0 z-30 mt-2 w-56 overflow-hidden rounded-md border border-neutral-200 bg-white shadow-md">
-                                    <div class="border-b border-neutral-100 px-4 py-3">
-                                        <p class="text-sm font-medium text-neutral-900">{{ $user->name }}</p>
-                                        <p class="truncate text-xs text-neutral-500">{{ $user->email }}</p>
+                                     class="absolute right-0 z-30 mt-2 w-64 overflow-hidden rounded-md border border-border bg-surface shadow-md">
+                                    <div class="border-b border-border px-4 py-3">
+                                        <p class="text-sm font-medium text-ink">{{ $user->name }}</p>
+                                        <p class="truncate text-xs text-ink-3">{{ $user->email }}</p>
                                     </div>
-                                    <a href="{{ route('settings.security') }}" class="block px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50">Sicurezza</a>
-                                    <a href="{{ route('settings.notifiche') }}" class="block px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50">Notifiche</a>
+
+                                    {{-- La scorciatoia del tema (🔗 ADR-034 — DS §8.3).
+
+                                         ⛔ **Un `<x-ui.selettore-tema>` nudo qui NON avrebbe
+                                         funzionato**, ed è il difetto per cui questa riga è un
+                                         componente Livewire invece di un tag Blade: la tendina non
+                                         è un componente Livewire, e `wire:click` fuori da Livewire
+                                         è un attributo **inerte** — non dà errore, semplicemente
+                                         non chiama nessuno. La pagina avrebbe cambiato colore
+                                         (Alpine) e `users.tema` no; al caricamento successivo
+                                         `riallinea()` avrebbe riportato `localStorage` al valore
+                                         del database, cioè **annullato la scelta** senza dire
+                                         perché. Terzo figlio Livewire della top bar, accanto allo
+                                         switcher e alla campanella, per la stessa ragione per cui
+                                         quelli lo sono.
+
+                                         ⚠️ Il componente si monta su **ogni** pagina: per questo
+                                         non ha `mount()` e il suo `render()` legge la colonna
+                                         dell'utente già in sessione, senza una query in più
+                                         (disciplina della Campanella). --}}
+                                    <livewire:settings.selettore-tema />
+
+                                    {{-- Le voci (`.el-menu` nel campione: testo su `--ink`, hover
+                                         su `--surface-sunken`, la sola voce distruttiva su
+                                         `--bad-soft-ink`).
+
+                                         ⚠️ `min-h-11` sono i 44px di DS §5.1: con `py-2.5` la riga
+                                         misurava ~38px, e questa tendina si apre col pollice tanto
+                                         quanto col mouse. Il campione sta a 2.25rem, ma sui
+                                         bersagli il Design System vince sul campione.
+
+                                         ⚠️ **«Preferenze» e non più «Notifiche»**: dal 26 Ago 2026
+                                         quella pagina porta anche il tema, e un'etichetta che
+                                         dicesse «Notifiche» ne nasconderebbe metà. L'`href` non si
+                                         tocca — la rotta resta `settings.notifiche`, perché è
+                                         citata dal piè di pagina del digest, cioè da email già
+                                         spedite. --}}
+                                    <a href="{{ route('settings.security') }}" class="flex min-h-11 items-center px-4 text-sm text-ink hover:bg-surface-sunken">Sicurezza</a>
+                                    <a href="{{ route('settings.notifiche') }}" class="flex min-h-11 items-center px-4 text-sm text-ink hover:bg-surface-sunken">Preferenze</a>
                                     <form method="POST" action="{{ route('logout') }}">
                                         @csrf
-                                        <button type="submit" class="block w-full px-4 py-2.5 text-left text-sm text-danger-600 hover:bg-neutral-50">Esci</button>
+                                        <button type="submit" class="flex min-h-11 w-full items-center px-4 text-left text-sm text-bad-soft-ink hover:bg-surface-sunken">Esci</button>
                                     </form>
                                 </div>
                             </div>

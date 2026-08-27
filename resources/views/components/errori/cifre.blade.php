@@ -17,6 +17,17 @@
     Il separatore è un punto mediano e non una virgola: la frase è **una**, non
     un elenco di due voci fra cui scegliere.
 
+    ⚠️ **Nessun colore, ed è deliberato** (F2.4 del restyling, DS §8.2): il
+    componente porta la sola `tabular-nums` — le `font-variant-numeric` di
+    `.el-num` nel campione, obbligatorie su ogni cifra (DS §3) — e **eredita**
+    la tinta da chi lo include (la cella dell'elenco e il paragrafo della
+    scheda, `text-neutral-700` finché F5 non li porta a `text-ink-2`).
+    Ereditare è ciò che lo rende già corretto nei due temi senza
+    possedere un token proprio; scrivergli addosso un `text-ink-2` «per
+    coerenza» lo renderebbe **immune** al contesto, cioè romperebbe l'unico
+    caso che conta: la stessa frase dentro una riga di tabella e dentro un
+    paragrafo, che non hanno lo stesso grigio.
+
     ⚠️ Tutto su una riga sola di sorgente, e non è disattenzione: Blade
     conserverebbe gli a-capo dentro il testo, e la frase su cui i test
     asseriscono non sarebbe più contigua nell'HTML.

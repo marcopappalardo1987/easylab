@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\TemaUtente;
 use App\Enums\TipoUnitaOrganizzativa;
 use App\Support\AuditLog;
 use Database\Factories\UserFactory;
@@ -67,6 +68,17 @@ class User extends Authenticatable
             // preferenze dell'utente, mai per mass-assignment — la stessa
             // postura di `visibilita_garanzie_ricambio` (ADR-029).
             'riceve_email_scadenze' => 'boolean',
+            // La preferenza di tema (ADR-034). Fuori dall'attributo Fillable
+            // come le due qui sopra: si scrive solo dalle preferenze
+            // dell'utente, con `forceFill`, mai per mass-assignment.
+            //
+            // ⚠️ **Il cast è la seconda metà del vincolo di schema**, non un
+            // ornamento: la colonna porta un CHECK sui tre valori, e qui
+            // `TemaUtente::from()` fa fallire con un `ValueError` ogni
+            // assegnazione fuori enum *prima* che arrivi al database. Le due
+            // guardie coprono strade diverse — questa Eloquent, quella gli
+            // import e le migration di correzione.
+            'tema' => TemaUtente::class,
         ];
     }
 
