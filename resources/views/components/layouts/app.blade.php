@@ -314,6 +314,22 @@
                                          spedite. --}}
                                     <a href="{{ route('settings.security') }}" class="flex min-h-11 items-center px-4 text-sm text-ink hover:bg-surface-sunken">Sicurezza</a>
                                     <a href="{{ route('settings.notifiche') }}" class="flex min-h-11 items-center px-4 text-sm text-ink hover:bg-surface-sunken">Preferenze</a>
+                                    {{-- «Abbonamento» sta QUI e non in barra laterale: la sidebar
+                                         elenca le aree di DATO dell'Ente, mentre l'abbonamento è il
+                                         rapporto commerciale dell'**Account** (ADR-032) — la stessa
+                                         famiglia di «Sicurezza» e «Preferenze», che sono dell'utente.
+
+                                         ⚠️ Doppio cancello, e servono entrambi: `?->account` perché
+                                         un utente senza Ente (il Developer, ADR-018) non ne ha uno, e
+                                         `@can('manage', …)` perché vedere la voce e poterla usare
+                                         devono essere la stessa domanda — la rotta vive fuori dal
+                                         gruppo protetto e non ha un `can:` a raccoglierla. --}}
+                                    @php($accountFatturazione = auth()->user()->ente?->account)
+                                    @if ($accountFatturazione)
+                                        @can('manage', $accountFatturazione)
+                                            <a href="{{ route('abbonamento.index') }}" class="flex min-h-11 items-center px-4 text-sm text-ink hover:bg-surface-sunken">Abbonamento</a>
+                                        @endcan
+                                    @endif
                                     <form method="POST" action="{{ route('logout') }}">
                                         @csrf
                                         <button type="submit" class="flex min-h-11 w-full items-center px-4 text-left text-sm text-bad-soft-ink hover:bg-surface-sunken">Esci</button>

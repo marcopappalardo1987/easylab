@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AccessoQr;
+use App\Http\Controllers\AperturaPortaleStripe;
 use App\Http\Controllers\EsportaElencoDocumenti;
 use App\Http\Controllers\EsportaStoricoPdf;
 use App\Http\Controllers\FugaDaLockout;
@@ -8,6 +9,8 @@ use App\Http\Controllers\ImpostaPasswordInvito;
 use App\Http\Controllers\PaginaBloccato;
 use App\Http\Controllers\ScaricaDocumento;
 use App\Livewire\Anagrafica\Albero;
+use App\Livewire\Anagrafica\MarchioEnte;
+use App\Livewire\Billing\PaginaAbbonamento;
 use App\Livewire\Campo\Home as CampoHome;
 use App\Livewire\Dashboard\Home as DashboardHome;
 use App\Livewire\Documenti\ElencoDocumenti;
@@ -16,6 +19,7 @@ use App\Livewire\Interventi\Scadenzario;
 use App\Livewire\Piattaforma\Cabina;
 use App\Livewire\Piattaforma\EditorRuoli;
 use App\Livewire\Piattaforma\Errori;
+use App\Livewire\Piattaforma\Listino;
 use App\Livewire\Piattaforma\RegistroAudit;
 use App\Livewire\Piattaforma\SchedaErrore;
 use App\Livewire\Ricambi\RicercaRicambi;
@@ -51,6 +55,12 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     Route::get('/anagrafica', Albero::class)
         ->middleware('can:unita_organizzativa.view')
         ->name('anagrafica.index');
+    // Il marchio dell'Ente nelle email. `unita_organizzativa.update` e non un
+    // permesso nuovo: è un'impostazione del nodo Ente, come la soglia di
+    // obsolescenza, e chi rinomina l'Ente ne governa già l'identità.
+    Route::get('/anagrafica/marchio', MarchioEnte::class)
+        ->middleware('can:unita_organizzativa.update')
+        ->name('anagrafica.marchio');
     Route::get('/strumenti', ElencoStrumenti::class)
         ->middleware('can:strumenti.view')
         ->name('strumenti.index');
@@ -176,6 +186,16 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
         ->middleware('can:'.EditorRuoli::PERMESSO)
         ->name('piattaforma.ruoli');
 
+    // Il listino dei piani (🔗 ADR-035, 27 Ago 2026). `billing.manage_global` e
+    // non un permesso nuovo: creare un piano è **fissare un prezzo**, e quel
+    // permesso è già del solo Developer/Superadmin ed è nel **set bloccato**,
+    // quindi l'editor di runtime non può regalarlo a un ruolo cliente. Un
+    // permesso dedicato sarebbe l'ottavo bloccato e imporrebbe un riseeding
+    // per dire la stessa cosa.
+    Route::get('/piattaforma/piani', Listino::class)
+        ->middleware('can:'.Listino::PERMESSO)
+        ->name('piattaforma.piani');
+
     // 🔴 L'error tracker interno (S6), e qui il permesso è **un terzo ancora**:
     // `can:system.logs.view`. Il criterio non cambia — si gata su un permesso
     // del **set bloccato** — ma per la prima volta la partizione che ne esce
@@ -277,6 +297,17 @@ Route::middleware('auth')->group(function () {
     // `routeIs` nel middleware — quella non varrebbe sugli update Livewire,
     // questa non ha buchi. `{ente}` è un id nudo: il route-model binding
     // passerebbe dal TenantScope del bloccato (fail-closed → 404 sistematico).
+    // ⛔ L'abbonamento sta FUORI dal gruppo protetto insieme a `/bloccato`, e
+    // non è una svista: un account bloccato per insoluto deve poter **pagare**
+    // — chiuderlo dentro `account.lockout` significherebbe sbarrare al cliente
+    // l'unica porta da cui può sbloccarsi da solo. Conseguenza da tenere
+    // presente: qui non c'è nessun `can:` di rotta, quindi l'autorizzazione
+    // (`manage` sull'Account, ADR-032) va scritta DENTRO il componente e dentro
+    // il controller, e provata lì.
+    Route::get('/abbonamento', PaginaAbbonamento::class)->name('abbonamento.index');
+    Route::post('/abbonamento/portale', AperturaPortaleStripe::class)
+        ->middleware('throttle:10,1')
+        ->name('abbonamento.portale');
     Route::get('/bloccato', PaginaBloccato::class)->name('bloccato');
     Route::post('/bloccato/passa/{ente}', FugaDaLockout::class)
         ->whereNumber('ente')->name('bloccato.passa');
