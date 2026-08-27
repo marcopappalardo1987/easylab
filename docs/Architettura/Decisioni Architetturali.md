@@ -1095,3 +1095,33 @@ Il precedente indica la strada: il **Tecnico esterno** (🔗 ADR-030) è già og
 - **Tre superfici restano su token di scala, di proposito**, e le reti le esentano per nome: il **banner di impersonation** (DS §5.8) — è un allarme persistente e deve avere lo stesso identico aspetto nei due temi, o smette di essere lo stesso segnale; il **toast**; e la **stampa**, che `@media print` riporta al chiaro qualunque cosa dica `data-theme`.
 - **Il PDF e le email non hanno un tema** e restano chiari: dompdf non vede Tailwind (ADR-031), e nessun client di posta ha un tema affidabile.
 - ⚠️ **Il numero delle sezioni del Design System non cambia**: il tema scuro entra come **§8**, in coda. §1–§7 sono citati per numero dai docblock del codice.
+
+---
+
+**ADR-035 — Il listino dei piani si governa dalla dashboard, ed è la dashboard a scriverlo su Stripe**
+
+*Stato: Accettata (27 Ago 2026) — decisa da Marco, non ancora attuata. **Supera** la nota di attuazione di ADR-012/032 «nessun select dei piani nel provisioning, ed è una decisione»: quella nasceva dall'assenza di un listino governabile, non da un principio. Non tocca ADR-002 (solo il rapporto A: incassa EasyLab, niente Stripe Connect in V1).*
+
+**Contesto.** Al 27 Ago 2026 un piano vive in **due posti che nessuno tiene allineati**: il catalogo locale (`App\Support\Piani`, con prezzo di listino e tetto di Enti, letto dai KPI di piattaforma e da `Account::puoAggiungereEnte()`) e il prodotto su **Stripe**, che è ciò che il cliente paga davvero. Cambiare listino significa oggi toccare del codice e poi Stripe, o viceversa — e la cabina di regia non offre alcun modo di farlo, tanto che il form di provisioning **non ha un select dei piani**: un piano a pagamento scelto lì creerebbe un account marcato `saas` senza subscription, cioè un cliente che risulta pagante e non paga.
+
+Che i due possano divergere non è teorico: la cabina **già oggi** gestisce i piani «fuori catalogo» (`accounts.piano` è una stringa senza CHECK) e vale 0 € nei KPI, perché dismettere un codice lascia righe orfane. Il difetto esiste, ed è governato invece che impedito.
+
+**Decisione.** Il listino si crea e si modifica **da una schermata della piattaforma**, e quel gesto **crea o aggiorna anche il prodotto su Stripe**: una superficie sola, un gesto solo.
+
+*Alternativa scartata — «il piano lo crea Stripe, la dashboard dice solo cosa concede».* Era la più semplice e la più sicura: Stripe resta l'unico posto dove si fissa un prezzo (con tasse, valute e fatture già risolte), e la dashboard governerebbe solo la parte di dominio — quanti Enti, quali funzioni. **Scelta la prima** per non avere due posti dove si crea un piano; il costo è dichiarato qui sotto ed è reale.
+
+**Chi può.** Solo **Superadmin e Developer**. Non è una preferenza d'interfaccia: creare un piano è **fissare un prezzo**, un gesto commerciale che nessun cliente deve poter compiere sul proprio account.
+
+- **Non serve un permesso nuovo.** `billing.manage_global` è già a catalogo, lo tengono solo Developer e Superadmin (l'Admin lo ha in `except`, e nessuna lista `only` lo nomina) ed è nel **set bloccato** (🔗 ADR-016): l'editor permessi di runtime non può regalarlo a un ruolo cliente nemmeno per sbaglio. Aggiungerne uno significherebbe un **ottavo** permesso bloccato e un **riseeding** per dire la stessa cosa — è l'errore già commesso e corretto con `system.errors.view`, che non è mai esistito.
+
+**Conseguenze e trappole — da sciogliere prima del form, non dopo.**
+
+- 🔴 **Stiamo scrivendo su un sistema di pagamenti vero.** È la stessa forma del blocco webhook di S5, dove la parte facile era il codice e i quattro difetti stavano tutti nel giro sull'ambiente reale. Un form che salva è il 20% del lavoro.
+- 🔴 **Il catalogo oggi vive in `config/easylab.php`, cioè nel codice versionato**, e `App\Support\Piani` lo legge da lì (`codici`, `maxEnti`, `prezzoMensileCent`, `stripePrice`, `perPrice`). Una schermata che *crea* un piano non può scrivere in un file di config: **il listino deve passare al DB**, e `Piani` diventa la facciata sopra il DB invece che sopra la config. È **la stessa forma del patto di `config/rbac.php`** — la config è il **bootstrap**, la verità dopo il primo seeding è il DB (🔗 ADR-016 §7) — con la stessa trappola in agguato: da quel giorno riseminare il listino dalla config **cancellerebbe le personalizzazioni fatte a runtime**. Va deciso *prima* se il seeding del listino esiste, e cosa fa.
+- ⚠️ **La conciliazione fra i due cataloghi va progettata, non rimandata.** Un prodotto archiviato su Stripe e ancora attivo qui, o il contrario, è lo stato *normale* dopo il primo errore di rete a metà salvataggio. Serve una risposta scritta a «chi vince» e una schermata che mostri le divergenze — la stessa forma del marcatore «personalizzato» di `/piattaforma/ruoli`, che esiste perché DB e config **divergono** e qualcuno deve poterlo vedere.
+- ⚠️ **I clienti già abbonati a un piano che cambia prezzo.** Su Stripe un prezzo non si modifica: se ne crea uno nuovo e si decide che fare delle subscription in essere (restano al vecchio, migrano, migrano al rinnovo). È una scelta **commerciale** prima che tecnica, e senza risposta il form non si può scrivere.
+- ⚠️ **Idempotenza sui tentativi ripetuti.** Un doppio clic o un retry non deve lasciare due prodotti gemelli su Stripe.
+- ⚠️ **Il tetto di Enti del piano non è cosmetico**: `Account::puoAggiungereEnte()` ci si appoggia, quindi abbassarlo su un piano già venduto mette dei clienti **sopra il proprio limite**. Va deciso se è permesso, e cosa succede a chi ci si trova.
+- **Il provisioning cambia di conseguenza**: con un listino governabile il form della cabina potrà offrire un select, ma **solo** dopo che «piano a pagamento» implica una subscription vera. Finché non c'è, resta Free e la pagina lo dice.
+
+**Nota collegata (stessa giornata, 🔗 ADR-013).** Dal **Billing Portal** il cliente **disdice da solo**. Non è una preferenza di configurazione: è la clausola che rende il portale una leva invece di una vetrina, e si appoggia sul percorso già verificato su staging il 21 Ago 2026 — disdetta su Stripe → webhook → account bloccato e piano decaduto a `free`, con il `locked_at` manuale intatto.

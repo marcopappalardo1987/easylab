@@ -36,6 +36,8 @@ Gli strumenti per gestire i pagamenti, gli abbonamenti e gli accessi in modo aut
 - **Motore Pagamenti:** Stripe
 - **Integrazione Laravel:** Laravel Cashier (Stripe) — **installato il 21 Ago 2026: `laravel/cashier v16.7.0` + `stripe/stripe-php v20.3.1`**. Il vincolo `^16.7` non è una preferenza: il supporto a Illuminate `^13` entra in Cashier 16.5.0, la 16.4 si ferma a `^12`. Installato **senza `--with-dependencies`** (stessa lezione del framework, sotto): 4 pacchetti aggiunti, zero update, `guzzlehttp/guzzle` fermo a 7.15.3 — che conta, perché ci sta sotto l'SDK AWS dei documenti B2.
 - **Gestione Portale Clienti:** Stripe Hosted Billing Portal (Per far scaricare le fatture e gestire le carte ai clienti senza scrivere una riga di codice lato UI).
+  - 🗓️ **Deciso il 27 Ago 2026**: dal portale il cliente **disdice da solo** (🔗 ADR-013, nota in coda ad **ADR-035**). Il percorso a valle è già verificato su staging il 21 Ago — disdetta → webhook → account bloccato e piano decaduto a `free`, col `locked_at` manuale intatto. **Non attuato**: il portale non è ancora collegato, e l'aspetto e le condizioni di disdetta si impostano nella dashboard Stripe.
+  - ⚠️ **Il listino, invece, non resta su Stripe**: 🔗 **ADR-035** (27 Ago 2026) porta la creazione dei piani in una schermata della piattaforma, che scrive **anche** su Stripe. Il portale continua a leggere da Stripe; è il posto dove il piano *nasce* che cambia.
 
 5. Pacchetti Core & Moduli Consigliati
 

@@ -326,6 +326,8 @@ Hub di navigazione: albero Ente→Dipartimento→Sottolaboratorio a sinistra, st
 └───────────────────────────┴────────────────────────────────────────────────┘
 ```
 
+⚠️ **Questo wireframe disegna l'albero già dentro un Ente, e l'omissione è costata una segnalazione.** L'alberatura organizza l'**interno** di un Ente e non ne crea mai uno: sa fare Dipartimenti e Sotto-laboratori, e ogni creazione vuole un padre. Un Ente nasce **solo dal provisioning** (§4, «＋ Nuovo cliente» e «＋ Ente» per riga). Al **livello radice** — quando l'utente non ha un'unica radice visibile e la lista si intitola «Enti» — la pagina non ha quindi alcun pulsante: fino al 27 Ago 2026 era un vicolo cieco muto, e ci finiva dentro soprattutto il **Developer**, che non ha un Ente proprio (🔗 ADR-018 → `TenantScope` fail-closed) e vedeva la pagina interamente vuota. Da quella data il livello radice porta un rimando alla cabina, **chiuso dietro `tenants.provision`**: indicare a un Admin una pagina che gli risponderebbe 403 sarebbe la seconda strada senza uscita invece della via d'uscita dalla prima. *Limite dichiarato, e c'è un test che lo fissa*: il rimando vive alla sola radice, quindi il **Superadmin** — che un Ente ce l'ha e viene portato dentro all'ingresso — non lo vede mai; per lui la Piattaforma è già in barra laterale.
+
 **Note.** L'albero è dinamico (profondità libera, `unita_organizzativa.parent_id`, ADR-006). Selezionando un nodo la lista si filtra sul suo sotto-albero. Il **Responsabile Reparto** vede solo il proprio sotto-albero (scope, ADR-006). `[ + Aggiungi nodo ]`/`[ + Nuovo strumento ]` compaiono con i relativi permessi `*.create`. `[ ⬇ Import CSV ]` = onboarding massivo (STRETCH S2). Mobile: albero in drawer `☰`, lista a tutta larghezza.
 
 ---

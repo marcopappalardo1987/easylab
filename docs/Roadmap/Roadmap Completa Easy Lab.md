@@ -1,6 +1,6 @@
 🗺️ Roadmap Completa — Easy Lab
 
-*Piano cronologico di progetto: fasi progettuali + sprint datati fino al rilascio della V1 (MVP) e backlog delle versioni successive. Questo documento è il **master roadmap**: incorpora e supera i due ToDo originali (`Fase 1 - ToDo List Installazione Stack.md` e `Fase 2 - ToDo List.md`), che restano come materiale di origine. Tutte le scelte qui riflesse sono tracciate in `../Architettura/Decisioni Architetturali.md` (ADR-001 → ADR-034).*
+*Piano cronologico di progetto: fasi progettuali + sprint datati fino al rilascio della V1 (MVP) e backlog delle versioni successive. Questo documento è il **master roadmap**: incorpora e supera i due ToDo originali (`Fase 1 - ToDo List Installazione Stack.md` e `Fase 2 - ToDo List.md`), che restano come materiale di origine. Tutte le scelte qui riflesse sono tracciate in `../Architettura/Decisioni Architetturali.md` (ADR-001 → ADR-035).*
 
 > **Revisione del 3 Agosto 2026 — briefing col cliente destinatario** (🔗 ADR-019 ÷ ADR-024). Sei chiarimenti di dominio, di cui uno **revoca** lavoro già consegnato in S3. Le date restano invariate: il rientro è contenuto (vedi **Sprint 3-bis**) e cade dentro la coda di S3 (3–7 Ago), mentre le voci nuove sono assorbite da S4, che già prevedeva ricambi, garanzia pezzo e fornitori. L'unica aggiunta di sostanza è il **tab Panoramica** (ADR-024), messo in S3-bis di proposito: tocca `Semaforo`, la stessa classe che S4 dovrà estendere, e farlo prima evita di rimetterci mano due volte con criteri diversi.
 
@@ -661,8 +661,8 @@ gantt
   - *Il **codice destinatario SDI** è di **6 caratteri (PA) o 7 (privati)**: sono due codici diversi con lo stesso nome, e un `between:6,7` accetterebbe entrambi e nessuno dei due. Nessun checksum: lo SDI non ne pubblica uno.*
   - ⚠️ *Gap dichiarato: `stripeMetadata()` **non** si riallinea al salvataggio — si riallinea alla prossima operazione Cashier, perché da un ciclo di render non si chiama la rete.*
 - [ ] `[CORE]` **Stripe Hosted Billing Portal** per fatture/metodi di pagamento self-service. 🔗 Tech Stack §4
-  - 🗓️ **Deciso il 27 Ago 2026**: il cliente **disdice da solo** dal portale. Non è un dettaglio di configurazione — è la clausola che rende il portale una leva vera invece di una vetrina, e si riflette sul webhook di disdetta, che già porta il tenant in lockout e fa decadere il piano a `free` (verificato su staging il 21 Ago).
-- [ ] `[CORE]` **Piani creabili dalla dashboard** — *aperta il 27 Ago 2026, voce nuova: non era in nessuno sprint.* 🔗 ADR-032, Tech Stack §4
+  - 🗓️ **Deciso il 27 Ago 2026** (🔗 ADR-013, nota in coda ad **ADR-035**): il cliente **disdice da solo** dal portale. Non è un dettaglio di configurazione — è la clausola che rende il portale una leva vera invece di una vetrina, e si riflette sul webhook di disdetta, che già porta il tenant in lockout e fa decadere il piano a `free` (verificato su staging il 21 Ago).
+- [ ] `[CORE]` **Piani creabili dalla dashboard** — *aperta il 27 Ago 2026, voce nuova: non era in nessuno sprint.* 🔗 **ADR-035**, ADR-032, Tech Stack §4
   - Oggi i piani vivono in `App\Support\Piani` (catalogo in codice) e su Stripe, e il provisioning dalla UI **non offre alcun select** proprio perché un piano a pagamento senza subscription creerebbe un cliente che risulta pagante e non paga. Questa casella **supera** quella decisione.
   - 🗓️ **Scelta l'opzione A** (27 Ago 2026): il piano si crea **dalla dashboard e viene creato anche su Stripe**, in un gesto solo. Scartata la B (piano su Stripe, in dashboard solo ciò che il piano *concede* dentro Easy Lab), che era la più semplice: si è preferita la superficie unica.
   - ⚠️ **Ciò che la A si porta dietro, e va scritto prima di cominciare**: stiamo scrivendo su un sistema di pagamenti **vero**, quindi servono la conciliazione fra catalogo locale e Stripe quando i due divergono (piano archiviato là e non qui, o viceversa), il comportamento sui clienti **già abbonati** a un piano modificato, e l'idempotenza sui tentativi ripetuti. È la stessa forma del difetto del webhook di S5: la parte facile è il form.
@@ -762,11 +762,11 @@ gantt
   >
   > Altri sei: `lockout` e `manage` non erano distinte da nessun test, e scambiarle metterebbe la leva antipagamento in mano al cliente (un membro potrebbe sbloccare il **proprio** account); `chiudiPannello()` azzerava il motivo ma non i dati fiscali, che passavano da un cliente all'altro; un payload fiscale monco dava un **500** invece di un errore di validazione, e la prima toppa era ancora sbagliata perché derivava l'elenco dei campi **dalla property che deve difendere**; `min:5` girava prima del `trim()`, quindi `'  ab  '` passava e a DB finiva `'ab'`; un `pannello` sconosciuto ereditava in silenzio l'ability `manage`, trappola pronta per il pannello di provisioning che ne vuole un'altra; e il guardrail sui token scansionava **solo `app/Livewire`**, cioè non il posto — un controller — dove una futura leva finirebbe davvero.
   >
-  > - **Il provisioning dalla UI** (blocco H), quarta e ultima leva: «＋ Nuovo cliente» in testata e «＋ Sede» per riga, che chiamano la stessa `ProvisionaEnte` del comando. Chiude l'ultima riga aperta della DoD di S5.
+  > - **Il provisioning dalla UI** (blocco H), quarta e ultima leva: «＋ Nuovo cliente» in testata e «＋ Sede» per riga *(rietichettato «＋ Ente» il 27 Ago 2026, vedi in fondo allo sprint)*, che chiamano la stessa `ProvisionaEnte` del comando. Chiude l'ultima riga aperta della DoD di S5.
   >
   > ⚠️ **Il confronto ha trovato che «Nuovo cliente» poteva creare una sede sul contratto di un altro, in silenzio.** `ProvisionaEnte` ha **due** modi di trovare un account: l'id esplicito e — se l'email dell'amministratore appartiene già a qualcuno — il suo. Il secondo non passava né da `VistaPiattaforma` né da `manage`: bastava usare l'email di un utente esistente perché l'Ente finisse sul suo contratto, **l'account di piattaforma compreso**, con il form intitolato «Nuovo cliente» che mostrava un messaggio di successo. Da console il difetto non esisteva, perché il comando stampa «Account: … (esistente)». La correzione non è un controllo in più nella UI: è un **flag esplicito nel dominio** (`esigiAccountNuovo`), perché i due gesti della pagina sono diversi e finora la classe non poteva saperlo.
   >
-  > ⚠️ E un piano fuori catalogo faceva **500** dal pulsante «＋ Sede»: `puoAggiungereEnte()` passa da `Piani::maxEnti()`, che lancia su un codice sconosciuto. È la stessa trappola che `MetrichePiattaforma` aveva evitato con cura — «questa è l'unica schermata da cui quel dato si ripara, e morire proprio lì sarebbe il modo peggiore di segnalarlo» — e il blocco H portava l'operatore lì e poi esplodeva.
+  > ⚠️ E un piano fuori catalogo faceva **500** dal pulsante «＋ Sede» *(oggi «＋ Ente»)*: `puoAggiungereEnte()` passa da `Piani::maxEnti()`, che lancia su un codice sconosciuto. È la stessa trappola che `MetrichePiattaforma` aveva evitato con cura — «questa è l'unica schermata da cui quel dato si ripara, e morire proprio lì sarebbe il modo peggiore di segnalarlo» — e il blocco H portava l'operatore lì e poi esplodeva.
   >
   > Altri cinque: un **invito fallito** (SMTP giù) dava lo stesso messaggio del caso legittimo «l'utente è già attivo, nessun invito da mandare», mentre il comando in console avvisa da sempre — una regressione rispetto all'altro chiamante; `resetPage()` **prometteva** di far comparire la riga nuova e non lo faceva (con l'ordinamento alfabetico il cliente nuovo cade dove capita, e con un filtro attivo la pagina diceva «Nessun cliente con questi filtri» sotto il messaggio di successo); il test della modale asseriva su una ragione sociale che **la tabella stampa comunque**, quindi restava verde anche togliendo l'intero paragrafo; il messaggio di ambiguità elencava **id** che la tabella non mostra, cioè un vicolo cieco per chi lo legge da lì; e l'invariante «una modale alla volta» era **a senso unico**, con i concern che si scrivevano le property a vicenda senza dichiararle — ora la mutua esclusione vive in `Cabina`, l'unico che le conosce tutte.
   >
@@ -924,6 +924,20 @@ gantt
 - [ ] `[STRETCH]` Esportazioni amministrative (clienti, MRR) in CSV/PDF.
 
 **Definition of Done:** il Superadmin vede i totali aggregati e l'MRR, impersona un cliente con banner di ritorno, e ogni ruolo ha la propria dashboard coerente coi permessi.
+
+> 🧭 **Coda di S6 — 27 Ago 2026: «come Developer non posso creare Enti».** Segnalato da Marco, e **non era un difetto di permessi** (il Developer li ha tutti, verificato). Erano due pagine che parlavano lingue diverse, più un vicolo cieco.
+>
+> L'**Anagrafica** organizza l'*interno* di un Ente: `rules()` ammette solo Dipartimento e Sottolaboratorio, e `addChild()` vuole un padre. Al **livello radice**, però, la lista si intitola «Enti» e non c'è alcun pulsante — e lì ci vive soprattutto il **Developer**, che ha `tenant_id` NULL e non è un Tecnico, quindi `TenantScope` applica `1 = 0` (🔗 ADR-018): zero radici visibili, `mount()` non entra in automatico da nessuna parte, pagina vuota e nessuna indicazione. La **cabina** — l'unico posto dove un Ente nasce — la parola «Ente» non la diceva **mai**: parlava di «cliente» e di «sede».
+>
+> Fatto: alla sola radice dell'Anagrafica un rimando alla Piattaforma, **chiuso dietro `tenants.provision`** (a un Admin si indicherebbe una pagina da 403, cioè la seconda strada senza uscita); e in cabina la parola «Ente» dove il gesto avviene — titolo della modale, etichetta del campo, bottone di riga «＋ Sede» → **«＋ Ente»**, `title` del bottone in testata. «Sede» resta come glossa.
+>
+> ⚠️ **Limite dichiarato, con un test che lo fissa**: il rimando vive alla sola radice, quindi il **Superadmin** — che un Ente proprio ce l'ha — viene portato dentro all'ingresso e non lo vede mai. Per lui la Piattaforma è già in barra laterale; era il Developer a restare senza nulla.
+>
+> *Prova di mutazione (con `view:clear` fra un giro e l'altro): rimosso il cartello → rosso il test che lo pretende alla radice; `@can` allargato a `unita_organizzativa.view` → rosso il negativo; titolo della modale riportato a «Nuova sede» → rossi i due test del vocabolario. Ogni mutazione ha acceso esattamente il test giusto.*
+>
+> ⚠️ **Trappola incontrata, che vale oltre questo blocco**: `assertSee` di Livewire **escapa l'ago**, quindi un apostrofo diventa `&#039;` e non combacia mai col testo statico di un template. Un test scritto con l'apostrofo fallisce senza che il codice abbia niente che non va — si asserisce su un tratto che ne è privo.
+>
+> Documenti allineati nello stesso giro: Wireframe §5 (l'albero non crea Enti, e dove invece nascono) e Funzionalità per Ruolo §2.
 
 ---
 
