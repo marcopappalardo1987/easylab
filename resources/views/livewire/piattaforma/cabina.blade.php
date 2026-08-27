@@ -18,6 +18,7 @@
 
         @can('tenants.provision')
             <button type="button" wire:click="apriProvisioning"
+                    title="Crea il cliente insieme al suo primo Ente"
                     class="rounded-md bg-brand px-3 py-2 text-sm font-medium text-brand-ink hover:bg-brand-hover">
                 <span aria-hidden="true">＋</span> Nuovo cliente
             </button>
@@ -338,8 +339,8 @@
                                 @can('tenants.provision')
                                     <button type="button" wire:click="apriProvisioning({{ $cliente->id }})"
                                             class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-2 hover:bg-surface-sunken hover:text-ink"
-                                            title="Aggiungi una sede a questo cliente">
-                                        <span aria-hidden="true">＋</span> Sede
+                                            title="Aggiungi un Ente (una sede) a questo cliente">
+                                        <span aria-hidden="true">＋</span> Ente
                                     </button>
                                 @endcan
 
@@ -449,10 +450,10 @@
     @if ($provisioningAperto)
         @php $perCliente = $this->clienteDelProvisioning(); @endphp
 
-        <x-ui.modal :title="$perCliente ? 'Nuova sede — '.$perCliente->ragione_sociale : 'Nuovo cliente'" close="chiudiProvisioning">
+        <x-ui.modal :title="$perCliente ? 'Nuovo Ente (sede) — '.$perCliente->ragione_sociale : 'Nuovo cliente e primo Ente'" close="chiudiProvisioning">
             @if ($perCliente)
                 <p class="text-sm text-ink-2">
-                    La sede si aggiunge al contratto di <strong>{{ $perCliente->ragione_sociale }}</strong>
+                    L'Ente — la sede — si aggiunge al contratto di <strong>{{ $perCliente->ragione_sociale }}</strong>
                     (piano {{ App\Support\Piani::esiste($perCliente->piano) ? App\Support\Piani::etichetta($perCliente->piano) : $perCliente->piano }},
                     sedi {{ $this->slotDelPiano($perCliente) }}).
                 </p>
@@ -464,6 +465,7 @@
                      paga. Si dice come stanno le cose, invece di offrire una
                      scelta che non esiste. --}}
                 <p class="text-sm text-ink-2">
+                    Nascono insieme il cliente, il suo primo <strong>Ente</strong> e l'amministratore che lo governa.
                     Il cliente nasce sul piano <strong>Free</strong>. Il passaggio a un piano a pagamento
                     si fa da Stripe (<code class="text-xs">easylab:abbona</code>), non da qui.
                 </p>
@@ -471,7 +473,7 @@
 
             <div class="mt-4 space-y-3">
                 @foreach ([
-                    'nome' => ['Nome della sede', 'Ospedale San Giovanni'],
+                    'nome' => ['Nome dell\'Ente (la sede)', 'Ospedale San Giovanni'],
                     'adminName' => ['Nome dell\'amministratore', 'Anna Bianchi'],
                     'adminEmail' => ['Email dell\'amministratore', 'anna.bianchi@sangiovanni.it'],
                 ] as $campo => [$etichetta, $esempio])

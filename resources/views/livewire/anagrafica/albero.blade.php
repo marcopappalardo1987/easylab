@@ -45,6 +45,32 @@
         @endif
     </div>
 
+    {{-- 🧭 Al livello radice l'elenco si chiama «Enti», ma qui un Ente non si
+         crea: l'albero organizza l'interno di una sede (dipartimenti e
+         sotto-laboratori), mentre un Ente nasce dal provisioning, insieme al
+         cliente che lo intesta e al suo amministratore. Senza questa riga la
+         pagina è un vicolo cieco muto — chi cerca «crea Ente» qui non trova
+         nulla e non sa dove guardare. Segnalato dal Developer, che è il ruolo
+         che vede più spesso questo livello: con più Enti visibili (o nessuno)
+         `mount()` non entra in automatico in nessuno.
+
+         Il riquadro è chiuso dietro `tenants.provision` di proposito: a un
+         Admin, che un Ente non può crearlo, indicare una pagina che non può
+         aprire sarebbe una seconda strada senza uscita. --}}
+    @if ($current === null)
+        @can('tenants.provision')
+            <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-sunken px-4 py-3">
+                <p class="text-sm text-ink-2">
+                    Qui si organizza l'<strong>interno</strong> di un Ente. Un Ente nuovo nasce dalla
+                    Piattaforma, insieme al cliente che lo intesta — o come sede in più di un cliente che c'è già.
+                </p>
+                <x-ui.button variant="secondary" href="{{ route('piattaforma.index') }}">
+                    Crea un Ente dalla Piattaforma
+                </x-ui.button>
+            </div>
+        @endcan
+    @endif
+
     @if ($notice)
         {{-- ⚠️ Il bordo era `border-warning-500/30`: come nel registro di audit, il
              campione non porta un bordo colorato sull'alert — lo fa solo il fondo. --}}

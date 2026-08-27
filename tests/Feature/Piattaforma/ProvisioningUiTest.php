@@ -251,7 +251,7 @@ it('adds a sede to an existing customer, on the same contract', function () {
         // ragione sociale la tabella la stampa comunque, quindi
         // `assertSee('Gruppo Rossi')` era verde anche togliendo l'intero
         // paragrafo — provato per mutazione dal confronto.
-        ->assertSee('La sede si aggiunge al contratto di')
+        ->assertSee('— la sede — si aggiunge al contratto di')
         ->assertSee('sedi 1 / 5')
         ->set('nuovo', ['nome' => 'Sede di Bergamo', 'adminEmail' => 'bergamo@rossi.test', 'adminName' => 'Carla Verdi'])
         ->call('creaCliente')
@@ -281,4 +281,26 @@ it('shows the new customer without making anyone go looking for it', function ()
     // tornare a pagina 1 lo rende *meno* probabile da vedere, non più.
     expect($t->viewData('clienti')->getCollection()->pluck('ragione_sociale')->all())
         ->toContain('Zeta Ultimo');
+});
+
+// --- Scopribilità: la Piattaforma deve dire «Ente» ---
+//
+// 🧭 Questa pagina è l'UNICO posto dove un Ente nasce, ma parlava solo di
+// «cliente» e di «sede»: chi cercava dove creare un Ente non trovava la parola
+// da nessuna parte, e l'Anagrafica — che invece la usa — non lo crea. Il
+// vocabolario diviso era il difetto, non il permesso.
+
+it('names the Ente where the Ente is actually born', function () {
+    Livewire::test(Cabina::class)
+        ->call('apriProvisioning')
+        ->assertSee('Nuovo cliente e primo Ente');
+});
+
+it('names the Ente also when adding one to an existing customer', function () {
+    $cliente = Account::factory()->create(['ragione_sociale' => 'Rossi SpA']);
+    UnitaOrganizzativa::factory()->ente()->perAccount($cliente)->create(['nome' => 'Sede di Milano']);
+
+    Livewire::test(Cabina::class)
+        ->call('apriProvisioning', $cliente->id)
+        ->assertSee('Nuovo Ente (sede) — Rossi SpA');
 });

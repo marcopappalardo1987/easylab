@@ -245,3 +245,64 @@ it('never writes the threshold on a node that is not the Ente', function () {
 
     expect($dip->fresh()->soglia_obsolescenza_anni)->toBe(10);   // default, intatto
 });
+
+// --- Scopribilità: dove nasce un Ente ---
+//
+// 🧭 L'albero organizza l'INTERNO di un Ente e non ne crea mai uno: `rules()`
+// ammette solo Dipartimento e Sottolaboratorio. Un Ente nasce dal provisioning.
+// Al livello radice, però, l'intestazione della lista dice «Enti» — e lì non
+// c'è nessun pulsante, perché `addChild()` vuole un padre. Da qui la
+// segnalazione «come Developer non posso creare Enti»: la pagina era un vicolo
+// cieco muto. Questi tre test tengono in piedi il cartello.
+//
+// ⚠️ Il Developer è il ruolo che ci finisce dentro: `tenant_id` NULL e nessun
+// Tecnico → `TenantScope` mette `1 = 0`, quindi zero radici visibili e
+// `mount()` non entra in automatico da nessuna parte.
+
+it('sends a provisioner from the empty root of the tree to the platform', function () {
+    $developer = User::factory()->create([
+        'tenant_id' => null,
+        'two_factor_confirmed_at' => now(),
+    ]);
+    $developer->assignRole('Developer');
+
+    Livewire::actingAs($developer->fresh())
+        ->test(Albero::class)
+        ->assertSet('currentId', null)
+        ->assertSee('Crea un Ente dalla Piattaforma');
+});
+
+it('does not dangle the platform link in front of who cannot provision', function () {
+    // Stessa posizione — radice, nessun nodo visibile — ma senza la leva:
+    // indicare una pagina che risponderebbe 403 sarebbe la seconda strada
+    // senza uscita, non la via d'uscita dalla prima.
+    $spettatore = User::factory()->create([
+        'tenant_id' => null,
+        'two_factor_confirmed_at' => now(),
+    ]);
+    $spettatore->givePermissionTo('unita_organizzativa.view');
+
+    expect($spettatore->fresh()->can('tenants.provision'))->toBeFalse();
+
+    Livewire::actingAs($spettatore->fresh())
+        ->test(Albero::class)
+        ->assertSet('currentId', null)
+        ->assertDontSee('Crea un Ente dalla Piattaforma');
+});
+
+it('drops the pointer once inside an Ente, where it would be noise', function () {
+    // Il cartello vive alla radice e basta: dentro un Ente la pagina fa già il
+    // suo mestiere e il pulsante «Aggiungi dipartimento» c'è.
+    //
+    // ⚠️ Conseguenza dichiarata: il Superadmin, che ha un Ente proprio
+    // (ADR-018), viene portato dentro da `mount()` e il cartello non lo vede
+    // mai. Per lui la Piattaforma è già in barra laterale — è il Developer,
+    // senza Ente, quello che restava senza indicazioni.
+    [$ente, $admin] = enteWithAdmin('Ente Cartello');
+    $admin->givePermissionTo('tenants.provision');
+
+    Livewire::actingAs($admin->fresh())
+        ->test(Albero::class)
+        ->assertSet('currentId', $ente->id)
+        ->assertDontSee('Crea un Ente dalla Piattaforma');
+});
