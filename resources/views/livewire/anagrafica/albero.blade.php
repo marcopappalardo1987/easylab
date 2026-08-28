@@ -119,6 +119,28 @@
         </div>
     @endif
 
+    {{-- 🔴 Le altre sedi dello STESSO contratto. Senza questa riga una sede
+         appena creata non si vede da nessuna parte: l'albero è scopato al
+         proprio Ente (ADR-018) e le altre vivono solo nella tendina dello
+         switcher — che durante un'impersonazione è soppressa apposta.
+
+         ⚠️ Nomi e non link: raggiungerle è un gesto dello switcher, che ha le
+         proprie guardie. Qui si risponde a «esiste?», non a «portami». --}}
+    @php
+        $altreSedi = $this->altreSediDelContratto();
+    @endphp
+    @if ($isEnte && $altreSedi->isNotEmpty())
+        <p class="mt-4 text-xs text-ink-3">
+            Altre sedi del tuo contratto:
+            <span class="text-ink-2">{{ $altreSedi->join(', ', ' e ') }}</span>.
+            @if ($this->switcherDisponibile())
+                Le raggiungi dallo switcher in alto.
+            @else
+                Il cliente le raggiunge dallo switcher in alto; mentre lo impersoni, tu no.
+            @endif
+        </p>
+    @endif
+
     {{-- Sotto-nodi --}}
     <section class="mt-6">
         <h2 class="text-xs font-semibold tracking-wide text-ink-3 uppercase">{{ $childLabel }}</h2>

@@ -467,3 +467,31 @@ it('actually RENDERS the sede modal when it is opened', function () {
         ->assertSee('Aggiungi una sede')
         ->assertSee('Nome della sede');
 });
+
+it('shows the other sedi of the same contract, so a new one is not invisible', function () {
+    // 🔴 «Ho creato la sede ma non la vedo da nessuna parte» — Marco, 28 Ago
+    // 2026. L'albero è scopato al proprio Ente (ADR-018), quindi una sede
+    // sorella NON compare fra i nodi; viveva solo nella tendina dello
+    // switcher, che durante un'impersonazione è soppressa apposta.
+    [$account, $ente, $admin] = enteConAdminSuAccount();
+
+    UnitaOrganizzativa::factory()->ente()->perAccount($account)->create(['nome' => 'Sede di Bergamo']);
+
+    Livewire::actingAs($admin->fresh())
+        ->test(Albero::class)
+        ->assertSee('Altre sedi del tuo contratto')
+        ->assertSee('Sede di Bergamo');
+});
+
+it('never shows the sedi of a contract that is not yours', function () {
+    // ⛔ Il negativo: l'elenco passa da `manage` sul PROPRIO account, e le sedi
+    // di un altro contratto non devono comparire nemmeno come nome.
+    [$account, $ente, $admin] = enteConAdminSuAccount();
+
+    $altroAccount = Account::factory()->saas()->create();
+    UnitaOrganizzativa::factory()->ente()->perAccount($altroAccount)->create(['nome' => 'Sede Altrui']);
+
+    Livewire::actingAs($admin->fresh())
+        ->test(Albero::class)
+        ->assertDontSee('Sede Altrui');
+});

@@ -170,6 +170,40 @@ class Albero extends Component
         return $this->mioAccount()?->slotEntiResidui();
     }
 
+    /** Lo switcher c'è davvero per chi guarda adesso? (Non durante un'impersonazione.) */
+    public function switcherDisponibile(): bool
+    {
+        return ! app(ImpersonateManager::class)->isImpersonating();
+    }
+
+    /**
+     * Le altre sedi dello stesso contratto, per nome.
+     *
+     * 🔴 Esiste perché senza di essa una sede appena creata **non si vede da
+     * nessuna parte**: l'albero è scopato al proprio Ente (ADR-018), e le altre
+     * sedi vivono solo dentro la tendina dello switcher — che durante
+     * un'impersonazione è soppressa. Segnalato da Marco il 28 Ago 2026, subito
+     * dopo aver creato la prima sede.
+     *
+     * ⚠️ Sono NOMI e non link: raggiungerle è un gesto dello switcher, con le
+     * sue guardie. Qui si risponde alla domanda «esiste?», non «portami».
+     *
+     * @return Collection<int,string>
+     */
+    public function altreSediDelContratto(): Collection
+    {
+        $account = $this->mioAccount();
+
+        if ($account === null || ! Gate::allows('manage', $account)) {
+            return collect();
+        }
+
+        return $account->enti()
+            ->where('id', '!=', Auth::user()?->tenant_id)
+            ->orderBy('nome')
+            ->pluck('nome');
+    }
+
     /**
      * I numeri del tetto, per dirlo invece di limitarsi a negare.
      *
@@ -248,7 +282,19 @@ class Albero extends Component
 
         $this->showSedeForm = false;
         $this->nomeSede = '';
-        $this->notice = 'Sede creata. La raggiungi dallo switcher in alto.';
+
+        // ⚠️ Il messaggio deve dire la verità di CHI sta guardando. Chi
+        // impersona non ha lo switcher — e non per una svista: passare a
+        // un'altra sede riscrive `users.tenant_id` dell'impersonato, cioè fa
+        // una modifica permanente «per suo conto», la stessa famiglia di gesti
+        // per cui il 2FA è chiuso durante un'impersonazione.
+        //
+        // La prima stesura diceva a tutti «la raggiungi dallo switcher in
+        // alto»: a chi impersonava era una bugia, e ha prodotto la segnalazione
+        // «ho creato la sede ma non la vedo da nessuna parte» (28 Ago 2026).
+        $this->notice = app(ImpersonateManager::class)->isImpersonating()
+            ? 'Sede creata. Il cliente la raggiunge dallo switcher in alto; tu, mentre lo impersoni, no — passare di sede riscriverebbe il suo contesto in modo permanente.'
+            : 'Sede creata. La raggiungi dallo switcher in alto, accanto al nome dell\'Ente.';
     }
 
     // --- Navigazione ---
