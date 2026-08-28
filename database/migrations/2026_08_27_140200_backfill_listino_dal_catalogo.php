@@ -96,7 +96,31 @@ return new class extends Migration
     {
         // Le due tabelle si svuotano, non si cancellano: lo schema lo tolgono
         // le due migration che precedono.
-        DB::table('prezzi_piano')->delete();
-        DB::table('piani')->delete();
+        //
+        // 🔴 **Solo i codici che questa migration ha messo, e mai un `delete()`
+        // nudo.** Un `down()` senza `where` toglieva anche i piani nati da
+        // `/piattaforma/piani`, che in nessuna config esistono e che `up()` non
+        // sa ricreare: un `migrate:rollback` — gesto che si fa per annullare
+        // *questa* migration — avrebbe portato via il listino costruito a mano,
+        // cioè dei prezzi veri, in silenzio. Il verso giusto di un `down()` è
+        // «disfa ciò che ho fatto io», non «riporta la tabella a vuota».
+        //
+        // ⚠️ Se la chiave di config fosse assente, `up()` non ha inserito nulla
+        // e qui non c'è nulla da togliere: la stessa muta simmetria.
+        $catalogo = config('easylab.piani.catalogo');
+
+        if (! is_array($catalogo) || $catalogo === []) {
+            return;
+        }
+
+        $codici = array_keys($catalogo);
+
+        // I prezzi PRIMA dei piani: la FK ha `cascadeOnDelete`, ma l'ordine
+        // esplicito regge anche se un domani quel vincolo cambiasse.
+        DB::table('prezzi_piano')
+            ->whereIn('piano_id', DB::table('piani')->select('id')->whereIn('codice', $codici))
+            ->delete();
+
+        DB::table('piani')->whereIn('codice', $codici)->delete();
     }
 };

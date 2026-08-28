@@ -269,13 +269,25 @@ Numeri globali, clienti, impersonazione, le leve amministrative. 🔗 ADR-001, A
 
 **Un piano fuori catalogo non fa esplodere la pagina.** `accounts.piano` è una stringa senza CHECK: basta dismettere un codice dal catalogo perché delle righe restino orfane. Valgono **0 €** nel ricavo, si mostrano con un badge `fuori catalogo` e un avviso sopra la tabella — perché questa è l'unica schermata da cui quel dato si ripara, e morire proprio lì sarebbe il modo peggiore di segnalarlo.
 
-**Il ricavo è a listino, non incassato.** Somma i prezzi di catalogo (`config/easylab.php`) dei contratti in essere, **lockout compresi** — un blocco è una porta chiusa, non una disdetta — con accanto il «di cui» di quanto non si sta incassando. La verità contabile resta Stripe, e i due possono divergere per una promo o un prezzo storico.
+**Il ricavo è a listino, non incassato.** Somma i prezzi di catalogo (`config/easylab.php`) dei contratti in essere, **lockout compresi** — un blocco è una porta chiusa, non una disdetta — con accanto il «di cui» di quanto non si sta incassando. La verità contabile resta Stripe, e i due possono divergere per una promo o un prezzo storico. *⚠️ Aggiornato il 28 Ago 2026: i prezzi non vengono più da `config/easylab.php` ma dalla tabella `piani` (🔗 ADR-035, §7.1). La frase resta vera parola per parola — cambia solo dove il catalogo abita — ma la divergenza da Stripe smette di essere solo teorica: da quel giorno esiste una schermata che scrive su entrambi, quindi un salvataggio interrotto a metà la produce davvero, ed è per questo che il listino porta un confronto esplicito.*
 
 **Filtri in query string** (`#[Url]`): una vista filtrata si manda per link, che è come si chiede aiuto su un cliente. `sortBy`, `sortDir` e `perPage` sono ri-validati contro una whitelist **a ogni render** e non solo negli hook, perché per quella strada arrivano dal browser senza passare da `updatingXxx()`.
 
 **Note sulle azioni.** `[👁]` = impersonazione, richiede `utenti.impersonate`, bersaglia **un membro** dell'account (link diretto se ce n'è uno solo, scelta se sono più d'uno) e avvia una sessione con **banner persistente** che dice entrambi i nomi. `[⚙]` = le leve amministrative: lockout manuale con motivo obbligatorio, visibilità delle garanzie ricambio per sede, dati fiscali. `[ + Nuovo cliente ]` = `tenants.provision` (onboarding + Free chiavi in mano). Il **lockout da Stripe è in sola lettura**: il suo inverso è un evento di pagamento, e un umano che dichiarasse «pagato» verrebbe smentito dal webhook successivo.
 
 **Stato di attuazione (S6).** KPI, tabella, filtri ed espansione sono in produzione di codice; impersonazione UI, leve e `[ 🛡 Permessi ruoli ]` → §4.1 arrivano nei blocchi successivi dello stesso sprint.
+
+> *Aggiornamento del paragrafo qui sopra: le tre cose che rimandava — impersonazione UI (`OffreImpersonazione`), leve amministrative (`AmministraAccount`, `FissaVisibilitaSede`, `ProvisionaCliente`) ed editor permessi — sono arrivate dentro S6, come previsto.*
+>
+> **Cosa la cabina ha guadagnato il 28 Ago 2026 (S7), e cosa NON ha guadagnato.** Il disegno qui sopra resta valido: nessuno dei quattro numeri, nessuna colonna e nessun badge cambia. Si aggiungono tre cose, tutte sopra o dentro la barra dei filtri già disegnata.
+>
+> **Una fascia di grafici fra i KPI e i filtri** — «Nuovi clienti per mese» a barre su dodici mesi, «Clienti per piano» come barra di composizione, e tre sparkline cumulate (clienti, sedi, strumenti) con accanto il «+N in 12 mesi». Sono **gli stessi dati dei quattro numeri letti nel tempo**: stessa porta `VistaPiattaforma`, stesso `PerimetroClienti`, tre query costanti — non una seconda sorgente. Stanno **dopo** l'avviso sui piani fuori catalogo perché quell'avviso è un'azione da fare e un grafico è una lettura. 🔴 **Il ricavo non riceve un andamento, e la pagina lo dichiara**: `accounts.piano` è lo stato di *oggi*, e ricostruire l'MRR di sei mesi fa applicando il piano attuale alle date d'ingresso darebbe una curva plausibile e falsa. Al suo posto c'è la composizione al presente, che è vera. Ogni voce porta **etichetta e glifo** oltre al colore: in tema scuro verde↔arancione scendono a ΔE 6,9 (🔗 ADR-034, DS §2.5). E una serie tutta a zero **non riceve una sparkline** — la linea piatta di dodici mesi vuoti è identica a quella di 5.000 strumenti fermi da un anno, cioè un'assenza di dato che si legge come un dato.
+>
+> **Due bottoni di esportazione, `[ CSV ]` e `[ PDF ]`, in fondo alla riga dei filtri.** Non hanno un `@can` proprio e non hanno una rotta propria, e sono due decisioni: il permesso di questa pagina (`tenants.view_all`) *è* già quello dell'export, e aggiungerne un secondo — `documenti.export_pdf`, che sembrerebbe naturale — lo renderebbe **revocabile a runtime** da §4.1, perché quel permesso non è nel set bloccato mentre `tenants.view_all` sì; una rotta `/piattaforma/clienti.csv` dovrebbe invece rileggere e ri-validare i filtri una seconda volta, ed è esattamente lì che nasce «il file esporta tutto mentre la pagina ne mostra dodici». Sotto ai bottoni la pagina dichiara l'invariante: **l'esportazione segue i filtri ma non si ferma alla pagina**, perché la paginazione non è un filtro di privacy. Il CSV passa da `CsvSicuro` (le celle che cominciano per `=`, `+`, `-` o `@` sono formule per Excel, intestazioni comprese). ⚠️ Tetto dichiarato: il file si costruisce tutto in memoria, e intorno ai 5.000 account questo meccanismo va sostituito da un job in coda, non allargato.
+>
+> **L'avviso sui piani fuori catalogo acquista la via d'uscita**: accanto a «Mostrali» c'è ora «Vai al listino», gatato su `billing.manage_global`. Senza, l'avviso era una diagnosi senza cura — chi lo leggeva non aveva da lì nessuna strada verso l'unica schermata che ripara il problema (§7.1).
+>
+> La **sub-nav di piattaforma è a cinque voci**: Clienti · Registro di audit · Ruoli e permessi · **Piani** · Errori. Ogni voce si filtra sul proprio permesso, e sono quattro permessi diversi per cinque voci. «Piani» sta **in mezzo e non in fondo**, ed è una decisione di presentazione con una ragione: l'ultima resta così quella del solo Developer (`system.logs.view`), e la fila che il Superadmin vede finisce dove finisce il suo insieme di permessi invece di avere un buco in mezzo.
 
 ### 4.1 Editor Permessi Ruolo ‹sub-vista, `roles.manage`› — 🔗 ADR-016
 
@@ -342,5 +354,142 @@ Hub di navigazione: albero Ente→Dipartimento→Sottolaboratorio a sinistra, st
 | §4 Dashboard Superadmin | Superadmin, Developer | S6 |
 | §4.1 Editor Permessi | Superadmin | S6 (🔗 ADR-016) |
 | §5 Alberatura + Lista | Admin, Resp. Reparto | S2 |
+| §7.1 Listino dei piani — `/piattaforma/piani` | Superadmin, Developer (`billing.manage_global`) | **S7 — 28 Ago 2026** (🔗 ADR-035) |
+| §7.2 Registrazione pubblica — `/registrati` | **nessuno**: chi la apre non esiste ancora | **S7 — 28 Ago 2026** (🔗 ADR-012, ADR-032) |
+| Archivio documentale d'Ente — `/documenti` | tutti con `documenti.view`; l'indice PDF vuole **anche** `documenti.export_pdf` | **S7** (🔗 ADR-026/031) |
+| Scadenzario — `/scadenzario` | tutti con `interventi.view` | **S7** (🔗 ADR-005/030) |
+| Abbonamento — `/abbonamento` | chi può `manage` l'Account, **anche in lockout** | **S7** (🔗 ADR-013/032) |
+| Marchio email dell'Ente — `/anagrafica/marchio` | Admin (`unita_organizzativa.update`) | **S7** (🔗 ADR-033) |
+
+> **Aggiornata il 28 Ago 2026 (S7), con sei righe e nessun disegno nuovo per quattro di esse.** Le due schermate che ricevono un wireframe vero stanno in §7, e il criterio è scritto lì. Le altre quattro non lo ricevono per la ragione che questo documento applica dal 25 Ago: **`/documenti` e `/scadenzario` sono la stessa forma di §5** — filtri in query string, tabella paginata, empty state esplicito, `tabella-a-card` sotto i 640px — e ridisegnarle sarebbe una seconda copia dello stesso disegno destinata a divergerne. Non è una deduzione di questo documento: `Scadenzario` cita **§5** nel proprio docblock ed è il codice a dichiarare da dove prende la forma. `/anagrafica/marchio` è un form con due campi e un'anteprima. E `/abbonamento` ha un layout banale — un titolo, tre voci di riepilogo, una card — mentre tutto ciò che ha di non ovvio è **autorizzazione e non struttura**: sta fuori dal gruppo protetto perché un moroso deve poter pagare, quindi non ha `can:` di rotta e le sue quattro ricadute (impersonazione, portale disponibile, piano gratuito, nessun portale) sono rami di testo. Quella materia è già scritta dove serve — commento della rotta in `routes/web.php` e `Tech Stack §4` — e un box ASCII la nasconderebbe invece di dirla.
+>
+> **Le due lavorazioni di S7 che non compaiono in tabella non sono viste**: i grafici e le esportazioni della cabina stanno **dentro §4**, e l'alert di obsolescenza non ha schermate proprie — entra in un'email e nella campanella già esistenti.
+
+---
+
+## 7. Le due schermate di S7 che meritano un disegno (28 Ago 2026)
+
+> **Perché in coda e non in mezzo.** I numeri di sezione di questo documento sono **citati dal codice**: `Cabina`, `Home`, `Scadenzario`, `CampoHome`, `app.css` e una decina di test scrivono «Wireframe §1/§3/§4/§5» nei propri docblock. Inserire una sezione fra §4 e §5 rinumererebbe §5 e §6 e renderebbe **false una dozzina di citazioni in un colpo solo**, in silenzio, perché nessun test le controlla. La sezione va quindi in fondo, e la numerazione resta un indirizzo stabile invece di una posizione.
+>
+> **Perché solo due, su sei viste nuove.** Un wireframe si guadagna quando la struttura non si deduce dal resto del documento. Queste due lo fanno: la prima ha una **colonna che mostra due verità affiancate** e non un dato, la seconda non è una schermata ma **quattro schermate con quattro gate diversi**, ed è la superficie dove è vissuto il difetto più grave di tutto lo sprint. Per le altre basta la riga in §6, con la motivazione scritta lì.
+
+### 7.1 Listino dei piani ‹`billing.manage_global`› — `/piattaforma/piani` 🔗 ADR-035
+
+Da qui un piano nasce, cambia prezzo e viene archiviato — **e lo stesso gesto arriva su Stripe** (l'«opzione A» decisa da Marco il 27 Ago). Fino a quel giorno il listino era `config('easylab.piani.catalogo')`: cambiare una cifra voleva dire un commit, un deploy e uno sviluppatore.
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Easy Lab · Piattaforma                                    🔔  👤 EasyLab ▼│
+│ Clienti │ Registro di audit │ Ruoli e permessi │ ▸Piani◂ │ Errori ‹Dev.› │
+├──────────────────────────────────────────────────────────────────────────┤
+│  Piani                                                                     │
+│  Da qui si crea un piano, se ne cambia il prezzo, e lo stesso gesto arriva │
+│  su Stripe.                                                                │
+│  ┌──────────────────────────────────────────────────────────────────────┐ │
+│  │ Cambiare prezzo crea un price NUOVO e archivia il vecchio: chi è già  │ │
+│  │ abbonato RESTA AL SUO. Un piano non si cancella — si archivia.        │ │
+│  └──────────────────────────────────────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────────────────────┐ │
+│  │ Il listino NON È STATO CONFRONTATO con  [ Confronta con Stripe ]      │ │
+│  │ Stripe in questa pagina.                                              │ │
+│  └──────────────────────────────────────────────────────────────────────┘ │
+│                                                                            │
+│  Il listino                                              [ Nuovo piano ]   │
+│  ┌──────────────────────────────────────────────────────────────────────┐ │
+│  │ Piano      │ Prezzo listino │ Enti    │Clienti│ Stripe    │ Azioni    │ │
+│  ├──────────────────────────────────────────────────────────────────────┤ │
+│  │ Free       │    0,00 EUR    │    1    │  12   │ niente,   │ [Modifica]│ │
+│  │ `free`     │    al mese     │         │       │ per defi- │           │ │
+│  │ ⟨gratuito⟩ ⟨predefinito⟩             │       │ nizione   │           │ │
+│  ├──────────────────────────────────────────────────────────────────────┤ │
+│  │ SaaS       │   49,00 EUR    │    5    │  25   │ ✅ sincro- │ [Modifica]│ │
+│  │ `saas`     │    al mese     │         │       │ nizzato   │ [Sincro-  │ │
+│  │            │                │         │       │ 28/08 9:12│  nizza]   │ │
+│  │            │                │         │       │ price_1Ab…│ [Aggancia │ │
+│  │            │                │         │       │ +2 price  │  un price]│ │
+│  │            │                │         │       │  storici  │ [Archivia]│ │
+│  │            │                │         │       │ ⚠ divergente su prezzo│ │
+│  │            │                │         │       │  listino 49,00 →      │ │
+│  │            │                │         │       │  Stripe   39,00       │ │
+│  ├──────────────────────────────────────────────────────────────────────┤ │
+│  │ Starter    │   19,00 EUR    │    2    │   0   │ da sincro-│ [Modifica]│ │
+│  │ `starter`  │    al mese     │         │       │ nizzare   │ …         │ │
+│  │ ⟨archiviato⟩                          │       │           │ [Riattiva]│ │
+│  └──────────────────────────────────────────────────────────────────────┘ │
+│                                                                            │
+│  ⚠️ Piani presenti sui clienti ma non a listino  ‹il blocco non c'è, se   │
+│                                                    non ce n'è nessuno›     │
+│  ┌──────────────────────────────────────────────────────────────────────┐ │
+│  │ Codice fuori catalogo       │  Clienti    │              In cabina    │ │
+│  ├──────────────────────────────────────────────────────────────────────┤ │
+│  │ `pro`                       │     3       │        Mostra i clienti → │ │
+│  └──────────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+🔴 **La colonna «Stripe» è la ragione per cui questa è una schermata e non un comando.** Tre `INSERT` scriverebbero il listino; ciò che non si scrive a mano è il **confronto** fra quel listino e ciò che il cliente paga davvero. La divergenza si mostra coi **due valori affiancati** — la stessa forma del marcatore «personalizzato» di §4.1 — perché dire soltanto «diverge» manda ad aprire la dashboard di Stripe per sapere *di quanto*, cioè a rifare a mano metà del lavoro che questa pagina toglie. E nessuna delle due parti vince da sola: **il database è la verità per il dominio** (etichetta, tetto di Enti, offribilità), **Stripe lo è per il denaro**.
+
+**Il confronto è un bottone, non una riga di `render()`.** Una conciliazione all'apertura sarebbe una chiamata di rete per piano a ogni visita, e una pagina di piattaforma che **muore perché un fornitore esterno è giù** o perché le chiavi Stripe non sono configurate su quell'ambiente. Un test conta le chiamate alla porta finta e pretende **zero** finché nessuno preme. Il risultato si butta via dopo ogni scrittura: un cambio di prezzo rende falsi i marcatori calcolati un istante prima, e «non confrontato» è meglio di una cifra sbagliata.
+
+**Tre badge che dicono cose diverse, e vanno letti prima del click.** `⟨gratuito⟩` = niente customer e niente subscription su Stripe, per definizione (ADR-002) — la colonna Stripe è vuota apposta, non è un buco da riempire. `⟨predefinito⟩` = il piano con cui nasce ogni account e a cui torna chi disdice: **archiviarlo è rifiutato**, e il bottone non compare, perché offrire un gesto che verrà rifiutato è un invito a bussare. `⟨archiviato⟩` = non più offribile, ma **ancora a catalogo**: gli account rimasti sopra continuano a valere il proprio prezzo nell'MRR: se `Piani::codici()` filtrasse sugli attivi diventerebbero tutti «fuori catalogo», cioè **0 €**.
+
+**La striscia in fondo è quella di §4.1, spostata sul listino.** Elenca i codici che vivono in `accounts.piano` e che nessun piano descrive più — la stringa non ha FK — con la strada verso la cabina per vedere *chi* sono. È il verso di ritorno del link che §4 ha guadagnato lo stesso giorno: la cabina dice che il problema esiste, il listino è dove si ripara.
+
+**Quattro modi di rompere Stripe, chiusi nella caccia del 28 Ago e visibili nel disegno.** «Aggancia un price» esiste perché un Price creato a mano nella dashboard non diventi un secondo Product al gesto successivo; l'aggancio verifica che il price sia **attivo** e **appartenga al prodotto del piano**, non solo che l'importo torni; la chiave di idempotenza non è funzione del solo importo, o tornare a un prezzo già usato entro 24 h farebbe ripescare a Stripe il price **vecchio** — quello che avevamo archiviato noi — rimettendolo corrente. E gli errori di validazione si vedono **dentro** la modale: l'attributo `name` dei campi è la chiave dell'error bag e non il nome della property, o il blocco d'errore per campo è codice morto e chi clicca vede «non è successo niente».
+
+**Nella colonna «Enti» un `null` vale «illimitati», non «non lo so»** — è la forma che avrebbe un piano Enterprise. E abbassare quel tetto mette clienti **sopra** il proprio limite, perché `Account::puoAggiungereEnte()` ci si appoggia: la modifica non è rifiutata, ma passa da una conferma che dice quanti clienti ci finirebbero.
+
+**Mobile**: la tabella scorre in orizzontale, come in §4 e per la stessa ragione — questa pagina si guarda da scrivania.
+
+### 7.2 Registrazione pubblica — `/registrati` 🔗 ADR-012, ADR-032
+
+Non è una schermata: sono **quattro**, con quattro gate diversi, e il disegno serve a far vedere dove passa il denaro e dove passa la fiducia. È l'**unica superficie pubblica e non autenticata che scrive** dell'intera applicazione.
+
+```
+  ① /registrati              ② …/controlla-email     ③ …/pagamento         ④ …/completata
+    ‹guest · throttle IP+email›  ‹guest›                ‹signed · guest›       ‹signed · NON guest›
+  ┌─────────────────────┐   ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
+  │ Crea il tuo account │   │ Controlla la     │   │ Indirizzo        │   │ «Lab Rossi srl»  │
+  │ Nome del laboratorio│   │ posta            │   │ confermato       │   │ è attivo         │
+  │ [                  ]│   │                  │   │                  │   │                  │
+  │ Il tuo nome e cognome│  │ Se l'indirizzo è │   │ Piano    SaaS    │   │ [Accedi a EasyLab]│
+  │ [                  ]│   │ valido ti abbiamo│   │ Importo  49,00 € │   │                  │
+  │ Email               │   │ scritto: apri il │   │          al mese │   │ ── oppure ──     │
+  │ [                  ]│   │ link per         │   │                  │   │ «Stiamo comple-  │
+  │ Password  [        ]│   │ confermarlo.     │   │ [ Vai al         │   │  tando l'attiva- │
+  │ Conferma  [        ]│   │                  │   │   pagamento ]    │   │  zione» ‹incasso │
+  │ ( • ) SaaS  49 €/mese│  │ ‹stessa risposta │   │                  │   │  non ancora con- │
+  │ ( ) …               │   │  se l'email è    │   │ ‹se il piano non │   │  fermato›        │
+  │ [sito_web]‹invisibile│   │  già di qualcuno›│   │  è più vendibile:│   │ [Torna all'acc.] │
+  │ [   Crea l'account  ]│   │ [Ricompila il    │   │  «Ricomincia»›   │   │                  │
+  │                     │   │  modulo]         │   │                  │   │                  │
+  └─────────────────────┘   └──────────────────┘   └──────────────────┘   └──────────────────┘
+            │                        ▲                      │                      ▲
+            └── riga `registrazioni` ┘                      └─ Stripe Checkout ────┘
+               + email di verifica     link di verifica       (fuori da Easy Lab)
+                                        firmato: 1 ora        ritorno firmato: 24 h
+```
+
+🔴 **L'account nasce SOLO al passo ④, e solo se Stripe dice che il pagamento è riuscito.** Fino a lì esiste una riga `registrazioni` che si pota da sola a 30 giorni, non un utente. È anche il motivo per cui il modulo **non offre piani gratuiti**: un piano omaggiato non ha un checkout da superare, e sarebbe l'unica porta del progetto da cui chiunque si fabbrica un Ente e un ruolo `Admin` senza che nessuno lo autorizzi. Il Free esiste (ADR-002) ma si **concede**, dalla cabina o da `easylab:provision-tenant`.
+
+**Il passo ④ ha due volti, e il secondo è quello che conta.** Se l'incasso non è ancora confermato la pagina dice «stiamo completando l'attivazione» invece di mentire: il webhook è la rete che chiude il caso «scheda chiusa a metà». E il caso peggiore — **pagamento riuscito, account rifiutato** — lascia ora una riga nel registro di audit: prima l'unica traccia era in `laravel.log`, cioè su un disco che questo progetto descrive come effimero e azzerato a ogni deploy, e a trenta giorni la potatura cancellava pure la riga pendente. Incasso avvenuto, nessun account, e niente da cui accorgersene. ⚠️ Quella voce di audit si etichetta sul **nome dell'Ente e non sull'email**, ed è privacy e non stile: il registro si legge con `tenants.view_all`, e l'indirizzo di chi ha solo *tentato* di registrarsi è il dato personale di una persona che cliente non è ancora.
+
+🔴 **Il passo ② dice sempre la stessa cosa, ed è la difesa principale del disegno.** Un'email che appartiene già a un utente produce **lo stesso identico schermo** di una nuova, e nessuna riga a database: cambia solo cosa arriva nella casella, che è raggiungibile dal solo proprietario. Dire «esiste già» significherebbe pubblicare l'anagrafica commerciale di Easy Lab un indirizzo alla volta.
+
+🔴 **Il difetto più grave dello sprint è vissuto fra ① e ②, e va scritto perché il disegno da solo non lo mostrerebbe.** Il riuso di una registrazione pendente sovrascriveva la password **senza azzerare la verifica della casella**: Mario si registra e conferma il link; un terzo che conosca solo il suo indirizzo ripete il modulo con la **propria** password, la riga viene riusata, la verifica di Mario resta valida; Mario paga, e l'account nasce con l'hash dell'attaccante. Ora una riga pendente si riusa **solo se nessuno l'ha verificata**, e la seconda registrazione ne ottiene una propria che nessuno ha ancora confermato.
+
+**Il campo `sito_web` è nel disegno perché esiste nel markup, e non si vede.** È l'esca: se arriva pieno la risposta è di **successo apparente** e non accade nulla — un rifiuto esplicito insegnerebbe al bot come passare. Il nome non dice «trappola»: `honeypot` non lo compila nessuno, un campo plausibile sì.
+
+**Quattro gate, e nessuno è un permesso.** Chi si registra **non esiste** nel database, quindi non ha ruoli: il controllo è `guest` + `signed` + `throttle` (su **due** chiavi, IP ed email — la sola chiave IP si aggira con un proxy, la sola email cambiando indirizzo), esattamente come `/invito/{user}` e `/q/{token}`. ⚠️ Il passo ④ è l'unico **fuori** da `guest`: Stripe rimanda qui il browser, e un visitatore già autenticato con un altro account verrebbe sbattuto sulla dashboard **perdendo il completamento di un pagamento già incassato**. Nessuna di queste rotte passa da `account.lockout` né da `two-factor.enforce`, e non è una svista: qui non c'è nessuna sessione da proteggere, e mandare al setup del 2FA chi sta chiudendo un pagamento sarebbe la stessa perdita.
+
+**Le finestre delle firme non sono tutte uguali, e ognuna ha la sua ragione.** Il link di verifica dura **un'ora**, perché è il gesto che si compie subito e la casella è già aperta; il ritorno da Stripe dura **24 ore**, perché chi resta quaranta minuti sulla pagina di pagamento — un cambio di carta, una telefonata — deve poter tornare, e una scadenza corta lì sarebbe un 403 su un pagamento **riuscito**.
+
+**Controller e Blade, non Livewire**, ed è l'unica forma possibile: `throttle` è un middleware **di rotta** e ogni update Livewire passa da `/livewire/update`, quindi un form Livewire avrebbe il rate limiting sul solo GET iniziale — cioè non l'avrebbe.
+
+**L'interruttore chiude solo l'ingresso.** `config('easylab.registrazione.aperta')` a `false` fa rispondere **404** — non 403, che dichiarerebbe l'esistenza della pagina — al solo passo ①. I passi ②–④ restano aperti apposta: chi ha già pagato deve poter completare, e chiudergli la porta significherebbe aver incassato senza consegnare.
+
+⚠️ **Limite dichiarato.** `Registrazione` è **esentato** dal guardrail di isolamento per tenant (`NON_TENANT_MODELS`), sulla stessa forma già usata per `Account`, `Errore` e `Piano`: una registrazione pendente un tenant non ce l'ha ancora — è ciò che deve nascere — e il confine qui è il **permesso**, non il tenant. E nulla di questo percorso è mai stato provato su Stripe vero: la porta del checkout ha una finta in suite, e il percorso felice verso la rete si verifica su staging con le chiavi di test.
+
+---
 
 > Questi wireframe sono la base per il **Design System** (S0.4): da lì arrivano palette, componenti Tailwind e gli stati semaforo definitivi.

@@ -154,3 +154,46 @@ it('bootstraps the listino from a migration, and does it only once', function ()
         // Una riga sola per piano: il backfill non ha lasciato duplicati.
         ->and(Piano::query()->count())->toBe(count(config('easylab.piani.catalogo')));
 });
+
+// --- Il `down()`, che è la metà che nessuno guarda ---
+//
+// 🔴 Trovato il 28 Ago 2026 allineando gli ADR, e **contro un messaggio di
+// commit che lo dichiarava già chiuso**: il `down()` di questa migration faceva
+// `DB::table('piani')->delete()` **senza `where`**. Un `migrate:rollback` —
+// cioè il gesto che si fa proprio per annullare *questa* migration — portava
+// via anche i piani nati da `/piattaforma/piani`, che in nessuna config
+// esistono e che `up()` non sa ricreare: prezzi veri, cancellati in silenzio.
+//
+// Il verso giusto di un `down()` è «disfa ciò che ho fatto io», non «riporta la
+// tabella a vuota». Questo test è ciò che tiene in piedi la differenza.
+
+it('undoes only the plans it created, leaving the hand-made listino alone', function () {
+    $daConfig = array_keys(config('easylab.piani.catalogo'));
+
+    // Un piano che il backfill non ha mai messo: nasce dalla schermata.
+    // ⚠️ `forceFill` e non `create`: `codice` e `gratuito` stanno FUORI dal
+    // `$fillable` di proposito — non sono campi, sono l'identità del piano, e
+    // dopo la nascita non si toccano. Qui si sta simulando la nascita.
+    $aMano = new Piano;
+    $aMano->forceFill([
+        'codice' => 'enterprise',
+        'etichetta' => 'Enterprise',
+        'max_enti' => null,
+        'gratuito' => false,
+        'attivo' => true,
+        'ordine' => 99,
+        'prezzo_mensile_cent' => 29900,
+    ])->save();
+
+    // Si esercita il `down()` vero della migration, non una sua imitazione.
+    $migration = require database_path('migrations/2026_08_27_140200_backfill_listino_dal_catalogo.php');
+    $migration->down();
+
+    expect(Piano::query()->where('codice', 'enterprise')->exists())
+        ->toBeTrue()
+        ->and(Piano::query()->whereIn('codice', $daConfig)->exists())
+        ->toBeFalse();
+
+    // E il piano sopravvissuto è proprio quello, non un omonimo ricreato.
+    expect(Piano::query()->sole()->id)->toBe($aMano->id);
+});
