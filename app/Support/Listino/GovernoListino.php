@@ -4,6 +4,7 @@ namespace App\Support\Listino;
 
 use App\Models\Piano;
 use App\Models\PrezzoPiano;
+use App\Support\Listino\Stripe\DivergenzaListino;
 use App\Support\Listino\Stripe\PortaListinoStripe;
 use App\Support\Piani;
 use Illuminate\Support\Facades\DB;
@@ -338,6 +339,157 @@ final class GovernoListino
         app(CatalogoPiani::class)->dimentica();
 
         return $piano->refresh();
+    }
+
+    /**
+     * 🔴 Il confronto fra il listino locale e Stripe, **su richiesta esplicita**.
+     *
+     * ⚠️ **Non si chiama da `render()`, e non è una scelta di prestazioni.** La
+     * pagina di listino deve restare leggibile con Stripe irraggiungibile o con
+     * le chiavi non configurate: qui dentro c'è una chiamata di rete per piano a
+     * pagamento, e una schermata di piattaforma che muore perché un fornitore
+     * esterno è giù è la stessa forma di difetto per cui `MetrichePiattaforma`
+     * non lascia esplodere un piano fuori catalogo. Il gesto è un bottone —
+     * «Confronta con Stripe» — e il suo esito si mostra **accanto** ai valori
+     * locali.
+     *
+     * ⚠️ **Nessuna riparazione automatica, in nessuna delle due direzioni**, ed è
+     * la regola scritta nel docblock di `DivergenzaListino`: il database è la
+     * verità per il **dominio** (etichetta, tetto di Enti, ordine, offribilità),
+     * Stripe è la verità per il **denaro** (esistenza del Product,
+     * `unit_amount`, `currency`, `active`). Questo metodo **legge e basta**: non
+     * scrive una riga, non tocca `stripe_sincronizzato_at`, non archivia niente.
+     * Una divergenza si mostra coi due valori affiancati e si risolve con un
+     * gesto di una persona — «risincronizza», oppure «aggancia il price
+     * esistente».
+     *
+     * ⚠️ **Un errore di rete diventa una divergenza, non un'eccezione.** Se il
+     * primo piano facesse esplodere il metodo, i tre sani non si vedrebbero:
+     * chi preme il bottone sta cercando *dove* non torna, e «Stripe non
+     * risponde» su una riga è un'informazione, mentre una pagina bianca non lo
+     * è.
+     *
+     * I piani **gratuiti si saltano**: per definizione non hanno né customer né
+     * subscription (ADR-002), quindi su Stripe non c'è niente con cui divergere
+     * — cercarlo produrrebbe una riga rossa su uno stato corretto.
+     *
+     * @return list<DivergenzaListino>
+     */
+    public static function concilia(): array
+    {
+        $porta = app(PortaListinoStripe::class);
+        $divergenze = [];
+
+        foreach (app(CatalogoPiani::class)->tutti() as $piano) {
+            if ($piano->gratuito) {
+                continue;
+            }
+
+            array_push($divergenze, ...self::divergenzeDelProdotto($porta, $piano));
+            array_push($divergenze, ...self::divergenzeDelPrezzo($porta, $piano));
+        }
+
+        return $divergenze;
+    }
+
+    /** @return list<DivergenzaListino> */
+    private static function divergenzeDelProdotto(PortaListinoStripe $porta, Piano $piano): array
+    {
+        if (! filled($piano->stripe_product_id)) {
+            // Non è ancora una divergenza fra due valori: è l'assenza del
+            // primo. Si dice comunque, perché è lo stato in cui la migration di
+            // backfill può aver lasciato `saas` su Cloud, e il gesto giusto è
+            // sincronizzare — non ricreare a mano un price.
+            return [new DivergenzaListino($piano->codice, 'prodotto', 'nessun product id', 'mai sincronizzato')];
+        }
+
+        try {
+            $prodotto = $porta->leggiProdotto($piano->stripe_product_id);
+        } catch (Throwable $e) {
+            return [new DivergenzaListino($piano->codice, 'prodotto', (string) $piano->stripe_product_id, 'Stripe non risponde: '.$e->getMessage())];
+        }
+
+        if ($prodotto === null) {
+            return [new DivergenzaListino($piano->codice, 'prodotto', (string) $piano->stripe_product_id, 'non esiste su Stripe')];
+        }
+
+        // ⚠️ Solo in **una** direzione: un piano archiviato qui e ancora attivo
+        // su Stripe non è un guasto — archiviare toglie il piano dalle offerte
+        // future e basta, e le subscription in essere continuano a fatturare. Il
+        // contrario sì: un piano che questa schermata offre e che su Stripe non
+        // esiste più fa fallire la prossima sottoscrizione.
+        if ($piano->attivo && ($prodotto['attivo'] ?? true) === false) {
+            return [new DivergenzaListino($piano->codice, 'prodotto', 'attivo', 'archiviato su Stripe')];
+        }
+
+        return [];
+    }
+
+    /** @return list<DivergenzaListino> */
+    private static function divergenzeDelPrezzo(PortaListinoStripe $porta, Piano $piano): array
+    {
+        $corrente = $piano->prezzi->firstWhere('corrente', true);
+
+        if ($corrente === null) {
+            return [new DivergenzaListino(
+                $piano->codice,
+                'prezzo',
+                self::inCifre((int) $piano->prezzo_mensile_cent, (string) $piano->valuta),
+                'nessun price a listino',
+            )];
+        }
+
+        try {
+            $remoto = $porta->leggiPrezzo($corrente->stripe_price_id);
+        } catch (Throwable $e) {
+            return [new DivergenzaListino($piano->codice, 'prezzo', $corrente->stripe_price_id, 'Stripe non risponde: '.$e->getMessage())];
+        }
+
+        if ($remoto === null) {
+            return [new DivergenzaListino($piano->codice, 'prezzo', $corrente->stripe_price_id, 'non esiste su Stripe')];
+        }
+
+        $divergenze = [];
+
+        // 💶 Il confronto sta sul **listino locale** e non sulla riga di
+        // `prezzi_piano`: le due possono già divergere fra loro (è ciò che fa
+        // `cambiaPrezzo()` prima della sincronizzazione), e la domanda a cui
+        // questa pagina risponde è «quanto fattura Stripe rispetto a quanto il
+        // listino dichiara», non «rispetto a quanto avevamo scritto l'ultima
+        // volta».
+        if ($remoto->importoCent !== (int) $piano->prezzo_mensile_cent) {
+            $divergenze[] = new DivergenzaListino(
+                $piano->codice,
+                'importo',
+                self::inCifre((int) $piano->prezzo_mensile_cent, (string) $piano->valuta),
+                self::inCifre($remoto->importoCent, $remoto->valuta),
+            );
+        }
+
+        // La valuta viveva **solo** in `cashier.currency` fino ad ADR-035, e il
+        // commento di `config/easylab.php` la dichiarava come divergenza non
+        // presidiata: registrarla sulla riga è ciò che rende questo confronto
+        // possibile senza indovinare.
+        if ($remoto->valuta !== (string) $piano->valuta) {
+            $divergenze[] = new DivergenzaListino(
+                $piano->codice,
+                'valuta',
+                mb_strtoupper((string) $piano->valuta),
+                mb_strtoupper($remoto->valuta),
+            );
+        }
+
+        if ($piano->attivo && ! $remoto->attivo) {
+            $divergenze[] = new DivergenzaListino($piano->codice, 'prezzo', 'corrente', 'archiviato su Stripe');
+        }
+
+        return $divergenze;
+    }
+
+    /** Centesimi interi → «49,00 EUR». Mai un float: vedi il docblock di `Piani::prezzoMensileCent()`. */
+    private static function inCifre(int $centesimi, string $valuta): string
+    {
+        return number_format($centesimi / 100, 2, ',', '.').' '.mb_strtoupper($valuta);
     }
 
     /**
