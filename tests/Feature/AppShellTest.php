@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 
@@ -89,4 +90,33 @@ it('redirects guests away from the shell', function () {
 
 it('no longer exposes the temporary TALL check page', function () {
     $this->get('/_tall-check')->assertNotFound();
+});
+
+it('keeps the personal pages out of the sidebar, where only the Ente data lives', function () {
+    // 🗓️ Deciso il 28 Ago 2026: «Sicurezza» stava sia in barra laterale sia nel
+    // menù utente. Non è solo deduplicazione — la barra elenca le **aree di
+    // dato dell'Ente** (anagrafica, strumenti, documenti, fornitori), mentre
+    // sicurezza, preferenze e abbonamento riguardano **chi guarda**, non ciò
+    // che guarda. Averla in due posti diceva che fossero due cose diverse.
+    $ente = UnitaOrganizzativa::factory()->ente()->create();
+    $admin = User::factory()->create([
+        'tenant_id' => $ente->id,
+        'two_factor_confirmed_at' => now(),
+    ]);
+    $admin->assignRole('Admin');
+
+    $html = $this->actingAs($admin)->get(route('dashboard'))->assertOk()->getContent();
+
+    // ⚠️ Si asserisce sul solo blocco <nav> della barra, estratto: «Sicurezza» è
+    // una parola che vive legittimamente altrove nella stessa pagina — nel menù
+    // utente, che è precisamente il posto in cui deve stare.
+    preg_match('/<nav class="flex-1 space-y-1 p-3">(.*?)<\/nav>/s', $html, $trovato);
+
+    expect($trovato)->not->toBeEmpty();
+    expect($trovato[1])->not->toContain('Sicurezza');
+    expect($trovato[1])->not->toContain('Abbonamento');
+
+    // …ma la pagina resta raggiungibile: togliere la voce non toglie la rotta,
+    // ed è lì che il middleware manda chi deve ancora attivare il 2FA.
+    expect($html)->toContain(route('settings.security'));
 });

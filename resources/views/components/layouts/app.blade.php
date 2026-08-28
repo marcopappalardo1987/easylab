@@ -115,10 +115,21 @@
                             <svg class="h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>
                             Dashboard
                         </x-app.nav-link>
-                        <x-app.nav-link :href="route('settings.security')" :active="request()->routeIs('settings.security')">
-                            <svg class="h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.746 3.746 0 0 1 21 12Z" /></svg>
-                            Sicurezza
-                        </x-app.nav-link>
+                        {{-- 🗓️ **«Sicurezza» tolta dalla barra il 28 Ago 2026**, su
+                             richiesta di Marco: la pagina è già nel menù utente in
+                             alto, insieme a «Preferenze» e «Abbonamento».
+
+                             Non è solo deduplicazione. La barra elenca le **aree di
+                             dato dell'Ente** — anagrafica, strumenti, documenti,
+                             fornitori — mentre sicurezza, preferenze e abbonamento
+                             riguardano **chi guarda**, non ciò che guarda: la loro
+                             casa è il menù dell'utente. Averla in due posti diceva
+                             che fossero due cose diverse.
+
+                             ⚠️ La ROTTA resta, e resta raggiungibile: è dove
+                             `EnsureTwoFactorIsEnabled` manda chi deve ancora
+                             attivare il 2FA. Togliere la voce non toglie la
+                             pagina. --}}
 
                         @can('unita_organizzativa.view')
                             <x-app.nav-link :href="route('anagrafica.index')" :active="request()->routeIs('anagrafica.*')">
