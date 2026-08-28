@@ -98,9 +98,49 @@ trait OffreImpersonazione
             return null;
         }
 
-        return VistaPiattaforma::accounts()
+        // ⚠️ `accountsInclusaPiattaforma()` e non `accounts()`: la tabella dei
+        // clienti esclude EasyLab perché «Clienti: 13» quando sono 12 è un
+        // numero che qualcuno riporterebbe a un socio — ma l'impersonazione non
+        // è un conteggio, è un gesto, e il Superadmin deve poter essere
+        // impersonato dal Developer (🔗 ADR-018: l'unico protetto è il
+        // Developer, e `canBeImpersonated()` continua a dirlo).
+        return VistaPiattaforma::accountsInclusaPiattaforma()
             ->with('membri.roles')
             ->find($this->sceltaImpersonazione);
+    }
+
+    /**
+     * L'account di piattaforma — EasyLab stessa — coi suoi membri impersonabili.
+     *
+     * 🔴 Esiste perché la tabella della cabina elenca i **clienti**, e il
+     * Superadmin non è un cliente: senza questo, il Developer non aveva
+     * nessun modo di impersonarlo dall'interfaccia. Segnalato da Marco il
+     * 28 Ago 2026.
+     *
+     * Sta fuori dalla tabella e non dentro, di proposito: mescolarlo alle righe
+     * dei clienti rimetterebbe EasyLab nei conteggi da cui è stata tolta
+     * apposta.
+     *
+     * @return array{account: Account, candidati: Collection<int,User>}|null
+     */
+    public function piattaformaImpersonabile(): ?array
+    {
+        if (! Gate::allows('utenti.impersonate')) {
+            return null;
+        }
+
+        $account = VistaPiattaforma::accountsInclusaPiattaforma()
+            ->with('membri.roles')
+            ->where('di_piattaforma', true)
+            ->first();
+
+        if ($account === null) {
+            return null;
+        }
+
+        $candidati = $this->candidatiDi($account);
+
+        return $candidati->isEmpty() ? null : ['account' => $account, 'candidati' => $candidati];
     }
 
     /**

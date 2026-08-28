@@ -110,6 +110,42 @@
         </x-ui.card>
     @endif
 
+    {{-- 🔴 EasyLab stessa, e solo per impersonarla. La tabella qui sotto elenca
+         i CLIENTI e l'account di piattaforma ne è escluso apposta — «Clienti:
+         13» quando sono 12 è un numero che qualcuno riporterebbe a un socio.
+         Ma senza questa striscia il Developer non aveva nessun modo di
+         impersonare il Superadmin dall'interfaccia, che è una cosa che deve
+         poter fare (🔗 ADR-018: l'unico account protetto è il Developer).
+
+         Sta FUORI dalla tabella e non dentro: rimetterlo fra le righe lo
+         rimetterebbe nei conteggi da cui è stato tolto. --}}
+    {{-- ⚠️ Blocco `@php … @endphp` e NON la forma breve `@php(…)`: con una
+         chiamata di metodo dentro, la forma breve chiude sulla parentesi
+         SBAGLIATA e la pagina va in 500 con «unexpected token @». Provato. --}}
+    @php
+        $piattaforma = $this->piattaformaImpersonabile();
+    @endphp
+    @if ($piattaforma)
+        <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-sunken px-4 py-3">
+            <p class="text-sm text-ink-2">
+                <span class="font-medium text-ink">{{ $piattaforma['account']->ragione_sociale }}</span>
+                — la piattaforma stessa. Non è un cliente e non entra nei numeri qui sopra.
+            </p>
+            @if ($piattaforma['candidati']->count() === 1)
+                <a href="{{ route('impersonate', $piattaforma['candidati']->first()) }}"
+                   class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-2 hover:bg-surface hover:text-ink"
+                   title="Impersona {{ $piattaforma['candidati']->first()->name }}">
+                    <span aria-hidden="true">👁</span> Impersona {{ $piattaforma['candidati']->first()->name }}
+                </a>
+            @else
+                <button type="button" wire:click="apriScelta({{ $piattaforma['account']->id }})"
+                        class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-2 hover:bg-surface hover:text-ink">
+                    <span aria-hidden="true">👁</span> Impersona ({{ $piattaforma['candidati']->count() }})
+                </button>
+            @endif
+        </div>
+    @endif
+
     {{-- ── Gli andamenti ────────────────────────────────────────────────────
          Gli stessi dati dei quattro numeri qui sopra, letti nel tempo: stessa
          porta (`tenants.view_all`), stesso `PerimetroClienti`, tre query
