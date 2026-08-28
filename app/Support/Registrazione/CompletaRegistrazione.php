@@ -35,14 +35,37 @@ use Illuminate\Support\Facades\DB;
  * 2. **rilettura della riga sotto lock, DENTRO la transazione**: è qui che si
  *    decide se il gesto è già avvenuto;
  * 3. **`completata_at !== null` → no-op**, che è l'idempotenza vera;
- * 4. **piano ancora a listino** — ricontrollato, vedi `PianiRegistrabili`;
- * 5. **`ProvisionaEnte`**, che è la transazione «account + Ente + Admin»
+ * 4. **casella verificata**, o `NON_VERIFICATA`: la stessa guardia di
+ *    `RegistrazionePubblica::versoStripe()`, rifatta qui perché il **webhook**
+ *    non passa da là;
+ * 5. **piano ancora a catalogo** — `Piani::esiste()`, e non
+ *    `PianiRegistrabili`: vedi il paragrafo qui sotto, la differenza è
+ *    deliberata;
+ * 6. **`ProvisionaEnte`**, che è la transazione «account + Ente + Admin»
  *    esistente e non va riscritta;
- * 6. `stripe_id`, piano, specchio della subscription, timbro e **azzeramento
+ * 7. `stripe_id`, piano, specchio della subscription, timbro e **azzeramento
  *    del segreto**;
- * 7. il benvenuto **fuori** dalla transazione, come l'invito del provisioning:
+ * 8. il benvenuto **fuori** dalla transazione, come l'invito del provisioning:
  *    una mail spedita per una transazione poi rollbackata manda qualcuno su un
- *    prodotto che non esiste.
+ *    prodotto che non esiste;
+ * 9. e se un rifiuto arriva **dopo l'incasso**, la sua traccia — fuori dalla
+ *    transazione, o il rollback se la porterebbe via. Vedi
+ *    `registraIlRifiuto()`.
+ *
+ * ## 🔴 Perché qui la domanda sul piano è più larga che al checkout
+ *
+ * `versoStripe()` chiede `PianiRegistrabili::accetta()`, che esclude gli
+ * archiviati; qui si chiede soltanto `Piani::esiste()`, che li comprende. **Non
+ * è una svista, ed è la differenza fra i due lati del pagamento.**
+ *
+ * Prima dell'incasso il fail-closed non costa niente a nessuno: il cliente
+ * torna alla pagina e sceglie un altro piano. Dopo, rifiutare significherebbe
+ * **aver incassato senza consegnare** — e per un gesto compiuto da noi
+ * (archiviare un piano da `/piattaforma/piani`) mentre il cliente era sulla
+ * pagina di Stripe. Un piano archiviato resta a catalogo per chi ci sta sopra
+ * (ADR-035): l'account può nascervi, ed è esattamente ciò che accade a chi
+ * l'ha appena pagato. Ciò che qui si rifiuta è il piano **sparito**, cioè un
+ * dato ormai corrotto: `Piani::maxEnti()` lancerebbe al primo Ente aggiunto.
  *
  * ## ⚠️ `lockForUpdate()` è un NO-OP su SQLite, dove gira la suite
  *
@@ -104,7 +127,32 @@ final class CompletaRegistrazione
             return null;
         }
 
-        [$account, $appenaCompletata] = DB::transaction(function () use ($registrazione, $esito) {
+        try {
+            [$account, $appenaCompletata] = $this->nasci($registrazione, $esito);
+        } catch (RegistrazioneRifiutata $e) {
+            // ⛔ **Fuori dalla transazione, o non resterebbe niente**: la
+            // scrittura della traccia gira dopo il rollback, altrimenti verrebbe
+            // annullata insieme al gesto che sta raccontando.
+            $this->registraIlRifiuto($registrazione, $e);
+
+            throw $e;
+        }
+
+        if ($appenaCompletata && $account !== null) {
+            $this->dailBenvenuto($registrazione->fresh() ?? $registrazione);
+        }
+
+        return $account;
+    }
+
+    /**
+     * La transazione vera e propria: rilettura sotto lock, guardie, nascita.
+     *
+     * @return array{0: Account|null, 1: bool}
+     */
+    private function nasci(Registrazione $registrazione, EsitoCheckout $esito): array
+    {
+        return DB::transaction(function () use ($registrazione, $esito) {
             // ⚠️ Riletta **dal database e sotto lock**, non usata com'è
             // arrivata: fra il momento in cui il chiamante l'ha caricata e
             // questo istante può essere passato l'altro chiamante.
@@ -118,6 +166,25 @@ final class CompletaRegistrazione
             // produrrebbe un secondo Account per un solo pagamento.
             if ($riga->completata()) {
                 return [$riga->account, false];
+            }
+
+            // 🔴 **La verifica della casella, ricontrollata anche qui.** In
+            // `RegistrazionePubblica::versoStripe()` questa guardia esiste già,
+            // ma quella è la strada del **browser**: il webhook chiama questa
+            // azione direttamente e non guarda niente, quindi senza questa riga
+            // la regola varrebbe per una delle due consegne dello stesso
+            // pagamento. Il caso non è teorico — il modulo pubblico riscrive una
+            // riga pendente, e una riga riscritta è una riga da riconfermare.
+            //
+            // ⚠️ **DENTRO la transazione e sulla riga RILETTA**, non su quella
+            // arrivata dal chiamante: fra il caricamento e questo istante può
+            // essere passato l'altro chiamante.
+            if (! $riga->emailVerificata()) {
+                throw new RegistrazioneRifiutata(
+                    "La registrazione {$riga->getKey()} non ha mai confermato la propria casella: ".
+                    'nessun account può nascere da essa.',
+                    RegistrazioneRifiutata::NON_VERIFICATA,
+                );
             }
 
             if (! Piani::esiste($riga->piano)) {
@@ -199,12 +266,53 @@ final class CompletaRegistrazione
 
             return [$account, true];
         });
+    }
 
-        if ($appenaCompletata && $account !== null) {
-            $this->dailBenvenuto($registrazione->fresh() ?? $registrazione);
-        }
+    /**
+     * 🔴 **Il rifiuto arriva DOPO l'incasso, quindi deve lasciare una traccia
+     * che sopravviva al deploy.**
+     *
+     * Il difetto che questo metodo chiude: la sola risposta era un `Log::error`
+     * nei due chiamanti, cioè una riga su `laravel.log` — disco **effimero e
+     * per-replica**, azzerato a ogni deploy e a ogni risveglio da scale-to-zero
+     * (lo dice `bootstrap/app.php`). A trenta giorni la potatura si porta via
+     * anche la riga pendente, e di un pagamento incassato che non è mai
+     * diventato un account non resta **niente**: nessun account, nessuna email,
+     * nessuno che lo sappia. Serve un intervento umano, e un intervento umano
+     * vuole un posto in cui lo si vede.
+     *
+     * Due tracce e non una, perché rispondono a due domande diverse:
+     *
+     * - **`report()`** porta il caso nell'error tracker interno (tabella
+     *   `errori`, ADR-017): è la coda di ciò che qualcuno deve **riparare**, ha
+     *   una retention e una schermata. È qui e non nei chiamanti perché i
+     *   chiamanti sono due e la dimenticanza sarebbe di uno solo — cioè
+     *   invisibile.
+     * - **la riga di audit** risponde a «cos'è successo a questa
+     *   registrazione?», che è la domanda che si farà chi riceve la telefonata
+     *   di chi ha pagato. Il soggetto è la `Registrazione` (mappata in
+     *   `SoggettiAudit`, che la etichetta col `nome_ente`), perché l'Account —
+     *   il soggetto del successo — qui non esiste.
+     *
+     * ⛔ **Nelle properties non entra il messaggio.** `ProvisioningRifiutato`
+     * nomina l'email di chi amministra già un altro account: il registro si
+     * legge con `tenants.view_all`, e l'indirizzo di chi non è (ancora) cliente
+     * non ci deve arrivare. Il testo per intero vive nel log dei chiamanti e
+     * nell'issue del tracker, che sono superfici operative.
+     */
+    private function registraIlRifiuto(Registrazione $registrazione, RegistrazioneRifiutata $e): void
+    {
+        report($e);
 
-        return $account;
+        activity(AuditLog::NAME)
+            ->performedOn($registrazione)
+            ->withProperties([
+                'registrazione_id' => $registrazione->getKey(),
+                'codice' => $e->codice,
+                'piano' => $registrazione->piano,
+                'stripe_session_id' => $registrazione->stripe_session_id,
+            ])
+            ->log(self::DESCRIZIONE_RIFIUTO);
     }
 
     /**
@@ -215,6 +323,14 @@ final class CompletaRegistrazione
      * cambiasse.
      */
     public const DESCRIZIONE_AUDIT = 'Account creato da registrazione pubblica';
+
+    /**
+     * La descrizione della riga che racconta un pagamento **incassato e non
+     * diventato un account**. Costante come la sorella, e per la stessa ragione:
+     * un test che riscrivesse la stringa a mano resterebbe verde a qualunque
+     * cosa la si cambiasse.
+     */
+    public const DESCRIZIONE_RIFIUTO = 'Registrazione pubblica rifiutata dopo il pagamento';
 
     /**
      * Lo specchio locale della subscription, per il caso in cui il webhook che

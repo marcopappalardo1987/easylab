@@ -75,14 +75,21 @@ final class PianiRegistrabili
     }
 
     /**
-     * ⛔ La domanda che la validazione fa sull'input del form, e che
-     * `CompletaRegistrazione` **rifà** sul piano memorizzato.
+     * ⛔ La domanda che si fa **prima del pagamento**, e due volte: sull'input
+     * del form e di nuovo in `RegistrazionePubblica::versoStripe()`.
      *
-     * Due volte e non una: fra il modulo e il ritorno da Stripe passa un giro
-     * su un dominio di terzi, e nel frattempo un piano può essere archiviato o
-     * cancellato da `/piattaforma/piani`. Fidarsi della prima verifica
-     * significherebbe far nascere un account su un piano che non esiste più —
-     * cioè `Piani::maxEnti()` che lancia al primo Ente aggiunto.
+     * Due volte e non una perché fra il modulo e il POST che apre il checkout
+     * passa del tempo, e nel frattempo un piano può essere archiviato o
+     * cancellato da `/piattaforma/piani`: aprire una sessione di pagamento su un
+     * piano ritirato è vendere qualcosa che non è più in vetrina.
+     *
+     * ⚠️ **E NON è la domanda che si fa dopo l'incasso.** `CompletaRegistrazione`
+     * ricontrolla il piano con `Piani::esiste()`, che è più largo — comprende
+     * gli archiviati — e la differenza è deliberata: prima del pagamento
+     * chiudere la porta non costa niente, dopo significherebbe aver incassato
+     * senza consegnare. Il perché per esteso sta nel docblock di quella classe;
+     * qui basti che le due domande sono **diverse apposta**, e che chi le
+     * uniformasse per simmetria rifiuterebbe un account a chi ha già pagato.
      */
     public static function accetta(?string $piano): bool
     {

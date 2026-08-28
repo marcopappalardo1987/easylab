@@ -160,11 +160,19 @@ class StripeWebhookController extends CashierWebhookController
      * il caso è normale: un checkout aperto a mano dalla dashboard di Stripe non
      * ha i nostri metadata.
      *
-     * **`RegistrazioneRifiutata` → 200 e una riga di log.** Il pagamento è già
-     * incassato e il rifiuto è **definitivo** (l'email appartiene già a un
-     * amministratore, il piano non è più a listino): ripetere l'evento darebbe
-     * lo stesso esito mille volte. Serve un intervento umano, e il posto in cui
-     * si vede è il log — non una coda di ritentativi che si esaurisce da sola.
+     * **`RegistrazioneRifiutata` → 200 e nessun ritentativo.** Il pagamento è
+     * già incassato e il rifiuto è **definitivo** (l'email appartiene già a un
+     * amministratore, il piano non è più a catalogo): ripetere l'evento darebbe
+     * lo stesso esito mille volte, e far ritentare Stripe per giorni costerebbe
+     * l'endpoint.
+     *
+     * 🔴 **Ma un 200 muto su un incasso che non è diventato un account sarebbe
+     * un cliente perduto in silenzio**, ed è il difetto che questo blocco ha
+     * pagato: l'unica traccia era `laravel.log`, disco effimero e per-replica.
+     * Serve un intervento umano, quindi il caso finisce **nel tracker interno e
+     * nel registro di audit** — lo scrive `CompletaRegistrazione`, in un posto
+     * solo per tutti e due i chiamanti. Il log qui sotto porta in più il
+     * messaggio per esteso, che nel registro non entra per privacy.
      */
     protected function handleCheckoutSessionCompleted(array $payload): Response
     {
@@ -195,6 +203,11 @@ class StripeWebhookController extends CashierWebhookController
                 EsitoCheckout::daSessioneStripe($sessione),
             );
         } catch (RegistrazioneRifiutata $e) {
+            // ⚠️ Come nel ritorno via browser: la traccia **durevole** (issue nel
+            // tracker interno + riga di audit sulla registrazione) la scrive
+            // `CompletaRegistrazione::registraIlRifiuto()`, in un posto solo per
+            // tutti e due i chiamanti. Qui resta il log col messaggio per
+            // esteso, che nel registro non entra per privacy.
             Log::channel(config('cashier.logger'))->error(
                 'Registrazione pubblica rifiutata al completamento dal webhook.',
                 [

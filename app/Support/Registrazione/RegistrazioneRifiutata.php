@@ -28,6 +28,18 @@ class RegistrazioneRifiutata extends RuntimeException
     public const PIANO_FUORI_CATALOGO = 'piano_fuori_catalogo';
 
     /**
+     * 🔴 La casella non è mai stata confermata.
+     *
+     * ⚠️ **Esiste perché la guardia non può vivere nel solo controller.** Il
+     * ritorno del browser passa da `RegistrazionePubblica::versoStripe()`, che
+     * la impone prima di aprire il checkout; il **webhook** chiama
+     * `CompletaRegistrazione` direttamente, e su quella strada non c'è nessun
+     * altro che guardi. Una regola presidiata in un punto solo dei due è una
+     * regola che vale per metà del traffico.
+     */
+    public const NON_VERIFICATA = 'non_verificata';
+
+    /**
      * Il provisioning ha detto di no — quasi sempre `GIA_AMMINISTRA`: fra il
      * modulo e il pagamento qualcuno ha creato un account con quella email.
      */

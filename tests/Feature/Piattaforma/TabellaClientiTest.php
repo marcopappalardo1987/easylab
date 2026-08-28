@@ -5,6 +5,7 @@ use App\Models\Account;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
+use App\Support\Listino\GovernoListino;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
@@ -156,8 +157,23 @@ it('does not treat a broken plan as an unlimited one', function () {
     // `maxEnti()` restituisce `null` per «illimitato»; un piano fuori catalogo
     // produce `null` per «non lo so». Fonderli fa leggere il caso corrotto come
     // il più permissivo — proprio sulla riga che la pagina invita a riparare.
+    //
+    // ⛔ **Servono ENTRAMBI i casi nella fixture.** Con il solo piano rotto,
+    // `assertDontSee('/ ∞')` è un negativo su un ago che non potrebbe comparire
+    // comunque: verde anche su una pagina che non sa più scrivere `∞`. Il piano
+    // senza tetto è previsto dal listino (`GovernoListino`: «vuoto per
+    // illimitato»), quindi non è un caso di laboratorio.
     $rotto = Account::factory()->create(['ragione_sociale' => 'Piano Dismesso SPA', 'piano' => 'gold']);
     UnitaOrganizzativa::factory()->ente()->perAccount($rotto)->create();
+
+    GovernoListino::crea([
+        'codice' => 'enterprise',
+        'etichetta' => 'Enterprise',
+        'prezzo_mensile_cent' => 99900,
+        'max_enti' => '',
+    ]);
+    $senzaTetto = Account::factory()->create(['ragione_sociale' => 'Enterprise SPA', 'piano' => 'enterprise']);
+    UnitaOrganizzativa::factory()->ente()->perAccount($senzaTetto)->create();
 
     Livewire::test(Cabina::class)
         ->set('piano', Cabina::FUORI_CATALOGO)
@@ -165,6 +181,13 @@ it('does not treat a broken plan as an unlimited one', function () {
         // asserisce sul limite: è quello la cosa che può mentire.
         ->assertSee('/ ?')
         ->assertDontSee('/ ∞');
+
+    // La controprova, sull'**altra** metà: `∞` non è stato spento in generale —
+    // significa ancora «illimitato», e solo quello.
+    Livewire::test(Cabina::class)
+        ->set('piano', 'enterprise')
+        ->assertSee('/ ∞')
+        ->assertDontSee('/ ?');
 });
 
 it('closes the other way into the expanded row too', function () {

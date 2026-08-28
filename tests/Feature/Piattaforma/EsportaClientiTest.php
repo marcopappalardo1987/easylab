@@ -1,15 +1,19 @@
 <?php
 
 use App\Livewire\Piattaforma\Cabina;
+use App\Livewire\Piattaforma\Concerns\EsportaClienti;
 use App\Models\Account;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Support\AuditLog;
+use App\Support\Listino\GovernoListino;
 use App\Support\Piattaforma\CsvSicuro;
+use App\Support\Piattaforma\EsportazioneClienti;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
+use Livewire\Exceptions\MethodNotFoundException;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Spatie\Activitylog\Models\Activity;
@@ -69,16 +73,34 @@ function righeCsv(string $csv): array
     return array_slice($linee, 1);
 }
 
+/**
+ * Un metodo **interno** del componente, letto senza aprirgli una porta.
+ *
+ * ⛔ `matriceClienti()` e `datiFoglioClienti()` sono `protected` di proposito:
+ * in Livewire ogni metodo pubblico non statico è invocabile dal browser, quindi
+ * renderli pubblici «per comodità di test» aggiungerebbe una via che porta
+ * fuori l'intero portafoglio **senza** la riga di audit (vedi
+ * `gives the browser no way out of the portfolio that skips the audit row`).
+ * La closure legata alla classe del componente li raggiunge dal test senza
+ * cambiare la superficie: la comodità di test non paga con una porta in più.
+ */
+function interno(Testable $t, string $metodo): mixed
+{
+    $componente = $t->instance();
+
+    return Closure::bind(fn () => $this->{$metodo}(), $componente, $componente::class)();
+}
+
 /** Il foglio PDF renderizzato in HTML, con **esattamente** i dati che l'azione gli passa. */
 function foglioDi(Testable $t): string
 {
-    return view('pdf.clienti-piattaforma', $t->instance()->datiFoglioClienti())->render();
+    return view('pdf.clienti-piattaforma', interno($t, 'datiFoglioClienti'))->render();
 }
 
 /** Una riga della matrice, indicizzata per nome di colonna. */
 function rigaEsportata(Testable $t, string $ragioneSociale): array
 {
-    [$intestazioni, $righe] = $t->instance()->matriceClienti();
+    [$intestazioni, $righe] = interno($t, 'matriceClienti');
 
     foreach ($righe as $riga) {
         if ($riga[0] === $ragioneSociale) {
@@ -229,7 +251,7 @@ it('lists only the filters actually applied', function () {
 
     // E le righe restano davvero non filtrate: il foglio dice il vero perché la
     // query ha fatto il vero, non perché la frase è generica.
-    expect($t->instance()->matriceClienti()[1])->toHaveCount(2);
+    expect(interno($t, 'matriceClienti')[1])->toHaveCount(2);
 });
 
 // --- Positivi: il file fa il suo mestiere ---
@@ -290,9 +312,43 @@ it('never explodes on a customer whose plan left the catalogue', function () {
 });
 
 it('keeps the unlimited plan apart from the unknown one', function () {
-    // L'altra metà della distinzione qui sopra: senza questa riga, un export che
-    // scrivesse `?` anche sull'illimitato passerebbe il test precedente.
-    expect(rigaEsportata(Livewire::test(Cabina::class), 'Gruppo Rossi')['sedi_max'])->toBe('5');
+    // 🔴 L'altra metà della distinzione qui sopra, e la metà che **conta**:
+    // `?` = «non lo sappiamo» (piano fuori catalogo), `illimitato` = «il piano
+    // non ha tetto». Fonderle farebbe leggere una riga sana come dato corrotto,
+    // o il contrario, proprio sul foglio che si stampa per decidere dove
+    // intervenire.
+    //
+    // ⛔ **La fixture deve contenere un piano SENZA tetto**, o il test non
+    // esercita il ramo che dice di congelare: la versione precedente asseriva
+    // `'5'` su un piano `saas` — un valore finito, cioè né `?` né `illimitato`
+    // — e la mutazione «`null` → `?`», che fonde esattamente i due casi,
+    // lasciava tutta la suite verde. Il piano Enterprise senza tetto è previsto
+    // dal listino (`GovernoListino`: «vuoto per illimitato»), quindi non è un
+    // caso di laboratorio.
+    GovernoListino::crea([
+        'codice' => 'enterprise',
+        'etichetta' => 'Enterprise',
+        'prezzo_mensile_cent' => 99900,
+        'max_enti' => '',
+    ]);
+
+    $senzaTetto = Account::factory()->create([
+        'ragione_sociale' => 'Enterprise SPA',
+        'piano' => 'enterprise',
+    ]);
+
+    $t = Livewire::test(Cabina::class);
+
+    expect(rigaEsportata($t, 'Enterprise SPA')['sedi_max'])->toBe('illimitato')
+        // I tre valori restano **tre**: un tetto finito non diventa né `?` né
+        // `illimitato`, e il fuori catalogo resta `?` (test qui sopra).
+        ->and(rigaEsportata($t, 'Gruppo Rossi')['sedi_max'])->toBe('5')
+        ->and($senzaTetto->piano)->toBe('enterprise');
+
+    // E la parola arriva davvero **nel file**, non solo nella matrice: è lì che
+    // qualcuno la legge.
+    expect(csvDi($t))->toContain('illimitato')
+        ->and(foglioDi($t))->toContain('illimitato');
 });
 
 it('keeps the two lockout sources apart, because they are two', function () {
@@ -392,11 +448,14 @@ it('makes the CSV and the sheet carry the same rows', function () {
 
     $t = Livewire::test(Cabina::class);
 
-    [$intestazioni, $righe] = $t->instance()->matriceClienti();
-    $dati = $t->instance()->datiFoglioClienti();
+    [$intestazioni, $righe] = interno($t, 'matriceClienti');
+    $dati = interno($t, 'datiFoglioClienti');
 
-    expect($dati['intestazioni'])->toBe($intestazioni)
-        ->and($dati['righe'])->toBe($righe)
+    // Le **righe** sono le stesse: è questa l'invariante «una matrice sola». Le
+    // intestazioni no, e di proposito — vedi il test sulle intestazioni in prosa
+    // qui sotto — ma restano appaiate una a una.
+    expect($dati['righe'])->toBe($righe)
+        ->and($dati['intestazioni'])->toHaveCount(count($intestazioni))
         ->and(righeCsv(csvDi($t)))->toHaveCount(count($righe));
 
     $foglio = foglioDi($t);
@@ -415,7 +474,7 @@ it('exports the rows in the same order the page shows them, tie-break included',
 
     $t = Livewire::test(Cabina::class)->set('sortBy', 'ragione_sociale')->set('sortDir', 'desc');
 
-    [, $righe] = $t->instance()->matriceClienti();
+    [, $righe] = interno($t, 'matriceClienti');
     $nelFile = array_column($righe, 0);
 
     // Discendente: «Pari Merito» ×3, poi «Gruppo Rossi», poi «Bianchi SRL».
@@ -432,7 +491,7 @@ it('exports the rows in the same order the page shows them, tie-break included',
     // volta su tre non è una rete, è un aneddoto.
     DB::enableQueryLog();
     DB::flushQueryLog();
-    $t->instance()->matriceClienti();
+    interno($t, 'matriceClienti');
     $sql = collect(DB::getQueryLog())->pluck('query')
         ->first(fn (string $q) => str_contains($q, 'from "accounts"'));
     DB::disableQueryLog();
@@ -460,4 +519,116 @@ it('writes one audit row per export, with the normalised filters', function () {
         // stato applicato, e un registro che lo elencasse direbbe di aver
         // esportato un insieme diverso da quello uscito.
         ->and($riga->properties['filtri'])->toBe([]);
+});
+
+it('does not carry the Stripe id nor the people who are not the subject of the list', function () {
+    // ⚠️ Le altre **due** metà del perimetro di colonna, che il docblock di
+    // `EsportazioneClienti` dichiara e che nessun test copriva:
+    //  · `stripe_id` — identificativo di un sistema terzo, inutile su un foglio
+    //    e sufficiente a **correlare** due esportazioni fatte a mesi di
+    //    distanza;
+    //  · i **membri** e le loro email — dati personali di persone che non sono
+    //    l'oggetto di questo elenco (ADR-020, minimizzazione).
+    // Senza queste righe, una colonna `stripe_id` «per riconciliare col foglio
+    // di Stripe» o una `referente_email` «per avere un contatto accanto al
+    // cliente» entrerebbero senza far diventare rosso nulla.
+    $this->rossi->forceFill(['stripe_id' => 'cus_CORRELABILE9'])->save();
+
+    $referente = User::factory()->create([
+        'name' => 'Referente Non Oggetto',
+        'email' => 'referente.privato@example.test',
+    ]);
+    $this->rossi->aggiungiMembro($referente);
+
+    $t = Livewire::test(Cabina::class);
+    $csv = csvDi($t);
+    $foglio = foglioDi($t);
+
+    // ⛔ Un ago per chiamata: `toContain()` è variadico, e un secondo argomento
+    // diventerebbe un secondo ago che rende l'asserzione negativa vera sempre.
+    foreach ([$csv, $foglio] as $file) {
+        expect($file)->toContain('Gruppo Rossi')
+            ->and($file)->not->toContain('cus_CORRELABILE9')
+            ->and($file)->not->toContain('referente.privato@example.test')
+            ->and($file)->not->toContain('Referente Non Oggetto');
+    }
+
+    // La controprova che il membro **esiste** davvero: senza, i tre negativi
+    // sarebbero soddisfatti da una fixture che non ha mai attaccato nessuno.
+    expect($this->rossi->fresh()->membri()->pluck('email')->all())
+        ->toContain('referente.privato@example.test');
+});
+
+it('prints the sheet columns in words, and the file ones in machine names', function () {
+    // Un PDF non si ri-importa: lo `snake_case` di `intestazioni()` è motivato
+    // dal giro di andata e ritorno in un foglio di calcolo, che vale per il CSV
+    // e **solo** per il CSV. Il foglio si stampa per una riunione, e ogni altro
+    // PDF del progetto (`storico-strumento`, `elenco-documenti`) intesta in
+    // prosa. La decisione «una matrice sola» riguarda le **righe**.
+    $foglio = foglioDi(Livewire::test(Cabina::class));
+
+    expect($foglio)->toContain('Bloccato per insoluto')
+        ->and($foglio)->toContain('Valore mensile')
+        ->and($foglio)->toContain('Cliente dal')
+        // ⛔ E il nome macchina non deve restare accanto: un foglio con
+        // entrambe le forme sarebbe la prova che qualcuno ha aggiunto le
+        // etichette senza togliere le vecchie.
+        ->and($foglio)->not->toContain('bloccato_per_insoluto')
+        ->and($foglio)->not->toContain('valore_mensile_eur');
+
+    // Il CSV resta invece in `snake_case`, che è ciò che si ri-importa: le due
+    // scelte sono opposte di proposito, e questo test è il posto in cui lo si
+    // legge.
+    $csv = csvDi(Livewire::test(Cabina::class));
+
+    expect($csv)->toContain('bloccato_per_insoluto')
+        ->and($csv)->not->toContain('Bloccato per insoluto');
+
+    // ⚠️ Due elenchi che nominano le **stesse** colonne: la sola cosa che può
+    // rompersi è aggiungerne una a uno solo dei due, e da lì in poi il foglio
+    // intesterebbe la colonna sbagliata su ogni riga.
+    expect(EsportazioneClienti::intestazioniLeggibili())
+        ->toHaveCount(count(EsportazioneClienti::intestazioni()));
+});
+
+it('gives the browser no way out of the portfolio that skips the audit row', function () {
+    // 🚩 La riga di audit è la TERZA eccezione al perimetro di ADR-027, e vale
+    // quanto la strada che copre: in Livewire **ogni metodo pubblico non
+    // statico è invocabile dal browser** — `HandleComponents::callMethods()`
+    // costruisce l'elenco con `Utils::getPublicMethodsDefinedBySubClass()`, che
+    // filtra su `isPublic() && ! isStatic()` e toglie solo `render`, e i metodi
+    // di trait appiattiti in `Cabina` ci rientrano.
+    //
+    // 🔴 `matriceClienti()` e `datiFoglioClienti()` erano `public` «perché un
+    // test possa leggerli senza passare dagli effects»: un `$wire.matriceClienti()`
+    // dalla console restituiva l'intero portafoglio filtrato dentro l'effect
+    // `returns`, e `datiFoglioClienti()` in più i KPI, i filtri e chi ha
+    // generato — senza toccare `tracciaEsportazione()`. L'autorizzazione teneva
+    // (si passa comunque da `VistaPiattaforma::porta()`), quindi non era una
+    // fuga verso chi non doveva: era la **tracciabilità** a essere falsa.
+    $azioni = collect((new ReflectionClass(EsportaClienti::class))->getMethods(ReflectionMethod::IS_PUBLIC))
+        ->reject(fn (ReflectionMethod $m) => $m->isStatic())
+        ->map(fn (ReflectionMethod $m) => $m->getName())
+        ->sort()->values()->all();
+
+    // L'elenco è **congelato**: rendere pubblico un metodo di questo trait
+    // significa aggiungere una strada che porta i clienti fuori, e da qui in poi
+    // va deciso a mano se traccia o no.
+    expect($azioni)->toBe(['esportaCsv', 'esportaPdf']);
+
+    foreach ($azioni as $azione) {
+        Activity::where('log_name', AuditLog::NAME)->delete();
+
+        Livewire::test(Cabina::class)->call($azione);
+
+        expect(Activity::where('log_name', AuditLog::NAME)
+            ->where('description', 'Esportazione clienti')->count())->toBe(1);
+    }
+
+    // E la porta di servizio è chiusa davvero, non solo per convenzione: il
+    // browser non raggiunge la matrice.
+    foreach (['matriceClienti', 'datiFoglioClienti'] as $muto) {
+        expect(fn () => Livewire::test(Cabina::class)->call($muto))
+            ->toThrow(MethodNotFoundException::class);
+    }
 });

@@ -143,13 +143,27 @@ trait EsportaClienti
     /**
      * Intestazioni e righe, dalla **stessa** matrice che usa il PDF.
      *
-     * Pubblico perché un test possa leggerlo senza passare dagli effects di
-     * Livewire, e perché sia dimostrabile che i due formati portano le stesse
-     * righe.
+     * ⛔ **`protected`, e la parola è la guardia.** Era `public` «perché un test
+     * possa leggerlo senza passare dagli effects», ed è costato una **porta di
+     * servizio muta**: in Livewire ogni metodo pubblico non statico del
+     * componente è invocabile dal browser — `HandleComponents::callMethods()`
+     * costruisce l'elenco con `Utils::getPublicMethodsDefinedBySubClass()`, che
+     * filtra su `isPublic() && ! isStatic()` e toglie solo `render`, e i metodi
+     * di trait appiattiti in `Cabina` ci rientrano. Un `$wire.matriceClienti()`
+     * dalla console restituiva l'**intero portafoglio filtrato** dentro
+     * l'effect `returns`, senza passare da `tracciaEsportazione()`: non una fuga
+     * verso chi non doveva (l'autorizzazione teneva comunque), ma la garanzia di
+     * tracciabilità dichiarata qui sotto resa **falsa**.
+     *
+     * ⚠️ I test la raggiungono legando una closure al componente
+     * (`Closure::bind(..., Cabina::class)`), che è il modo di leggere un interno
+     * senza renderlo una superficie: la comodità di test non paga con una porta
+     * in più. `GuardrailEsportazioniTest` — nel file dei test di questo blocco —
+     * congela l'elenco delle azioni invocabili dal browser.
      *
      * @return array{0: list<string>, 1: list<list<string>>}
      */
-    public function matriceClienti(): array
+    protected function matriceClienti(): array
     {
         return $this->matriceDa($this->righeDaEsportare());
     }
@@ -157,10 +171,8 @@ trait EsportaClienti
     /**
      * I dati del foglio PDF.
      *
-     * Pubblico per la stessa ragione di `matriceClienti()`: un test deve poter
-     * renderizzare `pdf.clienti-piattaforma` con **esattamente** i dati che
-     * l'azione le passa, non con dati ricostruiti a mano che potrebbero
-     * concordare per caso.
+     * ⛔ `protected` per la stessa ragione di `matriceClienti()`, e con più
+     * motivo: questo metodo porta fuori i KPI e i filtri **oltre** alle righe.
      *
      * ⚠️ **I quattro KPI NON seguono i filtri**, come in pagina, e il foglio lo
      * dice con la stessa didascalia del blade della cabina. Non si «aggiustano»
@@ -171,17 +183,20 @@ trait EsportaClienti
      *
      * @return array{intestazioni: list<string>, righe: list<list<string>>, riepilogo: RiepilogoPiattaforma, filtri: array<string,string>, totaleListinoEuro: int, generatoIl: Carbon, generatoDa: ?string}
      */
-    public function datiFoglioClienti(): array
+    protected function datiFoglioClienti(): array
     {
         // Una passata sola: `matriceClienti()` e il totale leggono la **stessa**
         // collezione, o sarebbero due query e due fotografie di un dato che nel
         // frattempo può cambiare.
         $clienti = $this->righeDaEsportare();
 
-        [$intestazioni, $righe] = $this->matriceDa($clienti);
+        [, $righe] = $this->matriceDa($clienti);
 
         return [
-            'intestazioni' => $intestazioni,
+            // ⛔ Le intestazioni del foglio sono quelle **in prosa**: le righe
+            // sono le stesse del CSV (matrice unica), i nomi macchina no. Vedi
+            // `EsportazioneClienti::intestazioniLeggibili()`.
+            'intestazioni' => EsportazioneClienti::intestazioniLeggibili(),
             'righe' => $righe,
             'riepilogo' => MetrichePiattaforma::riepilogo(),
             'filtri' => $this->filtriAttivi(),

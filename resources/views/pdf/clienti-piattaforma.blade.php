@@ -95,6 +95,12 @@
 <table style="margin-top: 4mm;">
     <thead>
         <tr>
+            {{-- ⛔ `$intestazioni` qui sono quelle IN PROSA
+                 (`EsportazioneClienti::intestazioniLeggibili()`), non i nomi
+                 macchina del CSV. Lo `snake_case` esiste perche' un foglio di
+                 calcolo si ri-importa; un PDF no, e un documento da riunione
+                 non intesta una colonna «bloccato_per_insoluto». Le RIGHE
+                 restano quelle del CSV: la matrice e' una sola. --}}
             @foreach ($intestazioni as $intestazione)
                 <th scope="col">{{ $intestazione }}</th>
             @endforeach

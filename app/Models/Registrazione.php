@@ -33,12 +33,14 @@ use Illuminate\Notifications\Notifiable;
  * riuscito), e quello lo scrive `CompletaRegistrazione` con
  * `performedOn($account)`.
  *
- * ⛔ **Nessun `activity(` in questo file, e non è una preferenza.**
- * `SoggettiAuditTest` legge il sorgente dei model cercando quella stringa e
- * pretenderebbe una voce in `App\Support\Audit\SoggettiAudit::SOGGETTI` — cioè
- * che `Registrazione` diventasse un soggetto mostrabile nel registro di audit,
- * che è l'opposto di ciò che si vuole per una riga che porta l'email di chi non
- * è ancora cliente.
+ * ⛔ **Nessun `activity(` in questo file, e non è una preferenza.** Una riga di
+ * audit per ogni salvataggio racconterebbe i **tentativi**, cioè l'anagrafica di
+ * chi non è ancora cliente, in un registro che si legge con `tenants.view_all`.
+ * L'unica scrittura che ha per soggetto una `Registrazione` la fa
+ * `App\Support\Registrazione\CompletaRegistrazione::registraIlRifiuto()`, ed è
+ * il solo caso in cui il silenzio costerebbe più della riga: un pagamento
+ * **incassato** che non è diventato un account, e per cui l'Account da nominare
+ * non esiste. `SoggettiAudit` la etichetta col `nome_ente` e mai con l'email.
  *
  * ## 🔴 `password_hash` è un segreto in TRANSITO
  *

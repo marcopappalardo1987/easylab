@@ -68,6 +68,11 @@ final class EsportazioneClienti
      * calcolo e spesso si ri-importa, e un'intestazione con accenti e spazi è
      * la prima cosa che si rompe nel giro di andata e ritorno.
      *
+     * ⚠️ **La ragione qui sopra vale per il CSV e basta.** Il foglio A4 usa
+     * `intestazioniLeggibili()`: un PDF non si ri-importa, e intestare una
+     * colonna `bloccato_per_insoluto` su un documento da riunione sarebbe
+     * applicare alle intestazioni una decisione presa sulle righe.
+     *
      * @return list<string>
      */
     public static function intestazioni(): array
@@ -86,6 +91,43 @@ final class EsportazioneClienti
             'sedi_max',
             'strumenti',
             'cliente_dal',
+        ];
+    }
+
+    /**
+     * Le stesse colonne, **in prosa**, per il foglio A4.
+     *
+     * ⛔ Esiste perché la ragione dello `snake_case` vale per il CSV e **solo**
+     * per il CSV: un foglio di calcolo si ri-importa, un PDF no. Il foglio che
+     * si stampa per una riunione non può intestare una colonna
+     * `bloccato_per_insoluto` — ogni altro PDF del progetto
+     * (`pdf/storico-strumento.blade.php`, `pdf/elenco-documenti.blade.php`)
+     * scrive parole umane, e questo le aveva perse per aver applicato alle
+     * intestazioni una decisione presa sulle **righe**.
+     *
+     * ⚠️ **Restano appaiate a `intestazioni()`, posizione per posizione**: sono
+     * due nomi della stessa colonna, non due elenchi. È la sola cosa che può
+     * rompersi aggiungendo una colonna a una sola delle due, e un test lo
+     * congela contando e appaiando le due liste.
+     *
+     * @return list<string>
+     */
+    public static function intestazioniLeggibili(): array
+    {
+        return [
+            'Cliente',
+            'P.IVA',
+            'Codice piano',
+            'Piano',
+            'A catalogo',
+            'Valore mensile (€)',
+            'Bloccato',
+            'Bloccato a mano',
+            'Bloccato per insoluto',
+            'Sedi',
+            'Sedi max',
+            'Strumenti',
+            'Cliente dal',
         ];
     }
 

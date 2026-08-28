@@ -60,16 +60,19 @@ use Throwable;
  *
  * ## ⛔ Nessuna riga di audit per l'avvio e per la verifica
  *
- * E non è una dimenticanza. Quelle due righe non avrebbero né **causer** (chi
- * compila il modulo non esiste nel dominio) né **subject** mostrabile
- * (`Registrazione` non è fra i soggetti di `SoggettiAudit`, apposta): il
- * registro le scarterebbe in lettura, quindi sarebbero scritture che nessuno
- * può leggere. Peggio: per essere utili dovrebbero portare l'**email** di chi
- * potrebbe non diventare mai cliente, cioè un dato personale in una tabella
- * che una retention non ce l'ha (T6, aperta col legale). La traccia dell'avvio
- * **è la riga `registrazioni`**, che si pota da sola a 30 giorni. Ciò che
- * merita il registro è il risultato, e lo scrive `CompletaRegistrazione` con
- * `performedOn($account)`.
+ * E non è una dimenticanza. Quelle due righe non avrebbero nessun **causer**
+ * (chi compila il modulo non esiste nel dominio) e sarebbero il registro di un
+ * gesto che non è ancora successo niente: per essere utili dovrebbero portare
+ * l'**email** di chi potrebbe non diventare mai cliente, cioè un dato personale
+ * in una tabella che una retention non ce l'ha (T6, aperta col legale). La
+ * traccia dell'avvio **è la riga `registrazioni`**, che si pota da sola a 30
+ * giorni.
+ *
+ * Ciò che merita il registro sono i due **esiti**, e li scrive entrambi
+ * `CompletaRegistrazione`: l'account nato (`performedOn($account)`) e — da qui
+ * la voce `Registrazione` in `SoggettiAudit` — il pagamento incassato che un
+ * rifiuto non ha fatto diventare un account, dove l'Account da nominare non
+ * esiste. Quella voce etichetta col `nome_ente` e non con l'email, apposta.
  *
  * ## L'interruttore, e da che parte sta chiuso
  *
@@ -174,6 +177,15 @@ class RegistrazionePubblica extends Controller
             'email' => $email,
             'password_hash' => Hash::make($validati['password']),
             'piano' => $validati['piano'],
+            // ⚠️ **Difesa in profondità, e per una riga che oggi le ha già a
+            // null.** `rigaPendentePer()` restituisce solo righe *non
+            // verificate*, quindi queste due assegnazioni non cambiano nulla —
+            // finché quella query resta com'è. Il giorno in cui qualcuno
+            // allargasse il riuso, il peggio possibile diventerebbe «la vittima
+            // deve verificare di nuovo» invece di «un terzo ha sostituito la
+            // password»: si perde un passo, non un account.
+            'email_verificata_at' => null,
+            'stripe_session_id' => null,
         ])->save();
 
         // ⚠️ **In consegna, mai «inviata»**: la notifica è `ShouldQueue`, e chi
@@ -304,6 +316,15 @@ class RegistrazionePubblica extends Controller
             // che un'email appartiene già a un amministratore, o che un piano è
             // sparito dal listino. Sono informazioni operative, e questa è una
             // superficie pubblica. Chi ha pagato legge «stiamo completando».
+            //
+            // ⚠️ **Nessun `report()` qui, e non è una dimenticanza**: la traccia
+            // durevole — l'issue nel tracker interno e la riga di audit — la
+            // scrive `CompletaRegistrazione::registraIlRifiuto()`, cioè un posto
+            // solo per **entrambi** i chiamanti. Ripeterla da qui darebbe due
+            // occorrenze per un fatto, e la dimenticanza di uno dei due
+            // chiamanti sarebbe invisibile. Questa riga resta perché il
+            // **messaggio** per esteso (che nel registro non entra, per privacy)
+            // vive nel log.
             Log::error('Registrazione pubblica rifiutata al completamento', [
                 'registrazione_id' => $registrazione->getKey(),
                 'codice' => $e->codice,
@@ -353,6 +374,24 @@ class RegistrazionePubblica extends Controller
      * tre righe con tre hash della stessa password, e il link ricevuto per
      * primo resterebbe valido su una riga che nessuno completerà.
      *
+     * 🔴 **E si riusa SOLO finché nessuno ha verificato la casella**, che è la
+     * guardia di sicurezza di questo controller. Questo POST è pubblico e
+     * l'unico dato che serve a raggiungere una riga altrui è **l'indirizzo**:
+     * senza `whereNull('email_verificata_at')` un terzo che lo conosce ripete il
+     * modulo con la propria password, `password_hash` viene sovrascritto mentre
+     * il timbro di verifica — messo dalla vittima, per un contenuto diverso —
+     * resta valido, e l'account che la vittima sta pagando nasce con la
+     * credenziale dell'attaccante. La verifica della casella è ciò che lega una
+     * riga a una persona: da quel momento la riga non è più riusabile da chi
+     * quella casella non la legge.
+     *
+     * ⚠️ **Filtrare qui invece di azzerare il timbro al riuso**, che era l'altra
+     * strada possibile: azzerarlo chiuderebbe il furto ma aprirebbe un
+     * dispetto — chiunque conosca l'indirizzo potrebbe revocare la verifica a
+     * qualcuno che è **già sulla pagina di Stripe**, e un pagamento incassato
+     * resterebbe senza account. Una riga nuova non tocca chi sta pagando, e chi
+     * non legge quella casella non può verificarla.
+     *
      * ⚠️ `orderByDesc('id')` e non `latest()`: `created_at` non è unico, e con
      * due righe nate nello stesso secondo l'ordine dipenderebbe dal motore —
      * SQLite in locale e Postgres in CI danno risposte diverse (CLAUDE.md).
@@ -362,6 +401,7 @@ class RegistrazionePubblica extends Controller
         return Registrazione::query()
             ->where('email', $email)
             ->whereNull('completata_at')
+            ->whereNull('email_verificata_at')
             ->orderByDesc('id')
             ->first();
     }

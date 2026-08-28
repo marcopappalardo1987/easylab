@@ -121,7 +121,13 @@ final class SoggettiAudit
         // mappa. `etichetta` e non `codice`: è il nome che una persona
         // riconosce, ed è la colonna che il gesto tipico cambia.
         Piano::class => ['Piano', 'etichetta'],
-        // ADR-012 — il self-signup pubblico. `nome_ente` e non `email`, ed è
+        // ADR-012 — il self-signup pubblico. La scrive **un solo gesto**:
+        // `CompletaRegistrazione::registraIlRifiuto()`, cioè un pagamento
+        // incassato che un rifiuto non ha fatto diventare un account — l'unico
+        // caso in cui l'Account, che è il soggetto del successo, non esiste. Il
+        // resto del percorso non lascia righe, e il divieto è scritto nel
+        // docblock del model.
+        // `nome_ente` e non `email`, ed è
         // una scelta di **privacy**, non di stile: questo registro si legge con
         // `tenants.view_all`, e l'indirizzo di chi ha solo *tentato* di
         // registrarsi è un dato personale di una persona che non è ancora

@@ -4,6 +4,7 @@ use App\Livewire\Piattaforma\RegistroAudit;
 use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Garanzia;
 use App\Models\Intervento;
+use App\Models\Registrazione;
 use App\Models\Ricambio;
 use App\Models\RicambioUtilizzo;
 use App\Models\Strumento;
@@ -105,6 +106,34 @@ const SOGGETTI_DI_VENDOR = [
     // L'editor dei permessi di ruolo (S6, ADR-016): il gesto è «al ruolo X è
     // stato tolto Y», quindi il soggetto è il `Role` e non il `Permission`.
     Role::class => ['app/Support/Rbac/MatriceRuoli.php', 'performedOn($riga)'],
+];
+
+/**
+ * Model **nostri** il cui audit non lo scrive né il trait né il model → [file
+ * che lo scrive, token da trovarci].
+ *
+ * 🔴 **Il buco che questo elenco chiude.** Il meta-test qui sotto verifica una
+ * direzione sola — chi scrive `activity(` dentro `app/Models/` deve stare nella
+ * mappa — quindi una voce della mappa il cui **scrittore non esiste** resta
+ * verde per sempre: il filtro «Soggetto» del registro offrirebbe un tipo che per
+ * costruzione non può avere righe, e chi lo seleziona vedrebbe zero risultati
+ * senza capire perché. È esattamente ciò che è successo a `Registrazione`, la
+ * cui voce è stata scritta prima dello scrittore.
+ *
+ * ⚠️ **Non ci vanno tutti i model della mappa**: i più sono coperti dal trait o
+ * scrivono da sé, e ripeterli qui sarebbe il secondo elenco parallelo su cui
+ * questo progetto ha già perso due volte. Ci va chi non è coperto da nessuna
+ * delle due reti.
+ */
+const SOGGETTI_SCRITTI_ALTROVE = [
+    // ADR-012 — il self-signup pubblico. Il model ha il **divieto** di scrivere
+    // audit (porterebbe l'email di chi non è ancora cliente): l'unica riga col
+    // suo soggetto racconta un pagamento incassato che un rifiuto non ha fatto
+    // diventare un account, e per cui l'Account da nominare non esiste.
+    Registrazione::class => [
+        'app/Support/Registrazione/CompletaRegistrazione.php',
+        'performedOn($registrazione)',
+    ],
 ];
 
 it('shows the subject of another tenant, which is the whole point', function () {
@@ -307,6 +336,21 @@ it('covers every model the codebase can write as a subject', function () {
 
     expect($conTrait->merge($espliciti)->merge(array_keys(SOGGETTI_DI_VENDOR))->unique()->diff($noti)->values()->all())
         ->toBe([], 'Soggetto di audit non nominato: aggiungilo a SoggettiAudit::SOGGETTI, o la riga si leggerà «Classe · #id».');
+});
+
+it('keeps every subject written outside its own model backed by a real writer', function () {
+    // 🔴 Il verso che mancava: non «chi scrive è nominato», ma «chi è nominato
+    // viene davvero scritto». Una voce senza scrittore è una riga morta nella
+    // mappa **e** una voce morta nel filtro di `/piattaforma/registro-audit`,
+    // che il menu lo costruisce da qui (`RegistroAudit::tipiSoggetto()`).
+    foreach (SOGGETTI_SCRITTI_ALTROVE as $classe => [$file, $token]) {
+        expect(array_keys(SoggettiAudit::tipi()))
+            ->toContain($classe)
+            ->and(file_exists(base_path($file)))
+            ->toBeTrue("Il file dichiarato per {$classe} non esiste più: {$file}")
+            ->and(str_contains(file_get_contents(base_path($file)), $token))
+            ->toBeTrue("«{$token}» non c'è più in {$file}: nessuna riga di audit avrà mai {$classe} per soggetto, e il filtro del registro offrirebbe un tipo vuoto.");
+    }
 });
 
 it('keeps the vendor subject list honest about what actually writes it', function () {
