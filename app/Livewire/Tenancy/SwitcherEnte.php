@@ -57,6 +57,20 @@ class SwitcherEnte extends Component
         $this->aperto = true;
     }
 
+    /**
+     * L'apertura e la chiusura passano dal server perché il pannello è reso da
+     * un `@if`: non c'è nessuno stato nel browser che possa perdersi.
+     */
+    public function alterna(): void
+    {
+        $this->aperto = ! $this->aperto;
+    }
+
+    public function chiudi(): void
+    {
+        $this->aperto = false;
+    }
+
     public function passa(int $enteId): void
     {
         $ente = UnitaOrganizzativa::withoutGlobalScopes()->find($enteId);
@@ -147,6 +161,14 @@ class SwitcherEnte extends Component
      */
     public function altreSedi(): Collection
     {
+        // Torna pigro: il pannello è reso da un `@if ($aperto)`, quindi il giro
+        // sul server c'è comunque nel gesto di aprire. Caricare l'elenco su
+        // ogni pagina — come nel tentativo del 28 Ago — sarebbe stato un costo
+        // pagato per una cura che non curava.
+        if (! $this->aperto) {
+            return new Collection;
+        }
+
         return $this->sedi()
             ->where('id', '!=', $this->user()->tenant_id)
             ->orderBy('nome')

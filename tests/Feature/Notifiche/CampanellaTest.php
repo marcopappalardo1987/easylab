@@ -51,28 +51,35 @@ it('counts the unread notifications', function () {
     Livewire::test(Campanella::class)->assertSet('nonLette', 2);
 });
 
-// 🔴 **Questa regola è cambiata il 28 Ago 2026, e il test dice perché.**
+// 🔴 **La regola NON è cambiata, ed è la conclusione di tre tentativi.**
 //
-// Fino a quel giorno le righe si leggevano solo a pannello aperto, per non
-// pesare su ogni pagina. Il prezzo era che il pannello **non si apriva**: il
-// click chiedeva le righe al server, la risposta faceva ridisegnare il
-// frammento e Alpine ripartiva da capo, richiudendolo nell'istante in cui
-// arrivavano i dati per riempirlo. Nessun errore in console. Lo stesso difetto
-// era sullo switcher delle sedi, dove Marco l'ha trovato usando l'applicazione.
+// Il caricamento pigro era stato tolto il 28 Ago 2026 credendolo la causa per
+// cui il pannello non si apriva: il click chiedeva le righe al server, e si
+// pensava che la risposta, ridisegnando il frammento, azzerasse lo stato di
+// Alpine. Il DOM di staging ha smentito la diagnosi — Alpine era vivo e legato,
+// le righe erano in pagina, e il pannello restava chiuso lo stesso.
 //
-// Ora le righe sono sempre in pagina e l'apertura è tutta nel browser. Il costo
-// è dichiarato: una query da dieci righe su ogni pagina, per ogni utente — ma
-// il conteggio dei non letti interroga già la stessa tabella a ogni pagina,
-// quindi il salto è da una query a due, non da zero.
+// La cura vera è stata togliere Alpine dal gesto: il pannello è reso da un
+// `@if ($aperta)`, cioè da stato del SERVER, come le modali di questa
+// applicazione. E siccome aprire passa comunque dal server, il caricamento
+// pigro è tornato — con esso la query che l'esperimento aveva aggiunto a ogni
+// pagina, per ogni utente.
 
-it('has the rows already in the page, so opening never needs the server', function () {
+it('loads the list only when the panel is opened', function () {
     notificaA($this->admin, $this->ente, $this->strumento);
     $this->actingAs($this->admin);
 
     Livewire::test(Campanella::class)
-        // Senza aver chiamato `apri()`: le righe ci sono già.
+        // Chiusa: nessuna riga letta dal database — il componente si monta su
+        // ogni pagina dell'applicazione.
+        ->assertDontSee('Ente A')
+        ->call('alterna')
         ->assertSee('Ente A')
-        ->assertSee('1 in arrivo');
+        ->assertSee('1 in arrivo')
+        // E `alterna()` chiude davvero, invece di limitarsi ad aprire.
+        ->call('alterna')
+        ->assertSet('aperta', false)
+        ->assertDontSee('Ente A');
 });
 
 it('marks everything as read', function () {

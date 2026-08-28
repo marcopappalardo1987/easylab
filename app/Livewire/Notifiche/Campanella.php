@@ -42,6 +42,17 @@ class Campanella extends Component
         $this->aperta = true;
     }
 
+    /** Il pannello è reso da un `@if`: aprire e chiudere passano dal server. */
+    public function alterna(): void
+    {
+        $this->aperta = ! $this->aperta;
+    }
+
+    public function chiudi(): void
+    {
+        $this->aperta = false;
+    }
+
     public function segnaTutteLette(): void
     {
         auth()->user()->unreadNotifications->markAsRead();
@@ -59,20 +70,14 @@ class Campanella extends Component
      */
     public function ultime(): Collection
     {
-        // 🔴 **Si calcolano SEMPRE, e la ragione è la stessa dello switcher
-        // delle sedi (28 Ago 2026).** La versione pigra chiedeva le righe al
-        // server nel gesto stesso di aprire: il server rispondeva, Livewire
-        // ridisegnava il frammento e il pannello si richiudeva nell'istante in
-        // cui arrivavano i dati per riempirlo. Non dava nessun errore.
-        //
-        // ⚠️ Qui il costo è più visibile che sulle sedi — è **una query da
-        // dieci righe su ogni pagina**, per ogni utente — e va detto invece che
-        // nascosto. Si paga perché l'alternativa era una tendina che non si
-        // apre, e perché il conteggio dei non letti già interroga questa stessa
-        // tabella a ogni pagina: il salto è da una query a due, non da zero.
-        //
-        // Se un domani pesasse, la strada NON è tornare al caricamento pigro:
-        // è marcare l'apertura in modo che non ridisegni questo frammento.
+        // Torna pigro: il pannello è reso da un `@if ($aperta)`, quindi il giro
+        // sul server c'è comunque nel gesto di aprire. Il tentativo del 28 Ago
+        // di caricarle su ogni pagina è stato annullato — era un costo pagato
+        // per una cura che non curava.
+        if (! $this->aperta) {
+            return new Collection;
+        }
+
         return auth()->user()->notifications()->take(10)->get();
     }
 

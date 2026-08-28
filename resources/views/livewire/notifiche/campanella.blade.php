@@ -1,13 +1,12 @@
-{{-- ⛔ Apertura e chiusura tutte nel browser, come lo switcher delle sedi e
-     come il menù utente: nessun `$wire` nel gesto che apre. Chiedere le righe
-     al server proprio mentre si apre faceva ridisegnare il frammento e
-     richiudeva il pannello, senza un errore in console. Le righe sono già in
-     pagina; `$wire` compare solo quando si segna tutto come letto. --}}
-<div class="relative" x-data="{ open: false }" @click.outside="open = false">
+{{-- ⛔ Tendina governata dal SERVER, senza Alpine: stesso meccanismo dello
+     switcher delle sedi, e stessa ragione (28 Ago 2026). Il pannello è reso da
+     un `@if`, quindi non c'è nessuno stato nel browser che possa perdersi — è
+     il modo in cui funzionano già le modali di questa applicazione. --}}
+<div class="relative" x-data @click.outside="$wire.chiudi()">
 
     {{-- Il pulsante: icona + pallino dei non letti --}}
     <button type="button"
-            @click="open = !open"
+            wire:click="alterna"
             title="Notifiche"
             aria-label="Notifiche{{ $nonLette > 0 ? " ({$nonLette} non lette)" : '' }}"
             class="relative flex h-10 w-10 items-center justify-center rounded-md text-ink-2 hover:bg-surface-sunken">
@@ -24,7 +23,8 @@
     </button>
 
     {{-- Il pannello --}}
-    <div x-show="open" x-cloak x-transition
+    @if ($aperta)
+    <div
          class="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-md border border-border bg-surface shadow-md">
 
         <div class="flex items-center justify-between border-b border-border px-4 py-3">
@@ -83,4 +83,5 @@
             Vai alle macchine
         </a>
     </div>
+    @endif
 </div>
