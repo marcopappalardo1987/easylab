@@ -352,3 +352,16 @@ it('leaves a Responsabile fail-safe in the ente they switched into', function ()
 
     expect(Strumento::count())->toBe(0);
 });
+
+it('renders the sede names in the panel once opened, while impersonating', function () {
+    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id]);
+    $superadmin->assignRole('Superadmin');
+    $this->actingAs($superadmin)->get(route('impersonate', $this->membro));
+
+    Livewire\Livewire::test(SwitcherEnte::class)
+        ->assertSee('Sede Nord')
+        ->call('apri')
+        ->assertSet('aperto', true)
+        ->assertSee('Le tue sedi')
+        ->assertSee('Sede Sud');
+});
