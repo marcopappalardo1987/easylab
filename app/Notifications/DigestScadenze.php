@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Enums\TransizioneAvviso;
+use App\Support\Mail\MarchioEmail;
 use App\Support\Notifiche\RigaAvviso;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -69,6 +70,12 @@ class DigestScadenze extends Notification implements ShouldQueue
         return (new MailMessage)
             ->subject($this->oggetto(count($scadute), count($imminenti)))
             ->markdown('mail.digest-scadenze', [
+                // 🔴 Il marchio si risolve dall'**id nel payload**, mai da
+                // `auth()` o da `CurrentTenant`: questo metodo gira sul worker,
+                // dove i global scope si ritirano e dove l'utente autenticato —
+                // se per caso ce n'è uno — non ha niente a che vedere con l'Ente
+                // di questo digest. L'id è l'unica difesa (🔗 MarchioEmail).
+                'marchio' => MarchioEmail::perEnte($this->enteId),
                 'ente' => $this->enteNome,
                 'scadute' => $scadute,
                 'imminenti' => $imminenti,

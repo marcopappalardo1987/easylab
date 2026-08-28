@@ -8,6 +8,9 @@ use App\Models\Account;
 use App\Models\Garanzia;
 use App\Policies\AccountPolicy;
 use App\Policies\GaranziaRicambioPolicy;
+use App\Support\Listino\CatalogoPiani;
+use App\Support\Listino\Stripe\PortaListinoStripe;
+use App\Support\Listino\Stripe\PortaListinoStripeReale;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -44,6 +47,23 @@ class AppServiceProvider extends ServiceProvider
         // sottoscrizione passa da `easylab:abbona`, in console. Una superficie
         // che non serve non si tiene aperta.
         Cashier::ignoreRoutes();
+
+        // ⛔ **`singleton` e non `Cache::`** — ADR-035. Il listino si legge una
+        // volta per richiesta, e il memo vive nel container: Redis è
+        // **condiviso** fra `easylab` e `easylab_test` (CLAUDE.md), e una
+        // chiave di cache condivisa su una somma di denaro rifarebbe
+        // l'incidente già pagato con `spatie.permission.cache`. Il container si
+        // ricostruisce a ogni richiesta e a ogni test, quindi non serve nessun
+        // reset globale in `tests/Pest.php`.
+        $this->app->singleton(CatalogoPiani::class);
+
+        // La porta verso Stripe per il listino (Product e Price). È
+        // un'interfaccia perché la logica **nostra** — idempotenza, storico dei
+        // prezzi, cosa succede se Stripe rifiuta — è sostanziale e va provata:
+        // i test legano una finta e verificano le nostre transizioni di stato,
+        // non le risposte di Stripe. Il percorso felice verso la rete resta
+        // senza test di suite, come `easylab:abbona`.
+        $this->app->bind(PortaListinoStripe::class, PortaListinoStripeReale::class);
     }
 
     /**

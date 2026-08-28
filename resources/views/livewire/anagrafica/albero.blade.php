@@ -32,6 +32,15 @@
             <div class="flex shrink-0 items-center gap-2">
                 @can('unita_organizzativa.update')
                     <x-ui.button variant="ghost" wire:click="edit({{ $current->id }})">Rinomina</x-ui.button>
+                    {{-- Il marchio email vive solo sull'Ente (ADR-011): su un
+                         dipartimento il pulsante porterebbe a una pagina che
+                         parla di un altro nodo. Nessuna voce di menù per
+                         questa impostazione — si tocca una volta l'anno, e il
+                         menù di primo livello è la superficie più contesa
+                         dell'applicazione. --}}
+                    @if ($isEnte)
+                        <x-ui.button variant="secondary" href="{{ route('anagrafica.marchio') }}" wire:navigate>Marchio email</x-ui.button>
+                    @endif
                 @endcan
                 @can('unita_organizzativa.delete')
                     @unless ($isEnte)

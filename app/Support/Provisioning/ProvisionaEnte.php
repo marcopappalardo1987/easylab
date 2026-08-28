@@ -255,7 +255,11 @@ final class ProvisionaEnte
         }
 
         try {
-            $admin->notify(new InvitoUtente($this->nome, $this->adminEmail));
+            // L'id dell'Ente rende l'invito brandizzabile: senza, la prima email
+            // che un cliente riceve da Easy Lab sarebbe l'unica senza il proprio
+            // marchio (🔗 MarchioEmail). È un `int`, non un model: attraversa la
+            // coda senza rifetchare nulla.
+            $admin->notify(new InvitoUtente($this->nome, $this->adminEmail, $ente->id));
 
             return $base(true, null);
         } catch (Throwable $e) {

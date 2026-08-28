@@ -109,8 +109,9 @@ const DA_MIGRARE = [
  * troverebbe più e l'esenzione diventerebbe rossa invece di restare lì a
  * coprire, per sempre, tre classi di un altro pezzo di markup.
  *
- * ⚠️ **`resources/views/pdf/` e `resources/views/mail/` sono esenzioni di
- * cartella, e oggi non sopprimono NIENTE**: il PDF porta il proprio CSS in un
+ * ⚠️ **`resources/views/pdf/`, `resources/views/mail/`, `resources/views/vendor/mail/`
+ * e `resources/views/vendor/notifications/` sono esenzioni di cartella, e oggi
+ * non sopprimono NIENTE**: il PDF porta il proprio CSS in un
  * `<style>` inline (che il rilevatore toglie) e le email sono componenti
  * Markdown senza classi. Restano perché la regola è del **bersaglio di
  * rendering** e non di un file: qualunque file nasca lì dentro sarà servito da
@@ -168,6 +169,34 @@ function esenzioniDiSuperficie(): array
             'classi' => ['*'],
             'ancora' => null,
             'perche' => 'nessun client di posta ha un tema affidabile: le email restano chiare (DS §8.4)',
+        ],
+        [
+            // Le componenti del layout email pubblicate dal pacchetto (ADR-011,
+            // 27 Ago 2026). Stesso bersaglio di rendering di `views/mail/`, e
+            // quindi stessa ragione — ma il percorso è un altro, e l'esenzione
+            // di sopra NON lo copriva: `str_starts_with` confronta la stringa,
+            // e `resources/views/vendor/mail/` non comincia per
+            // `resources/views/mail/`.
+            //
+            // ⚠️ **Anche questa oggi non sopprime NIENTE**, ed è dichiarato
+            // apposta: quei Blade portano il colore in `style=""` e in un
+            // foglio `.css` a parte, che il rilevatore non guarda (legge classi
+            // Tailwind, non stili). Resta perché la regola è del bersaglio di
+            // rendering e non di un file — chiunque scriva lì dentro sta
+            // scrivendo per un client di posta. «Un'esenzione che si crede al
+            // lavoro e non lo è vale meno di una dichiarata inerte.»
+            'percorso' => 'resources/views/vendor/mail/',
+            'classi' => ['*'],
+            'ancora' => null,
+            'perche' => 'layout email pubblicato: stesso bersaglio di `views/mail/`, nessun tema (DS §8.4, ADR-011)',
+        ],
+        [
+            // Il template delle notifiche costruite con `->line()/->action()`
+            // (ci passa `NuovoErrore`). Stessa natura del precedente: è posta.
+            'percorso' => 'resources/views/vendor/notifications/',
+            'classi' => ['*'],
+            'ancora' => null,
+            'perche' => 'template email delle notifiche: è posta, non una pagina (DS §8.4, ADR-011)',
         ],
     ];
 }

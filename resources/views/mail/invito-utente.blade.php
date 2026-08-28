@@ -1,9 +1,11 @@
-<x-mail::message>
+{{-- Il `cid:` si calcola qui e non nella componente: vedi la nota estesa in
+     `digest-scadenze.blade.php`. --}}
+<x-mail::message :marchio="$marchio" :logo="$marchio->cid($message ?? null)">
 # Benvenuto su Easy Lab
 
 Ciao {{ $destinatario->name }}, il tuo account per gestire **{{ $ente }}** su Easy Lab è pronto: manca solo la password.
 
-<x-mail::button :url="$url">
+<x-mail::button :url="$url" :colore="$marchio->colore" :colore-testo="$marchio->coloreTesto">
 Imposta la password
 </x-mail::button>
 

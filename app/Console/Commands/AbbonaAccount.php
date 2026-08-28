@@ -44,7 +44,7 @@ class AbbonaAccount extends Command
 
     protected $signature = 'easylab:abbona
         {account : ID dell\'account}
-        {--piano=saas : Codice del piano (vedi config/easylab.php)}
+        {--piano=saas : Codice del piano (vedi /piattaforma/piani)}
         {--price= : Price id Stripe, se diverso da quello del piano}
         {--trial-giorni= : Giorni di prova prima del primo addebito}
         {--payment-method=pm_card_visa : Metodo di pagamento (default: carta di test)}
@@ -83,7 +83,16 @@ class AbbonaAccount extends Command
         $price = $this->option('price') ?: Piani::stripePrice($piano);
 
         if (! $price) {
-            $this->error("Nessun price id per il piano «{$piano}»: valorizzare STRIPE_PRICE_SAAS (o passare --price=).");
+            // ⚠️ Il messaggio nominava `STRIPE_PRICE_SAAS`, ed è invecchiato il
+            // 27 Ago 2026: dal listino a database (ADR-035) il price id non
+            // viene più dall'ambiente ma dalla riga `corrente` di
+            // `prezzi_piano`, che si crea sincronizzando il piano da
+            // /piattaforma/piani. La variabile resta il **bootstrap** letto
+            // dalla migration di backfill, quindi mandare qui chi legge
+            // significherebbe mandarlo a modificare un file che non produce più
+            // alcun effetto.
+            $this->error("Nessun price id per il piano «{$piano}»: il piano non è ancora sincronizzato con Stripe.");
+            $this->line('Si rimedia da /piattaforma/piani — «Sincronizza», oppure «Aggancia un price esistente» se il Price su Stripe c\'è già. In alternativa si passa --price= a mano.');
 
             return self::FAILURE;
         }

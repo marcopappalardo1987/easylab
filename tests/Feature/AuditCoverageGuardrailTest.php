@@ -9,6 +9,8 @@ use App\Models\Fornitore;
 use App\Models\Garanzia;
 use App\Models\Intervento;
 use App\Models\OccorrenzaErrore;
+use App\Models\Piano;
+use App\Models\PrezzoPiano;
 use App\Models\Ricambio;
 use App\Models\RicambioUtilizzo;
 use App\Models\SpostamentoStrumento;
@@ -37,6 +39,7 @@ const ESENZIONI = [
     // stato appena i due model sono nati (S6, error tracker interno).
     Errore::class => 'il contatore di un log, non un gesto di una persona: il trait scriverebbe una riga di audit a ogni incremento delle occorrenze — l\'audit di un log, la ragione di AvvisoScadenza. I tre gesti (risolvi/ignora/riapri) lasciano invece una riga esplicita, scritta dal model stesso e non da un service: e\' lì che il meta-test dei soggetti audit va a cercarla.',
     OccorrenzaErrore::class => 'riga append-only scritta dal gestore delle eccezioni: nessuna persona la crea, la modifica o la cancella — solo la retention e il cascade della propria issue.',
+    PrezzoPiano::class => 'riga append-only dello storico dei Price di Stripe (ADR-035): nessuna persona la crea, la modifica o la cancella — la scrive la sincronizzazione, che e\' l\'effetto di un gesto gia\' tracciato su Piano. Tracciarla sarebbe l\'audit di un log, la ragione di AvvisoScadenza.',
     Strumento::class => 'logga a mano: i suoi gesti (forzaSemaforo/rimuoviForzatura) hanno un messaggio che vale più dell\'elenco dei campi, e le colonne forced_* sono fuori da $fillable (ADR-005/027).',
     UnitaOrganizzativa::class => 'logga a mano la sola scrittura che conta — la visibilità garanzie ricambio (ADR-029). Il resto dell\'anagrafica non è tracciato: ADR-027 §3, «il resto quando serve».',
     User::class => 'identità e sessioni, già coperte da AuditLogSubscriber su un altro canale (login, 2FA, impersonation).',
@@ -61,6 +64,9 @@ const SOSTANTIVI = [
     Ricambio::class => 'Creazione ricambio',
     RicambioUtilizzo::class => 'Creazione ricambio montato',
     Intervento::class => 'Creazione intervento',
+    // Aggiunto il 27 Ago 2026 col listino a database (ADR-035), e di nuovo su
+    // richiesta del meta-test, che ha fermato la suite appena il model è nato.
+    Piano::class => 'Creazione piano',
     SpostamentoStrumento::class => 'Creazione spostamento',
 ];
 

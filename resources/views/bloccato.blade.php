@@ -51,6 +51,35 @@
                     </div>
                 @endif
 
+                {{-- 💳 La via d'uscita COMMERCIALE (27 Ago 2026): ADR-013
+                     chiama il lockout «leva di pagamento forte», e una leva ha
+                     bisogno di uno scatto di rilascio — se l'unico modo di
+                     aggiornare una carta scaduta stesse dietro il blocco, la
+                     leva sarebbe una porta murata. Il moroso vede solo questa
+                     pagina, quindi il bottone sta qui, e le due rotte
+                     dell'abbonamento stanno fuori dal gruppo protetto apposta.
+
+                     Il gate lo calcola il controller (`$puoPagare`): non
+                     compare a chi non amministra il contratto, né a un account
+                     senza customer Stripe — il piano Free non ne ha uno per
+                     definizione (ADR-002).
+
+                     ⛔ E continua a non comparire NESSUN motivo del blocco: la
+                     pagina resta quella che ADR-013 ha voluto muta. --}}
+                @if ($puoPagare)
+                    <hr class="my-6 border-border">
+                    <form method="POST" action="{{ route('abbonamento.portale') }}">
+                        @csrf
+                        <button type="submit"
+                                class="flex w-full items-center justify-center rounded-md border border-transparent bg-brand px-4 py-2.5 text-sm font-medium text-brand-ink transition hover:bg-brand-hover">
+                            Regolarizza il pagamento
+                        </button>
+                    </form>
+                    <p class="mt-2 text-center text-xs text-ink-3">
+                        Si apre il portale di fatturazione su Stripe, fuori da Easy Lab.
+                    </p>
+                @endif
+
                 {{-- La VIA D'USCITA: le sedi sane sopra, e qui il logout. Stesso
                      bordo forte e stesso hover incassato dei bottoni "sede", per
                      restare il più leggibile possibile in entrambi i temi. --}}

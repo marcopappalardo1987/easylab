@@ -1,14 +1,47 @@
 <?php
 
+use App\Models\Piano;
+use App\Support\Listino\CatalogoPiani;
 use App\Support\Piani;
 
 /**
- * Il catalogo dei piani (config/easylab.php ↔ App\Support\Piani).
+ * Il listino dei piani, letto dalla sua unica porta (`App\Support\Piani`).
  *
- * I numeri sono ripetuti qui apposta, come in `RbacSeederTest`: se cambiano in
- * config devono cambiare anche qui, o uno dei due sta mentendo. Un piano è un
+ * ⚠️ **Dal 27 Ago 2026 la fonte è il DATABASE** (ADR-035): questi test
+ * scrivevano `config(['easylab.piani.catalogo...'])`, e ora scrivono righe.
+ * L'intento è rimasto identico riga per riga — sono le viscere della porta ad
+ * essere cambiate, non il suo contratto, che è precisamente ciò che questo file
+ * esiste per congelare.
+ *
+ * ⚠️ **Dopo ogni scrittura serve `CatalogoPiani::dimentica()`.** Il memo è
+ * per-richiesta e in un test la richiesta non finisce mai: senza, la porta
+ * continuerebbe a leggere il listino caricato prima della scrittura, e il test
+ * proverebbe il memo invece della regola.
+ *
+ * I numeri del bootstrap sono ripetuti qui apposta, come in `RbacSeederTest`: se
+ * cambiano devono cambiare anche qui, o uno dei due sta mentendo. Un piano è un
  * parametro commerciale, e cambiarlo dev'essere un gesto che si vede.
  */
+
+/** Scrive una riga di listino e invalida il memo, che è l'unica insidia del file. */
+function unPiano(array $attributi): Piano
+{
+    $piano = new Piano;
+    $piano->forceFill(array_merge([
+        'etichetta' => 'Gold',
+        'max_enti' => 9,
+        'gratuito' => false,
+        'prezzo_mensile_cent' => 9900,
+        'valuta' => 'eur',
+        'attivo' => true,
+        'ordine' => 99,
+    ], $attributi))->save();
+
+    app(CatalogoPiani::class)->dimentica();
+
+    return $piano;
+}
+
 it('carries exactly the two V1 plans', function () {
     expect(Piani::codici())->toBe(['free', 'saas'])
         ->and(Piani::predefinito())->toBe('free');
@@ -30,41 +63,61 @@ it('knows that the free plan never talks to Stripe', function () {
 
 it('never mistakes a missing price id for a free plan', function () {
     // La distinzione che il comando `easylab:abbona` ha imposto: un piano a
-    // pagamento con `STRIPE_PRICE_SAAS` non configurato è un errore di deploy
-    // da segnalare per nome, non un piano gratuito. Dedurre la gratuità
-    // dall'assenza del prezzo nasconderebbe la variabile dimenticata dietro un
-    // messaggio rassicurante.
-    config(['easylab.piani.catalogo.saas.stripe_price' => null]);
-
+    // pagamento senza price è un errore di configurazione da segnalare per nome,
+    // non un piano gratuito. Dedurre la gratuità dall'assenza del prezzo
+    // nasconderebbe il piano non sincronizzato dietro un messaggio rassicurante.
+    //
+    // In suite il caso è già quello di partenza: le chiavi Stripe sono azzerate
+    // in `phpunit.xml`, quindi la migration di backfill non ha scritto nessuna
+    // riga di `prezzi_piano`.
     expect(Piani::eGratuito('saas'))->toBeFalse()
         ->and(Piani::stripePrice('saas'))->toBeNull();
 });
 
 it('resolves a plan from its Stripe price', function () {
-    config(['easylab.piani.catalogo.saas.stripe_price' => 'price_xyz']);
+    Piani::modello('saas')->prezzi()->create([
+        'stripe_price_id' => 'price_xyz',
+        'importo_cent' => 4900,
+        'valuta' => 'eur',
+        'corrente' => true,
+    ]);
+    app(CatalogoPiani::class)->dimentica();
 
-    expect(Piani::perPrice('price_xyz'))->toBe('saas');
+    expect(Piani::perPrice('price_xyz'))->toBe('saas')
+        ->and(Piani::stripePrice('saas'))->toBe('price_xyz');
+});
+
+it('still resolves a price that is no longer the current one', function () {
+    // 🔴 **La ragione per cui `prezzi_piano` è una tabella e non una colonna.**
+    // Su Stripe un Price è immutabile: cambiare cifra ne crea uno nuovo, e chi
+    // è già abbonato continua a fatturare sul vecchio. Se `perPrice()` guardasse
+    // solo il corrente, al primo cambio di listino il webhook di **ogni cliente
+    // vecchio** tornerebbe `null` e `accounts.piano` non si riallineerebbe più —
+    // in silenzio, perché quel `null` è già oggi un esito legittimo che
+    // `StripeWebhookController::applicaStato()` tratta come tale.
+    $saas = Piani::modello('saas');
+    $saas->prezzi()->create(['stripe_price_id' => 'price_vecchio', 'importo_cent' => 3900, 'valuta' => 'eur', 'corrente' => false]);
+    $saas->prezzi()->create(['stripe_price_id' => 'price_nuovo', 'importo_cent' => 4900, 'valuta' => 'eur', 'corrente' => true]);
+    app(CatalogoPiani::class)->dimentica();
+
+    expect(Piani::perPrice('price_vecchio'))->toBe('saas')
+        ->and(Piani::perPrice('price_nuovo'))->toBe('saas')
+        // Il **corrente** però è uno solo: è quello su cui si aprono le
+        // subscription nuove.
+        ->and(Piani::stripePrice('saas'))->toBe('price_nuovo');
 });
 
 it('returns no plan for a price outside the catalogo', function () {
     // Esito legittimo, non errore: un price creato a mano in dashboard o di un
     // piano dismesso non deve far esplodere un handler di webhook.
     expect(Piani::perPrice('price_mai_visto'))->toBeNull()
-        ->and(Piani::perPrice(null))->toBeNull();
+        ->and(Piani::perPrice(null))->toBeNull()
+        ->and(Piani::perPrice(''))->toBeNull();
 });
 
 it('declares a monthly price for every plan in the catalogue', function () {
-    // Si guarda la **config grezza**, non il getter: un `expect(...)->toBeInt()`
-    // sarebbe garantito dal tipo di ritorno e non potrebbe fallire mai — era la
-    // prima stesura, ed è la stessa forma di test-che-non-prova-nulla che questo
-    // progetto ha già incontrato due volte.
-    foreach (Piani::codici() as $codice) {
-        expect(config("easylab.piani.catalogo.{$codice}"))->toHaveKey('prezzo_mensile_cent');
-    }
-
-    // I numeri sono ripetuti qui apposta, come i conteggi RBAC: se cambiano in
-    // config devono cambiare anche qui, o uno dei due sta mentendo. Un listino è
-    // un parametro commerciale, e cambiarlo dev'essere un gesto che si vede.
+    // I numeri sono ripetuti qui apposta, come i conteggi RBAC: se cambiano
+    // devono cambiare anche qui, o uno dei due sta mentendo.
     expect(Piani::prezzoMensileCent('free'))->toBe(0)
         ->and(Piani::prezzoMensileCent('saas'))->toBe(4900);
 });
@@ -72,14 +125,15 @@ it('declares a monthly price for every plan in the catalogue', function () {
 it('never lets an omaggiato plan carry a price', function () {
     // ⚠️ **Una direzione sola, e non l'equivalenza.** «Gratuito» in ADR-002
     // significa «nessun customer, nessuna subscription» — è una dichiarazione
-    // del catalogo, non una deduzione dal prezzo, e il docblock di `eGratuito()`
-    // lo dice per esteso. L'invariante inversa («chi costa 0 è gratuito») era la
-    // prima stesura e vietava un caso legittimo e vicino: un SaaS in promozione
-    // a 0 €, che ha una subscription vera e deve restare `gratuito => false`.
-    // Quando fosse caduta, la reazione naturale sarebbe stata cancellarla — e
-    // una guardia che si cancella invece di correggerla non ha guardato niente.
+    // del listino, non una deduzione dal prezzo. L'invariante inversa («chi
+    // costa 0 è gratuito») era la prima stesura e vietava un caso legittimo e
+    // vicino: un SaaS in promozione a 0 €, che ha una subscription vera e deve
+    // restare `gratuito => false`. Quando fosse caduta, la reazione naturale
+    // sarebbe stata cancellarla — e una guardia che si cancella invece di
+    // correggerla non ha guardato niente.
     //
-    // Questa direzione invece protegge l'MRR da denaro mai fatturato.
+    // Questa direzione invece protegge l'MRR da denaro mai fatturato. È fatta
+    // valere da `GovernoListino::crea()`, e il suo negativo vive lì.
     foreach (Piani::codici() as $codice) {
         if (Piani::eGratuito($codice)) {
             expect(Piani::prezzoMensileCent($codice))->toBe(0);
@@ -87,15 +141,17 @@ it('never lets an omaggiato plan carry a price', function () {
     }
 });
 
-it('refuses a plan declared by halves', function () {
-    // Chiave **assente** ≠ valore `null` dichiarato: `stripe_price => null` sul
-    // Free è legittimo, un piano senza `prezzo_mensile_cent` è scritto a metà —
-    // e valeva zero euro in silenzio dentro una somma di denaro, finché il
-    // confronto sul blocco A non l'ha trovato.
-    config(['easylab.piani.catalogo.gold' => ['etichetta' => 'Gold', 'max_enti' => 9, 'gratuito' => false]]);
+it('no longer lets a plan be declared by halves at all', function () {
+    // *Questo test si chiamava «refuses a plan declared by halves» e scriveva un
+    // piano senza `prezzo_mensile_cent` in config, verificando che il getter
+    // lanciasse.* Col listino a database quel piano non è più **esprimibile**:
+    // la colonna è NOT NULL, e ciò che era una guardia in PHP è diventato un
+    // vincolo di schema — la forma migliore, perché non si può dimenticare.
+    // La prova sta in `SchemaListinoTest`; qui resta il fatto che ne discende.
+    $gold = unPiano(['codice' => 'gold']);
 
-    expect(fn () => Piani::prezzoMensileCent('gold'))->toThrow(InvalidArgumentException::class)
-        ->and(Piani::stripePrice('free'))->toBeNull();
+    expect(Piani::prezzoMensileCent('gold'))->toBe(9900)
+        ->and($gold->prezzo_mensile_cent)->not->toBeNull();
 });
 
 it('refuses an unknown plan instead of guessing a limit', function () {
@@ -104,6 +160,35 @@ it('refuses an unknown plan instead of guessing a limit', function () {
     expect(fn () => Piani::maxEnti('gold'))->toThrow(InvalidArgumentException::class)
         ->and(fn () => Piani::prezzoMensileCent('gold'))->toThrow(InvalidArgumentException::class)
         ->and(fn () => Piani::etichetta('gold'))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => Piani::modello('gold'))->toThrow(InvalidArgumentException::class)
         ->and(Piani::esiste('gold'))->toBeFalse()
         ->and(Piani::esiste(''))->toBeFalse();
+});
+
+it('keeps an archived plan in the catalogo, and only out of the offer', function () {
+    // 🔴 Archiviare ≠ togliere dal catalogo, ed è la riga più facile da
+    // sbagliare di tutta la feature. Se `codici()` filtrasse su `attivo`, ogni
+    // account rimasto sul piano ritirato diventerebbe «fuori catalogo» in
+    // `MetrichePiattaforma` — cioè varrebbe **0 €** nell'MRR, in silenzio e
+    // tutti insieme.
+    unPiano(['codice' => 'gold', 'attivo' => false]);
+
+    expect(Piani::esiste('gold'))->toBeTrue()
+        ->and(Piani::codici())->toContain('gold')
+        ->and(Piani::prezzoMensileCent('gold'))->toBe(9900)
+        ->and(Piani::offribili())->not->toContain('gold')
+        ->and(Piani::offribili())->toContain('free');
+});
+
+it('orders the catalogo by ordine and then by id', function () {
+    // ⚠️ Il tie-break sull'`id` non è pignoleria: a parità di chiave di
+    // ordinamento l'ordine fra due righe è una **proprietà del motore**, e
+    // SQLite e Postgres non concordano (CLAUDE.md, 25 Ago 2026). Senza,
+    // l'ordine delle colonne dell'MRR cambierebbe fra locale e CI.
+    unPiano(['codice' => 'terzo', 'ordine' => 1]);
+    unPiano(['codice' => 'secondo', 'ordine' => 1]);
+
+    // `free` e `saas` nascono dal backfill con ordine 1 e 2; i due qui sopra
+    // hanno ordine 1 come `free`, quindi a decidere fra loro è solo l'id.
+    expect(Piani::codici())->toBe(['free', 'terzo', 'secondo', 'saas']);
 });

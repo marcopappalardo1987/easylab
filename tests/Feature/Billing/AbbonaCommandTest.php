@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\Account;
+use App\Models\Piano;
+use App\Support\Listino\CatalogoPiani;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -21,10 +23,21 @@ beforeEach(function () {
 
     // Le chiavi sono azzerate in phpunit.xml: qui si dà per configurato tutto
     // tranne ciò che il singolo test vuole mancante.
-    config([
-        'cashier.secret' => 'sk_test_finta',
-        'easylab.piani.catalogo.saas.stripe_price' => 'price_saas_test',
+    config(['cashier.secret' => 'sk_test_finta']);
+
+    // ⚠️ Il price id **non** viene più da `config('easylab.piani...')`: dal 27
+    // Ago 2026 (ADR-035) il listino vive a database, e il price corrente è una
+    // riga di `prezzi_piano`. La riga si scrive qui perché la migration di
+    // backfill ne crea una solo se `STRIPE_PRICE_SAAS` è valorizzata, e in
+    // suite le chiavi Stripe sono azzerate da `phpunit.xml`.
+    Piano::query()->where('codice', 'saas')->sole()->prezzi()->create([
+        'stripe_price_id' => 'price_saas_test',
+        'importo_cent' => 4900,
+        'valuta' => 'eur',
+        'corrente' => true,
     ]);
+
+    app(CatalogoPiani::class)->dimentica();
 });
 
 it('fails on an account that does not exist', function () {
@@ -51,11 +64,23 @@ it('refuses to subscribe a free plan, because that is what free means', function
     expect($this->account->fresh()->stripe_id)->toBeNull();
 });
 
-it('names the missing variable instead of failing inside the SDK', function () {
-    config(['easylab.piani.catalogo.saas.stripe_price' => null]);
+it('sends the operator to the listino when the plan has no price yet', function () {
+    // *Questo test si chiamava «names the missing variable» e nominava
+    // `STRIPE_PRICE_SAAS`.* Ha cambiato nome col listino a database (ADR-035):
+    // la variabile d'ambiente è rimasta solo come **bootstrap** letto dalla
+    // migration di backfill, quindi mandare l'operatore a valorizzarla
+    // significherebbe mandarlo a modificare un file che non produce più alcun
+    // effetto sul price di un piano già creato. Il gesto che ripara è
+    // «Sincronizza» su /piattaforma/piani.
+    //
+    // La distinzione che il comando difende resta identica per intento: un
+    // piano **a pagamento senza price** è un errore di configurazione da
+    // segnalare per nome, non un piano gratuito.
+    Piano::query()->where('codice', 'saas')->sole()->prezzi()->delete();
+    app(CatalogoPiani::class)->dimentica();
 
     $this->artisan('easylab:abbona', ['account' => (string) $this->account->id])
-        ->expectsOutputToContain('STRIPE_PRICE_SAAS')
+        ->expectsOutputToContain('/piattaforma/piani')
         ->assertFailed();
 });
 

@@ -1,8 +1,10 @@
 <?php
 
 use App\Models\Account;
+use App\Models\Piano;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
+use App\Support\Listino\CatalogoPiani;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Notification;
 
@@ -113,6 +115,41 @@ it('grandfathers the sedi of an account that downgraded', function () {
     ])->assertFailed();
 });
 
+it('never takes a sede away when the cap drops below what a client already has', function () {
+    // 🔴 Il negativo di ADR-035, ed è il gemello di «grandfathers the sedi of an
+    // account that downgraded» con la causa rovesciata: là scendeva il
+    // **cliente** di piano, qui scende il **piano** sotto il cliente — è ciò che
+    // succede la prima volta che qualcuno abbassa `max_enti` da
+    // /piattaforma/piani.
+    //
+    // L'esito dev'essere lo stesso: nessuna sede chiusa, nessun account
+    // bloccato, e la sesta rifiutata. Cestinare sedi in uso per effetto di un
+    // click su un listino sarebbe una perdita di dati decisa da una macchina —
+    // qui, per giunta, su clienti che non hanno fatto niente.
+    $account = Account::factory()->saas()->create();
+    $sedi = collect(range(1, 5))->map(
+        fn (int $n) => UnitaOrganizzativa::factory()->ente()->perAccount($account)->create(['nome' => "Sede {$n}"])
+    );
+
+    tettoEnti('saas', 2);
+
+    expect($account->enti()->count())->toBe(5)
+        ->and($account->fresh()->is_locked)->toBeFalse()
+        ->and($account->slotEntiResidui())->toBe(-3)
+        ->and($account->puoAggiungereEnte())->toBeFalse()
+        ->and($sedi->every(fn (UnitaOrganizzativa $sede) => $sede->fresh() !== null))->toBeTrue();
+
+    $this->artisan('easylab:provision-tenant', [
+        'nome' => 'Sesta Sede',
+        '--account' => (string) $account->id,
+        '--admin-email' => 'sesta@demo.test',
+    ])
+        ->expectsOutputToContain('limite raggiunto')
+        ->assertFailed();
+
+    expect(UnitaOrganizzativa::withoutGlobalScopes()->where('nome', 'Sesta Sede')->exists())->toBeFalse();
+});
+
 it('counts the enti of this account only', function () {
     // In console non c'è tenant e non c'è scope: il confine è `account_id`,
     // e un Ente di un altro account non deve consumare slot qui.
@@ -124,8 +161,19 @@ it('counts the enti of this account only', function () {
         ->and($mio->puoAggiungereEnte())->toBeTrue();
 });
 
+/** Il tetto di Enti di un piano, che dal 27 Ago 2026 vive a database (ADR-035). */
+function tettoEnti(string $codice, ?int $max): void
+{
+    Piano::query()->where('codice', $codice)->sole()->forceFill(['max_enti' => $max])->save();
+
+    // Il memo è per-richiesta e in un test la richiesta non finisce mai: senza
+    // questa riga `Piani::maxEnti()` continuerebbe a leggere il valore caricato
+    // prima della scrittura.
+    app(CatalogoPiani::class)->dimentica();
+}
+
 it('has no limit at all when the plan declares none', function () {
-    config(['easylab.piani.catalogo.saas.max_enti' => null]);
+    tettoEnti('saas', null);
 
     $account = Account::factory()->saas()->create();
     UnitaOrganizzativa::factory()->ente()->perAccount($account)->create();

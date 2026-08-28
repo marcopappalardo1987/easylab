@@ -1,4 +1,6 @@
-<x-mail::message>
+{{-- Il `cid:` si calcola qui e non nella componente: vedi la nota estesa in
+     `digest-scadenze.blade.php`. --}}
+<x-mail::message :marchio="$marchio" :logo="$marchio->cid($message ?? null)">
 # Macchine oltre la soglia di età — {{ $ente }}
 
 Ciao {{ $destinatario->name }}, la soglia di obsolescenza del tuo Ente è di
@@ -24,7 +26,7 @@ la manutenzione e non cambia lo stato delle macchine in Easy Lab.
      `ElencoStrumenti` espone `$soloObsoleti` come proprietà Livewire e non come
      query string, quindi un link `?obsoleti=1` non filtrerebbe niente — cioè
      sarebbe una promessa non mantenuta dentro un'email. --}}
-<x-mail::button :url="route('strumenti.index')">
+<x-mail::button :url="route('strumenti.index')" :colore="$marchio->colore" :colore-testo="$marchio->coloreTesto">
 Apri Easy Lab
 </x-mail::button>
 

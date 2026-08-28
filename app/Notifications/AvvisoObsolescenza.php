@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Support\Mail\MarchioEmail;
 use App\Support\Notifiche\RigaObsolescenza;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -75,6 +76,9 @@ class AvvisoObsolescenza extends Notification implements ShouldQueue
         return (new MailMessage)
             ->subject($this->oggetto())
             ->markdown('mail.avviso-obsolescenza', [
+                // Stessa regola del digest: l'id dal payload, mai il tenant di
+                // chi capita di essere autenticato quando il job gira.
+                'marchio' => MarchioEmail::perEnte($this->enteId),
                 'ente' => $this->enteNome,
                 'soglia' => $this->soglia,
                 'righe' => $this->righe,

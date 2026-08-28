@@ -1,8 +1,10 @@
 <?php
 
 use App\Models\Account;
+use App\Models\Piano;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
+use App\Support\Listino\CatalogoPiani;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
@@ -157,6 +159,27 @@ it('locks the account when the subscription is deleted, and the piano decays', f
         ->and($account->piano)->toBe('free');
 });
 
+/**
+ * Il price corrente del piano `saas`, come riga di `prezzi_piano`.
+ *
+ * ⚠️ Era `config(['easylab.piani.catalogo.saas.stripe_price' => ...])`: dal 27
+ * Ago 2026 il listino vive a database (ADR-035), e la migration di backfill non
+ * scrive alcuna riga perché in suite le chiavi Stripe sono azzerate da
+ * `phpunit.xml`. Il memo del catalogo è per-richiesta e in un test la richiesta
+ * non finisce mai, quindi va dimenticato a mano dopo la scrittura.
+ */
+function prezzoSaas(string $priceId, bool $corrente = true): void
+{
+    Piano::query()->where('codice', 'saas')->sole()->prezzi()->create([
+        'stripe_price_id' => $priceId,
+        'importo_cent' => 4900,
+        'valuta' => 'eur',
+        'corrente' => $corrente,
+    ]);
+
+    app(CatalogoPiani::class)->dimentica();
+}
+
 it('unlocks the account when the subscription is healthy again', function (string $stato) {
     $this->account->bloccaPerStripe('Stripe: insoluto.');
 
@@ -170,7 +193,7 @@ it('unlocks the account when the subscription is healthy again', function (strin
 })->with(['active', 'trialing']);
 
 it('realigns the piano from the Stripe price, but only on a healthy subscription', function () {
-    config(['easylab.piani.catalogo.saas.stripe_price' => 'price_saas_test']);
+    prezzoSaas('price_saas_test');
     $this->account->cambiaPiano('free');
 
     consegna(evento('customer.subscription.updated', 'active'))->assertOk();
@@ -178,8 +201,27 @@ it('realigns the piano from the Stripe price, but only on a healthy subscription
     expect($this->account->fresh()->piano)->toBe('saas');
 });
 
+it('realigns the piano from a HISTORIC price, which is what every old customer has', function () {
+    // 🔴 Il caso che nasce alla **prima modifica di listino**, e che senza lo
+    // storico non si vedrebbe mai in test: su Stripe un Price è immutabile,
+    // quindi cambiare cifra ne crea uno nuovo e archivia il vecchio — mentre le
+    // subscription in essere continuano a fatturare sul vecchio. Se
+    // `Piani::perPrice()` guardasse solo il price corrente, da quel momento in
+    // poi il piano di **ogni cliente già abbonato** smetterebbe di riallinearsi,
+    // in silenzio: `null` è un esito legittimo, e `applicaStato()` lo tratta
+    // come tale lasciando il piano dov'è.
+    prezzoSaas('price_storico', corrente: false);
+    prezzoSaas('price_corrente');
+
+    $this->account->cambiaPiano('free');
+
+    consegna(evento('customer.subscription.updated', 'active', price: 'price_storico'))->assertOk();
+
+    expect($this->account->fresh()->piano)->toBe('saas');
+});
+
 it('never promotes the piano on a subscription that never started', function () {
-    config(['easylab.piani.catalogo.saas.stripe_price' => 'price_saas_test']);
+    prezzoSaas('price_saas_test');
     $this->account->cambiaPiano('free');
 
     // `incomplete`: il primo pagamento non è mai andato a buon fine. Se il
@@ -205,7 +247,7 @@ it('unlocks a returning customer who subscribes again', function () {
     // l'account restava BLOCCATO e sul piano `free` mentre pagava — il peggior
     // esito possibile per questo blocco. I test non lo vedevano perché erano
     // scritti sul flusso che avevo immaginato, dove si disdice e basta.
-    config(['easylab.piani.catalogo.saas.stripe_price' => 'price_saas_test']);
+    prezzoSaas('price_saas_test');
     $this->account->bloccaPerStripe('Stripe: abbonamento cancellato.');
     $this->account->cambiaPiano('free');
 

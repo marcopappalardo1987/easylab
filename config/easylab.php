@@ -21,12 +21,34 @@ return [
     ],
 
     /*
-    | I piani commerciali (ADR-002, ADR-032). Consumati via App\Support\Piani.
+    | I piani commerciali (ADR-002, ADR-032, ADR-035). Consumati via
+    | App\Support\Piani.
     |
-    | Il «limite di Enti» che ADR-032 chiama attributo del piano vive qui e
-    | non a DB: è un parametro di prodotto, cambia con un commit e non con una
-    | migrazione, ed è la stessa forma di config/rbac.php — il catalogo sta in
-    | config, ciò che il singolo cliente ha comprato sta a DB (accounts.piano).
+    | ⛔ **DAL 27 AGO 2026 `catalogo` NON È PIÙ IL LISTINO.** ADR-035 lo ha
+    | spostato a database (tabella `piani`), e da lì lo governa la schermata
+    | /piattaforma/piani. Quello che resta qui sotto è **solo il bootstrap**: lo
+    | legge una volta sola la migration di backfill
+    | `2026_08_27_140200_backfill_listino_dal_catalogo`, e nessun altro codice
+    | dell'applicazione lo apre più. Modificare questi numeri **non cambia il
+    | prezzo di nessuno** — cambia solo ciò con cui nascerebbe un database nuovo,
+    | e `ListinoBootstrapTest` diventa rosso apposta per dirlo a chi ci prova.
+    |
+    | È lo stesso patto di config/rbac.php ↔ la matrice a database (ADR-016 §7),
+    | con una differenza deliberata: là esiste un seeder rilanciabile, ed è
+    | proprio quello che rende distruttivo il gesto corretto (`syncPermissions()`
+    | detacha tutto e riattacca dai default). Qui **non esiste nessun seeder del
+    | listino**: la trappola non si documenta, si rende inesprimibile.
+    |
+    | `predefinito` invece è **vivo** e resta qui: non è il listino, è «con che
+    | piano nasce un account» — un parametro di prodotto come `giorni_imminente`,
+    | e nessuna schermata lo crea. Lo legge `Piani::predefinito()`, che è chiamato
+    | da un webhook (disdetta → decadimento a free): lì un'eccezione farebbe
+    | ritentare Stripe per giorni, quindi la coerenza col DB la tiene un test
+    | (`ListinoBootstrapTest`) e non una guardia a runtime.
+    |
+    | Il «limite di Enti» che ADR-032 chiama attributo del piano nasce quindi da
+    | qui e vive a DB: cambia con un click su /piattaforma/piani, e ciò che il
+    | singolo cliente ha comprato sta su accounts.piano.
     |
     | ⚠️ Il piano FREE non ha `stripe_price`, e non è una casella da riempire
     | più avanti: un cliente Free non ha customer Stripe né subscription (è
@@ -60,15 +82,17 @@ return [
     | sono **immutabili**: cambiare cifra significa crearne uno nuovo e
     | aggiornare `STRIPE_PRICE_SAAS`, non modificare quello esistente.
     |
-    | ⚠️ **Nulla in questo repository può accorgersi se questo numero e il Price
-    | su Stripe divergono**: il price id vive nell'ambiente, l'importo qui, e i
-    | due non si incontrano mai. Un test non può parlare con Stripe. L'unico
-    | posto dove il confronto sarebbe possibile è un comando che legga il Price
-    | e confronti `unit_amount` e `currency` — oggi non esiste, ed è la ragione
-    | per cui questa riga dice «a listino» e non «incassato».
+    | ⚠️ *La riga che seguiva diceva: «nulla in questo repository può accorgersi
+    | se questo numero e il Price su Stripe divergono». **Ha smesso di essere
+    | vera il 27 Ago 2026**: /piattaforma/piani ha l'azione «Confronta con
+    | Stripe», che legge `unit_amount` e `currency` e mostra i due valori
+    | affiancati. La conciliazione non ripara nulla da sola — il DB è la verità
+    | per il dominio, Stripe per il denaro — ma la divergenza si vede.*
     |
-    | La **valuta** non è qui: è `cashier.currency` (EUR). Le due devono restare
-    | d'accordo, e nessun meccanismo lo garantisce.
+    | ⚠️ La **valuta** non era qui ed era `cashier.currency` (EUR) e basta: la
+    | riga «nessun meccanismo lo garantisce» si è chiusa registrandola sulla riga
+    | di `prezzi_piano` al momento in cui il price viene creato, che è ciò che
+    | rende il confronto possibile senza indovinare.
     */
     'piani' => [
         'predefinito' => 'free',

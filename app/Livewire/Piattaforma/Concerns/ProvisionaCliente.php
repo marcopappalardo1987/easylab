@@ -28,6 +28,15 @@ use Illuminate\Support\Facades\Gate;
  * marcato `saas` senza subscription, cioè un cliente che risulta pagante e non
  * paga. Nasce **Free**, e la pagina lo dice invece di lasciarlo scoprire.
  *
+ * *Aggiornato il 27 Ago 2026 (ADR-035).* Il listino ora si governa da
+ * `/piattaforma/piani` e `Piani::offribili()` saprebbe quali piani proporre —
+ * cioè la metà «non c'è un listino governabile» di questa motivazione è
+ * superata. **L'esito però non cambia**, perché a reggere è l'altra metà, che
+ * questa feature non tocca: finché «piano a pagamento» non implica una
+ * subscription vera creata nello stesso gesto, un select produrrebbe comunque
+ * un account marcato pagante e senza addebito. Il select arriva col flusso di
+ * sottoscrizione, non col listino.
+ *
  * ⚠️ **Due ability e non una.** `tenants.provision` apre il gesto; se si
  * aggancia una sede a un **account esistente** serve anche `manage` su
  * quell'account, perché aggiungere una sede consuma uno slot del suo piano —

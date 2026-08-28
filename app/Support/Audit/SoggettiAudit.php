@@ -8,6 +8,7 @@ use App\Models\Errore;
 use App\Models\Fornitore;
 use App\Models\Garanzia;
 use App\Models\Intervento;
+use App\Models\Piano;
 use App\Models\Ricambio;
 use App\Models\RicambioUtilizzo;
 use App\Models\Scopes\DepartmentScope;
@@ -30,11 +31,12 @@ use Spatie\Permission\Models\Role;
  * 🔴 Come si legge il soggetto di una riga di audit **attraverso i tenant**.
  *
  * Il problema che risolve, e che non si vede finché non lo si prova: `subject`
- * punta a **tredici** modelli, **nove dei quali scopati sulla tenancy**. Gli
- * altri quattro non lo sono, e ciascuno per una ragione propria: `User` e il
- * `Role` di vendor non registrano alcuno scope, `Errore` è un modello di
- * piattaforma (un'eccezione PHP non appartiene a un Ente) e `Account` porta il
- * solo `SoftDeletingScope` — che non è tenancy. Chi guarda il registro è
+ * punta a **quattordici** modelli, **nove dei quali scopati sulla tenancy**. Gli
+ * altri cinque non lo sono, e ciascuno per una ragione propria: `User` e il
+ * `Role` di vendor non registrano alcuno scope, `Errore` e `Piano` sono modelli
+ * di piattaforma (un'eccezione PHP non appartiene a un Ente, e nemmeno un
+ * listino — ADR-035) e `Account` porta il solo `SoftDeletingScope` — che non è
+ * tenancy. Chi guarda il registro è
  * tenant-bound come chiunque (ADR-018). Caricare la relazione in modo ingenuo
  * restituisce **null** per i soggetti di ogni altro cliente — cioè la pagina
  * mostrerebbe righe senza soggetto, in silenzio e senza dire perché. È il
@@ -112,6 +114,12 @@ final class SoggettiAudit
         Fornitore::class => ['Fornitore', 'ragione_sociale'],
         Garanzia::class => ['Garanzia', null],
         Intervento::class => ['Intervento', null],
+        // ADR-035 — il listino a database. Senza questa riga l'etichetta di
+        // ogni modifica al listino si legge «Piano · #3», e il tipo **non
+        // compare nel filtro**: `RegistroAudit::tipiSoggetto()` legge questa
+        // mappa. `etichetta` e non `codice`: è il nome che una persona
+        // riconosce, ed è la colonna che il gesto tipico cambia.
+        Piano::class => ['Piano', 'etichetta'],
         Ricambio::class => ['Ricambio', 'nome'],
         RicambioUtilizzo::class => ['Ricambio montato', null],
         // ⚠️ **L'unico model di VENDOR della mappa**, ed è il motivo per cui il

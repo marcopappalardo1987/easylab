@@ -65,6 +65,12 @@ class UnitaOrganizzativa extends Model
      * appartiene l'Ente, e lo scrivono solo provisioning e backfill, mai un
      * form. Un Admin che potesse forgiarlo sposterebbe il proprio Ente sotto
      * l'abbonamento di qualcun altro.
+     *
+     * Fuori, infine, `marchio_logo_path` e `marchio_colore` (ADR-011): il primo
+     * è un percorso sul disco privato `documenti`, e forgiarlo per
+     * mass-assignment significherebbe far incorporare in un'email il file di un
+     * altro Ente. L'unica via è `fissaMarchioEmail()`, che riceve un percorso
+     * già costruito con l'id dell'Ente dentro.
      */
     protected function casts(): array
     {
@@ -161,6 +167,45 @@ class UnitaOrganizzativa extends Model
             ->log('Visibilità garanzie ricambio modificata');
 
         return $salvato;
+    }
+
+    /**
+     * Unica via per fissare il **marchio email** dell'Ente (🔗 ADR-011).
+     *
+     * Le due colonne restano fuori da `$fillable` per la stessa ragione di
+     * `visibilita_garanzie_ricambio`: il form dell'anagrafica — dove si scrivono
+     * nome, note e soglia — passa per mass-assignment, e un `marchio_logo_path`
+     * forgiato lì dentro punterebbe a un percorso arbitrario sul disco privato
+     * `documenti`, cioè al logo (o al documento) di un altro Ente. Tenendole
+     * fuori, l'unica strada è questa, che è anche il punto in cui il percorso è
+     * già stato costruito con l'id dell'Ente dentro.
+     *
+     * ⚠️ **La guardia sul tipo è la stessa forma di
+     * `fissaVisibilitaGaranzieRicambio()`**, ma qui il motivo è più stretto: il
+     * marchio si legge solo dal nodo `tipo = ente` (`MarchioEmail::perEnte()`
+     * filtra su quello), quindi scriverlo su un dipartimento produrrebbe un dato
+     * che nessuno rileggerà mai — un'impostazione che si crede applicata e non
+     * lo è, che è il modo peggiore di sbagliare.
+     *
+     * **Nessuna riga di audit**, a differenza della visibilità delle garanzie:
+     * `UnitaOrganizzativa` è già esente in `AuditCoverageGuardrailTest` («logga
+     * a mano la sola scrittura che conta») e il marchio ricade nel «resto
+     * dell'anagrafica non tracciato» di ADR-027 §3. Là si traccia perché è una
+     * clausola del rapporto commerciale che decide EasyLab; qui è un dato che
+     * l'Ente governa da sé.
+     */
+    public function fissaMarchioEmail(?string $logoPath, ?string $colore): bool
+    {
+        if ($this->tipo !== TipoUnitaOrganizzativa::Ente) {
+            throw new RuntimeException(
+                "Il marchio email appartiene solo ai nodi ente (ADR-011): il nodo «{$this->nome}» è {$this->tipo->value}."
+            );
+        }
+
+        return $this->forceFill([
+            'marchio_logo_path' => $logoPath,
+            'marchio_colore' => $colore,
+        ])->save();
     }
 
     /**

@@ -20,7 +20,13 @@
     };
 @endphp
 
-<x-mail::message>
+{{-- ⚠️ Il `cid:` del logo si calcola QUI e non dentro `x-mail::message`: un
+     componente Blade anonimo non eredita i dati della vista padre, e `$message`
+     — che è l'oggetto su cui si incorpora un allegato — viene iniettato da
+     `Mailer` nei dati della VISTA. Il `?? null` copre `MailMessage::render()`,
+     che rende il markdown senza passare dal mailer: lì `$message` non esiste e
+     la testata resta senza immagine, che è esattamente ciò che si vuole. --}}
+<x-mail::message :marchio="$marchio" :logo="$marchio->cid($message ?? null)">
 # Scadenze di {{ $ente }}
 
 Ciao {{ $destinatario->name }}, ecco cosa è cambiato oggi sulle macchine che segui.
@@ -49,7 +55,7 @@ Ciao {{ $destinatario->name }}, ecco cosa è cambiato oggi sulle macchine che se
 </x-mail::table>
 @endif
 
-<x-mail::button :url="route('strumenti.index')">
+<x-mail::button :url="route('strumenti.index')" :colore="$marchio->colore" :colore-testo="$marchio->coloreTesto">
 Apri Easy Lab
 </x-mail::button>
 

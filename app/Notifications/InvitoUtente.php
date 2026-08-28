@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Support\AuditLog;
+use App\Support\Mail\MarchioEmail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -94,9 +95,25 @@ class InvitoUtente extends Notification implements ShouldQueue
      * stesso Ente, o dopo due giri di provisioning. Una traccia che non si può
      * usare non è una traccia.
      */
+    /**
+     * ⚠️ **`$enteId` è il terzo parametro, opzionale e in CODA**, e la posizione
+     * è parte della decisione: i chiamanti storici — `ProvisionaEnte`, i test
+     * del provisioning, `TimbroImpersonazioneAuditTest` — costruiscono l'invito
+     * con due argomenti, e un parametro obbligatorio (o inserito in mezzo) li
+     * romperebbe tutti in una volta.
+     *
+     * Serve perché `enteNome` è una **stringa**: dice come si chiama l'Ente, non
+     * quale sia, e da una stringa non si leggono né il logo né il colore. La via
+     * alternativa — risalire all'Ente da `auth()` dentro `toMail()` — è
+     * esattamente la fuga che 🔗 `MarchioEmail` esiste per impedire: questo
+     * metodo gira sul worker, dove il tenant corrente non è quello dell'invito.
+     * Un `int` nel payload si serializza, attraversa la coda e non porta con sé
+     * un solo byte del logo.
+     */
     public function __construct(
         public readonly string $enteNome,
         public readonly string $destinatario = '',
+        public readonly ?int $enteId = null,
     ) {}
 
     /** @return list<string> */
@@ -116,6 +133,7 @@ class InvitoUtente extends Notification implements ShouldQueue
         return (new MailMessage)
             ->subject("Easy Lab · Invito per {$this->enteNome}")
             ->markdown('mail.invito-utente', [
+                'marchio' => MarchioEmail::perEnte($this->enteId),
                 'destinatario' => $notifiable,
                 'ente' => $this->enteNome,
                 'url' => $url,

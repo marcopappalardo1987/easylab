@@ -5,6 +5,8 @@ use App\Models\Concerns\BelongsToTenant;
 use App\Models\Contracts\ReachesStrumento;
 use App\Models\Errore;
 use App\Models\OccorrenzaErrore;
+use App\Models\Piano;
+use App\Models\PrezzoPiano;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
@@ -49,6 +51,19 @@ const NON_TENANT_MODELS = [
     Account::class,
     Errore::class,
     OccorrenzaErrore::class,
+    //  - Piano e PrezzoPiano (ADR-035, il listino a database) seguono lo stesso
+    //    pattern: un **listino** non è il dato di un Ente, è ciò che gli Enti
+    //    comprano. Scoparlo al tenant corrente lo renderebbe invisibile proprio
+    //    a chi lo governa — il Superadmin è tenant-bound come chiunque
+    //    (ADR-018) — e le righe nate in console (la migration di backfill)
+    //    sarebbero invisibili a tutti. Il confine qui non è il tenant, è il
+    //    permesso: `/piattaforma/piani` è gatata su `billing.manage_global`,
+    //    che è nel set bloccato.
+    //    ⚠️ E come per `Errore`, non si chiude con una porta in
+    //    `VistaPiattaforma`: sarebbe il «bypass finto» che quel docblock
+    //    rifiuta per nome, perché non c'è nessuno scope da togliere.
+    Piano::class,
+    PrezzoPiano::class,
 ];
 
 function businessModels(): array
