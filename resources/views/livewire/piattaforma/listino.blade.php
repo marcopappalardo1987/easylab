@@ -15,6 +15,21 @@
     difetto per cui `MetrichePiattaforma` non lascia esplodere un piano fuori
     catalogo. Vedi il docblock del componente.
 
+    ⛔ **`name` è la chiave dell'ERROR BAG, non il nome della property.** Il
+    campo del codice si chiama `name="codice"` mentre il suo `wire:model` è
+    `nuovo.codice`, e la differenza è l'intera ragione per cui gli errori per
+    campo si vedono: `x-ui.input` rende il messaggio con `@error($name)`, e
+    `GovernoListino` rifiuta con `withMessages(['codice' => …])`. Con
+    `name="nuovo.codice"` quell'`@error` non trova **mai** nulla — il blocco
+    d'errore del componente diventa codice morto su tutti i campi della
+    schermata, e l'unico messaggio superstite resta la card in cima alla pagina,
+    cioè **dietro il velo della modale**, su una pagina che nel frattempo è
+    scrollata. Chi clicca vede «non è successo niente», che è precisamente il
+    difetto che il punto qui sotto dichiara di aver evitato. Livewire lega il
+    campo con `wire:model` e non guarda l'attributo `name`: cambiarlo non rompe
+    nulla e fa comparire il rifiuto **dentro** la modale, accanto al campo che
+    lo ha causato.
+
     ⚠️ **Gli errori si rendono in pagina e non solo dentro le modali.**
     `GovernoListino` rifiuta con `ValidationException` — fail-closed e rumorosa —
     e i gesti che rifiuta (cambiare il codice, ribaltare la gratuità, archiviare
@@ -286,12 +301,95 @@
         </div>
     </x-ui.card>
 
+    {{-- ─── I piani fuori catalogo ─────────────────────────────────────────
+
+         🔴 **La striscia in fondo, sulla forma di quella degli orfani di
+         `/piattaforma/ruoli`.** Sono codici che vivono in `accounts.piano` e che
+         il listino non conosce: `accounts.piano` è una stringa **senza FK e
+         senza CHECK**, la scrivono il webhook di Stripe e i comandi di console,
+         e un cliente può restare su un piano dismesso. Non è un caso teorico —
+         ADR-035 lo dichiara già esistente e governato, `ElencaClienti` gli dedica
+         un filtro e `MetrichePiattaforma` li conta a **0 € di MRR**.
+
+         ⚠️ **Questa è l&rsquo;unica schermata da cui quel dato si ripara**, e
+         senza la striscia non ne mostrerebbe traccia: chi apre il listino per
+         capire perché l&rsquo;MRR non torna vedrebbe un catalogo perfettamente
+         sano, e chi lo scopre dalla cabina non avrebbe da lì nessuna strada
+         verso il posto in cui si aggiusta.
+
+         Fuori dalla tabella e non fra le righe, per la ragione degli orfani dei
+         permessi: mescolarli ai piani veri li legittimerebbe come piani. E il
+         blocco **non compare affatto** quando non ce n&rsquo;è nessuno, che è il
+         caso normale — una sezione vuota permanente insegna a non guardarla. --}}
+    @if ($fuoriCatalogo !== [])
+        <div class="mt-8" data-fuori-catalogo>
+            <h2 class="text-sm font-semibold text-ink">
+                <span aria-hidden="true">⚠️</span>
+                Piani presenti sui clienti ma non a listino
+            </h2>
+            <p class="mt-1 text-xs text-ink-2">
+                <code class="text-xs">accounts.piano</code> conserva il piano per <strong>stringa</strong>,
+                senza vincolo: questi codici sono su dei clienti veri e non esistono qui.
+                Valgono <strong>0 €</strong> nel ricavo della cabina, e nessuna delle due schermate
+                può indovinare a quale piano vadano ricondotti.
+            </p>
+            <p class="mt-1 text-xs text-ink-2">
+                Si riparano in un modo solo: creando qui il piano con <strong>quello stesso codice</strong>
+                — che è immutabile apposta — oppure spostando quei clienti su un piano a listino.
+            </p>
+
+            <x-ui.card class="mt-3 !p-0 !border-warn-dot">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="border-b border-border bg-warn-soft text-left text-xs uppercase tracking-wide text-warn-soft-ink">
+                            <tr>
+                                <th scope="col" class="py-3 pl-4 pr-3">Codice fuori catalogo</th>
+                                <th scope="col" class="px-3 py-3">Clienti</th>
+                                <th scope="col" class="px-3 py-3 text-right">In cabina</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-border">
+                            @foreach ($fuoriCatalogo as $codiceOrfano => $quanti)
+                                <tr wire:key="fuori-{{ $codiceOrfano }}" data-fuori-catalogo-codice="{{ $codiceOrfano }}">
+                                    <th scope="row" class="py-2 pl-4 pr-3 text-left font-normal">
+                                        <span class="font-mono text-xs text-ink">{{ $codiceOrfano }}</span>
+                                    </th>
+                                    <td class="px-3 py-2 tabular-nums text-ink-2" data-fuori-catalogo-clienti="{{ $quanti }}">
+                                        {{ $quanti }}
+                                    </td>
+                                    <td class="px-3 py-2 text-right">
+                                        {{-- Il filtro della cabina, non una ricerca a mano: la
+                                             sentinella `__fuori_catalogo` è una costante, e
+                                             ribatterla a stringa qui sarebbe la seconda copia da
+                                             tenere allineata. Gatato sul permesso della cabina,
+                                             che è una pagina diversa da questa.
+
+                                             ⚠️ Si legge da `Cabina` e NON dal trait che la
+                                             dichiara: dal 8.2 una costante di trait non è
+                                             raggiungibile per nome del trait, e il sintomo è
+                                             un Error a runtime dentro la vista compilata. --}}
+                                        @can(App\Support\Tenancy\VistaPiattaforma::PERMESSO)
+                                            <a href="{{ route('piattaforma.index', ['piano' => App\Livewire\Piattaforma\Cabina::FUORI_CATALOGO]) }}"
+                                               class="text-sm font-medium text-brand underline hover:no-underline">
+                                                Mostra i clienti
+                                            </a>
+                                        @endcan
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </x-ui.card>
+        </div>
+    @endif
+
     {{-- ─── Creazione ─────────────────────────────────────────────────────── --}}
 
     @if ($creazioneAperta)
         <x-ui.modal title="Nuovo piano" close="chiudiCreazione">
             <div class="space-y-4" data-form-creazione>
-                <x-ui.input name="nuovo.codice" label="Codice" wire:model="nuovo.codice"
+                <x-ui.input name="codice" label="Codice" wire:model="nuovo.codice"
                             placeholder="es. enterprise" />
                 <p class="-mt-3 text-xs text-ink-3">
                     Minuscole, cifre e underscore. È la stringa che finisce in
@@ -299,13 +397,13 @@
                     <strong>non si potrà più cambiare</strong>: rinominarla li renderebbe tutti fuori catalogo.
                 </p>
 
-                <x-ui.input name="nuovo.etichetta" label="Etichetta" wire:model="nuovo.etichetta"
+                <x-ui.input name="etichetta" label="Etichetta" wire:model="nuovo.etichetta"
                             placeholder="es. Enterprise" />
 
-                <x-ui.input name="nuovo.max_enti" label="Tetto di Enti" type="number" wire:model="nuovo.max_enti"
+                <x-ui.input name="max_enti" label="Tetto di Enti" type="number" wire:model="nuovo.max_enti"
                             placeholder="vuoto = illimitato" />
 
-                <x-ui.input name="nuovo.prezzo_mensile_cent" label="Prezzo mensile, in centesimi interi"
+                <x-ui.input name="prezzo_mensile_cent" label="Prezzo mensile, in centesimi interi"
                             type="number" wire:model="nuovo.prezzo_mensile_cent" />
                 <p class="-mt-3 text-xs text-ink-3">
                     Centesimi e mai euro con la virgola: un totale su decine di clienti in virgola mobile
@@ -344,19 +442,19 @@
                     comportamento si crea un piano nuovo.
                 </p>
 
-                <x-ui.input name="modifica.etichetta" label="Etichetta" wire:model="modifica.etichetta" />
+                <x-ui.input name="etichetta" label="Etichetta" wire:model="modifica.etichetta" />
 
-                <x-ui.input name="modifica.max_enti" label="Tetto di Enti" type="number"
+                <x-ui.input name="max_enti" label="Tetto di Enti" type="number"
                             wire:model="modifica.max_enti" placeholder="vuoto = illimitato" />
 
-                <x-ui.input name="modifica.prezzo_mensile_cent" label="Prezzo mensile, in centesimi interi"
+                <x-ui.input name="prezzo_mensile_cent" label="Prezzo mensile, in centesimi interi"
                             type="number" wire:model="modifica.prezzo_mensile_cent" />
                 <p class="-mt-3 text-xs text-ink-3">
                     Cambiare la cifra marca il piano «da sincronizzare»: il price nuovo nasce alla
                     sincronizzazione, e chi è già abbonato resta sul suo.
                 </p>
 
-                <x-ui.input name="modifica.ordine" label="Ordine nel listino" type="number"
+                <x-ui.input name="ordine" label="Ordine nel listino" type="number"
                             wire:model="modifica.ordine" />
 
                 <div class="mt-4 flex justify-end gap-2">
@@ -416,7 +514,7 @@
                     Crearne uno nuovo duplicherebbe il prodotto su Stripe.
                 </p>
 
-                <x-ui.input name="priceId" label="Price id su Stripe" wire:model="priceId"
+                <x-ui.input name="price_id" label="Price id su Stripe" wire:model="priceId"
                             placeholder="price_..." />
 
                 <p class="-mt-3 text-xs text-ink-3">

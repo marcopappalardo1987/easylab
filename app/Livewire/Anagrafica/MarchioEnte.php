@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\WithFileUploads;
 use Throwable;
 
@@ -44,6 +45,23 @@ use Throwable;
  * fail-closed di ADR-018, dove l'assenza di contesto è una negazione e non un
  * permesso.
  *
+ * ⛔ **E l'Ente NON è una proprietà pubblica del componente**, che è la
+ * differenza fra dire quella frase e renderla vera. Un `public UnitaOrganizzativa
+ * $ente` viaggia nello snapshot Livewire e torna indietro **reidratato**:
+ * `SupportModels\ModelSynth::hydrate()` chiama `newQueryForRestoration()`, cioè
+ * `newQueryWithoutScopes()->whereKey(...)` — TenantScope, DepartmentScope e
+ * SoftDeletingScope **non si applicano al ripristino**. Il legame Ente↔tenant
+ * sarebbe quindi verificato in `mount()` e mai più: una scheda lasciata aperta
+ * mentre il contesto cambia — il Superadmin che esce da un'impersonazione
+ * legittima (ADR-018), o un utente convertito a tecnico esterno con
+ * `tenant_id` azzerato (ADR-030) — continuerebbe a scrivere sull'Ente vecchio,
+ * fuori da ogni scope e senza riga di audit. *È stato riprodotto: un Admin
+ * dell'Ente B, con lo snapshot dell'Ente A, ne ha riscritto il colore.*
+ *
+ * L'Ente si ri-risolve quindi **dentro ogni azione**, da `Auth::user()` e con i
+ * global scope attivi — la stessa forma che usano `ElencoFornitori`, `Listino` e
+ * `AmministraAccount`, e per la stessa ragione.
+ *
  * ⚠️ E il `can:` della rotta **non basta da solo** per le azioni che scrivono:
  * `skipRender()` fa saltare `render()`, quindi una chiamata diretta a `salva()`
  * non ripasserebbe da lì. Ogni azione ha il proprio `Gate::authorize()`.
@@ -52,8 +70,6 @@ use Throwable;
 class MarchioEnte extends Component
 {
     use WithFileUploads;
-
-    public UnitaOrganizzativa $ente;
 
     /** `#rrggbb`, o `null` per «usa il blu di Easy Lab». */
     public ?string $colore = null;
@@ -65,6 +81,18 @@ class MarchioEnte extends Component
 
     public function mount(): void
     {
+        $this->colore = $this->ente()->marchio_colore;
+    }
+
+    /**
+     * 🔴 L'Ente di chi sta guardando **adesso**, con i global scope attivi.
+     *
+     * Si chiama da `mount()`, da `render()` e da ogni azione: è l'unico punto in
+     * cui l'Ente entra in questo componente, e per costruzione non può essere
+     * quello di un altro tenant né sopravvivere a un cambio di contesto.
+     */
+    private function ente(): UnitaOrganizzativa
+    {
         $enteId = Auth::user()?->tenant_id;
 
         // 🔴 Fail-closed: un utente autenticato SENZA tenant non vede nulla
@@ -74,11 +102,9 @@ class MarchioEnte extends Component
         // diventerebbe silenziosamente «il primo Ente che capita».
         abort_if($enteId === null, 403);
 
-        $this->ente = UnitaOrganizzativa::whereKey($enteId)
+        return UnitaOrganizzativa::whereKey($enteId)
             ->where('tipo', TipoUnitaOrganizzativa::Ente)
             ->firstOrFail();
-
-        $this->colore = $this->ente->marchio_colore;
     }
 
     protected function rules(): array
@@ -114,18 +140,19 @@ class MarchioEnte extends Component
 
         $this->validate();
 
-        $precedente = $this->ente->marchio_logo_path;
+        $ente = $this->ente();
+        $precedente = $ente->marchio_logo_path;
         $path = $precedente;
 
         if ($this->logo !== null) {
             // 🔴 **L'id dell'Ente STA NEL PERCORSO**, ed è ciò che rende
             // impossibile per costruzione che il file di un Ente finisca sotto
             // quello di un altro: il percorso non arriva mai dal client, si
-            // costruisce qui con l'Ente che `mount()` ha già risolto dal
+            // costruisce qui con l'Ente che `ente()` ha appena risolto dal
             // `tenant_id`. Il nome è un ULID e non quello del file caricato —
             // un nome scelto dall'utente è un percorso scelto dall'utente.
             $path = $this->logo->storeAs(
-                'marchi/'.$this->ente->id,
+                'marchi/'.$ente->id,
                 (string) Str::ulid().'.'.strtolower($this->logo->extension()),
                 MarchioEmail::DISCO,
             );
@@ -133,24 +160,42 @@ class MarchioEnte extends Component
             $this->cancellaFile($precedente, $path);
         }
 
-        $this->ente->fissaMarchioEmail($path, $this->colore ?: null);
+        $ente->fissaMarchioEmail($path, $this->colore ?: null);
 
         $this->reset('logo');
         $this->notice = 'Marchio aggiornato.';
     }
 
+    /**
+     * Toglie il logo — e salva il colore insieme.
+     *
+     * ⚠️ **Il colore va salvato anche qui**, e non è uno zelo: `$this->colore` è
+     * legato con `wire:model.live`, quindi si aggiorna a ogni battuta senza
+     * passare da `salva()`. Scrivendo `$ente->marchio_colore` — cioè il valore
+     * già a database — questa azione **buttava via** una modifica in sospeso e
+     * mostrava comunque un avviso di riuscita: il campo e l'anteprima
+     * continuavano a mostrare il nuovo colore, il database teneva il vecchio, e
+     * l'utente lasciava la pagina convinto di aver salvato tutto.
+     *
+     * `validateOnly('colore')` e non `validate()`: qui non c'è un file da
+     * validare, e un `logo` scelto ma non ancora salvato non deve poter
+     * impedire la rimozione di quello vecchio.
+     */
     public function rimuoviLogo(): void
     {
         Gate::authorize('unita_organizzativa.update');
 
-        $precedente = $this->ente->marchio_logo_path;
+        $this->validateOnly('colore');
 
-        $this->ente->fissaMarchioEmail(null, $this->ente->marchio_colore);
+        $ente = $this->ente();
+        $precedente = $ente->marchio_logo_path;
+
+        $ente->fissaMarchioEmail(null, $this->colore ?: null);
 
         $this->cancellaFile($precedente, null);
 
         $this->reset('logo');
-        $this->notice = 'Logo rimosso: le email tornano al marchio Easy Lab.';
+        $this->notice = 'Logo rimosso: le email tornano al logo Easy Lab.';
     }
 
     /**
@@ -183,6 +228,67 @@ class MarchioEnte extends Component
     }
 
     /**
+     * Il logo da mostrare nell'anteprima, come `data:` URI — quello appena
+     * scelto se c'è, altrimenti quello già memorizzato, altrimenti `null`.
+     *
+     * ⛔ **Un `data:` URI e non un URL**, perché il disco `documenti` è
+     * **privato**: non ha una rotta pubblica, e una `temporaryUrl()` sul driver
+     * locale non esiste. L'alternativa sarebbe una rotta che serve i loghi, cioè
+     * una seconda superficie da autorizzare e da scopare per tenant — un
+     * bersaglio nuovo per mostrare un'immagine che l'utente ha appena caricato
+     * lui stesso. I byte sono al più 512 KB (lo impone `rules()`), quindi
+     * inlinarli costa meno di quella rotta.
+     *
+     * ⚠️ **Il file appena scelto si mostra solo se somiglia a ciò che si può
+     * salvare** (png/jpg entro 512 KB): l'anteprima gira *prima* della
+     * validazione — `wire:model` carica il file al cambio — e leggere in memoria
+     * un file arbitrario per mostrarlo sarebbe un modo di far fare al server
+     * lavoro deciso dal client. Un file fuori regola non si vede: al suo posto
+     * resta il logo salvato, e il messaggio di validazione dice perché.
+     *
+     * ⚠️ Il `try/catch` è quello di sempre: `documenti` ha `throw => true`, e un
+     * file cancellato a mano non deve buttare giù la pagina che serve a
+     * rimetterlo.
+     */
+    private function anteprimaLogo(UnitaOrganizzativa $ente): ?string
+    {
+        if ($this->logo instanceof TemporaryUploadedFile) {
+            $mime = (string) $this->logo->getMimeType();
+
+            if (in_array($mime, ['image/png', 'image/jpeg'], true) && $this->logo->getSize() <= 512 * 1024) {
+                try {
+                    return 'data:'.$mime.';base64,'.base64_encode((string) $this->logo->get());
+                } catch (Throwable $e) {
+                    // Il temporaneo è sparito fra il caricamento e la resa:
+                    // si ricade sul logo salvato, come per un file mancante.
+                }
+            }
+        }
+
+        if ($ente->marchio_logo_path === null) {
+            return null;
+        }
+
+        try {
+            $disco = Storage::disk(MarchioEmail::DISCO);
+
+            if (! $disco->exists($ente->marchio_logo_path)) {
+                return null;
+            }
+
+            return 'data:'.($disco->mimeType($ente->marchio_logo_path) ?: 'image/png')
+                .';base64,'.base64_encode((string) $disco->get($ente->marchio_logo_path));
+        } catch (Throwable $e) {
+            Log::warning('Logo del marchio non leggibile per l\'anteprima', [
+                'path' => $ente->marchio_logo_path,
+                'errore' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
      * L'anteprima chiede l'inchiostro allo **stesso** metodo che lo calcola per
      * l'email (luminanza WCAG): riscriverlo qui vorrebbe dire avere due
      * risposte alla stessa domanda, e la seconda si accorgerebbe di essere
@@ -190,11 +296,14 @@ class MarchioEnte extends Component
      */
     public function render()
     {
+        $ente = $this->ente();
         $scelto = $this->colore ?: MarchioEmail::COLORE_EASYLAB;
 
         return view('livewire.anagrafica.marchio-ente', [
+            'ente' => $ente,
             'coloreScelto' => $scelto,
             'inchiostro' => MarchioEmail::inchiostroSu($scelto),
+            'logoAnteprima' => $this->anteprimaLogo($ente),
         ]);
     }
 }

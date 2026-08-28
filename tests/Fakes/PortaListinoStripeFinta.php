@@ -55,8 +55,32 @@ final class PortaListinoStripeFinta implements PortaListinoStripe
     /** @var array<string, array{id: string, nome: string, attivo: bool}> product id → ciò che Stripe risponde */
     public array $prodotti = [];
 
+    /**
+     * Quale price rispondere a **qualunque** `creaPrezzo`, ignorando la chiave.
+     *
+     * Serve a riprodurre l'unico caso che la chiave di idempotenza non basta a
+     * escludere: Stripe che restituisce un price **già nostro e già archiviato**.
+     * Senza questo interruttore quella riga di codice non sarebbe raggiungibile
+     * da nessun test, e una guardia non raggiungibile non è una guardia.
+     */
+    public ?string $ripeteSempre = null;
+
     /** Rende irripetibili gli id dei price creati nella stessa richiesta. */
     private int $progressivo = 0;
+
+    /**
+     * 🔴 **La memoria della chiave di idempotenza, come Stripe la tiene.**
+     *
+     * Entro 24 ore Stripe non ricrea nulla: **replica la risposta originale**,
+     * parola per parola, anche se nel frattempo quel price è stato archiviato —
+     * la risposta replicata dice ancora `active: true`, perché è la risposta di
+     * allora. È la ragione per cui la chiave non può essere funzione del solo
+     * (codice, importo, valuta): tornare a un prezzo già usato ripescherebbe il
+     * price vecchio, e nessuna ispezione della risposta potrebbe accorgersene.
+     *
+     * @var array<string, PrezzoRemoto> chiave di idempotenza → risposta già data
+     */
+    private array $repliche = [];
 
     public function creaOAggiornaProdotto(Piano $piano): string
     {
@@ -81,14 +105,25 @@ final class PortaListinoStripeFinta implements PortaListinoStripe
     {
         $this->registra('creaPrezzo');
 
+        if ($this->ripeteSempre !== null) {
+            return $this->prezzi[$this->ripeteSempre];
+        }
+
+        // La replica per chiave: la risposta di allora, non lo stato di adesso.
+        if (isset($this->repliche[$chiaveIdempotenza])) {
+            return $this->repliche[$chiaveIdempotenza];
+        }
+
         $prezzo = new PrezzoRemoto(
             id: 'price_'.$piano->codice.'_'.(++$this->progressivo),
             importoCent: $importoCent,
             valuta: $valuta,
             attivo: true,
+            prodotto: $piano->stripe_product_id,
         );
 
         $this->prezzi[$prezzo->id] = $prezzo;
+        $this->repliche[$chiaveIdempotenza] = $prezzo;
 
         return $prezzo;
     }
@@ -100,7 +135,7 @@ final class PortaListinoStripeFinta implements PortaListinoStripe
         if (isset($this->prezzi[$priceId])) {
             $vecchio = $this->prezzi[$priceId];
 
-            $this->prezzi[$priceId] = new PrezzoRemoto($vecchio->id, $vecchio->importoCent, $vecchio->valuta, false);
+            $this->prezzi[$priceId] = new PrezzoRemoto($vecchio->id, $vecchio->importoCent, $vecchio->valuta, false, $vecchio->prodotto);
         }
     }
 
@@ -126,10 +161,18 @@ final class PortaListinoStripeFinta implements PortaListinoStripe
             : count(array_filter($this->chiamate, fn (string $c) => $c === $metodo));
     }
 
-    /** Dichiara cosa Stripe risponde per un price già esistente. */
-    public function conPrezzo(string $id, int $importoCent, string $valuta = 'eur', bool $attivo = true): self
+    /**
+     * Dichiara cosa Stripe risponde per un price già esistente.
+     *
+     * ⚠️ **Il prodotto ha un default e non è `null`**: su Stripe un Price
+     * appartiene *sempre* a un Product, e una finta che rispondesse «nessun
+     * prodotto» renderebbe non verificabile la metà di `agganciaPrezzo()` che
+     * registra il product id del piano — cioè lascerebbe verde il difetto che
+     * fa nascere un secondo Product al primo «Sincronizza».
+     */
+    public function conPrezzo(string $id, int $importoCent, string $valuta = 'eur', bool $attivo = true, string $prodotto = 'prod_esistente'): self
     {
-        $this->prezzi[$id] = new PrezzoRemoto($id, $importoCent, $valuta, $attivo);
+        $this->prezzi[$id] = new PrezzoRemoto($id, $importoCent, $valuta, $attivo, $prodotto);
 
         return $this;
     }

@@ -61,6 +61,9 @@
                 @if ($ente->marchio_logo_path)
                     <div class="mt-3 flex items-center gap-3">
                         <span class="text-xs text-ink-3">Un logo è già impostato.</span>
+                        {{-- ⚠️ Toglie il logo E salva il colore in sospeso: il campo è
+                             `wire:model.live`, quindi qui può esserci una scelta che
+                             `salva()` non ha ancora visto. --}}
                         <x-ui.button variant="ghost" type="button" wire:click="rimuoviLogo">Rimuovi il logo</x-ui.button>
                     </div>
                 @endif
@@ -87,8 +90,15 @@
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse;">
                 <tr>
                     <td align="center" style="border-top: 4px solid {{ $coloreScelto }}; background-color: #ffffff; padding: 24px 16px;">
-                        @if ($ente->marchio_logo_path)
-                            <span style="display: block; color: #475569; font-size: 12px;">[logo caricato]</span>
+                        {{-- 🔴 **Il logo VERO, non un segnaposto.** L'anteprima esiste
+                             perché il colore si giudichi dove verrà visto, e un logo su
+                             fondo bianco sopra un filetto scuro stona in un modo che
+                             nessuna scritta «[logo caricato]» può mostrare. È un `data:`
+                             URI perché il disco `documenti` è privato: vedi
+                             `MarchioEnte::anteprimaLogo()`. --}}
+                        @if ($logoAnteprima)
+                            <img src="{{ $logoAnteprima }}" alt="{{ $ente->nome }}" width="180"
+                                style="display: block; margin: 0 auto; max-width: 180px; height: auto;">
                         @endif
                         <span style="display: block; margin-top: 8px; color: #0f172a; font-size: 18px; font-weight: bold;">{{ $ente->nome }}</span>
                     </td>

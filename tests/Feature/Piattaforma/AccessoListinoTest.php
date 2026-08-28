@@ -87,6 +87,36 @@ it('refuses the route to every role without billing.manage_global', function (st
         ->assertForbidden();
 })->with(RUOLI_SENZA_LISTINO);
 
+it('refuses the page to someone who governs billing but may not read the platform', function () {
+    // 🔴 **La pagina legge `accounts`, e quella lettura ha una porta.** Le
+    // colonne «Clienti» e il conteggio di chi finirebbe sopra il tetto sono
+    // censimenti di **tutti gli account della piattaforma**: passano da
+    // `VistaPiattaforma::accounts()`, che chiede `tenants.view_all` prima di
+    // consegnare il builder. Scritte con un `Account::query()` a mano — com'erano
+    // — quella verifica non girava mai, e la pagina restava gatata sul solo
+    // `billing.manage_global`.
+    //
+    // ⚠️ **Oggi non cambia nessun verdetto**, ed è il motivo per cui il difetto
+    // era invisibile: i due permessi stanno sugli stessi due ruoli, e il test in
+    // fondo al file congela il fatto. Ma è precisamente la divergenza che la
+    // scelta di NON mettere i due permessi in AND mette in conto — e il giorno in
+    // cui arrivasse un ruolo con l'uno e non l'altro, quella persona leggerebbe
+    // il censimento dei clienti di tutta la piattaforma senza attraversare la
+    // sola guardia che esiste per quel dato. `BypassNudiGuardrailTest` non lo
+    // vedrebbe: guarda `withoutGlobalScopes()`, e qui non ce n'è nessuno.
+    //
+    // Lo stato si fabbrica con l'API di spatie, come per la voce di menù: nessun
+    // ruolo del catalogo lo realizza, e l'editor dei permessi non può produrlo
+    // perché entrambi sono nel set bloccato.
+    Role::findByName('Superadmin', 'web')->revokePermissionTo(VistaPiattaforma::PERMESSO);
+
+    expect(Rbac::isLocked(VistaPiattaforma::PERMESSO))->toBeTrue();
+
+    Livewire::actingAs(utenteConRuolo('Superadmin'))
+        ->test(Listino::class)
+        ->assertForbidden();
+});
+
 it('sends a guest to the login', function () {
     $this->get(route('piattaforma.piani'))->assertRedirect(route('login'));
 });

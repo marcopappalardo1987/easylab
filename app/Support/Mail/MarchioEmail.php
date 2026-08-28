@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Throwable;
+use WeakMap;
 
 /**
  * Il **marchio** con cui esce un'email: nome in testata, colore del filetto e
@@ -63,7 +64,7 @@ final class MarchioEmail
     public const DISCO = 'documenti';
 
     /**
-     * Il `cid:` già calcolato, e per quale `Message`.
+     * Il `cid:` già calcolato, per ciascun `Message` su cui è stato inciso.
      *
      * ⚠️ **Non è un'ottimizzazione: senza, il logo finisce nell'email DUE
      * volte.** Nel canale mail delle notifiche `MailChannel::buildView()`
@@ -71,17 +72,37 @@ final class MarchioEmail
      * invoca **entrambe** con lo stesso `Illuminate\Mail\Message`. La vista
      * `mail/*.blade.php` è una sola e viene resa due volte, quindi `cid()`
      * verrebbe chiamata due volte e `embed()` aggiungerebbe due `DataPart`
-     * distinti (il `cid` è casuale a ogni chiamata). Memorizzarlo sull'istanza
-     * basta perché è la **stessa** istanza a viaggiare nei dati delle due
-     * rese: `toMail()` la costruisce una volta sola.
+     * distinti (il `cid` è casuale a ogni chiamata).
+     *
+     * ⛔ **E la memoria deve stare su un'istanza CONDIVISA fra le due rese**,
+     * che è la metà del problema che questa classe aveva risolto solo per una
+     * strada: le viste di `resources/views/mail/` ricevono il marchio dai dati
+     * della notifica — costruito una volta sola in `toMail()` — ma
+     * `vendor/notifications/email.blade.php` se lo costruisce **dentro il
+     * Blade**, cioè da capo a ogni resa. Lì la memoria non poteva funzionare, e
+     * l'alert di piattaforma usciva con il logo allegato due volte. È il motivo
+     * per cui `piattaforma()` restituisce un'istanza memorizzata.
+     *
+     * ⚠️ **`WeakMap` e non `spl_object_id()`**: gli id degli oggetti si
+     * **riciclano** dopo la deallocazione, quindi un'istanza di lunga vita — ed
+     * è precisamente ciò che `piattaforma()` è diventata — potrebbe riconoscere
+     * come «già inciso» un `Message` nuovo che ha ereditato l'id di uno
+     * liberato, e restituire un `cid:` che in quell'email non esiste: un logo
+     * rotto. La `WeakMap` tiene la chiave **debolmente**: finché il `Message` è
+     * vivo l'associazione vale, e quando muore sparisce da sé.
      *
      * ⚠️ E non si può distinguere la resa testuale da quella html guardando il
      * tipo: il `TextMessage` che restituisce stringa vuota da `embed()` è usato
      * solo da `Mailable::buildView()`, **non** dal canale delle notifiche.
+     *
+     * @var WeakMap<Message, string>
      */
-    private ?string $cid = null;
+    private WeakMap $cidPerMessaggio;
 
-    private ?int $cidPerMessaggio = null;
+    /**
+     * L'istanza di piattaforma, condivisa. Vedi `piattaforma()`.
+     */
+    private static ?self $piattaforma = null;
 
     private function __construct(
         public readonly string $nome,
@@ -92,7 +113,9 @@ final class MarchioEmail
         /** Percorso sul disco `documenti`; `null` = logo Easy Lab. */
         public readonly ?string $logoPath,
         public readonly bool $diPiattaforma,
-    ) {}
+    ) {
+        $this->cidPerMessaggio = new WeakMap;
+    }
 
     /**
      * Il marchio del prodotto: è il default di ogni vista email e la ricaduta
@@ -100,7 +123,23 @@ final class MarchioEmail
      */
     public static function piattaforma(): self
     {
-        return new self(
+        // ⛔ **Memorizzata, e non è una micro-ottimizzazione**: è ciò che rende
+        // possibile la memoria del `cid:` (vedi `$cidPerMessaggio`).
+        // `vendor/notifications/email.blade.php` costruisce il marchio DENTRO il
+        // Blade, e quel Blade viene reso due volte sullo stesso `Message` — una
+        // per il corpo html e una per quello testuale. Con un'istanza nuova a
+        // ogni chiamata le due rese non condividono nulla, `embed()` viene
+        // invocata due volte e l'alert di piattaforma parte con il logo
+        // allegato **due volte**.
+        //
+        // ⚠️ Condividere un'istanza per tutto il processo è sicuro **solo
+        // perché non c'è stato mutabile da condividere**: nome, colore e
+        // inchiostro sono costanti o config, e non cambiano fra una richiesta e
+        // l'altra né fra due job dello stesso worker. L'unica parte viva è la
+        // `WeakMap` dei `cid`, che è per `Message` e si svuota da sé. Il giorno
+        // in cui uno di questi valori diventasse per-richiesta, questa riga è la
+        // prima da disfare.
+        return self::$piattaforma ??= new self(
             nome: (string) config('app.name'),
             colore: self::COLORE_EASYLAB,
             coloreTesto: self::inchiostroSu(self::COLORE_EASYLAB),
@@ -211,14 +250,14 @@ final class MarchioEmail
             return null;
         }
 
-        if ($this->cid !== null && $this->cidPerMessaggio === spl_object_id($message)) {
-            return $this->cid;
-        }
+        return $this->cidPerMessaggio[$message] ??= $this->incidi($message);
+    }
 
-        $this->cidPerMessaggio = spl_object_id($message);
-
+    /** Incorpora davvero il logo nel messaggio e restituisce il suo `cid:`. */
+    private function incidi(Message $message): string
+    {
         if ($this->logoPath === null) {
-            return $this->cid = $message->embed(public_path(self::LOGO_EASYLAB));
+            return $message->embed(public_path(self::LOGO_EASYLAB));
         }
 
         try {
@@ -228,7 +267,7 @@ final class MarchioEmail
                 throw new RuntimeException('file assente sul disco');
             }
 
-            return $this->cid = $message->embedData(
+            return $message->embedData(
                 $disco->get($this->logoPath),
                 'marchio.'.$this->estensione(),
                 $this->mime(),
@@ -239,7 +278,7 @@ final class MarchioEmail
                 'errore' => $e->getMessage(),
             ]);
 
-            return $this->cid = $message->embed(public_path(self::LOGO_EASYLAB));
+            return $message->embed(public_path(self::LOGO_EASYLAB));
         }
     }
 

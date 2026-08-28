@@ -225,6 +225,88 @@ it('creates no twins when the same sync runs twice a day apart', function () {
         ->and($saas->fresh()->prezzi()->count())->toBe(1);
 });
 
+it('creates a genuinely new price when an old amount comes back inside the idempotency window', function () {
+    // 🔴 **La cifra digitata per errore e corretta cinque minuti dopo**, che è il
+    // caso normale e non un caso limite. 49,00 sincronizzato; qualcuno scrive
+    // 59,00 e sincronizza (nasce il price B, il price A viene archiviato su
+    // Stripe); si accorge dell'errore, rimette 49,00 e sincronizza di nuovo.
+    //
+    // Con una chiave di idempotenza funzione del solo `(codice, importo,
+    // valuta)`, quel terzo giro riusa la **stessa chiave del primo**: entro 24
+    // ore Stripe non crea nulla e **replica la risposta originale**, cioè il
+    // price A — che noi stessi avevamo appena archiviato. Il listino tornerebbe a
+    // puntare a un price morto col badge verde «sincronizzato», e la prossima
+    // sottoscrizione fallirebbe con «This price is not active» in un punto
+    // lontanissimo da questa schermata.
+    //
+    // ⚠️ E ispezionare la risposta non salverebbe: la replica di Stripe è la
+    // risposta di **allora**, e dice ancora `active: true`. La porta finta la
+    // riproduce così apposta — vedi il suo docblock. L'unica difesa è che chiavi
+    // diverse siano chiavi diverse, e ciò che distingue le due creazioni non è la
+    // cifra: è da quale price si sta passando.
+    $saas = Piani::modello('saas');
+
+    GovernoListino::sincronizza($saas);
+    $primo = $saas->fresh()->prezzi()->where('corrente', true)->value('stripe_price_id');
+
+    GovernoListino::cambiaPrezzo($saas->fresh(), 5900);
+    GovernoListino::sincronizza($saas->fresh());
+
+    GovernoListino::cambiaPrezzo($saas->fresh(), 4900);
+    GovernoListino::sincronizza($saas->fresh());
+
+    app(CatalogoPiani::class)->dimentica();
+
+    $piano = $saas->fresh();
+    $corrente = $piano->prezzi()->where('corrente', true)->firstOrFail();
+
+    expect($corrente->stripe_price_id)->not->toBe($primo)
+        ->and($corrente->importo_cent)->toBe(4900)
+        // 🔴 E il price su cui si aprono le nuove subscription è **attivo su
+        // Stripe**: è l'asserzione che vale tutto il resto del test.
+        ->and($this->porta->prezzi[$corrente->stripe_price_id]->attivo)->toBeTrue()
+        // Nessun errore da nascondere dietro un badge verde.
+        ->and($piano->stripe_ultimo_errore)->toBeNull()
+        ->and($piano->stripe_sincronizzato_at)->not->toBeNull()
+        // Tre price nello storico, e il primo resta risolvibile: chi era
+        // abbonato a 49,00 continua a esserlo.
+        ->and($piano->prezzi()->count())->toBe(3)
+        ->and(Piani::perPrice($primo))->toBe('saas');
+});
+
+it('refuses to make current a price that Stripe merely replayed', function () {
+    // La cintura, oltre alle bretelle della chiave. Se per qualunque ragione
+    // Stripe restituisse un price che il listino **conosce già**, quel price non
+    // è nato adesso: scriverlo come corrente farebbe puntare il piano a una riga
+    // che noi stessi abbiamo archiviato, e la pagina mostrerebbe il badge verde.
+    // Meglio un errore leggibile in pagina — il dominio non fa rollback, e la
+    // riga locale resta valida.
+    $saas = Piani::modello('saas');
+
+    GovernoListino::sincronizza($saas);
+    $primo = $saas->fresh()->prezzi()->where('corrente', true)->value('stripe_price_id');
+
+    // Stripe risponde sempre lo stesso price, chiave o non chiave.
+    $this->porta->ripeteSempre = $primo;
+
+    GovernoListino::cambiaPrezzo($saas->fresh(), 5900);
+    GovernoListino::sincronizza($saas->fresh());
+
+    app(CatalogoPiani::class)->dimentica();
+
+    $piano = $saas->fresh();
+
+    expect($piano->stripe_ultimo_errore)->not->toBeNull()
+        ->and($piano->stripe_ultimo_errore)->toContain('replica della chiave di idempotenza')
+        ->and($piano->stripe_sincronizzato_at)->toBeNull()
+        // 🔴 **E il listino non è stato toccato**: una riga sola, ancora sua,
+        // ancora a 49,00 e ancora attiva su Stripe.
+        ->and($piano->prezzi()->count())->toBe(1)
+        ->and($piano->prezzi()->where('corrente', true)->value('stripe_price_id'))->toBe($primo)
+        ->and($piano->prezzi()->where('corrente', true)->value('importo_cent'))->toBe(4900)
+        ->and($this->porta->prezzi[$primo]->attivo)->toBeTrue();
+});
+
 // ─── Quando Stripe rifiuta ───────────────────────────────────────────────────
 
 it('keeps the local row and writes the failure down, instead of failing silently', function () {
@@ -332,4 +414,45 @@ it('refuses to hook any price onto a free plan', function () {
 
     expect(fn () => GovernoListino::agganciaPrezzo(Piani::modello('free'), 'price_qualunque'))
         ->toThrow(ValidationException::class);
+});
+
+it('refuses to hook a price that Stripe has archived', function () {
+    // 🔴 È il caso che si incontra davvero, non un caso limite: chi cerca «SaaS»
+    // nella dashboard di Stripe trova anche i residui delle prove precedenti —
+    // stesso importo, stessa valuta, **archiviati**. Le subscription in essere
+    // continuano a fatturare su un price archiviato, ma nessuna nuova può
+    // agganciarlo: `Piani::stripePrice()` restituirebbe un id morto, e
+    // `easylab:abbona` fallirebbe con «This price is not active» in un punto
+    // lontanissimo dalla schermata che ha accettato l'aggancio.
+    $this->porta->conPrezzo('price_residuo', 4900, 'eur', attivo: false);
+
+    $saas = Piani::modello('saas');
+
+    expect(fn () => GovernoListino::agganciaPrezzo($saas, 'price_residuo'))
+        ->toThrow(ValidationException::class);
+
+    app(CatalogoPiani::class)->dimentica();
+
+    expect(Piani::stripePrice('saas'))->toBeNull()
+        ->and($saas->fresh()->prezzi()->count())->toBe(0);
+});
+
+it('refuses to hook a price that belongs to another Stripe product', function () {
+    // Un piano e un prodotto che non si corrispondono: la conciliazione
+    // leggerebbe il Product di qua e il Price di là, e direbbe «coincidono» su
+    // due oggetti che non hanno niente a che fare l'uno con l'altro.
+    $saas = Piani::modello('saas');
+
+    GovernoListino::sincronizza($saas);
+
+    $this->porta->conPrezzo('price_di_un_altro', 4900, 'eur', prodotto: 'prod_ALTRO');
+
+    expect(fn () => GovernoListino::agganciaPrezzo($saas->fresh(), 'price_di_un_altro'))
+        ->toThrow(ValidationException::class);
+
+    app(CatalogoPiani::class)->dimentica();
+
+    // Il price corrente è rimasto quello del prodotto del piano.
+    expect(Piani::stripePrice('saas'))->not->toBe('price_di_un_altro')
+        ->and($saas->fresh()->prezzi()->count())->toBe(1);
 });

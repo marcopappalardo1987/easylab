@@ -16,7 +16,15 @@
      `lock-soft`, `bad-soft`. Nessuna classe di scala, e questo file NON va
      aggiunto a `DA_MIGRARE`. --}}
 <div class="mx-auto w-full max-w-2xl px-4 py-10 sm:px-6">
-    <h1 class="text-2xl font-bold tracking-tight text-ink">Abbonamento</h1>
+    {{-- Il link di ritorno se lo porta la PAGINA, perché il layout è quello
+         ospite (zero componenti Livewire, v. il docblock del componente: la top
+         bar dell'app qui sarebbe una fuga dal lockout). Destinazione diversa a
+         seconda dello stato: per un account sospeso la dashboard rimbalza su
+         /bloccato, e mandarcelo passando da un 302 sarebbe solo un giro in più. --}}
+    <a href="{{ $sospeso ? route('bloccato') : route('dashboard') }}"
+       class="text-sm font-medium text-ink-2 transition hover:text-ink">&larr; Torna indietro</a>
+
+    <h1 class="mt-4 text-2xl font-bold tracking-tight text-ink">Abbonamento</h1>
     <p class="mt-1 text-sm text-ink-2">{{ $ragioneSociale }}</p>
 
     @if (session('erroreAbbonamento'))
@@ -65,13 +73,30 @@
             </div>
             <div>
                 <dt class="text-xs font-medium uppercase tracking-wide text-ink-3">Sedi</dt>
-                <dd class="mt-1 text-sm text-ink">{{ $entiUsati }} su {{ $maxEnti ?? '∞' }}</dd>
+                {{-- ⛔ «∞» solo quando il piano lo dichiara illimitato. Su un
+                     piano fuori catalogo il limite NON si conosce, e stamparlo
+                     comunque affermerebbe al cliente che ha sedi illimitate
+                     mentre il provisioning della successiva esplode. --}}
+                <dd class="mt-1 text-sm text-ink">{{ $entiUsati }}@if ($limiteEnti !== null) su {{ $limiteEnti }}@endif</dd>
             </div>
         </dl>
     </x-ui.card>
 
     <x-ui.card class="mt-4">
-        @if ($haPortale)
+        {{-- 🔴 L'impersonazione PRIMA di ogni altro ramo, e con una copy
+             propria: la sessione di portale si aprirebbe sul customer del
+             CLIENTE, e da lì si può disdire il suo abbonamento e cambiargli il
+             metodo di pagamento. Il rifiuto vero sta nel controller; qui si
+             toglie il bottone e si dice perché — far cadere il caso nel ramo
+             «non disponibile per questo account» direbbe una cosa falsa
+             sull'account del cliente. --}}
+        @if ($impersonazione)
+            <p class="text-sm text-ink-2">
+                Il portale di fatturazione non si apre durante un&rsquo;impersonazione: la sessione
+                sarebbe intestata al customer del cliente e consentirebbe di disdirne l&rsquo;abbonamento.
+                Esci dall&rsquo;impersonazione, oppure usa la dashboard di Stripe.
+            </p>
+        @elseif ($haPortale)
             {{-- Form POST classico verso un controller invokable, NON un'azione
                  Livewire: `skipRender()` farebbe saltare del tutto il `render()`
                  di questo componente, quindi una guardia scritta lì non

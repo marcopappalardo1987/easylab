@@ -1,10 +1,16 @@
 <?php
 
 use App\Models\Account;
+use App\Models\Piano;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
+use App\Support\AuditLog;
 use App\Support\Billing\PortaleStripe;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
+use Illuminate\Support\Facades\Log;
+use Spatie\Activitylog\Models\Activity;
 
 /**
  * La pagina «Abbonamento» e il bottone che apre il Billing Portal ospitato di
@@ -63,6 +69,29 @@ function portaleFinto(): object
     app()->instance(PortaleStripe::class, $fake);
 
     return $fake;
+}
+
+/**
+ * Una riga in `subscriptions` scritta a mano, come in `AbbonaCommandTest`: la
+ * suite non parla con Stripe, e `Account::subscription('default')` legge da
+ * questa tabella e basta.
+ *
+ * ⚠️ `DB::table()` e non un factory: `Laravel\Cashier\Subscription` vive in
+ * `vendor/`, dove il progetto non ha (né vuole) fixture proprie.
+ */
+function abbonamentoFinto(Account $account, string $stato, ?string $endsAt = null): void
+{
+    DB::table('subscriptions')->insert([
+        'account_id' => $account->id,
+        'type' => 'default',
+        'stripe_id' => 'sub_'.$stato.'_'.$account->id,
+        'stripe_status' => $stato,
+        'stripe_price' => 'price_saas_test',
+        'quantity' => 1,
+        'ends_at' => $endsAt,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
 }
 
 it('shows the page to a member, with the plan and the form towards the portal', function () {
@@ -290,4 +319,314 @@ it('never offers the menu entry to a user of the same Ente who does not administ
         ->get(route('dashboard'))
         ->assertOk()
         ->assertDontSee(route('abbonamento.index'));
+});
+
+/*
+ |--------------------------------------------------------------------------
+ | Lo STATO dell'abbonamento, che è il cuore prodotto della pagina
+ |--------------------------------------------------------------------------
+ |
+ | 🔴 Prima del 28 Ago 2026 `statoAbbonamento()` non aveva **nessun** test:
+ | ogni fixture creava un Account `conStripe()` senza mai una riga in
+ | `subscriptions`, quindi tutti i test rendevano sempre e solo il ramo
+ | `null => 'Nessun abbonamento'`. Conseguenza misurata: sostituire l'intero
+ | `match` con `$account->subscribed('default') ? 'Attivo' : 'Nessun
+ | abbonamento'` non rompeva una sola asserzione — e coi default di Cashier
+ | (`$deactivatePastDue`) la pagina avrebbe detto «Nessun abbonamento» proprio
+ | al cliente in dunning che sta cercando di pagare, cioè all'unica persona per
+ | cui questa pagina esiste.
+ */
+
+it('reads the subscription state from stripe_status, never from subscribed()', function (string $stato, string $atteso) {
+    abbonamentoFinto($this->account, $stato);
+
+    $this->actingAs($this->membro)
+        ->get(route('abbonamento.index'))
+        ->assertOk()
+        ->assertSee($atteso);
+})->with([
+    'attivo' => ['active', 'Attivo'],
+    'in prova' => ['trialing', 'In prova'],
+    // ⛔ Il caso che regge tutto: `valid()` lo direbbe NON abbonato.
+    'insoluto in corso' => ['past_due', 'Stripe sta ritentando'],
+    'non pagato' => ['unpaid', 'Chiuso'],
+    'disdetto e chiuso' => ['canceled', 'Chiuso'],
+    'mai partito' => ['incomplete', 'Mai partito'],
+]);
+
+it('never says «no subscription» to the customer Stripe is still retrying', function () {
+    // Il negativo del caso `past_due`, scritto a parte perché è la riga che il
+    // difetto attraverserebbe in silenzio: `subscribed()` passa da `valid()`,
+    // che con `$deactivatePastDue` considera NON valido proprio questo stato.
+    abbonamentoFinto($this->account, 'past_due');
+
+    $this->actingAs($this->membro)
+        ->get(route('abbonamento.index'))
+        ->assertOk()
+        ->assertDontSee('Nessun abbonamento');
+});
+
+it('says «no subscription» when there is no subscription row at all', function () {
+    $this->actingAs($this->membro)
+        ->get(route('abbonamento.index'))
+        ->assertOk()
+        ->assertSee('Nessun abbonamento');
+});
+
+it('prints an unknown Stripe status verbatim instead of a blank page', function () {
+    // Uno stato che Stripe introducesse domani non deve diventare una pagina
+    // vuota: si stampa com'è, e chi legge ha di che chiamare.
+    abbonamentoFinto($this->account, 'paused');
+
+    $this->actingAs($this->membro)
+        ->get(route('abbonamento.index'))
+        ->assertOk()
+        ->assertSee('paused');
+});
+
+it('tells the self-cancelled customer until when the subscription stays active', function () {
+    // 🔴 È la riga che dà il titolo alla feature — «disdetta autonoma». Chi
+    // disdice nel portale resta `active` con un `ends_at` futuro, e senza
+    // questa frase leggerebbe soltanto «Attivo», cioè crederebbe di non aver
+    // disdetto nulla.
+    abbonamentoFinto($this->account, 'active', now()->addDays(12)->toDateTimeString());
+
+    $this->actingAs($this->membro)
+        ->get(route('abbonamento.index'))
+        ->assertOk()
+        ->assertSee('disdetto, attivo fino al '.now()->addDays(12)->format('d/m/Y'));
+});
+
+it('never claims a cancellation that has already expired', function () {
+    // `ends_at` passato = la disdetta è già stata eseguita, e la subscription
+    // è `canceled`: «attivo fino al» sarebbe falso al passato.
+    abbonamentoFinto($this->account, 'canceled', now()->subDay()->toDateTimeString());
+
+    $this->actingAs($this->membro)
+        ->get(route('abbonamento.index'))
+        ->assertOk()
+        ->assertSee('Chiuso')
+        ->assertDontSee('attivo fino al');
+});
+
+/*
+ |--------------------------------------------------------------------------
+ | Il limite di sedi: «illimitato» e «non lo so» non sono la stessa cosa
+ |--------------------------------------------------------------------------
+ */
+
+it('never claims unlimited sedi on a plan that is not in the catalogue', function () {
+    // `accounts.piano` è una stringa senza CHECK a DB e i piani fuori catalogo
+    // sono uno stato governato (ADR-035). `Piani::maxEnti()` LANCIA su quel
+    // codice — quindi `Account::slotEntiResidui()` esplode e la quarta sede non
+    // viene concessa affatto: stampare «∞» affermerebbe al cliente il contrario
+    // esatto di ciò che succede.
+    $this->account->forceFill(['piano' => 'saas_legacy'])->save();
+
+    $this->actingAs($this->membro)
+        ->get(route('abbonamento.index'))
+        ->assertOk()
+        ->assertDontSee('∞')
+        // Il ripiego dell'etichetta resta il codice grezzo, come già era.
+        ->assertSee('saas_legacy');
+});
+
+it('still shows the infinity sign for a plan that declares no limit', function () {
+    // La controprova: «∞» non è stato spento in generale — significa ancora
+    // «illimitato», e solo quello.
+    Piano::query()->where('codice', 'saas')->update(['max_enti' => null]);
+
+    $this->actingAs($this->membro)
+        ->get(route('abbonamento.index'))
+        ->assertOk()
+        ->assertSee('∞');
+});
+
+/*
+ |--------------------------------------------------------------------------
+ | L'errore che TORNA: il flash deve essere reso da chi lo riceve
+ |--------------------------------------------------------------------------
+ */
+
+it('shows the failure to the customer who lands back on the subscription page', function () {
+    // Non basta che il flash sia in sessione: prima del 28 Ago 2026 le tre
+    // asserzioni si fermavano a `assertSessionHas`, e nessun test seguiva il
+    // redirect — cancellando il blocco @if dalla vista la suite restava verde.
+    app()->instance(PortaleStripe::class, new class extends PortaleStripe
+    {
+        public function url(Account $account, string $returnUrl): string
+        {
+            throw new RuntimeException('Stripe non risponde');
+        }
+    });
+
+    $this->actingAs($this->membro)
+        ->from(route('abbonamento.index'))
+        ->post(route('abbonamento.portale'))
+        ->assertRedirect(route('abbonamento.index'));
+
+    // ⚠️ Ago senza apostrofi: `assertSee` escapa, e «non è stato possibile»
+    // non ne contiene.
+    $this->actingAs($this->membro)
+        ->get(route('abbonamento.index'))
+        ->assertOk()
+        ->assertSee('Non è stato possibile aprire il portale di fatturazione');
+});
+
+it('reports the Stripe failure to the internal error tracker', function () {
+    // 🔴 La METÀ del nome che prima non poteva diventare rossa: senza questa
+    // asserzione, sostituire `report($e)` con un catch muto lasciava il test
+    // verde — il cliente leggeva la frase gentile e l'assistenza non vedeva
+    // nulla in /piattaforma/errori, che è esattamente lo scenario che il
+    // docblock del controller dice di voler evitare.
+    Exceptions::fake();
+
+    app()->instance(PortaleStripe::class, new class extends PortaleStripe
+    {
+        public function url(Account $account, string $returnUrl): string
+        {
+            throw new RuntimeException('Stripe non risponde');
+        }
+    });
+
+    $this->actingAs($this->membro)
+        ->from(route('abbonamento.index'))
+        ->post(route('abbonamento.portale'))
+        ->assertRedirect(route('abbonamento.index'));
+
+    Exceptions::assertReported(RuntimeException::class);
+});
+
+/*
+ |--------------------------------------------------------------------------
+ | Il registro: aprire il portale è un ATTO, e lascia una riga
+ |--------------------------------------------------------------------------
+ */
+
+it('writes an audit row when the portal is actually opened', function () {
+    // Nel progetto anche il semplice download di un documento è tracciato
+    // (`ScaricaDocumento`): aprire una sessione da cui si può disdire un
+    // abbonamento non può essere l'unico gesto muto.
+    portaleFinto();
+
+    $this->actingAs($this->membro)
+        ->post(route('abbonamento.portale'))
+        ->assertRedirect('https://billing.stripe.test/sessione-finta');
+
+    $riga = Activity::inLog(AuditLog::NAME)->where('description', 'Portale di fatturazione aperto')->sole();
+
+    expect($riga->causer_id)->toBe($this->membro->id)
+        ->and($riga->subject_id)->toBe($this->account->id);
+});
+
+it('never writes an audit row when the portal was not opened', function () {
+    // La controprova: la riga descrive un ATTO compiuto, non un tentativo.
+    portaleFinto();
+    config(['cashier.secret' => null]);
+
+    $this->actingAs($this->membro)
+        ->from(route('abbonamento.index'))
+        ->post(route('abbonamento.portale'));
+
+    expect(Activity::inLog(AuditLog::NAME)->where('description', 'Portale di fatturazione aperto')->count())->toBe(0);
+});
+
+/*
+ |--------------------------------------------------------------------------
+ | 🔴 IMPERSONAZIONE — il portale di un ALTRO Account non si apre
+ |--------------------------------------------------------------------------
+ |
+ | `Gate::authorize('manage', …)` risponde sull'utente della guard, e lab404
+ | SOSTITUISCE quell'utente: dentro un'impersonazione la Policy risponde
+ | sull'impersonato e dice di sì. Riprodotto il 28 Ago 2026: un Superadmin di
+ | un altro Account otteneva un 302 verso una sessione di portale intestata al
+ | customer del cliente — e da lì, con la disdetta abilitata (27 Ago 2026), se
+ | ne poteva disdire l'abbonamento.
+ */
+
+/** Il Superadmin di un Account DIVERSO, che impersona l'Admin del cliente. */
+function superadminDiUnAltroAccount(): User
+{
+    $staff = Account::factory()->create(['ragione_sociale' => 'EasyLab']);
+    $sede = UnitaOrganizzativa::factory()->ente()->perAccount($staff)->create(['nome' => 'Sede Staff']);
+
+    $super = User::factory()->create(['tenant_id' => $sede->id, 'two_factor_confirmed_at' => now()]);
+    $super->assignRole('Superadmin');
+    $staff->aggiungiMembro($super);
+
+    return $super;
+}
+
+it('never opens the billing portal of another account while impersonating', function () {
+    $fake = portaleFinto();
+    $super = superadminDiUnAltroAccount();
+
+    $this->actingAs($super)->get(route('impersonate', $this->membro->id));
+
+    $this->from(route('abbonamento.index'))
+        ->post(route('abbonamento.portale'))
+        ->assertRedirect(route('abbonamento.index'))
+        ->assertSessionHas('erroreAbbonamento');
+
+    expect($fake->invocazioni)->toBeEmpty()
+        ->and(Activity::inLog(AuditLog::NAME)->where('description', 'Portale di fatturazione aperto')->count())->toBe(0);
+});
+
+it('says why instead of offering a button it would refuse, while impersonating', function () {
+    $super = superadminDiUnAltroAccount();
+
+    $this->actingAs($super)->get(route('impersonate', $this->membro->id));
+
+    $this->get(route('abbonamento.index'))
+        ->assertOk()
+        // Ago senza apostrofi: `assertSee` escapa l'ago, e la copy ne contiene.
+        ->assertSee('non si apre durante')
+        ->assertDontSee(route('abbonamento.portale'));
+});
+
+it('still opens the portal for the member who is really signed in', function () {
+    // La controprova che la guardia dell'impersonazione è chirurgica e non ha
+    // spento la feature.
+    $fake = portaleFinto();
+
+    $this->actingAs($this->membro)
+        ->post(route('abbonamento.portale'))
+        ->assertRedirect('https://billing.stripe.test/sessione-finta');
+
+    expect($fake->invocazioni)->toBe([route('abbonamento.index')]);
+});
+
+it('logs the anomaly of a paying plan without a Stripe customer, and stays quiet on the free one', function () {
+    // Le due situazioni dietro lo stesso `stripe_id` mancante non sono la
+    // stessa cosa, e la differenza è ciò che il log esiste per registrare: sul
+    // Free non c'è **niente da riparare** (ADR-002), su un piano a pagamento
+    // c'è un account rotto che qualcuno deve sistemare. Senza questa
+    // asserzione, fondere i due rami in un messaggio solo non rompeva nulla e
+    // l'anomalia smetteva di essere segnalata a chi può rimediare.
+    Log::spy();
+    portaleFinto();
+
+    $this->account->forceFill(['stripe_id' => null])->save();
+
+    $this->actingAs($this->membro)
+        ->from(route('abbonamento.index'))
+        ->post(route('abbonamento.portale'));
+
+    Log::shouldHaveReceived('warning')
+        ->withArgs(fn (string $messaggio) => str_contains($messaggio, 'senza customer Stripe'))
+        ->once();
+});
+
+it('never logs an anomaly for a free plan, which has no customer by definition', function () {
+    Log::spy();
+    portaleFinto();
+
+    $this->account->forceFill(['stripe_id' => null, 'piano' => 'free'])->save();
+
+    $this->actingAs($this->membro)
+        ->from(route('abbonamento.index'))
+        ->post(route('abbonamento.portale'))
+        ->assertSessionHas('erroreAbbonamento');
+
+    Log::shouldNotHaveReceived('warning');
 });

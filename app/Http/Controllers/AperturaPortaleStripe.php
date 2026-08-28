@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Account;
+use App\Support\AuditLog;
 use App\Support\Billing\PortaleStripe;
 use App\Support\Piani;
 use Illuminate\Http\RedirectResponse;
@@ -41,6 +42,31 @@ use Throwable;
  * con `hasStripeId()`, non un'anomalia da lasciar esplodere in faccia a chi ha
  * cliccato.
  *
+ * ## 🔴 In IMPERSONAZIONE il portale non si apre
+ *
+ * `Gate::authorize('manage', …)` risponde sull'utente della guard, e lab404
+ * **sostituisce** quell'utente (`ImpersonateManager::quietLogin`): dentro
+ * un'impersonazione la guardia risponde sull'IMPERSONATO, quindi dice di sì —
+ * e la sessione di portale si aprirebbe sul customer del **cliente**.
+ * Riprodotto il 28 Ago 2026: un Superadmin di un altro Account, impersonando
+ * l'Admin di «Cliente Moroso», otteneva un 302 verso una sessione di portale
+ * intestata a quel customer. Con la disdetta abilitata nel portale (27 Ago
+ * 2026) quella sessione permette di **disdire l'abbonamento del cliente** e di
+ * cambiargli il metodo di pagamento.
+ *
+ * La specifica dice «nessun accesso al portale altrui per il Superadmin da
+ * questa feature»: qui è dove diventa vera. Il gesto di assistenza commerciale
+ * si compie dalla dashboard di Stripe, che è già il posto in cui vivono le
+ * chiavi e i log del fornitore; l'esenzione di ADR-013 sull'impersonazione
+ * riguarda l'**assistenza e l'export** in lockout, non l'intestazione di un
+ * rapporto commerciale.
+ *
+ * ⚠️ **E l'apertura riuscita lascia una riga di audit.** Nel progetto anche il
+ * download di un documento la lascia (`ScaricaDocumento`); aprire una sessione
+ * da cui si può disdire un abbonamento non può essere l'unico gesto muto. Il
+ * registro dice CHI l'ha aperta e su quale Account, non l'URL — che è un
+ * segreto a uso singolo.
+ *
  * ⚠️ **Un controller invokable esegue sempre il proprio corpo**: la trappola
  * `skipRender()` che rende fragili le guardie scritte in un `render()` Livewire
  * qui non esiste. È metà della ragione per cui questo pezzo non è un'azione
@@ -58,6 +84,19 @@ class AperturaPortaleStripe extends Controller
         abort_if($account === null, 404);
 
         Gate::authorize('manage', $account);
+
+        // 🔴 Subito DOPO la Policy, perché è la Policy che qui non basta:
+        // risponde sull'utente della guard, e in impersonazione quell'utente è
+        // il cliente. Vedi il docblock: senza questa riga il portale di un
+        // ALTRO Account si apre, e da lì se ne disdice l'abbonamento.
+        if (app('impersonate')->isImpersonating()) {
+            Log::warning('Portale di fatturazione richiesto durante un\'impersonazione: rifiutato.', [
+                'account_id' => $account->id,
+                'impersonato_da' => app('impersonate')->getImpersonatorId(),
+            ]);
+
+            return back()->with('erroreAbbonamento', 'Il portale di fatturazione non si apre durante un\'impersonazione: la sessione sarebbe intestata al customer del cliente. Esci dall\'impersonazione, oppure usa la dashboard di Stripe.');
+        }
 
         // ⚠️ La chiave prima del customer: senza segreto nessuna chiamata può
         // riuscire, e la forma in cui questo si presenta su Laravel Cloud è
@@ -95,6 +134,13 @@ class AperturaPortaleStripe extends Controller
 
             return back()->with('erroreAbbonamento', 'Non è stato possibile aprire il portale di fatturazione. Riprova fra poco.');
         }
+
+        // ADR-026: si traccia l'ATTO, non l'URL — che è un segreto valido una
+        // volta sola e non ha nulla da fare in un registro consultabile.
+        activity(AuditLog::NAME)
+            ->causedBy($request->user())
+            ->performedOn($account)
+            ->log('Portale di fatturazione aperto');
 
         return redirect()->away($url);
     }

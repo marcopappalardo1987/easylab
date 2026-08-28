@@ -7,6 +7,7 @@ use App\Models\Piano;
 use App\Support\Listino\CatalogoPiani;
 use App\Support\Listino\GovernoListino;
 use App\Support\Piani;
+use App\Support\Tenancy\VistaPiattaforma;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Layout;
@@ -73,9 +74,9 @@ use Livewire\Component;
  * dire la stessa cosa, cioè l'errore già commesso e corretto con
  * `system.errors.view`.
  *
- * ⚠️ **`VistaPiattaforma` non c'entra e non le si aggiunge un `piani()`.**
- * `piani` e `prezzi_piano` sono tabelle **globali**, senza tenancy: non c'è
- * alcuno scope da togliere, e un metodo in più nella porta sarebbe il «bypass
+ * ⚠️ **Alla porta di tenancy non si aggiunge un `piani()`.** `piani` e
+ * `prezzi_piano` sono tabelle **globali**, senza tenancy: non c'è alcuno scope
+ * da togliere, e un metodo in più in `VistaPiattaforma` sarebbe il «bypass
  * finto» che il suo docblock rifiuta per nome — la scelta già fatta da
  * `MatriceRuoli`. La conseguenza va accettata e scritta: questo componente
  * **non eredita** il guardrail «nessuna scrittura concatenata alla porta»,
@@ -83,6 +84,22 @@ use Livewire\Component;
  * in `render()`. Senza, `Livewire::test()` — che disabilita i middleware — non
  * incontrerebbe nessuna guardia, e un'azione che un domani guadagnasse
  * `skipRender()` scriverebbe **prima** che `render()` possa rispondere 403.
+ *
+ * 🔴 **Ma questa pagina legge anche `accounts`, e QUELLA lettura la porta la
+ * copre.** Le colonne «Clienti» e il conteggio di chi finirebbe sopra il tetto
+ * sono conteggi di **tutti gli account della piattaforma**: si prendono da
+ * `VistaPiattaforma::accounts()` e mai da un `Account::query()` a mano, che
+ * salterebbe il `Gate::authorize('tenants.view_all')` — la sola guardia che
+ * esiste per quel dato. Oggi i due permessi stanno sugli stessi due ruoli, e
+ * `AccessoListinoTest` congela il fatto; ma è precisamente la divergenza che la
+ * decisione di **non** metterli in AND mette in conto, e il giorno in cui
+ * arrivasse un ruolo con `billing.manage_global` e senza `tenants.view_all`
+ * quella persona leggerebbe il censimento dei clienti di tutta la piattaforma
+ * senza attraversare nessuna porta. Il meta-test dei bypass nudi non lo
+ * vedrebbe: guarda `withoutGlobalScopes()`, e qui non ce n'è nessuno.
+ *
+ * ⚠️ Di conseguenza `accounts()` **esclude EasyLab stessa** (`di_piattaforma`),
+ * ed è la lettura giusta: la colonna si intitola «Clienti».
  *
  * ⚠️ **Il file sta in `app/Livewire/Piattaforma/`, non in una sottocartella
  * propria**: `LocalizzazioneTest` deriva il proprio universo da un `glob()` con
@@ -261,7 +278,22 @@ class Listino extends Component
 
         $modello = $this->pianoInLavorazione();
 
-        $oltre = self::accountOltreIlTetto($modello, self::maxEntiDalForm($this->modifica['max_enti']));
+        $nuovoMax = self::maxEntiDalForm($this->modifica['max_enti']);
+
+        // 🔴 **Due condizioni, non una: il tetto deve SCENDERE, e sotto qualcuno
+        // deve esserci.** Guardare solo la seconda è la forma di difetto che il
+        // grandfathering stesso fabbrica: appena si abbassa `saas` da 5 a 2 con
+        // un cliente a 3 Enti, quel cliente resta **sopra il tetto per sempre** —
+        // quindi ogni salvataggio successivo, anche il solo cambio di etichetta
+        // con `max_enti` lasciato com'è, ritroverebbe «1 account oltre» e si
+        // fermerebbe a chiedere. La modale direbbe «il tetto passa da 2 a 2», e
+        // l'etichetta non si salverebbe al primo click. Col tetto in **salita**
+        // sarebbe peggio: stessa modale, intitolata «Abbassare il tetto» mentre
+        // lo si alza, cioè un'informazione falsa davanti a un pulsante.
+        $scende = $nuovoMax !== null
+            && ($modello->max_enti === null || $nuovoMax < (int) $modello->max_enti);
+
+        $oltre = $scende ? self::accountOltreIlTetto($modello, $nuovoMax) : 0;
 
         // Si chiede **solo** se qualcuno ci finisce davvero sotto. Una modale che
         // comparisse comunque sarebbe un ostacolo, non una decisione — e il
@@ -398,13 +430,19 @@ class Listino extends Component
         // di classe: è la riga che tiene in piedi la pagina quando Stripe è giù.
         $piani = app(CatalogoPiani::class)->tutti();
 
+        $clientiPerPiano = self::clientiPerPiano();
+
         return view('livewire.piattaforma.listino', [
             'piani' => $piani,
             // Il piano con cui nasce ogni account e a cui si torna dopo una
             // disdetta: è quello che `archivia()` rifiuta, e la pagina lo dice
             // **prima** invece di far scoprire il rifiuto con un click.
             'predefinito' => Piani::predefinito(),
-            'clientiPerPiano' => self::clientiPerPiano(),
+            'clientiPerPiano' => $clientiPerPiano,
+            // 🔴 I piani che esistono **solo** su `accounts.piano`: vedi
+            // `fuoriCatalogo()`. Costano zero query — sono la differenza fra due
+            // insiemi già in mano.
+            'fuoriCatalogo' => self::fuoriCatalogo($clientiPerPiano, $piani),
             // Raggruppate per codice qui e non nel Blade: è una trasformazione,
             // e una trasformazione dentro una vista è logica scritta dove non si
             // può provare.
@@ -428,12 +466,49 @@ class Listino extends Component
      */
     private static function clientiPerPiano(): array
     {
-        return Account::query()
+        return VistaPiattaforma::accounts()
             ->selectRaw('piano, count(*) as quanti')
             ->groupBy('piano')
             ->pluck('quanti', 'piano')
             ->map(fn ($quanti) => (int) $quanti)
             ->all();
+    }
+
+    /**
+     * 🔴 I piani che vivono **solo** su `accounts.piano`, col conteggio di chi ci
+     * sta sopra.
+     *
+     * `accounts.piano` è una stringa **senza FK e senza CHECK**: la scrivono il
+     * webhook di Stripe e i comandi di console, per codice. Un account può
+     * quindi restare su un codice che il listino non conosce (più) — ed è uno
+     * stato che ADR-035 dichiara già esistente: `ElencaClienti::FUORI_CATALOGO`
+     * lo filtra in cabina, e `MetrichePiattaforma` lo conta in
+     * `pianiSconosciuti`, **a 0 € di MRR**.
+     *
+     * ⚠️ **Questa è l'unica schermata da cui quel dato si ripara**, e senza la
+     * striscia non ne mostrerebbe traccia: chi apre il listino per capire perché
+     * l'MRR non torna vedrebbe un catalogo perfettamente sano. È la stessa forma
+     * della striscia degli orfani in fondo a `/piattaforma/ruoli`, e per la
+     * stessa ragione sta **fuori dalla tabella**: mescolare quei codici alle
+     * righe vere li legittimerebbe come piani.
+     *
+     * Costa **zero query**: è la differenza fra i codici già contati e i codici
+     * già caricati.
+     *
+     * @param  array<string, int>  $clientiPerPiano
+     * @param  array<string, Piano>  $piani
+     * @return array<string, int>
+     */
+    private static function fuoriCatalogo(array $clientiPerPiano, array $piani): array
+    {
+        $fuori = array_diff_key($clientiPerPiano, $piani);
+
+        // Ordine per codice: a parità di conteggio l'ordine di un `array_diff_key`
+        // è quello della query, cioè una proprietà del motore — la stessa
+        // ragione per cui ogni `orderBy` paginato vuole il suo tie-break.
+        ksort($fuori);
+
+        return $fuori;
     }
 
     /**
@@ -454,7 +529,7 @@ class Listino extends Component
             return 0;
         }
 
-        return Account::query()
+        return VistaPiattaforma::accounts()
             ->where('piano', $piano->codice)
             ->withCount('enti')
             ->get()

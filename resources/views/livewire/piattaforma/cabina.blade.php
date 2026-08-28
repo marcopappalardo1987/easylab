@@ -93,6 +93,19 @@
                      bottone un'affordance che i token esistenti sanno esprimere. --}}
                 <button type="button" wire:click="$set('piano', '{{ $this::FUORI_CATALOGO }}')"
                         class="font-medium underline hover:no-underline">Mostra{{ $riepilogo->pianiSconosciuti === 1 ? 'lo' : 'li' }}</button>
+                {{-- ⛔ Il filtro mostra CHI, il listino è dove si RIPARA: da qui il
+                     piano dismesso si ricrea o si riassegna, e senza questa strada
+                     l'avviso resta una diagnosi senza cura — chi lo legge in cabina
+                     non ha da lì nessun modo di arrivare all'unica schermata che
+                     può chiudere il problema (🔗 ADR-035).
+
+                     Gatato su `billing.manage_global` e non lasciato aperto: chi
+                     legge l'avviso non è detto che possa toccare il listino, e un
+                     link che porta a un 403 è peggio dell'assenza del link. --}}
+                @can('billing.manage_global')
+                    <a href="{{ route('piattaforma.piani') }}"
+                       class="font-medium underline hover:no-underline">Vai al listino</a>
+                @endcan
             </p>
         </x-ui.card>
     @endif

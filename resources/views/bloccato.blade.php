@@ -17,6 +17,27 @@
                 </p>
             </div>
 
+            {{-- 🔴 L'esito del bottone «Regolarizza il pagamento».
+                 `AperturaPortaleStripe` torna sempre con
+                 `back()->with('erroreAbbonamento', …)` sui suoi tre rami di
+                 errore (ambiente senza chiave, customer sparito, Stripe che non
+                 risponde), e `back()` da qui riporta QUI: senza questo blocco il
+                 messaggio esisteva in sessione e non lo rendeva nessuno — la
+                 pagina lampeggiava e tornava identica, su quella che per il
+                 moroso è l'unica via d'uscita. Il gemello vive in
+                 `livewire/billing/pagina-abbonamento.blade.php`, che è l'altro
+                 punto in cui quel `back()` può atterrare.
+
+                 ⚠️ Sta FUORI da `@if ($puoPagare)`, e non è indifferente: il
+                 ramo «customer sparito fra il render e il POST» è esattamente
+                 quello in cui, al ritorno, `$puoPagare` è diventato falso — il
+                 messaggio sparirebbe proprio nel caso che lo rende necessario. --}}
+            @if (session('erroreAbbonamento'))
+                <div class="mt-8 rounded-lg border border-border bg-bad-soft p-4 text-sm text-bad-soft-ink">
+                    {{ session('erroreAbbonamento') }}
+                </div>
+            @endif
+
             <div class="mt-8 rounded-lg border border-border bg-surface p-6 shadow-sm md:p-8">
                 {{-- Il messaggio è GENERICO di proposito: `locked_reason` è
                      un'annotazione operativa interna scritta dallo staff (può

@@ -1,5 +1,6 @@
 <?php
 
+use App\Livewire\Piattaforma\Cabina;
 use App\Livewire\Piattaforma\Listino;
 use App\Models\Account;
 use App\Models\Piano;
@@ -330,6 +331,60 @@ it('never counts a trashed sede against the cap', function () {
     expect($componente->html())->not->toContain('data-conferma-tetto');
 });
 
+it('only stops to ask when the cap is really going down', function () {
+    // 🔴 **Il freno guardava una condizione sola, e il grandfathering fabbrica
+    // l'altra metà da sé.** Chiedere «ci sono account sopra il tetto nuovo?»
+    // senza confrontarlo col tetto **vecchio** significa che, una volta abbassato
+    // `saas` da 5 a 2 con un cliente a 3 Enti, quel cliente resta sopra il tetto
+    // per sempre: da lì in poi **ogni** salvataggio — anche il solo cambio di
+    // etichetta, col campo del tetto lasciato a 2 — ritrova «1 account oltre», si
+    // ferma e non scrive. La modale che compare dice «il tetto passa da 2 a 2»,
+    // che è una frase priva di senso davanti a un pulsante, e l'etichetta non si
+    // salva al primo click.
+    $account = Account::factory()->saas()->create();
+    UnitaOrganizzativa::factory()->count(3)->ente()->perAccount($account)->create();
+
+    $saas = Piani::modello('saas');
+
+    // Il preludio: il tetto scende davvero, e la modale è giusto che compaia.
+    ($this->pagina)()
+        ->call('apriModifica', $saas->id)
+        ->set('modifica.max_enti', '2')
+        ->call('salva')
+        ->call('procedi')
+        ->assertHasNoErrors();
+
+    app(CatalogoPiani::class)->dimentica();
+    expect($saas->fresh()->max_enti)->toBe(2)
+        ->and($account->fresh()->enti()->count())->toBe(3);
+
+    // 1. Il tetto non si muove: si salva l'etichetta, e basta.
+    $soloEtichetta = ($this->pagina)()
+        ->call('apriModifica', $saas->id)
+        ->set('modifica.etichetta', 'SaaS Pro')
+        ->call('salva')
+        ->assertHasNoErrors();
+
+    expect($soloEtichetta->html())->not->toContain('data-conferma-tetto');
+
+    app(CatalogoPiani::class)->dimentica();
+    expect($saas->fresh()->etichetta)->toBe('SaaS Pro');
+
+    // 2. Il tetto **sale**, con il cliente ancora sopra: nessuna modale, e
+    //    soprattutto nessuna modale intitolata «Abbassare il tetto» mentre lo si
+    //    alza — che sarebbe un'informazione falsa, non un attrito di troppo.
+    $inSalita = ($this->pagina)()
+        ->call('apriModifica', $saas->id)
+        ->set('modifica.max_enti', '3')
+        ->call('salva')
+        ->assertHasNoErrors();
+
+    expect($inSalita->html())->not->toContain('data-conferma-tetto');
+
+    app(CatalogoPiani::class)->dimentica();
+    expect($saas->fresh()->max_enti)->toBe(3);
+});
+
 it('writes nothing when procedi arrives with nothing pending', function () {
     // Il pulsante di conferma non è una seconda strada per scrivere: senza una
     // conferma in attesa non fa niente. Senza questa riga, una richiesta
@@ -423,6 +478,139 @@ it('refuses to hook a price that bills a different amount', function () {
     app(CatalogoPiani::class)->dimentica();
 
     expect(Piani::stripePrice('saas'))->toBeNull();
+});
+
+it('records the product of the hooked price, so the obvious next click creates no twin', function () {
+    // 🔴 **La sequenza completa, che è lo scenario per cui l'azione esiste.** Su
+    // Laravel Cloud `STRIPE_PRICE_SAAS` manca al deploy, il backfill crea `saas`
+    // senza product id e senza riga di prezzo, l'operatore aggancia il price
+    // giusto — e poi fa il gesto ovvio: preme «Sincronizza», perché la colonna
+    // «Stripe» dice ancora «da sincronizzare».
+    //
+    // Se l'aggancio scrivesse **solo** la riga di `prezzi_piano`, quel secondo
+    // click troverebbe `stripe_product_id` vuoto e **creerebbe un secondo
+    // Product** — cioè esattamente la duplicazione che il docblock
+    // dell'aggancio dichiara di voler evitare. Il price giusto resterebbe appeso
+    // al prodotto vecchio, il piano punterebbe a un prodotto nuovo e vuoto, e la
+    // conciliazione direbbe «coincidono» leggendo i due oggetti sbagliati.
+    //
+    // Nessun test si fermava all'aggancio a metà strada: si verificava che
+    // `creaPrezzo` valesse 0 e ci si fermava lì.
+    $this->porta->conPrezzo('price_gia_esistente', 4900, 'eur', true, 'prod_XYZ');
+
+    $saas = Piani::modello('saas');
+
+    ($this->pagina)()
+        ->call('apriAggancio', $saas->id)
+        ->set('priceId', 'price_gia_esistente')
+        ->call('aggancia')
+        ->assertHasNoErrors();
+
+    app(CatalogoPiani::class)->dimentica();
+
+    expect($saas->fresh()->stripe_product_id)->toBe('prod_XYZ')
+        // E il piano non dice più «da sincronizzare»: lo è.
+        ->and($saas->fresh()->stripe_sincronizzato_at)->not->toBeNull();
+
+    // Il gesto ovvio successivo, quello che duplicava.
+    ($this->pagina)()->call('sincronizza', $saas->id)->assertHasNoErrors();
+
+    app(CatalogoPiani::class)->dimentica();
+
+    expect($this->porta->quante('creaProdotto'))->toBe(0)
+        ->and($this->porta->quante('aggiornaProdotto'))->toBe(1)
+        ->and($this->porta->quante('creaPrezzo'))->toBe(0)
+        ->and(Piani::stripePrice('saas'))->toBe('price_gia_esistente')
+        ->and($saas->fresh()->stripe_product_id)->toBe('prod_XYZ');
+});
+
+// ─── Dove si vede il rifiuto ─────────────────────────────────────────────────
+
+it('puts the refusal next to the field, inside the modal where the click happened', function () {
+    // 🔴 **La card «Gesto rifiutato» in cima alla pagina NON basta, e va detto
+    // perché sembra che basti.** La modale è `fixed inset-0 z-50` sopra un velo
+    // opaco: il messaggio in cima al flusso normale sta **dietro** quel velo, su
+    // una pagina che nel frattempo è scrollata. Chi preme «Aggancia» con un
+    // price sbagliato vede la modale restare aperta esattamente com'era e
+    // conclude «non è successo niente» — cioè il difetto che l'intera disciplina
+    // degli errori in pagina esiste per evitare.
+    //
+    // ⚠️ **E il difetto era invisibile ai test che c'erano**: `renders the
+    // refusal in the page` cerca la stringa nell'HTML, che c'era. Ciò che
+    // mancava era **dove**. Qui si taglia l'HTML dal `data-form-` in poi, cioè
+    // si guarda solo dentro la modale.
+    //
+    // La causa era una sola parola: `x-ui.input` rende il messaggio con
+    // `@error($name)`, e i campi si chiamavano `nuovo.codice` / `priceId`
+    // mentre l'error bag porta `codice` / `price_id`. Nessun `@error` combaciava,
+    // su nessuno degli otto campi della schermata.
+    $dentroLaModale = function (string $html, string $marcatore): string {
+        $inizio = mb_strpos($html, $marcatore);
+
+        expect($inizio)->not->toBeFalse();
+
+        return mb_substr($html, (int) $inizio);
+    };
+
+    $this->porta->conPrezzo('price_troppo_caro', 9900, 'eur');
+
+    $saas = Piani::modello('saas');
+
+    $aggancio = ($this->pagina)()
+        ->call('apriAggancio', $saas->id)
+        ->set('priceId', 'price_troppo_caro')
+        ->call('aggancia')
+        ->assertHasErrors('price_id')
+        ->html();
+
+    expect($dentroLaModale($aggancio, 'data-form-aggancio'))
+        ->toContain('agganciarlo fatturerebbe una cifra che nessuna schermata mostra');
+
+    // L'altra modale, che ha quattro campi e la stessa forma di difetto.
+    $creazione = ($this->pagina)()
+        ->call('apriCreazione')
+        ->set('nuovo.codice', 'NON valido')
+        ->set('nuovo.etichetta', 'X')
+        ->call('crea')
+        ->assertHasErrors('codice')
+        ->html();
+
+    expect($dentroLaModale($creazione, 'data-form-creazione'))
+        ->toContain('non è un codice valido');
+});
+
+// ─── I piani che esistono solo sui clienti ───────────────────────────────────
+
+it('names the codes that live only on accounts, and points at the clients still on them', function () {
+    // 🔴 `accounts.piano` è una stringa **senza FK e senza CHECK**: un cliente
+    // può restare su un codice che il listino non conosce più, ed è uno stato
+    // che ADR-035 dichiara già esistente — `ElencaClienti::FUORI_CATALOGO` lo
+    // filtra in cabina e `MetrichePiattaforma` lo conta a **0 € di MRR**.
+    //
+    // ⚠️ Questa è l'**unica schermata da cui quel dato si ripara**: senza la
+    // striscia, chi apre il listino per capire perché l'MRR non torna vedrebbe
+    // un catalogo perfettamente sano.
+    Account::factory()->count(2)->create(['piano' => 'gold']);
+    Account::factory()->create(['piano' => 'free']);
+
+    $html = ($this->pagina)()->html();
+
+    expect($html)->toContain('data-fuori-catalogo-codice="gold"')
+        ->and($html)->toContain('data-fuori-catalogo-clienti="2"')
+        // La strada verso i clienti veri, col filtro già impostato: la
+        // sentinella viene dalla costante e non da una stringa ribattuta.
+        ->and($html)->toContain(route('piattaforma.index', ['piano' => Cabina::FUORI_CATALOGO]))
+        // E i piani veri restano nella tabella, non nella striscia.
+        ->and($html)->not->toContain('data-fuori-catalogo-codice="free"');
+});
+
+it('shows no out-of-catalogue strip when every client sits on a real plan', function () {
+    // Una sezione vuota permanente insegna a non guardarla: il blocco non
+    // compare affatto nel caso normale. È la disciplina della striscia degli
+    // orfani di /piattaforma/ruoli.
+    Account::factory()->saas()->create();
+
+    expect(($this->pagina)()->html())->not->toContain('data-fuori-catalogo');
 });
 
 // ─── Il costo della pagina ───────────────────────────────────────────────────

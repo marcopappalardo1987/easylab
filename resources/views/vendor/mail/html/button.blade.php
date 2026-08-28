@@ -10,18 +10,29 @@
     `$coloreTesto`: il kebab-case è la convenzione dei componenti, e un
     `:coloreTesto` non arriverebbe mai.
 
-    ⚠️ **Lo `style` inline vince sul CSS del tema**, che `CssToInlineStyles`
-    scrive anch'esso inline: l'ultimo `style` sull'elemento è quello che conta,
-    e le classi `button-primary` del tema restano il default per chi non passa
-    un colore. Il testo NON è fissato a bianco — lo calcola
-    `MarchioEmail::inchiostroSu()`, perché il colore lo sceglie il cliente e può
-    essere giallo canarino.
+    ⚠️ **Lo `style` inline vince sul CSS del tema**, e non «perché è l'ultimo»:
+    `CssToInlineStyles::inlineCssOnElement()` scarta del tutto le proprietà del
+    foglio che sono **già** presenti nell'attributo `style`. Ciò che sta qui
+    dentro, quindi, non è una preferenza — è una cancellazione.
+
+    ⛔ **Per questo il marchio tinge SOLO il pulsante di default (`primary`).**
+    Il colore lo sceglie il cliente, ma `error` e `success` non sono colori: sono
+    il **livello** del messaggio, e vengono da `->level()` della notifica. Finché
+    lo stile inline si scriveva a ogni chiamata, `.button-error` e
+    `.button-success` del tema erano **classi morte** — un `->level('error')`
+    produceva la classe giusta sull'`<a>` e un pulsante blu, cioè due regole per
+    lo stesso colore che potevano divergere senza che nulla lo dicesse.
+    `vendor/notifications/email.blade.php` calcola quel livello: qui si rispetta.
+
+    Il testo NON è fissato a bianco — lo calcola `MarchioEmail::inchiostroSu()`,
+    perché il colore del cliente può essere giallo canarino. Sui livelli
+    semantici l'inchiostro è del tema, che li sceglie insieme al fondo.
 
     I `border-*` ripetono il fondo perché è così che si ottiene il padding di un
     pulsante nei client che ignorano `padding` su un `<a>` (Outlook in testa).
 --}}
 @php
-    $stile = $colore !== null
+    $stile = ($colore !== null && $color === 'primary')
         ? 'background-color: '.$colore.'; color: '.($coloreTesto ?? '#ffffff').'; border-color: '.$colore.';'
         : null;
 @endphp

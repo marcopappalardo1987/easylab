@@ -58,6 +58,34 @@ use Livewire\Component;
  * su Stripe. Stamparlo su una pagina rivolta al cliente pagante significa
  * affermare quanto paga senza saperlo. Le cifre vere sono nel portale.
  *
+ * ## 🔴 Il layout NON è quello dell'applicazione, ed è una decisione di sicurezza
+ *
+ * `components.guest-layout` — lo stesso di `/bloccato`, che monta **zero**
+ * componenti Livewire. Il layout dell'app ne monta tre (`tenancy.switcher-ente`,
+ * `notifiche.campanella`, `settings.selettore-tema`), e su questa pagina
+ * sarebbero una **fuga dal lockout**, non un dettaglio estetico.
+ *
+ * Il meccanismo, riprodotto il 28 Ago 2026: Livewire scrive nel `memo` dello
+ * snapshot il **path** della richiesta che l'ha generato e, sugli update,
+ * ricostruisce da quel path i middleware *persistenti*
+ * (`PersistentMiddleware::getApplicablePersistentMiddleware()`). `/abbonamento`
+ * sta nel gruppo `auth` **nudo**, quindi i middleware ricostruiti sono
+ * `['web','auth']` e `EnforceAccountLockout` — registrato persistente in
+ * `AppServiceProvider` proprio perché «senza, ogni azione Livewire aggirerebbe
+ * il blocco» — **non gira**. Misura: con la top bar montata qui, un POST su
+ * `/livewire/update` con lo snapshot della campanella preso da `/abbonamento`
+ * eseguiva `segnaTutteLette` con HTTP 200 su un account bloccato; lo stesso
+ * componente e la stessa azione, con lo snapshot preso da `/dashboard`,
+ * rispondevano 302 verso `/bloccato`.
+ *
+ * L'esenzione di ADR-013 è «un bloccato può **pagare**», non «un bloccato può
+ * usare tutto ciò che il layout monta». Con questo layout resta un solo
+ * componente sulla pagina — **questo**, che non ha azioni — e un guardrail
+ * strutturale (`PortaleStripeInLockoutTest`) lo conta.
+ *
+ * ⚠️ Il costo dichiarato: niente top bar, quindi la pagina si porta da sé il
+ * link di ritorno. È lo stesso patto di `/bloccato`.
+ *
  * ## ZERO rete nel ciclo di render
  *
  * Tutto ciò che si legge qui viene da colonne locali. La rete la chiama solo il
@@ -66,7 +94,7 @@ use Livewire\Component;
  * timeout del fornitore diventerebbe una pagina che non si apre.
  */
 #[Title('Abbonamento — Easy Lab')]
-#[Layout('components.layouts.app')]
+#[Layout('components.guest-layout')]
 class PaginaAbbonamento extends Component
 {
     public function mount(): void
@@ -89,12 +117,29 @@ class PaginaAbbonamento extends Component
         return view('livewire.billing.pagina-abbonamento', [
             'ragioneSociale' => $account->ragione_sociale,
             'etichettaPiano' => $pianoNoto ? Piani::etichetta($account->piano) : $account->piano,
-            'maxEnti' => $pianoNoto ? Piani::maxEnti($account->piano) : null,
+            // ⛔ `null` NON è il ripiego del piano ignoto, ed è la riga che
+            // il difetto ha attraversato: per `Piani::maxEnti()` `null` significa
+            // **illimitato** (la forma di un Enterprise), e la vista lo stampa
+            // «∞». Su un piano fuori catalogo — stato esistente e governato,
+            // ADR-035, e `accounts.piano` non ha CHECK a DB — quel ripiego
+            // affermava al cliente «sedi illimitate» mentre
+            // `Account::slotEntiResidui()` **lancia** sullo stesso codice: la
+            // quarta sede sarebbe esplosa invece di essere concessa. Qui il
+            // limite semplicemente non si dichiara, come già fa l'etichetta che
+            // ripiega sul codice grezzo: è la stessa regola del prezzo — non si
+            // afferma ciò che non si sa.
+            'limiteEnti' => $pianoNoto ? (Piani::maxEnti($account->piano) ?? '∞') : null,
             'entiUsati' => $account->enti()->count(),
             'statoAbbonamento' => $this->statoAbbonamento($account),
             // 🔴 SOLO il booleano. Il motivo del blocco non esce da qui.
             'sospeso' => (bool) $account->is_locked,
             'pianoGratuito' => $pianoNoto && Piani::eGratuito($account->piano),
+            // 🔴 In impersonazione il portale NON si offre: vedi
+            // `AperturaPortaleStripe`, dove sta la guardia vera. Qui si toglie
+            // il bottone perché offrire ciò che il controller rifiuta sarebbe
+            // un vicolo cieco — e la copy lo dice per nome, invece di far
+            // credere che l'account non abbia un portale.
+            'impersonazione' => app('impersonate')->isImpersonating(),
             // Le due condizioni insieme: un customer che non c'è (Free, ADR-002)
             // e un ambiente senza chiavi darebbero entrambi un bottone che
             // porta a un errore. Meglio non offrirlo.

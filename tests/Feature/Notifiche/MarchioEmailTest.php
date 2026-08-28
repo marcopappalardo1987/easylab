@@ -10,6 +10,8 @@ use App\Notifications\NuovoErrore;
 use App\Support\Mail\MarchioEmail;
 use App\Support\Notifiche\RigaAvviso;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Notifications\Notification as NotificaBase;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
@@ -192,6 +194,14 @@ it('never brands the platform alert with a tenant, by construction and not by co
     expect($testo)->not->toContain('#123456');
     expect($allegati)->not->toContain('PNG-DEL-LABORATORIO-ROSSI-8811');
 
+    // ⚠️ **Una volta sola.** Questa email costruisce il marchio DENTRO
+    // `vendor/notifications/email.blade.php`, che viene reso due volte sullo
+    // stesso `Message` — html e testo. Finché ogni resa si costruiva un marchio
+    // nuovo, la memoria del `cid:` non poteva funzionare e il logo Easy Lab
+    // finiva allegato **due volte**: un `DataPart` in più che nessuno vede
+    // finché non apre il messaggio grezzo.
+    expect($email->getAttachments())->toHaveCount(1);
+
     expect($ente->marchio_colore)->toBe('#123456');
 });
 
@@ -341,8 +351,52 @@ it('picks the ink on the button instead of assuming white', function () {
 
     $html = (string) emailPer('anna@rossi.test')->getHtmlBody();
 
-    expect($html)->toContain('#ffff00');
-    expect($html)->toContain('#0f172a');
+    // ⛔ **L'ago è la COPPIA, non il solo inchiostro.** `expect($html)->toContain('#0f172a')`
+    // non poteva fallire: `easylab.css` assegna quel valore a `h1`, `h2`, `h3` e
+    // `.header-nome`, e `CssToInlineStyles` li scrive inline su OGNI email — il
+    // digest ha sempre un titolo e la testata ha sempre il nome dell'Ente.
+    // Fissando il testo del pulsante a bianco, il calcolo diventava inutile e
+    // questa asserzione restava verde. Fondo e inchiostro nello stesso attributo
+    // `style` sono invece un ago che solo il pulsante può soddisfare.
+    expect($html)->toContain('background-color: #ffff00; color: #0f172a');
+});
+
+it('keeps the semantic level of a button instead of painting it with the brand', function () {
+    // Il colore del marchio tinge il pulsante di DEFAULT. `error` e `success`
+    // non sono colori ma il **livello** del messaggio, e arrivano da `->level()`
+    // della notifica: finché lo stile inline si scriveva sempre,
+    // `CssToInlineStyles` scartava `background-color` del tema — perché dà
+    // priorità alle proprietà già presenti nell'attributo `style` — e
+    // `.button-error`/`.button-success` erano classi MORTE. Un `->level('error')`
+    // produceva la classe giusta sull'`<a>` e un pulsante blu: due regole per lo
+    // stesso colore, libere di divergere in silenzio.
+    $allarme = new class extends NotificaBase
+    {
+        /** @return list<string> */
+        public function via(object $notifiable): array
+        {
+            return ['mail'];
+        }
+
+        public function toMail(object $notifiable): MailMessage
+        {
+            return (new MailMessage)->error()
+                ->subject('Easy Lab · prova di livello')
+                ->line('Qualcosa è andato storto.')
+                ->action('Apri la scheda', 'http://easylab.test/piattaforma/errori/1');
+        }
+    };
+
+    Notification::route('mail', 'allerta@easylab.test')->notify($allarme);
+
+    $html = (string) emailPer('allerta@easylab.test')->getHtmlBody();
+
+    expect(preg_match('/<a[^>]*class="button button-error"[^>]*>/', $html, $trovato))->toBe(1);
+
+    // Il rosso del livello arriva sul pulsante…
+    expect($trovato[0])->toContain('#b3261e');
+    // …e il blu del marchio NON lo copre.
+    expect($trovato[0])->not->toContain(MarchioEmail::COLORE_EASYLAB);
 });
 
 it('never leaves raw markdown in the plain text body of the digest', function () {
@@ -360,6 +414,43 @@ it('never leaves raw markdown in the plain text body of the digest', function ()
     // da un corpo testuale vuoto.
     expect($testo)->toContain('Agitatore 2358');
     expect($testo)->toContain(today()->addDays(5)->format('d/m/Y'));
+});
+
+it('never leaves raw markdown in the body around the table either', function () {
+    // ⛔ La correzione precedente viveva **solo** dentro `text/table.blade.php`,
+    // quindi copriva le righe della tabella e lasciava grezzo tutto il resto:
+    // `Markdown::renderText()` non fa alcun parsing, applica `strip_tags` e
+    // basta. Chi apriva il digest in un client che preferisce il `text/plain`
+    // leggeva «dalle [preferenze notifiche](http://…/settings/notifiche)», col
+    // titolo `# Scadenze di …` e i cancelletti in chiaro. Il test di prima non
+    // se ne accorgeva perché cercava solo `|:---` e ` | `.
+    [$ente, $admin, $strumento] = enteConScadenza('Laboratorio Rossi', null, null, 'anna@rossi.test', 'Agitatore 2358');
+    spedisciDigest($ente, $admin, $strumento);
+    $admin->notify(new InvitoUtente($ente->nome, $admin->email, $ente->id));
+    Notification::route('mail', 'allerta@easylab.test')
+        ->notify(new NuovoErrore(RuntimeException::class, 'app/Guasto.php:12', 3, 77));
+
+    foreach (postaDelMarchio() as $email) {
+        $testo = (string) $email->getTextBody();
+
+        // Un ago per `expect()`: `toContain()` è variadico, e un secondo
+        // argomento diventerebbe un secondo ago invece di un messaggio.
+        expect($testo)->not->toContain('](http');
+        expect($testo)->not->toContain('**');
+        expect($testo)->not->toContain('# ');
+    }
+
+    // E i positivi di controllo, o «niente sintassi» sarebbe soddisfatto da un
+    // corpo vuoto: l'etichetta e l'URL ci sono entrambi, uniti da un trattino.
+    $digest = (string) emailPer('anna@rossi.test')->getTextBody();
+    expect($digest)->toContain('preferenze notifiche — '.route('settings.notifiche'));
+    expect($digest)->toContain('Scadenze di Laboratorio Rossi');
+
+    // Nel sottotesto dell'alert etichetta e URL coincidono: si scrive una volta
+    // sola, non «http://… — http://…».
+    $alert = (string) emailPer('allerta@easylab.test')->getTextBody();
+    expect($alert)->toContain(route('piattaforma.errori.mostra', 77));
+    expect($alert)->not->toContain(route('piattaforma.errori.mostra', 77).' — ');
 });
 
 it('embeds the logo once, not once per rendered body', function () {

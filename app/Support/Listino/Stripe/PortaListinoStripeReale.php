@@ -56,12 +56,7 @@ final class PortaListinoStripeReale implements PortaListinoStripe
             'metadata' => ['easylab_piano' => $piano->codice],
         ], ['idempotency_key' => $chiaveIdempotenza]);
 
-        return new PrezzoRemoto(
-            id: $prezzo->id,
-            importoCent: (int) $prezzo->unit_amount,
-            valuta: (string) $prezzo->currency,
-            attivo: (bool) $prezzo->active,
-        );
+        return self::inPrezzoRemoto($prezzo);
     }
 
     public function archiviaPrezzo(string $priceId): void
@@ -84,11 +79,28 @@ final class PortaListinoStripeReale implements PortaListinoStripe
     {
         $prezzo = Cashier::stripe()->prices->retrieve($priceId);
 
+        return self::inPrezzoRemoto($prezzo);
+    }
+
+    /**
+     * La risposta di Stripe → il nostro dato.
+     *
+     * ⚠️ **`product` arriva come stringa o come oggetto**, a seconda che la
+     * chiamata l'abbia espanso: leggerlo in un modo solo funzionerebbe finché
+     * qualcuno non aggiunge un `expand`, e il sintomo sarebbe un product id
+     * `null` — cioè una guardia di `agganciaPrezzo()` che si astiene in
+     * silenzio.
+     */
+    private static function inPrezzoRemoto(mixed $prezzo): PrezzoRemoto
+    {
+        $prodotto = $prezzo->product ?? null;
+
         return new PrezzoRemoto(
             id: $prezzo->id,
             importoCent: (int) $prezzo->unit_amount,
             valuta: (string) $prezzo->currency,
             attivo: (bool) $prezzo->active,
+            prodotto: is_string($prodotto) ? $prodotto : ($prodotto?->id ?? null),
         );
     }
 }

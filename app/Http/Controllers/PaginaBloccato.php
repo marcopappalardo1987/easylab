@@ -48,8 +48,14 @@ class PaginaBloccato extends Controller
             // di spatie sono globali, quindi il permesso da solo direbbe di sì
             // sul contratto di qualunque cliente. La Policy restringe con
             // l'appartenenza ad `account_user` (ADR-032).
+            // 🔴 E non durante un'impersonazione: `Gate::forUser($user)`
+            // risponde sull'IMPERSONATO, quindi direbbe di sì, e il bottone
+            // porterebbe a un rifiuto del controller (che è dove sta la
+            // guardia vera, `AperturaPortaleStripe`). Offrire ciò che si
+            // rifiuta è un vicolo cieco.
             'puoPagare' => $account->hasStripeId()
                 && filled(config('cashier.secret'))
+                && ! app('impersonate')->isImpersonating()
                 && Gate::forUser($user)->allows('manage', $account),
         ]);
     }

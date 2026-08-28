@@ -9,6 +9,7 @@ use App\Support\Listino\Stripe\PortaListinoStripe;
 use App\Support\Piani;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -52,6 +53,10 @@ use Throwable;
  * prima di creare un Price si confrontano importo e valuta con la riga
  * `corrente` di `prezzi_piano`. Se non è cambiato nulla **non si chiama Stripe
  * affatto**: il gesto è un no-op che non lascia gemelli.
+ *
+ * ⛔ **E la chiave NON è funzione della sola cifra**, o entro le 24 ore
+ * proteggerebbe il caso sbagliato: vedi `chiaveIdempotenza()`, che è il posto in
+ * cui questa trappola è spiegata per esteso.
  *
  * ## L'audit
  *
@@ -296,8 +301,10 @@ final class GovernoListino
                     $piano,
                     (int) $piano->prezzo_mensile_cent,
                     (string) $piano->valuta,
-                    'easylab_price_'.sha1($piano->codice.'|'.$piano->prezzo_mensile_cent.'|'.$piano->valuta),
+                    self::chiaveIdempotenza($piano, $corrente?->stripe_price_id),
                 );
+
+                self::verificaCheSiaUnPrezzoNuovo($piano, $nuovo->id);
 
                 DB::transaction(function () use ($piano, $corrente, $nuovo) {
                     $corrente?->forceFill(['corrente' => false])->save();
@@ -339,6 +346,70 @@ final class GovernoListino
         app(CatalogoPiani::class)->dimentica();
 
         return $piano->refresh();
+    }
+
+    /**
+     * 🔴 La chiave di idempotenza di un `creaPrezzo`, e perché contiene il price
+     * che sta sostituendo.
+     *
+     * ⚠️ **Una chiave funzione del solo (codice, importo, valuta) è una
+     * trappola, non una protezione.** Entro 24 ore Stripe non ricrea nulla:
+     * **replica la risposta originale**, parola per parola. Quindi il giro
+     * `4900 → 5900 → 4900` — cioè una cifra digitata per errore e corretta cinque
+     * minuti dopo, che è il caso *normale* — ripescherebbe il price di partenza
+     * che noi stessi avevamo appena archiviato su Stripe, e lo rimetterebbe
+     * `corrente` con tanto di badge verde «sincronizzato». Da lì
+     * `Piani::stripePrice()` restituisce un price **inattivo**, e la prossima
+     * sottoscrizione fallisce con «This price is not active» in un punto
+     * lontanissimo da questa schermata.
+     *
+     * ⚠️ E non basta ispezionare la risposta: la replica di Stripe è la risposta
+     * di **allora**, quindi dice ancora `active: true`. L'unica difesa vera è
+     * che chiavi diverse siano chiavi diverse — e ciò che distingue le due
+     * creazioni non è la cifra, è **da quale price si sta passando**.
+     *
+     * Ciò che la chiave continua a proteggere è il caso per cui esiste: il
+     * doppio invio dello **stesso** gesto, dove il price corrente è ancora
+     * quello di prima e la chiave coincide.
+     */
+    private static function chiaveIdempotenza(Piano $piano, ?string $priceCorrente): string
+    {
+        return 'easylab_price_'.sha1(implode('|', [
+            $piano->codice,
+            (string) $piano->prezzo_mensile_cent,
+            (string) $piano->valuta,
+            // `primo` e non la stringa vuota: un piano senza price corrente è
+            // uno stato, non un dato mancante, e nominarlo tiene la chiave
+            // leggibile quando la si ritrova nella dashboard di Stripe.
+            $priceCorrente ?? 'primo',
+        ]));
+    }
+
+    /**
+     * La cintura, oltre alle bretelle della chiave: **il price che Stripe
+     * restituisce non deve essere uno che conosciamo già**.
+     *
+     * Se lo è, non è nato adesso — è una replica, o una risposta sbagliata — e
+     * scriverlo come `corrente` significherebbe far puntare il listino a un
+     * price che noi stessi abbiamo archiviato. Meglio un `stripe_ultimo_errore`
+     * leggibile in pagina che un badge verde su un piano non più vendibile: il
+     * fallimento della sincronizzazione non fa rollback del dominio, e il
+     * chiamante lo registra.
+     */
+    private static function verificaCheSiaUnPrezzoNuovo(Piano $piano, string $priceId): void
+    {
+        $giaNostro = PrezzoPiano::query()->where('stripe_price_id', $priceId)->first();
+
+        if ($giaNostro === null) {
+            return;
+        }
+
+        throw new RuntimeException(
+            "Stripe ha restituito il price «{$priceId}», che il listino conosce già".
+            ($giaNostro->corrente ? '' : ' e ha archiviato').
+            ': è una replica della chiave di idempotenza, non un price nuovo. '.
+            'Il listino non è stato toccato; riprovare fra qualche minuto, oppure agganciare a mano il price giusto.'
+        );
     }
 
     /**
@@ -505,6 +576,27 @@ final class GovernoListino
      * ⚠️ **Si rifiuta se importo o valuta non combaciano.** Agganciare un price
      * da 99 € a un piano che il listino dichiara da 49 € significherebbe
      * fatturare una cifra che nessuna schermata mostra.
+     *
+     * ⚠️ **Si rifiuta anche se il price è ARCHIVIATO su Stripe**, ed è il caso
+     * più facile da incontrare davvero: chi cerca «SaaS» nella dashboard trova
+     * anche i residui delle prove precedenti, che hanno l'importo giusto e sono
+     * morti. Le subscription in essere continuano a fatturare su un price
+     * archiviato, ma **nessuna nuova può agganciarlo**: `Piani::stripePrice()`
+     * restituirebbe un id che `easylab:abbona` passa a `newSubscription()` e che
+     * Stripe rifiuta con «This price is not active» — un guasto lontanissimo da
+     * questa schermata.
+     *
+     * ⚠️ **E si rifiuta se quel price appartiene a un altro Product** di quello
+     * del piano: sarebbero un piano e un prodotto che non si corrispondono, cioè
+     * una conciliazione che dice «coincidono» leggendo due oggetti diversi.
+     *
+     * 🔴 **Ciò che l'aggancio scrive non è solo la riga di `prezzi_piano`.**
+     * Registra anche `stripe_product_id` — il prodotto a cui quel price
+     * appartiene — e marca il piano sincronizzato. Senza, la colonna «Stripe»
+     * continuerebbe a dire «da sincronizzare» su un piano ormai corretto, e il
+     * gesto ovvio che ne segue («Sincronizza») troverebbe il product id vuoto e
+     * **creerebbe un secondo Product**: esattamente la duplicazione che questa
+     * azione esiste per evitare, con il price giusto appeso al prodotto vecchio.
      */
     public static function agganciaPrezzo(Piano $piano, string $priceId): Piano
     {
@@ -557,6 +649,21 @@ final class GovernoListino
             ]);
         }
 
+        if (! $remoto->attivo) {
+            throw ValidationException::withMessages([
+                'price_id' => "Il price «{$priceId}» è archiviato su Stripe: le subscription già aperte continuano a fatturarci sopra, ma nessuna nuova può agganciarlo. Metterlo a listino farebbe fallire la prossima sottoscrizione con «This price is not active». Serve un price attivo — o si crea con «Sincronizza».",
+            ]);
+        }
+
+        // Il piano ha già un prodotto e il price ne dichiara un altro: sarebbero
+        // due oggetti che non si corrispondono, e la conciliazione direbbe
+        // «coincidono» leggendo il product di qua e il price di là.
+        if (filled($piano->stripe_product_id) && filled($remoto->prodotto) && $remoto->prodotto !== $piano->stripe_product_id) {
+            throw ValidationException::withMessages([
+                'price_id' => "Il price «{$priceId}» appartiene al prodotto «{$remoto->prodotto}», mentre «{$piano->codice}» è il prodotto «{$piano->stripe_product_id}». Agganciarlo legherebbe il piano a un price di un altro prodotto: la conciliazione leggerebbe due oggetti diversi e direbbe che coincidono.",
+            ]);
+        }
+
         DB::transaction(function () use ($piano, $remoto) {
             $piano->prezzi()->where('corrente', true)->update(['corrente' => false]);
 
@@ -569,6 +676,23 @@ final class GovernoListino
                     'corrente' => true,
                 ]
             );
+
+            // 🔴 **La metà che mancava.** Il prodotto del price diventa il
+            // prodotto del piano, e il piano risulta sincronizzato: senza,
+            // «Sincronizza» — il gesto immediatamente successivo, perché la
+            // colonna direbbe ancora «da sincronizzare» — creerebbe un **secondo
+            // Product** e lascerebbe il price giusto appeso al primo.
+            $prodotto = filled($piano->stripe_product_id) ? $piano->stripe_product_id : $remoto->prodotto;
+
+            $piano->forceFill([
+                'stripe_product_id' => $prodotto,
+                // ⚠️ Sincronizzato **solo se il prodotto c'è**. Se Stripe non ha
+                // detto a quale Product appartiene il price, il piano resta
+                // «da sincronizzare»: dire il contrario nasconderebbe l'unica
+                // cosa che ancora manca.
+                'stripe_sincronizzato_at' => filled($prodotto) ? now() : $piano->stripe_sincronizzato_at,
+                'stripe_ultimo_errore' => null,
+            ])->save();
         });
 
         app(CatalogoPiani::class)->dimentica();
