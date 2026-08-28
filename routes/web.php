@@ -7,6 +7,7 @@ use App\Http\Controllers\EsportaStoricoPdf;
 use App\Http\Controllers\FugaDaLockout;
 use App\Http\Controllers\ImpostaPasswordInvito;
 use App\Http\Controllers\PaginaBloccato;
+use App\Http\Controllers\RegistrazionePubblica;
 use App\Http\Controllers\ScaricaDocumento;
 use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Anagrafica\MarchioEnte;
@@ -279,6 +280,75 @@ Route::middleware(['signed', 'guest'])->group(function () {
     Route::post('/invito/{user}', [ImpostaPasswordInvito::class, 'imposta'])
         ->whereNumber('user')->middleware('throttle:6,1')->name('invito.imposta');
 });
+
+/*
+ | 🔴 Self-signup pubblico — `/registrati` (🔗 ADR-012, ADR-032).
+ |
+ | **Tre gruppi e non uno**, perché i tre tratti hanno tre gate diversi: il
+ | modulo è aperto, i passi intermedi sono firmati, il ritorno da Stripe è
+ | firmato ma **non** `guest`.
+ |
+ | ⛔ **Nessun `can:`, in nessuno dei tre.** Non è una svista ed è l'unica forma
+ | possibile: chi si registra **non esiste** nel database, quindi non ha ruoli e
+ | non può avere permessi. Il gate è `guest` + `signed` + `throttle`, esattamente
+ | come `/invito/{user}` (ADR-012) e `/q/{token}` (ADR-003).
+ |
+ | ⛔ **E nessuna di queste rotte sta nel gruppo `auth`**, quindi nessuna passa
+ | da `account.lockout` né da `two-factor.enforce` — che è la risposta alla
+ | domanda «e l'ordine dei middleware col 2FA?». I due middleware sono
+ | dichiarati sul gruppo autenticato, non globalmente, e qui non c'è nessuna
+ | sessione da proteggere: l'unico caso in cui un utente autenticato tocca
+ | queste rotte è il ritorno da Stripe, dove passare da `two-factor.enforce`
+ | significherebbe **perdere il completamento di un pagamento già incassato**
+ | per mandarlo al setup della sicurezza di un altro account.
+ |
+ | ⚠️ Il ruolo `Admin` che nascerà è `two_factor_required`: al primo login
+ | `two-factor.enforce` porterà su `/settings/security`. È il comportamento
+ | voluto, e l'email di benvenuto lo dice per non farlo sembrare un guasto.
+ */
+Route::middleware('guest')->group(function () {
+    Route::get('/registrati', [RegistrazionePubblica::class, 'mostra'])
+        ->name('registrazione.mostra');
+    // ⛔ Il `throttle` sta sul POST e usa il limiter **nominato**
+    // `registrazione` (App\Providers\AppServiceProvider): due chiavi, IP ed
+    // email. Un `throttle:3,1` inline avrebbe la sola chiave IP, che si aggira
+    // con un proxy.
+    Route::post('/registrati', [RegistrazionePubblica::class, 'avvia'])
+        ->middleware('throttle:registrazione')
+        ->name('registrazione.avvia');
+    Route::get('/registrati/controlla-email', [RegistrazionePubblica::class, 'controllaEmail'])
+        ->name('registrazione.controlla-email');
+});
+
+/*
+ | `signed` davanti a tutto, come nell'invito e nel QR: la firma copre id e
+ | scadenza e cade **prima** del route-model binding, quindi da qui non si
+ | enumerano le registrazioni pendenti — un id manomesso dà 403, non un 404 che
+ | direbbe «questa riga non c'è, prova la prossima».
+ |
+ | `whereNumber` è difesa in profondità: senza, `/registrazione/qualcosa/...`
+ | arriverebbe al binding a farsi risolvere come id.
+ */
+Route::middleware(['signed', 'guest'])->group(function () {
+    Route::get('/registrazione/{registrazione}/verifica', [RegistrazionePubblica::class, 'verifica'])
+        ->whereNumber('registrazione')->name('registrazione.verifica');
+    Route::get('/registrazione/{registrazione}/pagamento', [RegistrazionePubblica::class, 'pagamento'])
+        ->whereNumber('registrazione')->name('registrazione.pagamento');
+    // Il POST apre una sessione su Stripe, cioè crea un oggetto su un servizio
+    // esterno: il limite serve contro il martellamento, non contro l'accesso —
+    // quello lo tiene già la firma.
+    Route::post('/registrazione/{registrazione}/pagamento', [RegistrazionePubblica::class, 'versoStripe'])
+        ->whereNumber('registrazione')->middleware('throttle:6,1')->name('registrazione.verso-stripe');
+});
+
+// ⚠️ **FUORI dal gruppo `guest`**, e non è una dimenticanza: Stripe rimanda qui
+// il browser, e un visitatore già autenticato con un altro account verrebbe
+// sbattuto sulla dashboard perdendo il completamento — mentre il pagamento è
+// già avvenuto. La firma è il gate; l'azione è idempotente e non autentica
+// nessuno. Il webhook resta la rete che chiude il caso «scheda chiusa».
+Route::get('/registrazione/{registrazione}/completata', [RegistrazionePubblica::class, 'completata'])
+    ->middleware(['signed', 'throttle:30,1'])
+    ->whereNumber('registrazione')->name('registrazione.completata');
 
 // Niente `account.lockout` qui, e non è un buco: questa rotta traduce solo
 // token → id e REINDIRIZZA a `strumenti.show`, che sta nel gruppo protetto —

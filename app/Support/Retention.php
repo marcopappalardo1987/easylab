@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\AvvisoScadenza;
 use App\Models\Errore;
 use App\Models\OccorrenzaErrore;
+use App\Models\Registrazione;
 use Illuminate\Database\Eloquent\Model;
 use Spatie\Activitylog\Models\Activity;
 
@@ -55,6 +56,18 @@ final class Retention
         AvvisoScadenza::class,
         Errore::class,
         OccorrenzaErrore::class,
+        // 🔴 Le registrazioni pubbliche **mai completate** (ADR-012, il
+        // self-signup). È la prima riga di questo elenco che contiene un
+        // **segreto**: `registrazioni.password_hash` è la password scelta al
+        // modulo, parcheggiata fra il form e il ritorno da Stripe. Chi non
+        // arriva mai al pagamento non è un cliente, e non deve diventare uno
+        // storico: la potatura è ciò che rende vera la riga del registro dei
+        // trattamenti. `Registrazione::prunable()` nomina la condizione che
+        // deve valere per cancellare — pendente **e** vecchia — e le completate
+        // restano, senza segreto (l'hash è azzerato nella transazione di
+        // completamento) e con l'unica risposta a «da dove è entrato questo
+        // contratto?».
+        Registrazione::class,
     ];
 
     /**

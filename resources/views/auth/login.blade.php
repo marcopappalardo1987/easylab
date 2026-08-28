@@ -74,6 +74,19 @@
                 </form>
             </div>
 
+            {{-- 🔴 Il link al self-signup, e **solo se l'ingresso è aperto**
+                 (`easylab.registrazione.aperta`): con l'interruttore spento
+                 `/registrati` risponde 404, quindi un link sempre visibile
+                 sarebbe una porta che sbatte in faccia — e per giunta
+                 dichiarerebbe che quella pagina esiste, che è precisamente ciò
+                 che il 404 (invece del 403) serve a non fare. --}}
+            @if (config('easylab.registrazione.aperta'))
+                <p class="mt-6 text-center text-sm text-ink-2">
+                    Non hai un account?
+                    <a href="{{ route('registrazione.mostra') }}" class="font-medium text-brand hover:text-brand-hover">Creane uno</a>
+                </p>
+            @endif
+
             <p class="mt-6 text-center text-xs text-ink-3">
                 &copy; {{ date('Y') }} Easy Lab · Accesso protetto
             </p>

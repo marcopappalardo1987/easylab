@@ -4,6 +4,7 @@ namespace App\Livewire\Piattaforma;
 
 use App\Livewire\Piattaforma\Concerns\AmministraAccount;
 use App\Livewire\Piattaforma\Concerns\ElencaClienti;
+use App\Livewire\Piattaforma\Concerns\EsportaClienti;
 use App\Livewire\Piattaforma\Concerns\FissaVisibilitaSede;
 use App\Livewire\Piattaforma\Concerns\OffreImpersonazione;
 use App\Livewire\Piattaforma\Concerns\ProvisionaCliente;
@@ -46,6 +47,16 @@ use Livewire\Component;
  * il risultato era archiviare come «ridondante» la sola guardia che copre
  * un'azione che non renderizza. Trovato dal confronto sul blocco C.
  *
+ * 🔴 **Le esportazioni (`EsportaClienti`) sono l'unica superficie di questa
+ * pagina che porta i dati dei clienti FUORI dall'applicazione**, e per questo
+ * non hanno una definizione propria del perimetro: riusano `queryClienti()` di
+ * `ElencaClienti`, cioè la stessa query che riempie la tabella. Il file contiene
+ * quindi esattamente le righe che si vedrebbero sfogliando fino all'ultima
+ * pagina — non di più (i filtri valgono) e non di meno (la paginazione non è un
+ * filtro di privacy). Una rotta dedicata avrebbe richiesto una seconda lettura
+ * dei filtri dalla query string, ed è là che nasce il file che esporta tutto
+ * mentre lo schermo mostra dodici righe.
+ *
  * **Guscio vuoto di proposito.** KPI (blocco D), tabella clienti con espansione
  * nelle sedi (E), impersonazione (F) e le quattro leve (G) arrivano dopo. Una
  * pagina che non mostra nulla ma è già gatata è ciò che rende il gate
@@ -56,7 +67,7 @@ use Livewire\Component;
 #[Layout('components.layouts.app')]
 class Cabina extends Component
 {
-    use AmministraAccount, ElencaClienti, FissaVisibilitaSede, OffreImpersonazione, ProvisionaCliente;
+    use AmministraAccount, ElencaClienti, EsportaClienti, FissaVisibilitaSede, OffreImpersonazione, ProvisionaCliente;
 
     /**
      * Chiude ogni modale della pagina.

@@ -3,7 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Account;
+use App\Models\Registrazione;
 use App\Support\Piani;
+use App\Support\Registrazione\CompletaRegistrazione;
+use App\Support\Registrazione\EsitoCheckout;
+use App\Support\Registrazione\RegistrazioneRifiutata;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Laravel\Cashier\Http\Controllers\WebhookController as CashierWebhookController;
@@ -121,6 +125,88 @@ class StripeWebhookController extends CashierWebhookController
         }
 
         return parent::handleWebhook($request);
+    }
+
+    /**
+     * 🔴 **La rete del self-signup: «ha pagato e ha chiuso la scheda»**
+     * (🔗 ADR-012, ADR-032).
+     *
+     * Il ritorno del browser da Stripe **non è garantito** — una connessione
+     * che cade, una scheda chiusa, un telefono che si spegne — e senza questo
+     * handler quel cliente avrebbe pagato per niente: nessun account, nessun
+     * utente, nessuna email, e una riga `registrazioni` che si pota da sola a
+     * trenta giorni portandosi via la traccia. È la sola metà del percorso che
+     * non dipende dal comportamento del browser.
+     *
+     * ⚠️ **Non chiama `parent::`, e non è una dimenticanza**: Cashier non ha un
+     * `handleCheckoutSessionCompleted`, quindi `parent::` non esiste. Senza
+     * questo metodo il dispatch finirebbe in `missingMethod()` con un **200
+     * muto** — che è la forma di guasto peggiore per un webhook, perché Stripe
+     * lo legge come «ricevuto e trattato» e non lo ripete mai più.
+     *
+     * ⚠️ **L'esito si legge dal PAYLOAD e non da una chiamata a Stripe.** Il
+     * payload è già autenticato dall'HMAC verificato in
+     * `VerificaFirmaWebhookStripe` (dichiarato sulla rotta, fail-closed), e un
+     * `sessions->retrieve()` qui dentro sarebbe un round-trip verso Stripe
+     * **mentre Stripe aspetta la nostra risposta** — precisamente ciò per cui
+     * `config/cashier.php` tiene corta la lista degli eventi registrati.
+     *
+     * ## I due `successMethod()` che sembrano una resa e non lo sono
+     *
+     * **`registrazione_id` assente o inesistente → 200 e nessuna scrittura.**
+     * Un 404 o un 500 farebbe ritentare Stripe per giorni e poi
+     * **disabilitare l'endpoint**, facendoci perdere anche gli eventi buoni —
+     * compresi i lockout per insoluto. È la stessa dottrina di `accountDa()`, e
+     * il caso è normale: un checkout aperto a mano dalla dashboard di Stripe non
+     * ha i nostri metadata.
+     *
+     * **`RegistrazioneRifiutata` → 200 e una riga di log.** Il pagamento è già
+     * incassato e il rifiuto è **definitivo** (l'email appartiene già a un
+     * amministratore, il piano non è più a listino): ripetere l'evento darebbe
+     * lo stesso esito mille volte. Serve un intervento umano, e il posto in cui
+     * si vede è il log — non una coda di ritentativi che si esaurisce da sola.
+     */
+    protected function handleCheckoutSessionCompleted(array $payload): Response
+    {
+        $sessione = $payload['data']['object'] ?? [];
+        $registrazioneId = $sessione['metadata']['registrazione_id'] ?? null;
+
+        if (! is_numeric($registrazioneId)) {
+            return $this->successMethod();
+        }
+
+        $registrazione = Registrazione::query()->find((int) $registrazioneId);
+
+        if ($registrazione === null) {
+            Log::channel(config('cashier.logger'))->warning(
+                'Webhook Stripe checkout.session.completed per una registrazione inesistente: ignorato.',
+                ['registrazione_id' => $registrazioneId, 'evento' => $payload['id'] ?? null]
+            );
+
+            return $this->successMethod();
+        }
+
+        try {
+            // ⚠️ Risolto dal container e non costruito qui: l'azione è la stessa
+            // che usa il ritorno via browser, e due `new` sarebbero due gesti
+            // che divergono al primo cambiamento.
+            app(CompletaRegistrazione::class)->esegui(
+                $registrazione,
+                EsitoCheckout::daSessioneStripe($sessione),
+            );
+        } catch (RegistrazioneRifiutata $e) {
+            Log::channel(config('cashier.logger'))->error(
+                'Registrazione pubblica rifiutata al completamento dal webhook.',
+                [
+                    'registrazione_id' => $registrazione->getKey(),
+                    'codice' => $e->codice,
+                    'motivo' => $e->getMessage(),
+                    'evento' => $payload['id'] ?? null,
+                ]
+            );
+        }
+
+        return $this->successMethod();
     }
 
     /**

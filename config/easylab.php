@@ -120,6 +120,38 @@ return [
     ],
 
     /*
+    | 🔴 Il self-signup pubblico (ADR-012 + ADR-032). L'interruttore
+    | dell'INGRESSO, e nient'altro.
+    |
+    | ⛔ **Il default è `false`, e il verso non e' negoziabile.** Questa e'
+    | l'unica superficie del progetto che e' insieme **pubblica, non
+    | autenticata e in scrittura**: aprirla e' una decisione commerciale, non un
+    | effetto collaterale di un deploy. Con `false` GET e POST di `/registrati`
+    | rispondono **404** — non 403: un 403 dichiarerebbe che la pagina c'e' e che
+    | qualcuno la puo' aprire, cioe' un invito a bussare (stessa scelta del banco
+    | dei componenti in `routes/web.php`).
+    |
+    | ⚠️ **Spegne l'ingresso, non il percorso.** Le rotte firmate a valle
+    | (verifica, pagamento, ritorno da Stripe) NON leggono questa chiave, ed e'
+    | deliberato: chi ha gia' pagato deve poter completare. Chiuderle insieme
+    | all'ingresso significherebbe aver incassato senza consegnare.
+    |
+    | ⚠️ In produzione la config e' cachata in build (`php artisan optimize`),
+    | quindi cambiare questa variabile **richiede un redeploy**: e' un
+    | interruttore lento, e va saputo prima di averne bisogno — stessa nota di
+    | `errori.abilitato` qui sotto.
+    |
+    | ⚠️ **Non basta accendere questa chiave**: il modulo vende solo i piani a
+    | pagamento con un price di Stripe configurato (`PianiRegistrabili`), quindi
+    | senza `STRIPE_PRICE_SAAS` la pagina dice «registrazioni chiuse» invece di
+    | regalare un account su un piano gratuito. Sono due guasti diversi e si
+    | leggono diversamente, apposta.
+    */
+    'registrazione' => [
+        'aperta' => env('REGISTRAZIONE_APERTA', false),
+    ],
+
+    /*
     | Account di piattaforma creati dai seeder (DatabaseSeeder,
     | SuperadminSeeder). Le credenziali stanno QUI e non in `env()` dentro il
     | seeder: in produzione la config è cachata (`php artisan optimize` in

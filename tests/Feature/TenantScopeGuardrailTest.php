@@ -7,6 +7,7 @@ use App\Models\Errore;
 use App\Models\OccorrenzaErrore;
 use App\Models\Piano;
 use App\Models\PrezzoPiano;
+use App\Models\Registrazione;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
@@ -64,6 +65,34 @@ const NON_TENANT_MODELS = [
     //    rifiuta per nome, perché non c'è nessuno scope da togliere.
     Piano::class,
     PrezzoPiano::class,
+    //  - Registrazione (ADR-012 + ADR-032, il self-signup pubblico) e' l'unica
+    //    esenzione di questo elenco che non e' «vive sopra i tenant»: e'
+    //    «il tenant non esiste ancora». Una registrazione PENDENTE e' la sala
+    //    d'attesa fra il modulo di /registrati e il primo pagamento riuscito, e
+    //    la decisione di prodotto dice che l'account nasce SOLO a pagamento
+    //    avvenuto: fino a `completata_at` non c'e' ne' un Account, ne' un Ente,
+    //    ne' un User. Non c'e' quindi nessun `tenant_id` da timbrare.
+    //    ⚠️ E il guasto non sarebbe teorico: chi scrive questa riga NON e'
+    //    autenticato, quindi in una richiesta web `CurrentTenant::shouldScope()`
+    //    e' falso e il hook `creating` non timbrerebbe niente — ma il ritorno
+    //    da Stripe (`registrazione.completata`) e' l'unica rotta del percorso
+    //    che NON e' `guest`, e un visitatore gia' loggato con un altro account
+    //    ci arriva autenticato: li' lo scope filtrerebbe su **il tenant di chi
+    //    passava di li'**, il binding darebbe 404, e il completamento di un
+    //    pagamento **gia' incassato** fallirebbe. Fail-closed nel posto in cui
+    //    il fail-closed e' il danno.
+    //    🔴 **L'esenzione toglie una rete, quindi ne mette un'altra al suo
+    //    posto**, e non e' un permesso: qui non c'e' nessuno a cui chiederlo.
+    //    La garanzia e' che questa tabella **non ha nessuna superficie di
+    //    lettura** — nessuna rotta autenticata, nessun componente Livewire,
+    //    nessuna vista la elenca — e che l'unico accesso a una singola riga
+    //    passa da un URL **firmato** che copre id e scadenza, cioe' non si
+    //    enumera. Entrambe le meta' sono rese meccaniche da
+    //    `tests/Feature/Registrazione/AccessoRegistrazioniGuardrailTest.php`,
+    //    che qui va nominato: se un giorno qualcuno costruisse la schermata
+    //    «registrazioni in corso», quel file diventa rosso e obbliga a
+    //    rispondere alla domanda che questa riga ha rimandato.
+    Registrazione::class,
 ];
 
 function businessModels(): array

@@ -1,0 +1,40 @@
+<?php
+
+namespace App\Support\Registrazione;
+
+use RuntimeException;
+
+/**
+ * Il completamento è stato rifiutato **prima di scrivere qualunque cosa**.
+ *
+ * Stessa forma di `App\Support\Provisioning\ProvisioningRifiutato`, e per la
+ * stessa ragione: due chiamanti — il ritorno da Stripe e il webhook — hanno due
+ * modi diversi di raccontarlo (una pagina e un 200 muto con una riga di log) ma
+ * la stessa identica regola.
+ *
+ * ⚠️ **Il messaggio non è un'API: si ramifica sul `codice`.** È la cicatrice già
+ * pagata da `ProvisioningRifiutato`, dove un `str_contains()` sul testo spegneva
+ * un suggerimento appena qualcuno riformulava una frase.
+ *
+ * ⛔ **E il messaggio non si mostra MAI a chi si è registrato.** Dice che
+ * un'email appartiene già a un amministratore, o che un piano è sparito dal
+ * listino: sono informazioni operative, e questa è una superficie pubblica. Chi
+ * ha pagato legge «stiamo completando, ti scriviamo noi»; il testo vero va nel
+ * log e nel registro di audit.
+ */
+class RegistrazioneRifiutata extends RuntimeException
+{
+    /** Il piano memorizzato non è (più) a listino: nessun account può nascere su di esso. */
+    public const PIANO_FUORI_CATALOGO = 'piano_fuori_catalogo';
+
+    /**
+     * Il provisioning ha detto di no — quasi sempre `GIA_AMMINISTRA`: fra il
+     * modulo e il pagamento qualcuno ha creato un account con quella email.
+     */
+    public const PROVISIONING_RIFIUTATO = 'provisioning_rifiutato';
+
+    public function __construct(string $messaggio, public readonly string $codice)
+    {
+        parent::__construct($messaggio);
+    }
+}

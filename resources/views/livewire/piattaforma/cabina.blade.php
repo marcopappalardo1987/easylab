@@ -278,7 +278,33 @@
                 @endforeach
             </select>
         </div>
+
+        {{-- Le due esportazioni. Nessun `@can`: il permesso di questa pagina
+             (`tenants.view_all`) È già quello dell'export, e aggiungerne un
+             secondo lo renderebbe revocabile a runtime dall'editor ruoli —
+             vedi il docblock di `EsportaClienti`.
+
+             `wire:loading.attr="disabled"` perché il file si costruisce tutto
+             in memoria e su molte righe la risposta non è istantanea: senza,
+             il secondo clic parte mentre il primo sta ancora generando. --}}
+        <div class="ml-auto flex items-end gap-2">
+            <x-ui.button variant="secondary" wire:click="esportaCsv" wire:loading.attr="disabled"
+                         title="Scarica in CSV i clienti che corrispondono ai filtri">CSV</x-ui.button>
+            <x-ui.button variant="secondary" wire:click="esportaPdf" wire:loading.attr="disabled"
+                         title="Scarica in PDF i clienti che corrispondono ai filtri">PDF</x-ui.button>
+        </div>
     </div>
+
+    {{-- L'invariante dichiarata a chi la usa, e non solo nel codice: il file
+         segue i filtri (chi non vede una riga a schermo non la trova dentro) ma
+         NON si ferma alla pagina corrente — la paginazione non è un filtro di
+         privacy, perché chi vede la prima pagina può sfogliare fino all'ultima.
+         Senza questa riga qualcuno esporterebbe credendo di aver preso 20
+         clienti, o crederebbe di averli presi tutti mentre un filtro è acceso. --}}
+    <p class="mt-2 text-xs text-ink-3">
+        L'esportazione segue i filtri e copre tutti i {{ number_format($clienti->total(), 0, ',', '.') }}
+        clienti che vi corrispondono, non solo la pagina.
+    </p>
 
     {{-- ⚠️ **Deviazione dichiarata dalla checklist §7 del Design System**, che
          vuole `tabella-a-card` con i `data-etichetta` su ogni vista nuova: qui

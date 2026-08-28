@@ -59,7 +59,49 @@ final class ProvisionaEnte
          * comportamento e i suoi test restano verdi senza essere toccati.
          */
         private readonly bool $esigiAccountNuovo = false,
+        /**
+         * 🔴 **L'hash di una password già scelta, per il self-signup pubblico**
+         * (ADR-012).
+         *
+         * Serve a un caso che né la console né la cabina hanno: chi si
+         * registra da sé sceglie la password **prima** di pagare, e l'utente
+         * nasce **dopo** il ritorno da Stripe. Fra i due momenti la credenziale
+         * vive già hashata su `registrazioni.password_hash`, quindi non c'è
+         * nessuna password in chiaro da passare a `$passwordEsplicita` — e
+         * rihashare un hash lo distruggerebbe.
+         *
+         * ⚠️ **Il cast `hashed` di `User` lo riconosce e lo lascia stare**
+         * (`castAttributeAsHashedString` rihasha solo ciò che hashato non è),
+         * quindi il valore arriva a database intatto e la password scelta al
+         * modulo funziona al primo login. Un test lo prova facendo il login.
+         *
+         * ⚠️ **Implica `email_verified_at`**, come `$passwordEsplicita`: chi
+         * arriva di qui ha già cliccato il link di verifica, quindi non c'è
+         * nessun invito da mandare — e mandarlo significherebbe offrirgli di
+         * riscrivere la password che ha appena scelto.
+         *
+         * ⚠️ **Ultimo parametro, e opzionale**, per la ragione già scritta
+         * sopra `$esigiAccountNuovo`: i chiamanti storici lo costruiscono senza,
+         * e un parametro in mezzo li romperebbe tutti in una volta.
+         */
+        private readonly ?string $passwordHash = null,
     ) {}
+
+    /**
+     * La credenziale è già stata scelta da chi la userà: niente invito, e
+     * `email_verified_at` valorizzato alla nascita.
+     *
+     * Una domanda sola con due risposte possibili — password in chiaro
+     * (provisioning da console/cabina) o hash (self-signup) — perché i due
+     * rami che la consumano devono restare **d'accordo**: se `email_verified_at`
+     * e l'invito rispondessero a condizioni diverse, esisterebbe uno stato in
+     * cui l'utente è verificato e riceve comunque un invito a impostare la
+     * password che ha già.
+     */
+    private function credenzialeGiaScelta(): bool
+    {
+        return $this->passwordEsplicita !== null || $this->passwordHash !== null;
+    }
 
     /**
      * @throws ProvisioningRifiutato prima di qualunque scrittura
@@ -90,7 +132,10 @@ final class ProvisionaEnte
                 ['email' => $this->adminEmail],
                 [
                     'name' => $this->adminName,
-                    'password' => Hash::make($passwordIniziale),
+                    // ⚠️ `Hash::make` **solo** quando la password arriva in
+                    // chiaro: `$passwordHash` è già un hash, e rihasharlo
+                    // produrrebbe una credenziale che nessuno conosce.
+                    'password' => $this->passwordHash ?? Hash::make($passwordIniziale),
                 ],
             );
 
@@ -107,7 +152,7 @@ final class ProvisionaEnte
             if ($admin->wasRecentlyCreated) {
                 $admin->forceFill([
                     'tenant_id' => $ente->id,
-                    'email_verified_at' => $this->passwordEsplicita ? now() : null,
+                    'email_verified_at' => $this->credenzialeGiaScelta() ? now() : null,
                 ])->save();
             }
 
@@ -250,7 +295,7 @@ final class ProvisionaEnte
             invitoFallito: $errore,
         );
 
-        if ($this->passwordEsplicita !== null || $admin->email_verified_at !== null) {
+        if ($this->credenzialeGiaScelta() || $admin->email_verified_at !== null) {
             return $base(false, null);
         }
 

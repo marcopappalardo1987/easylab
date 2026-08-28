@@ -11,9 +11,15 @@ use App\Policies\GaranziaRicambioPolicy;
 use App\Support\Listino\CatalogoPiani;
 use App\Support\Listino\Stripe\PortaListinoStripe;
 use App\Support\Listino\Stripe\PortaListinoStripeReale;
+use App\Support\Registrazione\PortaleCheckout;
+use App\Support\Registrazione\PortaleCheckoutStripe;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
 use Laravel\Cashier\Cashier;
 use Livewire\Livewire;
 use Spatie\Activitylog\Actions\LogActivityAction;
@@ -64,6 +70,15 @@ class AppServiceProvider extends ServiceProvider
         // non le risposte di Stripe. Il percorso felice verso la rete resta
         // senza test di suite, come `easylab:abbona`.
         $this->app->bind(PortaListinoStripe::class, PortaListinoStripeReale::class);
+
+        // La porta verso Stripe Checkout per il self-signup pubblico (ADR-012).
+        // Interfaccia per la stessa ragione della riga qui sopra, con
+        // un'aggravante: la logica **nostra** a valle — quando un account nasce,
+        // l'idempotenza, il piano che non si legge dal payload — va provata
+        // contro esiti che Stripe non ci darebbe mai su richiesta (sessione
+        // aperta, pagamento non incassato, customer mancante). Un'interfaccia li
+        // rende costruibili in una riga; una classe da estendere no.
+        $this->app->bind(PortaleCheckout::class, PortaleCheckoutStripe::class);
     }
 
     /**
@@ -92,6 +107,62 @@ class AppServiceProvider extends ServiceProvider
         Livewire::addPersistentMiddleware(EnforceAccountLockout::class);
 
         $this->timbraLImpersonazioneSullAudit();
+
+        $this->limitaLeRegistrazioniPubbliche();
+    }
+
+    /**
+     * 🔴 Il limite di tentativi sul modulo pubblico di `/registrati`
+     * (🔗 ADR-012).
+     *
+     * ## Due chiavi e non una, perché una sola si aggira
+     *
+     * · **IP** — ferma il martellamento da una postazione, ma un proxy a
+     *   rotazione lo annulla;
+     * · **email** — ferma chi cambia indirizzo di rete per provare mille volte
+     *   la stessa casella (che è il gesto con cui si scopre se un indirizzo è
+     *   già cliente, se la risposta differisse).
+     *
+     * Laravel applica **tutti** i limiti dell'array: basta che uno sia esaurito
+     * per rispondere 429. Con la sola chiave IP il secondo scenario passerebbe
+     * indisturbato, e con la sola chiave email il primo.
+     *
+     * ⚠️ **La chiave dell'email va normalizzata come la normalizza il
+     * controller** (`lower` + `trim`), o «Mario@Studio.it » e
+     * «mario@studio.it» sarebbero due secchielli diversi per lo stesso
+     * indirizzo — cioè il doppio dei tentativi per chi sa scrivere uno spazio.
+     * Le due normalizzazioni devono restare d'accordo: un test le esercita
+     * insieme.
+     *
+     * ⚠️ **`Str::transliterate` come nel limiter `login`**: senza, due grafie
+     * unicode dello stesso indirizzo darebbero due secchielli.
+     *
+     * ## Perché qui e non in `FortifyServiceProvider`, dove stanno gli altri
+     *
+     * Perché questo modulo **non è di Fortify**, ed è una scelta dichiarata:
+     * `Features::registration()` resta spenta in `config/fortify.php` (il
+     * perché è scritto lì, e non è un dettaglio: quella feature autentica
+     * l'utente appena creato e lo manda in dashboard senza che abbia pagato).
+     * Mettere il limiter accanto a quelli di Fortify farebbe credere a chi
+     * legge che la registrazione passi da lì.
+     *
+     * ## Tre al minuto
+     *
+     * Non è un numero difensivo scelto a caso: registrarsi è un gesto che una
+     * persona compie **una volta**, e i due o tre tentativi in più esistono solo
+     * per l'errore di battitura sulla password. Il limite del login è cinque
+     * perché lì sbagliare è normale; qui no.
+     */
+    private function limitaLeRegistrazioniPubbliche(): void
+    {
+        RateLimiter::for('registrazione', function (Request $request) {
+            $email = Str::transliterate(Str::lower(trim((string) $request->input('email'))));
+
+            return [
+                Limit::perMinute(3)->by('registrazione-ip|'.$request->ip()),
+                Limit::perMinute(3)->by('registrazione-email|'.$email),
+            ];
+        });
     }
 
     /**

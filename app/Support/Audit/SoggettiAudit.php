@@ -9,6 +9,7 @@ use App\Models\Fornitore;
 use App\Models\Garanzia;
 use App\Models\Intervento;
 use App\Models\Piano;
+use App\Models\Registrazione;
 use App\Models\Ricambio;
 use App\Models\RicambioUtilizzo;
 use App\Models\Scopes\DepartmentScope;
@@ -120,6 +121,18 @@ final class SoggettiAudit
         // mappa. `etichetta` e non `codice`: è il nome che una persona
         // riconosce, ed è la colonna che il gesto tipico cambia.
         Piano::class => ['Piano', 'etichetta'],
+        // ADR-012 — il self-signup pubblico. `nome_ente` e non `email`, ed è
+        // una scelta di **privacy**, non di stile: questo registro si legge con
+        // `tenants.view_all`, e l'indirizzo di chi ha solo *tentato* di
+        // registrarsi è un dato personale di una persona che non è ancora
+        // cliente. Il nome dell'organizzazione dichiarata dice a chi legge di
+        // quale tentativo si tratta senza portarsi dietro l'indirizzo — che
+        // resta nella riga, raggiungibile da chi ha ragione di aprirla.
+        //
+        // ⚠️ Ed è la colonna che si degrada bene: la retention si porterà via
+        // le registrazioni abbandonate, la riga di audit resta, e da lì in poi
+        // si legge il nome dell'Ente invece di «Registrazione · #12».
+        Registrazione::class => ['Registrazione', 'nome_ente'],
         Ricambio::class => ['Ricambio', 'nome'],
         RicambioUtilizzo::class => ['Ricambio montato', null],
         // ⚠️ **L'unico model di VENDOR della mappa**, ed è il motivo per cui il

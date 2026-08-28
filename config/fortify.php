@@ -162,7 +162,24 @@ return [
     */
 
     'features' => [
-        // Features::registration(),          // rimandata a S5 (ADR-012: self-signup con attivazione a pagamento)
+        // 🔴 **Resta commentata, e dal 28 Ago 2026 NON e' piu' «rimandata»: e'
+        // esclusa.** Il self-signup esiste (ADR-012 + ADR-032) ma non passa di
+        // qui — vive in `App\Http\Controllers\RegistrazionePubblica`, su
+        // `/registrati`.
+        //
+        // Accendere questa riga rifarebbe esattamente cio' che quella feature
+        // esiste per impedire: Fortify crea l'utente via
+        // `App\Actions\Fortify\CreateNewUser`, lo **autentica subito** e lo
+        // manda su `fortify.home` = `/dashboard`. Con ADR-018 fail-closed
+        // quell'utente ha `tenant_id` NULL e atterra su un'applicazione vuota,
+        // senza account e **senza aver pagato** — cioe' lo stato «account che
+        // non paga» che la decisione di prodotto vieta.
+        //
+        // ⚠️ E aggiungerebbe una **seconda** superficie pubblica in scrittura,
+        // con un rate limiting diverso e senza honeypot: la difesa
+        // anti-enumerazione di `/registrati` varrebbe meno di niente se
+        // accanto vivesse un modulo che risponde «email gia' presa».
+        // Features::registration(),
         Features::resetPasswords(),
         Features::emailVerification(),
         // Features::updateProfileInformation(),  // fuori scope punto 4

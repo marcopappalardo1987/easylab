@@ -206,6 +206,14 @@ it('ignores a sort column that did not come from the whitelist', function () {
     $t = Livewire::test(Cabina::class)->set('sortBy', 'password')->set('sortDir', 'drop');
 
     expect(inPagina($t))->toBe(['Bianchi SRL', 'Gruppo Rossi']);
+
+    // 🔴 E la **freccia** dice la stessa cosa della query. È l'invariante che ha
+    // reso necessario estrarre `filtriNormalizzati()`: finché la whitelist stava
+    // in due posti, la pagina poteva ordinare per una colonna e indicarne
+    // un'altra — una bugia piccola, e proprio per questo credibile. Da S6 il
+    // terzo consumatore della stessa definizione è il foglio esportato, dove la
+    // bugia esce dall'applicazione su carta e non si corregge ricaricando.
+    expect($t->instance()->ordinamentoEffettivo())->toBe(['ragione_sociale', 'asc']);
 });
 
 it('ignores a click on a column that is not sortable', function () {

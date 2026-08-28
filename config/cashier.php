@@ -72,6 +72,30 @@ return [
          * `customer.subscription.updated`. Vedi StripeWebhookController.
          */
         'events' => [
+            /*
+             * 🔴 Il self-signup pubblico (ADR-012): la rete che chiude il caso
+             * «ha pagato e ha chiuso la scheda».
+             *
+             * Il ritorno del browser da Stripe non e' garantito — una
+             * connessione che cade, una scheda chiusa, un telefono che si
+             * spegne — e senza questo evento quel cliente avrebbe **pagato per
+             * niente**: nessun account, nessun utente, nessuna email, e una
+             * riga `registrazioni` che si pota da sola a trenta giorni. Il
+             * gesto e' lo stesso del ritorno via browser
+             * (`App\Support\Registrazione\CompletaRegistrazione`) ed e'
+             * idempotente, quindi le due strade non si pestano i piedi.
+             *
+             * ⚠️ **Cashier NON ha un `handleCheckoutSessionCompleted`**: il
+             * dispatch del parent finirebbe in `missingMethod()` con un 200
+             * muto. L'handler e' scritto nel NOSTRO `StripeWebhookController` e
+             * non chiama `parent::` — non esiste.
+             *
+             * ⚠️ Aggiungerlo qui non basta sull'ambiente: `cashier:webhook` va
+             * **rilanciato**, o l'endpoint registrato su Stripe continua ad
+             * ascoltare i soli tre eventi di prima. Un endpoint creato a mano
+             * in dashboard non si aggiorna da se'.
+             */
+            'checkout.session.completed',
             'customer.subscription.created',
             'customer.subscription.updated',
             'customer.subscription.deleted',
