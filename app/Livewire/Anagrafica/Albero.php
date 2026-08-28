@@ -6,11 +6,14 @@ use App\Enums\TipoSpostamento;
 use App\Enums\TipoUnitaOrganizzativa;
 use App\Enums\VisibilitaGaranzieRicambio;
 use App\Livewire\Concerns\ManagesStrumentoForm;
+use App\Models\Account;
 use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Support\Notifiche\AvvisiObsolescenza;
+use App\Support\Provisioning\ProvisionaEnte;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -66,6 +69,11 @@ class Albero extends Component
 
     public ?string $notice = null;
 
+    /** Modale «aggiungi una sede», il gesto del cliente su sé stesso. */
+    public bool $showSedeForm = false;
+
+    public string $nomeSede = '';
+
     public function mount(): void
     {
         // Se l'utente ha un'unica radice visibile (es. Admin con un Ente,
@@ -103,6 +111,119 @@ class Albero extends Component
         return $nodes->filter(
             fn (UnitaOrganizzativa $n) => $n->parent_id === null || ! in_array($n->parent_id, $ids, true)
         )->values();
+    }
+
+    // --- Aggiungere una sede al proprio account (ADR-032) ---
+
+    /**
+     * 🔴 L'Account di chi guarda, se ne ha uno.
+     *
+     * Si deriva dall'Ente dell'utente e **mai** da un id che arriva dal
+     * browser: è ciò che rende impossibile, per costruzione, aggiungere una
+     * sede al contratto di qualcun altro.
+     */
+    private function mioAccount(): ?Account
+    {
+        return Auth::user()?->ente?->account;
+    }
+
+    /**
+     * 🔴 **Nessun permesso nuovo, e la scelta è la parte importante.**
+     *
+     * Aggiungere una sede **consuma uno slot del piano**, cioè tocca il
+     * contratto: la domanda giusta non è «sai amministrare l'anagrafica» ma
+     * «questo account è tuo». È esattamente l'ability `manage` di
+     * `AccountPolicy`, quella che la cabina già pretende quando aggancia una
+     * sede a un cliente esistente — qui il cliente è sé stesso.
+     *
+     * ⛔ `tenants.provision` NON si allarga all'Admin, e non è pigrizia: è nel
+     * **set bloccato** (🔗 ADR-016) e per definizione è cross-tenant, quindi
+     * darglielo significherebbe dargli la piattaforma. E un permesso nuovo
+     * costerebbe un riseeding, che cancella le personalizzazioni di runtime.
+     */
+    public function puoAggiungereSede(): bool
+    {
+        $account = $this->mioAccount();
+
+        return $account !== null
+            && Gate::allows('manage', $account)
+            && $account->puoAggiungereEnte();
+    }
+
+    /**
+     * Il tetto è pieno: la pagina lo dice invece di nascondere il bottone e
+     * lasciare che il cliente si chieda perché.
+     */
+    public function tettoPieno(): bool
+    {
+        $account = $this->mioAccount();
+
+        return $account !== null
+            && Gate::allows('manage', $account)
+            && ! $account->puoAggiungereEnte();
+    }
+
+    public function slotResidui(): ?int
+    {
+        return $this->mioAccount()?->slotEntiResidui();
+    }
+
+    public function apriNuovaSede(): void
+    {
+        abort_unless($this->puoAggiungereSede(), 403);
+
+        $this->resetForm();
+        $this->nomeSede = '';
+        $this->resetValidation();
+        $this->showSedeForm = true;
+    }
+
+    public function chiudiNuovaSede(): void
+    {
+        $this->showSedeForm = false;
+        $this->nomeSede = '';
+        $this->resetValidation();
+    }
+
+    /**
+     * ⛔ Ricontrolla TUTTO nell'azione, e non solo all'apertura: le property di
+     * un componente Livewire sono pubbliche e `set` + `call` è a un `$wire` di
+     * distanza. Il tetto in particolare va riletto qui — fra l'apertura della
+     * modale e il salvataggio una sede può essere nata da un'altra scheda.
+     */
+    public function creaSede(): void
+    {
+        $account = $this->mioAccount();
+
+        abort_if($account === null, 403);
+        Gate::authorize('manage', $account);
+        abort_unless($account->puoAggiungereEnte(), 403);
+
+        $this->validate([
+            'nomeSede' => ['required', 'string', 'max:255'],
+        ]);
+
+        $utente = Auth::user();
+
+        // Si riusa `ProvisionaEnte`, la stessa classe del comando di console e
+        // della cabina: la transazione «Ente + aggancio all'account + membro»
+        // esiste già, e riscriverla qui vorrebbe dire tenerne due allineate.
+        //
+        // ⚠️ L'email è quella di chi sta chiedendo: l'utente esiste già,
+        // quindi non ne nasce uno nuovo — resta sul proprio Ente e raggiunge
+        // quello appena creato con lo switcher in testata.
+        $esito = new ProvisionaEnte(
+            nome: $this->nomeSede,
+            adminEmail: $utente->email,
+            adminName: $utente->name,
+            accountId: $account->id,
+        );
+
+        $esito->esegui();
+
+        $this->showSedeForm = false;
+        $this->nomeSede = '';
+        $this->notice = 'Sede creata. La raggiungi dallo switcher in alto.';
     }
 
     // --- Navigazione ---

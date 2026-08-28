@@ -47,6 +47,22 @@
                         <x-ui.button variant="ghost" wire:click="confirmDelete({{ $current->id }})">Elimina</x-ui.button>
                     @endunless
                 @endcan
+                {{-- 🔴 Il gesto del CLIENTE su sé stesso: aggiungere una sede al
+                     proprio contratto, entro il tetto del piano (🔗 ADR-032).
+                     Sta qui e non alla radice perché un Admin con un Ente solo
+                     alla radice non ci arriva mai — `mount()` lo porta dentro.
+
+                     ⚠️ Non chiede `tenants.provision`, che è cross-tenant e nel
+                     set bloccato: chiede `manage` sul PROPRIO account, perché
+                     una sede in più consuma uno slot del piano, cioè tocca il
+                     contratto. --}}
+                @if ($isEnte && $this->puoAggiungereSede())
+                    <x-ui.button variant="secondary" wire:click="apriNuovaSede">+ Aggiungi una sede</x-ui.button>
+                @elseif ($isEnte && $this->tettoPieno())
+                    {{-- Il tetto pieno si DICE, non si nasconde: un bottone che
+                         sparisce lascia il cliente a chiedersi perché. --}}
+                    <span class="text-xs text-ink-3">Sedi incluse nel piano: esaurite</span>
+                @endif
                 @can('unita_organizzativa.create')
                     <x-ui.button wire:click="addChild({{ $current->id }})">+ {{ $addLabel }}</x-ui.button>
                 @endcan
@@ -253,3 +269,31 @@
         </x-ui.modal>
     @endif
 </div>
+
+{{-- Modale «aggiungi una sede» --}}
+@if ($showSedeForm)
+    <x-ui.modal title="Aggiungi una sede" close="chiudiNuovaSede">
+        <p class="text-sm text-ink-2">
+            La sede nasce dentro il tuo contratto e la raggiungi dallo switcher in alto.
+            @php($residui = $this->slotResidui())
+            @if ($residui !== null)
+                Te ne {{ $residui === 1 ? 'resta' : 'restano' }} <strong>{{ $residui }}</strong>.
+            @endif
+        </p>
+
+        <div class="mt-4">
+            <label for="nome-sede" class="block text-sm font-medium text-ink">Nome della sede</label>
+            <input id="nome-sede" type="text" wire:model="nomeSede"
+                   placeholder="Sede di Bergamo"
+                   class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+            @error('nomeSede')
+                <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
+            @enderror
+        </div>
+
+        <div class="mt-4 flex justify-end gap-2">
+            <x-ui.button variant="ghost" wire:click="chiudiNuovaSede">Annulla</x-ui.button>
+            <x-ui.button wire:click="creaSede">Crea la sede</x-ui.button>
+        </div>
+    </x-ui.modal>
+@endif

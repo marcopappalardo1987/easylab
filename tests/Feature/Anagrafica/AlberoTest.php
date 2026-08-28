@@ -2,6 +2,7 @@
 
 use App\Enums\TipoUnitaOrganizzativa;
 use App\Livewire\Anagrafica\Albero;
+use App\Models\Account;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -331,4 +332,79 @@ it('still saves the threshold when no machine crosses the line', function () {
 
     expect($ente->fresh()->soglia_obsolescenza_anni)->toBe(4);
     Notification::assertNothingSent();
+});
+
+// --- Il cliente aggiunge una sede al proprio contratto (ADR-032) ---
+//
+// 🔴 Segnalato da Marco il 28 Ago 2026: un cliente deve poter aggiungere Enti
+// da sé, entro il tetto del suo piano. Fino a quel giorno un Ente nasceva SOLO
+// dal provisioning, cioè da EasyLab.
+//
+// ⛔ Il permesso è `manage` sul PROPRIO account e non `tenants.provision`:
+// quest'ultimo è cross-tenant e nel set bloccato, e darlo all'Admin
+// significherebbe dargli la piattaforma. Aggiungere una sede consuma uno slot
+// del piano, cioè tocca il contratto — e «questo account è tuo» è esattamente
+// la domanda che `AccountPolicy::manage` fa già.
+
+function enteConAdminSuAccount(int $maxEnti = 5): array
+{
+    $account = Account::factory()->saas()->create();
+    $ente = UnitaOrganizzativa::factory()->ente()->perAccount($account)->create(['nome' => 'Sede di Milano']);
+
+    $admin = User::factory()->create([
+        'tenant_id' => $ente->id,
+        'two_factor_confirmed_at' => now(),
+    ]);
+    $admin->assignRole('Admin');
+    $account->membri()->syncWithoutDetaching([$admin->id]);
+
+    return [$account, $ente, $admin];
+}
+
+it('lets a customer add a sede of their own, within the plan', function () {
+    [$account, $ente, $admin] = enteConAdminSuAccount();
+
+    Livewire::actingAs($admin->fresh())
+        ->test(Albero::class)
+        ->call('apriNuovaSede')
+        ->set('nomeSede', 'Sede di Bergamo')
+        ->call('creaSede')
+        ->assertHasNoErrors();
+
+    expect($account->fresh()->enti()->pluck('nome'))->toContain('Sede di Bergamo');
+});
+
+it('refuses a sede beyond the plan cap, in the action and not only in the view', function () {
+    // ⛔ Il tetto si rilegge NELL'AZIONE: fra l'apertura della modale e il
+    // salvataggio una sede può essere nata da un'altra scheda. E le property
+    // sono pubbliche, quindi `set` + `call` salta del tutto l'apertura.
+    [$account, $ente, $admin] = enteConAdminSuAccount();
+
+    // Si riempie il piano fino al tetto.
+    while ($account->fresh()->puoAggiungereEnte()) {
+        UnitaOrganizzativa::factory()->ente()->perAccount($account)->create();
+    }
+
+    Livewire::actingAs($admin->fresh())
+        ->test(Albero::class)
+        ->set('nomeSede', 'Una di troppo')
+        ->call('creaSede')
+        ->assertForbidden();
+
+    expect($account->fresh()->enti()->where('nome', 'Una di troppo')->exists())->toBeFalse();
+});
+
+it('never lets someone add a sede to an account that is not theirs', function () {
+    // Un utente che l'account non ce l'ha (nessuna riga sul pivot) non può
+    // aggiungere sedi a nessuno — e l'account si deriva da lui, mai dal browser.
+    [$account, $ente, $admin] = enteConAdminSuAccount();
+    $account->membri()->detach($admin->id);
+
+    Livewire::actingAs($admin->fresh())
+        ->test(Albero::class)
+        ->set('nomeSede', 'Abusiva')
+        ->call('creaSede')
+        ->assertForbidden();
+
+    expect(UnitaOrganizzativa::withoutGlobalScopes()->where('nome', 'Abusiva')->exists())->toBeFalse();
 });
