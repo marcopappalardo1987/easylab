@@ -647,3 +647,42 @@
         }
     }
 }
+
+/*
+| ─────────────────────────────────────────────────────────────────────────────
+| Il cursore sugli elementi cliccabili
+| ─────────────────────────────────────────────────────────────────────────────
+|
+| 🔴 **Tailwind 4 ha cambiato il default, e il progetto non se n'era accorto.**
+| Fino alla v3 il preflight dava `cursor: pointer` a ogni `<button>`; dalla v4
+| i bottoni seguono il default del browser, cioè `cursor: default` — la stessa
+| freccia del testo inerte. Segnalato da Marco il 28 Ago 2026 guardando la
+| barra in alto, ma non era un difetto di quella barra: era di OGNI bottone
+| dell'applicazione, dalle azioni della cabina ai bottoni delle modali.
+|
+| ⚠️ Si rimedia QUI e non con `cursor-pointer` sparso nelle viste: erano già
+| sei i file che se lo scrivevano a mano — sei punti in cui qualcuno aveva
+| notato il sintomo e curato il proprio caso, senza che la causa venisse mai a
+| galla. Una regola di base toglie a chi scriverà la prossima vista l'onere di
+| ricordarsene.
+|
+| ⚠️ **Quei sei restano, e non sono tutti ridondanti**: solo i due su
+| `<summary>` lo diventano. Gli altri quattro stanno su elementi che questa
+| regola NON copre e che cliccabili lo sono per come sono costruiti — una
+| `<label>` che avvolge un radio, l'interruttore delle preferenze, il selettore
+| di colore, e la riga `<tr>` della tabella strumenti. Toglierli spegnerebbe il
+| cursore proprio dove serve di più.
+|
+| ⛔ `:not(:disabled)` non è cosmesi: un bottone disabilitato che mostra la
+| mano promette un gesto che non avverrà, ed è la stessa disciplina per cui in
+| questo progetto un tetto pieno si DICE invece di far sparire il comando.
+| `[role="button"]` copre gli elementi che bottoni non sono ma si comportano
+| come tali; `summary` è cliccabile per natura.
+*/
+@layer base {
+    button:not(:disabled),
+    [role='button']:not(:disabled),
+    summary {
+        cursor: pointer;
+    }
+}
