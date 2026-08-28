@@ -6,6 +6,7 @@ use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Support\AuditLog;
+use App\Support\Tenancy\CurrentTenant;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\Models\Activity;
@@ -204,18 +205,101 @@ it('does not redirect on an illegitimate target', function () {
     expect($this->membro->fresh()->tenant_id)->toBe($this->enteA->id);
 });
 
-it('suppresses the tendina while impersonating, keeping the name', function () {
+// --- Lo spostamento durante un'impersonazione: effimero, non permanente ---
+//
+// 🔴 **Questa regola è cambiata il 28 Ago 2026, su richiesta di Marco.** Fino a
+// quel giorno la tendina era soppressa mentre si impersonava, e chi impersonava
+// un cliente con più sedi non poteva vederle — cioè non poteva fare la cosa per
+// cui l'impersonazione esiste.
+//
+// La ragione della soppressione restava però valida, ed è quella che il nuovo
+// comportamento conserva: `passaAllEnte()` **scrive** `users.tenant_id`, e
+// scriverlo impersonando è una modifica permanente fatta per conto del cliente
+// — che si ritroverebbe, al proprio prossimo accesso, in una sede che non ha
+// scelto lui. Stessa famiglia di gesti per cui il 2FA è chiuso impersonando.
+//
+// Quindi: la tendina c'è, lo spostamento vive nella SESSIONE, e il database del
+// cliente non viene toccato.
+
+it('lets an impersonator move between the sedi WITHOUT touching the customer record', function () {
     $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id]);
     $superadmin->assignRole('Superadmin');
     $this->actingAs($superadmin)->get(route('impersonate', $this->membro));
 
     Livewire\Livewire::test(SwitcherEnte::class)
         ->assertSee('Sede Nord')
-        ->assertDontSee('Le tue sedi')
+        ->call('apri')
         ->call('passa', $this->enteB->id)
+        ->assertRedirect(route('dashboard'));
+
+    // 🔴 Il cuore: il contesto SEGUE lo spostamento…
+    expect(CurrentTenant::id())->toBe($this->enteB->id)
+        // …e la riga del cliente NON è stata riscritta.
+        ->and($this->membro->fresh()->tenant_id)->toBe($this->enteA->id);
+});
+
+it('refuses an ephemeral move toward a sede outside the customer contract', function () {
+    // ⛔ La guardia sta dove la chiave si SCRIVE, perché `CurrentTenant` a valle
+    // non ricontrolla (costerebbe una query per richiesta). Se questa riga si
+    // allentasse, la sessione diventerebbe un varco verso un Ente qualunque.
+    $estraneo = UnitaOrganizzativa::factory()->ente()->create(['nome' => 'Ente Estraneo']);
+
+    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id]);
+    $superadmin->assignRole('Superadmin');
+    $this->actingAs($superadmin)->get(route('impersonate', $this->membro));
+
+    Livewire\Livewire::test(SwitcherEnte::class)
+        ->call('passa', $estraneo->id)
         ->assertNoRedirect();
 
-    expect($this->membro->fresh()->tenant_id)->toBe($this->enteA->id);
+    expect(CurrentTenant::id())->toBe($this->enteA->id);
+});
+
+it('drops the ephemeral sede the moment the impersonation ends', function () {
+    // ⛔ La chiave di sessione porta l'id dell'utente per cui è stata scritta, e
+    // si applica solo se si sta impersonando ADESSO **e** l'utente è ancora
+    // quello. Una chiave rimasta appesa non può quindi scopare nessuno verso
+    // l'Ente di un altro — che è il modo in cui questa scorciatoia potrebbe
+    // diventare un buco.
+    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id]);
+    $superadmin->assignRole('Superadmin');
+    $this->actingAs($superadmin)->get(route('impersonate', $this->membro));
+
+    Livewire\Livewire::test(SwitcherEnte::class)->call('passa', $this->enteB->id);
+    expect(CurrentTenant::id())->toBe($this->enteB->id);
+
+    // Si esce dall'impersonazione: la chiave resta in sessione, ma è spenta.
+    $this->get(route('impersonate.leave'));
+
+    expect(session(CurrentTenant::SEDE_IMPERSONATA))->not->toBeNull()
+        ->and(CurrentTenant::id())->toBe($this->enteA->id);
+});
+
+it('never lets a leftover key move the CUSTOMER, when they log in themselves', function () {
+    // 🔴 **Il caso che rende falsificabile la guardia `isImpersonating()`, e che
+    // il test qui sopra NON coglieva** — trovato per mutazione: togliendo quel
+    // controllo la suite restava verde, perché dopo l'uscita l'utente
+    // autenticato è l'impersonatore e la chiave veniva spenta dal confronto
+    // sull'id, non da quello sull'impersonazione.
+    //
+    // Lo scenario vero è un altro, ed è quello che conta: la chiave è stata
+    // scritta PER il cliente, e poi è il cliente stesso ad autenticarsi nella
+    // stessa sessione. Qui i due id COMBACIANO, quindi l'unica cosa che
+    // impedisce di scoparlo verso una sede che non ha scelto è
+    // `isImpersonating()`. Senza, un cliente si troverebbe in un'altra sede per
+    // una chiave lasciata da un tecnico dell'assistenza.
+    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id]);
+    $superadmin->assignRole('Superadmin');
+    $this->actingAs($superadmin)->get(route('impersonate', $this->membro));
+
+    Livewire\Livewire::test(SwitcherEnte::class)->call('passa', $this->enteB->id);
+    $this->get(route('impersonate.leave'));
+
+    // Ora entra il cliente, di persona, con la chiave ancora in sessione.
+    $this->actingAs($this->membro->fresh());
+
+    expect(session(CurrentTenant::SEDE_IMPERSONATA))->not->toBeNull()
+        ->and(CurrentTenant::id())->toBe($this->enteA->id);
 });
 
 it('renders nothing for a user without a tenant', function () {

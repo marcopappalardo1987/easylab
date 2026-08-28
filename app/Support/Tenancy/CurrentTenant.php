@@ -4,6 +4,7 @@ namespace App\Support\Tenancy;
 
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Lab404\Impersonate\Services\ImpersonateManager;
 
 /**
  * Risolutore del tenant corrente per il Global Scope multi-tenant (ADR-001/018).
@@ -17,7 +18,29 @@ use Illuminate\Support\Facades\Auth;
  *
  * Impersonation: lab404 sostituisce l'utente autenticato, quindi
  * `Auth::user()` (e il suo `tenant_id`) seguono automaticamente il contesto
- * impersonato — nessun trattamento speciale necessario.
+ * impersonato.
+ *
+ * 🔴 **L'unica eccezione, e va letta per intero: la sede scelta durante
+ * un'impersonazione vive nella SESSIONE, non sull'utente.**
+ *
+ * Chi impersona un cliente con più sedi deve poterle vedere tutte — è la
+ * ragione per cui impersona. Ma `passaAllEnte()` riscrive `users.tenant_id`,
+ * cioè fa una **modifica permanente per conto dell'impersonato**: il cliente si
+ * ritroverebbe, al proprio prossimo accesso, in una sede che non ha scelto lui.
+ * È la stessa famiglia di gesti per cui il 2FA è chiuso durante
+ * un'impersonazione (28 Ago 2026).
+ *
+ * Quindi lo spostamento è **effimero**: dura quanto l'impersonazione e non
+ * tocca una riga di database.
+ *
+ * ⛔ **Perché non può diventare un varco.** La chiave di sessione porta con sé
+ * l'id dell'utente per cui è stata scritta, e si applica solo se **entrambe**
+ * le condizioni valgono: si sta impersonando ADESSO, e l'utente autenticato è
+ * ancora quello. Una chiave rimasta appesa dopo la fine dell'impersonazione non
+ * può quindi scopare nessuno verso l'Ente di un altro: la condizione più
+ * stretta la spegne, e senza costare una query per richiesta. La legittimità
+ * del bersaglio (stesso account, non in lockout) si verifica dove la chiave
+ * viene SCRITTA, in `SwitcherEnte::passa()`.
  */
 class CurrentTenant
 {
@@ -26,9 +49,45 @@ class CurrentTenant
      * autenticato senza tenant (gestito fail-closed da TenantScope) oppure in
      * contesto senza utente (console/seeder/job → nessuno scope).
      */
+    /** La chiave di sessione dello spostamento effimero. */
+    public const SEDE_IMPERSONATA = 'impersonazione.sede';
+
     public static function id(): ?int
     {
-        return self::user()?->tenant_id;
+        $user = self::user();
+
+        if ($user === null) {
+            return null;
+        }
+
+        $scelta = self::sedeScelta($user);
+
+        return $scelta ?? $user->tenant_id;
+    }
+
+    /**
+     * La sede scelta a mano da chi impersona, se e solo se è ancora sua.
+     *
+     * ⛔ Le due condizioni sono in AND e nessuna delle due è ridondante:
+     * `isImpersonating()` spegne la chiave appena l'impersonazione finisce, e
+     * il confronto sull'id la spegne se nel frattempo si impersona qualcun
+     * altro. Fail-closed: al minimo dubbio si torna al `tenant_id` vero.
+     */
+    protected static function sedeScelta(User $user): ?int
+    {
+        if (! app(ImpersonateManager::class)->isImpersonating()) {
+            return null;
+        }
+
+        $scelta = session(self::SEDE_IMPERSONATA);
+
+        if (! is_array($scelta)) {
+            return null;
+        }
+
+        return ($scelta['utente'] ?? null) === $user->getKey()
+            ? ($scelta['ente'] ?? null)
+            : null;
     }
 
     /**

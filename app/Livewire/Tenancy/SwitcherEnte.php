@@ -4,6 +4,8 @@ namespace App\Livewire\Tenancy;
 
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
+use App\Support\AuditLog;
+use App\Support\Tenancy\CurrentTenant;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Livewire\Component;
@@ -59,8 +61,50 @@ class SwitcherEnte extends Component
     {
         $ente = UnitaOrganizzativa::withoutGlobalScopes()->find($enteId);
 
-        if ($ente === null || ! $this->user()->passaAllEnte($ente)) {
+        if ($ente === null) {
             return; // fail-closed silenzioso: la UI non offre bersagli illegittimi.
+        }
+
+        // 🔴 Impersonando, lo spostamento è EFFIMERO: vive nella sessione di
+        // chi impersona e non tocca `users.tenant_id`. `passaAllEnte()`
+        // continua a rifiutare — ed è giusto che rifiuti: quella scrive, e
+        // scrivere qui sarebbe una modifica permanente fatta per conto del
+        // cliente, che si ritroverebbe al prossimo accesso in una sede che non
+        // ha scelto lui.
+        //
+        // ⛔ La legittimità del bersaglio si verifica QUI, dove la chiave si
+        // scrive: dev'essere una sede raggiungibile dall'impersonato, cioè
+        // dello stesso account e non in lockout. `CurrentTenant` a valle non
+        // ricontrolla — costerebbe una query per richiesta — quindi questa
+        // riga è l'unica guardia e non può essere allentata.
+        if ($this->impersonando()) {
+            $legittima = $this->sedi()->whereKey($ente->id)->exists();
+
+            if (! $legittima) {
+                return;
+            }
+
+            session([CurrentTenant::SEDE_IMPERSONATA => [
+                'utente' => $this->user()->getKey(),
+                'ente' => $ente->id,
+            ]]);
+
+            // L'attraversamento di un confine si registra, come l'impersonazione
+            // stessa e lo switch permanente: il causer è l'impersonato (è chi la
+            // guard espone), e la riga dell'impersonazione dice chi c'è dietro.
+            activity(AuditLog::NAME)
+                ->causedBy($this->user())
+                ->performedOn($ente)
+                ->withProperties(['effimero' => true, 'impersonazione' => true])
+                ->log('sede.cambiata');
+
+            $this->redirect(route('dashboard'));
+
+            return;
+        }
+
+        if (! $this->user()->passaAllEnte($ente)) {
+            return;
         }
 
         // Full reload verso la dashboard, non navigate SPA e non la pagina
@@ -85,7 +129,7 @@ class SwitcherEnte extends Component
      */
     public function altreSedi(): Collection
     {
-        if (! $this->aperto || $this->impersonando()) {
+        if (! $this->aperto) {
             return new Collection;
         }
 
@@ -109,7 +153,11 @@ class SwitcherEnte extends Component
     {
         return view('livewire.tenancy.switcher-ente', [
             'altreSedi' => $this->altreSedi(),
-            'tendina' => $this->sediRaggiungibili > 0 && ! $this->impersonando(),
+            // 🔴 La tendina vive anche durante un'impersonazione (28 Ago 2026):
+            // chi impersona un cliente con più sedi deve poterle vedere tutte —
+            // è la ragione per cui impersona. Lo spostamento che ne segue è
+            // effimero e non tocca il contesto del cliente (vedi `passa()`).
+            'tendina' => $this->sediRaggiungibili > 0,
         ]);
     }
 }
