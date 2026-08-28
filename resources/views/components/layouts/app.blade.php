@@ -236,7 +236,28 @@
                              radice** riceve a sua volta `min-w-0` — e quel file è ancora da
                              migrare (F4). Fino ad allora si sceglie fra un nome tagliato e
                              un menù utente irraggiungibile. --}}
-                        <div class="flex min-w-0 items-center gap-2 overflow-hidden">
+                        {{-- ⛔ **NIENTE `overflow-hidden` qui**, ed è la riga che ha
+                             tenuto chiusa la tendina delle sedi per tre giri di
+                             correzioni sbagliate (28 Ago 2026).
+
+                             Il pannello dello switcher è `absolute` e cade SOTTO
+                             questa intestazione, che è alta `h-14`: con
+                             `overflow-hidden` su questo contenitore veniva
+                             **ritagliato via**. Si apriva davvero — Alpine
+                             toglieva `x-cloak` e il DOM conteneva le sedi — e non
+                             si vedeva niente, senza un errore in console.
+
+                             La prova è differenziale: il **menù utente** usa lo
+                             stesso identico schema e ha sempre funzionato, e sta
+                             nel contenitore accanto, che `overflow-hidden` non ce
+                             l'ha. Come la campanella.
+
+                             ⚠️ Il troncamento del nome dell'Ente non dipendeva da
+                             qui: lo fanno `min-w-0` su questo flex e `max-w-56` +
+                             `truncate` dentro il componente. Chi rimettesse
+                             `overflow-hidden` per «sicurezza» richiuderebbe la
+                             tendina — c'è un test che lo rende rosso. --}}
+                        <div class="flex min-w-0 items-center gap-2">
                             <button type="button" @click="sidebarOpen = true"
                                     class="-ml-1 flex size-11 items-center justify-center rounded-md text-ink-2 hover:bg-surface-sunken hover:text-ink md:hidden"
                                     aria-label="Apri menù">
