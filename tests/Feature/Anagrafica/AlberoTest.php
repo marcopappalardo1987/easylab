@@ -408,3 +408,29 @@ it('never lets someone add a sede to an account that is not theirs', function ()
 
     expect(UnitaOrganizzativa::withoutGlobalScopes()->where('nome', 'Abusiva')->exists())->toBeFalse();
 });
+
+it('says WHY the sede button is gone, with the numbers', function () {
+    // 🔴 La prima stesura scriveva solo «Sedi incluse nel piano: esaurite»: chi
+    // la leggeva vedeva sparire un bottone senza sapere né a quante sedi avesse
+    // diritto né cosa fare per averne di più. Segnalato da Marco il 28 Ago 2026
+    // guardando un cliente Free, che di sedi ne ha una sola.
+    $account = Account::factory()->create(['piano' => 'free']);
+    $ente = UnitaOrganizzativa::factory()->ente()->perAccount($account)->create();
+
+    $admin = User::factory()->create([
+        'tenant_id' => $ente->id,
+        'two_factor_confirmed_at' => now(),
+    ]);
+    $admin->assignRole('Admin');
+    $account->membri()->syncWithoutDetaching([$admin->id]);
+
+    expect($account->fresh()->puoAggiungereEnte())->toBeFalse();
+
+    Livewire::actingAs($admin->fresh())
+        ->test(Albero::class)
+        // Il numero e il nome del piano, non un generico «esaurite».
+        ->assertSee('include')
+        ->assertSee('Free')
+        // E la via d'uscita.
+        ->assertSee('abbonamento');
+});

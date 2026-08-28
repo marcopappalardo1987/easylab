@@ -11,12 +11,14 @@ use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Support\Notifiche\AvvisiObsolescenza;
+use App\Support\Piani;
 use App\Support\Provisioning\ProvisionaEnte;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Lab404\Impersonate\Services\ImpersonateManager;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -166,6 +168,29 @@ class Albero extends Component
     public function slotResidui(): ?int
     {
         return $this->mioAccount()?->slotEntiResidui();
+    }
+
+    /**
+     * I numeri del tetto, per dirlo invece di limitarsi a negare.
+     *
+     * ⚠️ `puoVedereAbbonamento` è una domanda a parte da `tettoPieno()`: la
+     * pagina dell'abbonamento vuole `manage` sull'account **e** non deve essere
+     * offerta durante un'impersonazione, dove il portale di fatturazione è
+     * chiuso apposta (aprirebbe la sessione sul customer di un altro).
+     *
+     * @return array{piano: string, max: int|null, puoVedereAbbonamento: bool}
+     */
+    public function tettoDelPiano(): array
+    {
+        $account = $this->mioAccount();
+
+        return [
+            'piano' => $account === null ? '—' : Piani::etichetta($account->piano),
+            'max' => $account === null ? null : Piani::maxEnti($account->piano),
+            'puoVedereAbbonamento' => $account !== null
+                && Gate::allows('manage', $account)
+                && ! app(ImpersonateManager::class)->isImpersonating(),
+        ];
     }
 
     public function apriNuovaSede(): void

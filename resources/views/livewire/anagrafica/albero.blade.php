@@ -59,9 +59,24 @@
                 @if ($isEnte && $this->puoAggiungereSede())
                     <x-ui.button variant="secondary" wire:click="apriNuovaSede">+ Aggiungi una sede</x-ui.button>
                 @elseif ($isEnte && $this->tettoPieno())
-                    {{-- Il tetto pieno si DICE, non si nasconde: un bottone che
-                         sparisce lascia il cliente a chiedersi perché. --}}
-                    <span class="text-xs text-ink-3">Sedi incluse nel piano: esaurite</span>
+                    {{-- ⛔ Il tetto pieno si DICE, e si dice CON I NUMERI.
+                         La prima stesura scriveva «Sedi incluse nel piano:
+                         esaurite» e basta: chi la leggeva non sapeva né quante
+                         ne avesse diritto, né cosa fare per averne di più —
+                         cioè vedeva sparire un bottone e non sapeva perché.
+                         Segnalato da Marco il 28 Ago 2026, guardando proprio
+                         questa riga. --}}
+                    @php
+                        $tetto = $this->tettoDelPiano();
+                    @endphp
+                    <span class="text-xs text-ink-3">
+                        Il piano <strong>{{ $tetto['piano'] }}</strong> include
+                        {{ $tetto['max'] }} {{ $tetto['max'] === 1 ? 'sede' : 'sedi' }}, e
+                        {{ $tetto['max'] === 1 ? 'la stai usando' : 'le stai usando tutte' }}.
+                        @if ($tetto['puoVedereAbbonamento'])
+                            <a href="{{ route('abbonamento.index') }}" class="font-medium underline hover:no-underline">Vedi l'abbonamento</a>
+                        @endif
+                    </span>
                 @endif
                 @can('unita_organizzativa.create')
                     <x-ui.button wire:click="addChild({{ $current->id }})">+ {{ $addLabel }}</x-ui.button>
