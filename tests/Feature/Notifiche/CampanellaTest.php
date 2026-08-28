@@ -51,15 +51,26 @@ it('counts the unread notifications', function () {
     Livewire::test(Campanella::class)->assertSet('nonLette', 2);
 });
 
-it('loads the list only when the panel is opened', function () {
+// 🔴 **Questa regola è cambiata il 28 Ago 2026, e il test dice perché.**
+//
+// Fino a quel giorno le righe si leggevano solo a pannello aperto, per non
+// pesare su ogni pagina. Il prezzo era che il pannello **non si apriva**: il
+// click chiedeva le righe al server, la risposta faceva ridisegnare il
+// frammento e Alpine ripartiva da capo, richiudendolo nell'istante in cui
+// arrivavano i dati per riempirlo. Nessun errore in console. Lo stesso difetto
+// era sullo switcher delle sedi, dove Marco l'ha trovato usando l'applicazione.
+//
+// Ora le righe sono sempre in pagina e l'apertura è tutta nel browser. Il costo
+// è dichiarato: una query da dieci righe su ogni pagina, per ogni utente — ma
+// il conteggio dei non letti interroga già la stessa tabella a ogni pagina,
+// quindi il salto è da una query a due, non da zero.
+
+it('has the rows already in the page, so opening never needs the server', function () {
     notificaA($this->admin, $this->ente, $this->strumento);
     $this->actingAs($this->admin);
 
     Livewire::test(Campanella::class)
-        // Chiusa: nessuna riga letta dal database — il componente si monta su
-        // ogni pagina dell'applicazione.
-        ->assertDontSee('Ente A')
-        ->call('apri')
+        // Senza aver chiamato `apri()`: le righe ci sono già.
         ->assertSee('Ente A')
         ->assertSee('1 in arrivo');
 });

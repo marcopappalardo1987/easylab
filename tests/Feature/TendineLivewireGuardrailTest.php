@@ -40,12 +40,21 @@ it('never lets a Livewire dropdown keep its open state in Alpine instead of the 
                 File::get($file->getPathname())
             );
 
-            // Il difetto esiste solo dove le due cose convivono: uno stato
-            // locale di Alpine E una chiamata al server che ridisegna.
-            $statoLocale = str_contains($sorgente, 'x-data="{ open');
-            $giroSulServer = str_contains($sorgente, '$wire.');
+            // ⛔ Il difetto NON è «Alpine più `$wire` nella stessa vista»: una
+            // tendina che apre nel browser e chiama il server solo quando si
+            // sceglie qualcosa è sana, ed è la forma verso cui lo switcher è
+            // stato portato. Il difetto è che sia il gesto di APRIRE a
+            // chiamare il server — perché è la risposta a quel giro che
+            // ridisegna il frammento e azzera lo stato.
+            //
+            // Si guarda quindi dentro i soli handler che toccano `open`.
+            preg_match_all('/@click(?:\.[a-z]+)*="([^"]*)"/', $sorgente, $handler);
 
-            return $statoLocale && $giroSulServer
+            $apreChiamandoIlServer = collect($handler[1] ?? [])
+                ->contains(fn (string $h) => str_contains($h, 'open')
+                    && str_contains($h, '$wire.'));
+
+            return $apreChiamandoIlServer
                 ? Str::after($file->getPathname(), resource_path('views/livewire/'))
                 : null;
         })
@@ -54,7 +63,7 @@ it('never lets a Livewire dropdown keep its open state in Alpine instead of the 
         ->all();
 
     expect($colpevoli)->toBe([], implode("\n", array_merge(
-        ['Tendine Livewire con lo stato in Alpine E una chiamata al server:'],
+        ['Tendine Livewire in cui il gesto di APRIRE chiama il server:'],
         $colpevoli,
         ['', 'Il pannello si richiuderà da solo appena il server risponde, senza errori in console.'],
         ['Rimedio: guidare `x-show` dalla property Livewire (`x-show="$wire.aperto"`) invece che da un flag di `x-data`.'],

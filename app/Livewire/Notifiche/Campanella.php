@@ -59,10 +59,20 @@ class Campanella extends Component
      */
     public function ultime(): Collection
     {
-        if (! $this->aperta) {
-            return new Collection;
-        }
-
+        // 🔴 **Si calcolano SEMPRE, e la ragione è la stessa dello switcher
+        // delle sedi (28 Ago 2026).** La versione pigra chiedeva le righe al
+        // server nel gesto stesso di aprire: il server rispondeva, Livewire
+        // ridisegnava il frammento e il pannello si richiudeva nell'istante in
+        // cui arrivavano i dati per riempirlo. Non dava nessun errore.
+        //
+        // ⚠️ Qui il costo è più visibile che sulle sedi — è **una query da
+        // dieci righe su ogni pagina**, per ogni utente — e va detto invece che
+        // nascosto. Si paga perché l'alternativa era una tendina che non si
+        // apre, e perché il conteggio dei non letti già interroga questa stessa
+        // tabella a ogni pagina: il salto è da una query a due, non da zero.
+        //
+        // Se un domani pesasse, la strada NON è tornare al caricamento pigro:
+        // è marcare l'apertura in modo che non ridisegni questo frammento.
         return auth()->user()->notifications()->take(10)->get();
     }
 

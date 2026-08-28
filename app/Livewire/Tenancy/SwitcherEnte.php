@@ -125,14 +125,28 @@ class SwitcherEnte extends Component
     }
 
     /**
+     * 🔴 **L'elenco si calcola SEMPRE, e non più solo a tendina aperta.**
+     *
+     * La versione pigra era una scelta di costo — questo componente si monta su
+     * ogni pagina — ma il prezzo era che il pannello **non si apriva**: il click
+     * chiedeva l'elenco al server, il server rispondeva, Livewire ridisegnava il
+     * frammento e Alpine ripartiva da capo, richiudendolo. Due tentativi di
+     * tenere lo stato al di là del ridisegno non hanno funzionato sull'ambiente
+     * vero; la strada giusta era togliere il ridisegno, non sopravvivergli.
+     *
+     * Il costo reale è **una query in più**, di soli `id` e `nome`, e **solo per
+     * chi ha più di una sede** — cioè una minoranza dei clienti: `mount()`
+     * calcola già `sediRaggiungibili`, e dove quel conteggio è zero la tendina
+     * non esiste e questo metodo non viene mai chiamato dalla vista.
+     *
+     * In cambio la tendina si comporta come il menù utente, che funziona da
+     * sempre: apertura e chiusura tutte nel browser, nessuna chiamata al server
+     * finché non si sceglie davvero una sede.
+     *
      * @return Collection<int, UnitaOrganizzativa>
      */
     public function altreSedi(): Collection
     {
-        if (! $this->aperto) {
-            return new Collection;
-        }
-
         return $this->sedi()
             ->where('id', '!=', $this->user()->tenant_id)
             ->orderBy('nome')

@@ -1,17 +1,13 @@
-{{-- ⛔ La tendina è guidata da `$wire.aperta`, una property del SERVER, e non
-     da un flag locale di Alpine. È la stessa correzione dello switcher delle
-     sedi (28 Ago 2026): il pannello si riempie con un giro sul server
-     (`apri()`), e quel giro ridisegna il frammento — uno stato tenuto in
-     `x-data` riparte da capo proprio mentre arrivano i dati.
-
-     ⚠️ Il menù utente in `layouts/app.blade.php` usa ancora `x-data="{ open }"`
-     ed è CORRETTO che lo faccia: lì non c'è nessuna chiamata al server, quindi
-     nessun ridisegno da sopravvivere. La differenza è quella, non lo stile. --}}
-<div class="relative" x-data @click.outside="$wire.aperta = false">
+{{-- ⛔ Apertura e chiusura tutte nel browser, come lo switcher delle sedi e
+     come il menù utente: nessun `$wire` nel gesto che apre. Chiedere le righe
+     al server proprio mentre si apre faceva ridisegnare il frammento e
+     richiudeva il pannello, senza un errore in console. Le righe sono già in
+     pagina; `$wire` compare solo quando si segna tutto come letto. --}}
+<div class="relative" x-data="{ open: false }" @click.outside="open = false">
 
     {{-- Il pulsante: icona + pallino dei non letti --}}
     <button type="button"
-            @click="$wire.aperta ? $wire.aperta = false : $wire.apri()"
+            @click="open = !open"
             title="Notifiche"
             aria-label="Notifiche{{ $nonLette > 0 ? " ({$nonLette} non lette)" : '' }}"
             class="relative flex h-10 w-10 items-center justify-center rounded-md text-ink-2 hover:bg-surface-sunken">
@@ -28,7 +24,7 @@
     </button>
 
     {{-- Il pannello --}}
-    <div x-show="$wire.aperta" x-cloak x-transition
+    <div x-show="open" x-cloak x-transition
          class="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-md border border-border bg-surface shadow-md">
 
         <div class="flex items-center justify-between border-b border-border px-4 py-3">
