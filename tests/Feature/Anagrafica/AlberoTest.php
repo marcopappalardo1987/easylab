@@ -434,3 +434,36 @@ it('says WHY the sede button is gone, with the numbers', function () {
         // E la via d'uscita.
         ->assertSee('abbonamento');
 });
+
+it('actually RENDERS the sede modal when it is opened', function () {
+    // 🔴 Il test che mancava, e la sua assenza è costata un difetto in
+    // produzione di codice. I tre test precedenti chiamavano `apriNuovaSede`
+    // e poi `creaSede` **saltando la vista**: provavano che l'azione funziona,
+    // non che l'utente possa raggiungerla. La modale era stata scritta FUORI
+    // dal `</div>` di radice del componente, e per Livewire ciò che segue
+    // l'elemento radice non esiste — nessun errore, in pagina né in console:
+    // si premeva il bottone e non si apriva nulla.
+    //
+    // ⛔ **E questo test NON è ciò che coglie quel difetto**, dichiarato qui
+    // perché il suo nome prometterebbe il contrario. Provato per mutazione:
+    // rimettendo la modale fuori dalla radice, questo test resta VERDE — il
+    // renderer di prova di Livewire restituisce tutto l'output del Blade,
+    // radice o no, mentre il browser vero ne scarta metà. La rete che coglie
+    // davvero quel guasto guarda il SORGENTE, e vive in
+    // `tests/Feature/RadiceLivewireGuardrailTest.php`.
+    //
+    // Questo resta perché prova un'altra cosa, che serve comunque: che
+    // `apriNuovaSede()` accenda la modale invece di limitarsi a cambiare uno
+    // stato che nessuno rende.
+    [$account, $ente, $admin] = enteConAdminSuAccount();
+
+    Livewire::actingAs($admin->fresh())
+        ->test(Albero::class)
+        ->assertDontSee('Nome della sede')
+        ->call('apriNuovaSede')
+        ->assertSet('showSedeForm', true)
+        // ⛔ L'asserzione che conta: il titolo e il campo devono essere in
+        // pagina, non solo la property a `true`.
+        ->assertSee('Aggiungi una sede')
+        ->assertSee('Nome della sede');
+});

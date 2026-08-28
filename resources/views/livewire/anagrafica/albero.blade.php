@@ -283,32 +283,38 @@
             </form>
         </x-ui.modal>
     @endif
+
+    {{-- ⛔ Questa modale stava FUORI dal `</div>` di radice, e per Livewire
+         era come non esistere: un componente ha UN solo elemento radice, e
+         tutto ciò che lo segue viene scartato in silenzio. Il bottone
+         «Aggiungi una sede» chiamava l'azione, l'azione metteva
+         `showSedeForm` a true, e non si apriva niente — nessun errore, né
+         in pagina né in console. Segnalato da Marco il 28 Ago 2026. --}}
+    {{-- Modale «aggiungi una sede» --}}
+    @if ($showSedeForm)
+        <x-ui.modal title="Aggiungi una sede" close="chiudiNuovaSede">
+            <p class="text-sm text-ink-2">
+                La sede nasce dentro il tuo contratto e la raggiungi dallo switcher in alto.
+                @php($residui = $this->slotResidui())
+                @if ($residui !== null)
+                    Te ne {{ $residui === 1 ? 'resta' : 'restano' }} <strong>{{ $residui }}</strong>.
+                @endif
+            </p>
+
+            <div class="mt-4">
+                <label for="nome-sede" class="block text-sm font-medium text-ink">Nome della sede</label>
+                <input id="nome-sede" type="text" wire:model="nomeSede"
+                       placeholder="Sede di Bergamo"
+                       class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                @error('nomeSede')
+                    <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
+                @enderror
+            </div>
+
+            <div class="mt-4 flex justify-end gap-2">
+                <x-ui.button variant="ghost" wire:click="chiudiNuovaSede">Annulla</x-ui.button>
+                <x-ui.button wire:click="creaSede">Crea la sede</x-ui.button>
+            </div>
+        </x-ui.modal>
+    @endif
 </div>
-
-{{-- Modale «aggiungi una sede» --}}
-@if ($showSedeForm)
-    <x-ui.modal title="Aggiungi una sede" close="chiudiNuovaSede">
-        <p class="text-sm text-ink-2">
-            La sede nasce dentro il tuo contratto e la raggiungi dallo switcher in alto.
-            @php($residui = $this->slotResidui())
-            @if ($residui !== null)
-                Te ne {{ $residui === 1 ? 'resta' : 'restano' }} <strong>{{ $residui }}</strong>.
-            @endif
-        </p>
-
-        <div class="mt-4">
-            <label for="nome-sede" class="block text-sm font-medium text-ink">Nome della sede</label>
-            <input id="nome-sede" type="text" wire:model="nomeSede"
-                   placeholder="Sede di Bergamo"
-                   class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
-            @error('nomeSede')
-                <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
-            @enderror
-        </div>
-
-        <div class="mt-4 flex justify-end gap-2">
-            <x-ui.button variant="ghost" wire:click="chiudiNuovaSede">Annulla</x-ui.button>
-            <x-ui.button wire:click="creaSede">Crea la sede</x-ui.button>
-        </div>
-    </x-ui.modal>
-@endif
