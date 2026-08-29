@@ -1,6 +1,6 @@
 🗺️ Roadmap Completa — Easy Lab
 
-*Piano cronologico di progetto: fasi progettuali + sprint datati fino al rilascio della V1 (MVP) e backlog delle versioni successive. Questo documento è il **master roadmap**: incorpora e supera i due ToDo originali (`Fase 1 - ToDo List Installazione Stack.md` e `Fase 2 - ToDo List.md`), che restano come materiale di origine. Tutte le scelte qui riflesse sono tracciate in `../Architettura/Decisioni Architetturali.md` (ADR-001 → ADR-035).*
+*Piano cronologico di progetto: fasi progettuali + sprint datati fino al rilascio della V1 (MVP) e backlog delle versioni successive. Questo documento è il **master roadmap**: incorpora e supera i due ToDo originali (`Fase 1 - ToDo List Installazione Stack.md` e `Fase 2 - ToDo List.md`), che restano come materiale di origine. Tutte le scelte qui riflesse sono tracciate in `../Architettura/Decisioni Architetturali.md` (ADR-001 → ADR-037).*
 
 > **Revisione del 3 Agosto 2026 — briefing col cliente destinatario** (🔗 ADR-019 ÷ ADR-024). Sei chiarimenti di dominio, di cui uno **revoca** lavoro già consegnato in S3. Le date restano invariate: il rientro è contenuto (vedi **Sprint 3-bis**) e cade dentro la coda di S3 (3–7 Ago), mentre le voci nuove sono assorbite da S4, che già prevedeva ricambi, garanzia pezzo e fornitori. L'unica aggiunta di sostanza è il **tab Panoramica** (ADR-024), messo in S3-bis di proposito: tocca `Semaforo`, la stessa classe che S4 dovrà estendere, e farlo prima evita di rimetterci mano due volte con criteri diversi.
 
@@ -916,6 +916,8 @@ gantt
   > Esistono l'**upload** nel tab Documenti della scheda, il **download mediato** dall'applicazione (🔗 ADR-026: autorizzazione ricontrollata a ogni richiesta, binding scopato) e l'**export PDF** dello storico macchina (🔗 ADR-031) — tutti **per singolo strumento**. Non esiste nessun elenco documenti a livello di Ente né un export aggregato: `documenti` è polimorfico su Strumento|Intervento e l'unica rotta è il download di un file.
   >
   > È una funzionalità **intera** — rotta, elenco, filtri, permessi, retention, privacy — non un blocco di pagina d'atterraggio: costruirla dentro la casella «Dashboard Tenant» sarebbe stata la seconda superficie che quel lavoro ha rifiutato di costruire per abitudine.
+- [ ] `[STRETCH]` **Estrarre la regola dell'etichetta «prossima scadenza»** — *aperta il 29 Ago 2026 col Parco clienti.* Oggi vive due volte: nel parco e nell'elenco per-Ente. Coincidono, e a tenerle insieme c'è un test di accoppiamento invece di una sola definizione: il giorno in cui una delle due cambia, i due schermi si contraddicono sullo stesso strumento. 🔗 ADR-037
+- [ ] `[STRETCH]` **Perimetro «fuori catalogo» nel Parco** — *aperta il 29 Ago 2026.* Un cliente rimasto su un piano dismesso (grandfathering) non è raggiungibile da nessuna voce di «per piano», mentre la cabina quel filtro ce l'ha da sempre (`ElencaClienti::FUORI_CATALOGO`). Non è perdita di dati — resta in «tutti» — è una risposta assente a una domanda che la schermata sorella sa già dare. 🔗 ADR-037
 - [ ] `[V1.1]` **Elenco interventi e spostamenti cross-macchina** — *aperta il 25 Ago 2026, insieme alla rimozione della voce «Prossimamente» dalla sidebar*
 
   > La sidebar mostrava una voce «Interventi» **disabilitata** sotto un'intestazione «Prossimamente»: la stessa bugia della card tolta dalla dashboard il 21 Ago, in un altro punto dello schermo. Gli interventi esistono da S3 — nel tab della scheda, in `/campo`, nel digest — e ciò che non esiste è un elenco **cross-macchina**; con S6 chiuso non c'è più uno sprint che lo porti, quindi la voce è stata rimossa e la lacuna dichiarata qui.
@@ -965,6 +967,24 @@ gantt
 > ⚠️ **Trappola incontrata, che vale oltre questo blocco**: `assertSee` di Livewire **escapa l'ago**, quindi un apostrofo diventa `&#039;` e non combacia mai col testo statico di un template. Un test scritto con l'apostrofo fallisce senza che il codice abbia niente che non va — si asserisce su un tratto che ne è privo.
 >
 > Documenti allineati nello stesso giro: Wireframe §5 (l'albero non crea Enti, e dove invece nascono) e Funzionalità per Ruolo §2.
+
+---
+
+> ## 🏗️ Il «Parco clienti» — 29 Agosto 2026 *(voce nuova, non era in nessuno sprint)*
+>
+> **Chiesta da Marco durante il giro di verifica su staging**, con una motivazione che vale più della funzione: *«il Superadmin si occuperà della gestione della strumentazione di molti Enti dentro questa piattaforma»*. Fino a quel giorno non esisteva nessun modo di vedere lo stato del parco di più clienti insieme — solo i totali della cabina, che dicono **quanti** sono e non **quanti sono rossi**.
+>
+> **`/piattaforma/parco`**, tre schede — Strumenti, Scadenzario, Ricambi — con un filtro di perimetro a tre modi (tutti / per piano / clienti scelti), **cliente e sede su ogni riga**, e il tasto **impersona** accanto. 🔗 **ADR-037**
+>
+> 🔴 **La richiesta iniziale era «vedo e posso anche modificare», e la risposta è stata di dividerla in due.** La lettura cross-cliente non concede un potere nuovo — impersonando si vedeva già tutto — quindi cambia la velocità, non il perimetro. La **scrittura** cross-cliente invece cambia tre cose insieme: le righe di audit perderebbero il contesto «chi, per conto di chi»; un filtro che vale «tutti» in silenzio trasformerebbe una correzione in un'operazione di massa (forma di difetto che questo progetto ha già avuto, sull'export che ignorava i filtri); e la garanzia passerebbe da «impossibile per costruzione» a «corretto se il filtro è scritto bene». Marco ha accettato la divisione, e il tasto impersona su ogni riga è ciò che la rende praticabile invece che fastidiosa: si vede il problema, si entra nel cliente, si corregge, si esce — e resta una traccia.
+>
+> **Come è stato costruito.** Fondamenta da un agente solo a ragionamento massimo — è l'area più rossa del progetto e tutto il resto ci si appoggia — poi le tre schede in parallelo su file disgiunti, ciascuna attaccata da **due cacciatori indipendenti** e corretta da un terzo agente. **57 difetti**, uno bloccante e venti seri. La suite passa da 1957 a **2194 test**.
+>
+> ⚠️ **Due difetti che nessun agente poteva chiudere, perché vivevano su file condivisi**, e che l'orchestratore ha raccolto:
+> 1. il **guardrail era cieco proprio dove serviva** — scandiva il solo strato UI, mentre `app/Support/Piattaforma` (dove vive lo strato di query delle tre schede, cioè i file che *decidono* l'isolamento) restava fuori. E la rete gemella non lo copriva, perché conta la forma **nuda** `withoutGlobalScopes()` mentre lì una rimozione **per nome** sarebbe stata invisibile a entrambe;
+> 2. `sort()` leggeva la property grezza mentre `render()` normalizza — trovato dal correttore di **un'altra scheda**, che lo stesso difetto l'aveva appena avuto in casa propria.
+>
+> ⚠️ **Limiti dichiarati, che vanno in coda a questa voce come debito**: la regola dell'etichetta «prossima scadenza» è **duplicata** fra il parco e l'elenco per-Ente — oggi tenuta insieme da un test di accoppiamento, non da un'estrazione — e il perimetro «per piano» **non sa esprimere i clienti su un piano fuori catalogo**, che la cabina invece filtra da sempre.
 
 ---
 
