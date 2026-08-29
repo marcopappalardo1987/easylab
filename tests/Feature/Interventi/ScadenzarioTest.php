@@ -744,7 +744,7 @@ it('puts the Scadenzario in the sidebar only for whoever may see the interventi'
     // sbagliato. Stessa forma di `AppShellTest`.
     $nav = function (User $u): string {
         $html = $this->actingAs($u->fresh())->get(route('dashboard'))->assertOk()->getContent();
-        preg_match('/<nav class="flex-1 space-y-1 p-3">.*?<\/nav>/s', $html, $blocco);
+        preg_match('/<nav class="flex-1 space-y-1[^"]*">.*?<\/nav>/s', $html, $blocco);
 
         expect($blocco)->not->toBeEmpty('Sidebar non trovata');
 

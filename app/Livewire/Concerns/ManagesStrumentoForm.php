@@ -86,6 +86,30 @@ trait ManagesStrumentoForm
         ];
     }
 
+    /**
+     * I nomi dei campi come li legge una persona.
+     *
+     * ⚠️ Senza questi, il messaggio usciva come «Il campo strumento
+     * form.fornitore id è obbligatorio»: Laravel umanizza il percorso della
+     * property, e `strumentoForm.fornitore_id` diventa una frase che non nomina
+     * nulla di ciò che c'è a schermo. Segnalato da Marco il 29 Ago 2026
+     * insieme al difetto del segnaposto — lo stesso errore, letto due volte.
+     *
+     * @return array<string,string>
+     */
+    protected function strumentoFormAttributi(): array
+    {
+        return [
+            'strumentoForm.nome' => 'nome',
+            'strumentoForm.modello' => 'modello',
+            'strumentoForm.matricola' => 'matricola',
+            'strumentoForm.data_installazione' => 'data di installazione',
+            'strumentoForm.fornitore_id' => 'fornitore',
+            'parametri.*.chiave' => 'nome del parametro',
+            'parametri.*.valore' => 'valore del parametro',
+        ];
+    }
+
     protected function resetStrumentoForm(): void
     {
         $this->strumentoForm = ['nome' => '', 'modello' => '', 'matricola' => '', 'data_installazione' => '', 'fornitore_id' => null];

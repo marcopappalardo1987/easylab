@@ -531,10 +531,16 @@ class Albero extends Component
         $node = UnitaOrganizzativa::findOrFail($this->currentId);
         abort_if($node->tipo === TipoUnitaOrganizzativa::Ente, 422);
 
-        $this->validate([
-            ...$this->strumentoFormRules($node->tenant_id),
-            'provenienza' => ['nullable', 'string', 'max:255'],
-        ]);
+        $this->validate(
+            [
+                ...$this->strumentoFormRules($node->tenant_id),
+                'provenienza' => ['nullable', 'string', 'max:255'],
+            ],
+            attributes: [
+                ...$this->strumentoFormAttributi(),
+                'provenienza' => 'provenienza',
+            ],
+        );
 
         DB::transaction(function () use ($node) {
             $strumento = Strumento::create([

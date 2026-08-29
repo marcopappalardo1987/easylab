@@ -155,10 +155,13 @@ class SchedaStrumento extends Component
     public function save(): void
     {
         $this->authorize('strumenti.update');
-        $this->validate($this->strumentoFormRules(
-            $this->strumento->tenant_id,
-            $this->strumento->fornitore_id, // riammette un fornitore cestinato già associato
-        ));
+        $this->validate(
+            $this->strumentoFormRules(
+                $this->strumento->tenant_id,
+                $this->strumento->fornitore_id, // riammette un fornitore cestinato già associato
+            ),
+            attributes: $this->strumentoFormAttributi(),
+        );
 
         $this->strumento->update($this->strumentoPayload());
 

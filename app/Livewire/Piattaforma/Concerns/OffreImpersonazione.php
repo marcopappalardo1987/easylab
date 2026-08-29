@@ -121,7 +121,7 @@ trait OffreImpersonazione
      * dei clienti rimetterebbe EasyLab nei conteggi da cui è stata tolta
      * apposta.
      *
-     * @return array{account: Account, candidati: Collection<int,User>}|null
+     * @return array{account: ?Account, candidati: Collection<int,User>}|null
      */
     public function piattaformaImpersonabile(): ?array
     {
@@ -134,13 +134,22 @@ trait OffreImpersonazione
             ->where('di_piattaforma', true)
             ->first();
 
+        // 🔴 **Si torna qualcosa anche quando non c'è nessuno da impersonare.**
+        // La prima stesura restituiva `null` e la striscia spariva: Marco ha
+        // chiesto «non vedo nessun superadmin, non esiste in staging o è un
+        // difetto?» — e quella è esattamente la domanda che un'assenza muta
+        // costringe a fare. Un'interfaccia che nasconde non distingue «non c'è»
+        // da «è rotto».
+        //
+        // Il Superadmin esiste solo se `SUPERADMIN_EMAIL` e `SUPERADMIN_PASSWORD`
+        // erano valorizzate al primo seeding: senza, `SuperadminSeeder` si salta
+        // da sé, in silenzio. È un'informazione che serve a chi guarda questa
+        // pagina, ed è la sua pagina.
         if ($account === null) {
-            return null;
+            return ['account' => null, 'candidati' => new Collection];
         }
 
-        $candidati = $this->candidatiDi($account);
-
-        return $candidati->isEmpty() ? null : ['account' => $account, 'candidati' => $candidati];
+        return ['account' => $account, 'candidati' => $this->candidatiDi($account)];
     }
 
     /**

@@ -98,8 +98,22 @@
                 <div x-show="sidebarOpen" x-cloak x-transition.opacity @click="sidebarOpen = false"
                      class="fixed inset-0 z-30 bg-overlay md:hidden"></div>
 
-                {{-- Sidebar (fissa su desktop, drawer su mobile) --}}
-                <aside class="fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col border-r border-border bg-surface-sunken transition-transform duration-200 md:static md:min-h-screen md:translate-x-0 print:hidden"
+                {{-- Sidebar: drawer su mobile, colonna FISSA su desktop.
+
+                     🗓️ **`md:sticky md:top-0 md:h-screen` dal 29 Ago 2026**, su
+                     richiesta di Marco. Era `md:static md:min-h-screen`: la
+                     colonna scorreva insieme alla pagina, quindi su un elenco
+                     lungo — gli strumenti, il registro di audit — il menù usciva
+                     dallo schermo e per cambiare area bisognava prima risalire
+                     in cima.
+
+                     ⚠️ `h-screen` e non `min-h-screen`: un elemento `sticky`
+                     deve essere alto quanto la finestra, o «si incolla» a un
+                     bordo che sta già fuori. E `overflow-y-auto` sulla
+                     navigazione, perché il giorno in cui le voci non ci
+                     staranno più il menù deve scorrere per conto suo invece di
+                     tagliare le ultime. --}}
+                <aside class="fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col border-r border-border bg-surface-sunken transition-transform duration-200 md:sticky md:top-0 md:h-screen md:translate-x-0 print:hidden"
                        :class="sidebarOpen && 'translate-x-0'">
                     <div class="flex h-14 items-center border-b border-border px-4">
                         {{-- Il marchio vero (ADR-033), al posto dell'icona a becher
@@ -110,7 +124,7 @@
                         </a>
                     </div>
 
-                    <nav class="flex-1 space-y-1 p-3">
+                    <nav class="flex-1 space-y-1 overflow-y-auto p-3">
                         <x-app.nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                             <svg class="h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>
                             Dashboard
