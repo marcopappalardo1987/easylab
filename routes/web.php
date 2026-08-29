@@ -22,6 +22,8 @@ use App\Livewire\Piattaforma\EditorRuoli;
 use App\Livewire\Piattaforma\Errori;
 use App\Livewire\Piattaforma\Listino;
 use App\Livewire\Piattaforma\ParcoGlobale;
+use App\Livewire\Piattaforma\ParcoRicambi;
+use App\Livewire\Piattaforma\ParcoScadenzario;
 use App\Livewire\Piattaforma\RegistroAudit;
 use App\Livewire\Piattaforma\SchedaErrore;
 use App\Livewire\Ricambi\RicercaRicambi;
@@ -212,6 +214,12 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     Route::get('/piattaforma/parco', ParcoGlobale::class)
         ->middleware('can:'.ParcoGlobale::PERMESSO)
         ->name('piattaforma.parco');
+    Route::get('/piattaforma/parco/scadenzario', ParcoScadenzario::class)
+        ->middleware('can:'.ParcoScadenzario::PERMESSO)
+        ->name('piattaforma.parco.scadenzario');
+    Route::get('/piattaforma/parco/ricambi', ParcoRicambi::class)
+        ->middleware('can:'.ParcoRicambi::PERMESSO)
+        ->name('piattaforma.parco.ricambi');
 
     // 🔴 L'error tracker interno (S6), e qui il permesso è **un terzo ancora**:
     // `can:system.logs.view`. Il criterio non cambia — si gata su un permesso
