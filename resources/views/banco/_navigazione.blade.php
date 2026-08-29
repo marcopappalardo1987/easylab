@@ -93,3 +93,11 @@
         <x-ui.selettore-tema :corrente="App\Enums\TemaUtente::Sistema" />
     </div>
 @endcomponent
+
+@component('banco.pezzo', [
+    'titolo' => 'x-parco.nav — le schede del Parco clienti',
+    'token' => 'attivo: border-brand + text-brand + font-semibold · inattivo: border-transparent + text-ink-2 · hover: border-border-strong + text-ink',
+    'nota' => "⚠️ Nessuna scheda risulta attiva qui, ed è corretto: lo stato attivo viene da `request()->routeIs()`, e il banco non sta su nessuna di quelle rotte. Ciò che questo pezzo mostra sono le tinte di riposo e il bordo inferiore — cioè le due cose che nei due temi si guardano.",
+])
+    <x-parco.nav />
+@endcomponent
