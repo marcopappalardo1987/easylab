@@ -171,12 +171,6 @@ class Albero extends Component
         return $this->mioAccount()?->slotEntiResidui();
     }
 
-    /** Lo switcher c'è davvero per chi guarda adesso? (Non durante un'impersonazione.) */
-    public function switcherDisponibile(): bool
-    {
-        return ! app(ImpersonateManager::class)->isImpersonating();
-    }
-
     /**
      * Le altre sedi dello stesso contratto, per nome.
      *
@@ -288,18 +282,12 @@ class Albero extends Component
         $this->showSedeForm = false;
         $this->nomeSede = '';
 
-        // ⚠️ Il messaggio deve dire la verità di CHI sta guardando. Chi
-        // impersona non ha lo switcher — e non per una svista: passare a
-        // un'altra sede riscrive `users.tenant_id` dell'impersonato, cioè fa
-        // una modifica permanente «per suo conto», la stessa famiglia di gesti
-        // per cui il 2FA è chiuso durante un'impersonazione.
-        //
-        // La prima stesura diceva a tutti «la raggiungi dallo switcher in
-        // alto»: a chi impersonava era una bugia, e ha prodotto la segnalazione
-        // «ho creato la sede ma non la vedo da nessuna parte» (28 Ago 2026).
-        $this->notice = app(ImpersonateManager::class)->isImpersonating()
-            ? 'Sede creata. Il cliente la raggiunge dallo switcher in alto; tu, mentre lo impersoni, no — passare di sede riscriverebbe il suo contesto in modo permanente.'
-            : 'Sede creata. La raggiungi dallo switcher in alto, accanto al nome dell\'Ente.';
+        // ⛔ Un solo messaggio, e parla al CLIENTE. La prima stesura ne aveva
+        // una seconda versione per chi impersona: è l'area del cliente, e non
+        // ci si stampano avvisi di servizio per l'operatore (Marco, 28 Ago
+        // 2026). Era anche diventata falsa — lo switcher funziona durante
+        // l'impersonazione.
+        $this->notice = 'Sede creata. La raggiungi dallo switcher in alto, accanto al nome dell\'Ente.';
     }
 
     // --- Navigazione ---

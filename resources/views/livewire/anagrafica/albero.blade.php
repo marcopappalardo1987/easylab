@@ -125,7 +125,14 @@
          switcher — che durante un'impersonazione è soppressa apposta.
 
          ⚠️ Nomi e non link: raggiungerle è un gesto dello switcher, che ha le
-         proprie guardie. Qui si risponde a «esiste?», non a «portami». --}}
+         proprie guardie. Qui si risponde a «esiste?», non a «portami».
+
+         ⛔ **Il testo parla al CLIENTE e a nessun altro.** Fino al 28 Ago 2026
+         questa riga aveva una seconda versione rivolta a chi impersona («il
+         cliente le raggiunge, tu no»): è l'area del cliente, e stamparci un
+         avviso di servizio per l'operatore è un errore di destinatario prima
+         che di stile. Marco l'ha tolta per quello — ed era anche diventata
+         falsa, perché lo switcher da ieri funziona durante l'impersonazione. --}}
     @php
         $altreSedi = $this->altreSediDelContratto();
     @endphp
@@ -133,11 +140,7 @@
         <p class="mt-4 text-xs text-ink-3">
             Altre sedi del tuo contratto:
             <span class="text-ink-2">{{ $altreSedi->join(', ', ' e ') }}</span>.
-            @if ($this->switcherDisponibile())
-                Le raggiungi dallo switcher in alto.
-            @else
-                Il cliente le raggiunge dallo switcher in alto; mentre lo impersoni, tu no.
-            @endif
+            Le raggiungi dallo switcher in alto.
         </p>
     @endif
 
