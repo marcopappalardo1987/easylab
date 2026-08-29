@@ -13,6 +13,7 @@ use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Support\Piani;
 use App\Support\Piattaforma\Perimetro;
+use App\Support\Piattaforma\RigheParcoStrumenti;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\DB;
@@ -125,6 +126,19 @@ function rigaDelParco(string $html, int $strumentoId): string
     $fine = strpos($html, '</tr>', $inizio);
 
     return substr($html, $inizio, $fine - $inizio);
+}
+
+/**
+ * La rotta che impersona **e atterra sulla macchina** (🔗 ADR-037).
+ *
+ * ⚠️ Nome diverso da `versoLaMacchina()` di `ImpersonaVersoStrumentoTest`, e non
+ * per gusto: le funzioni dichiarate nei file di test sono **globali** e la suite
+ * gira in un processo solo — due file che ne definiscono una omonima si fanno
+ * esplodere a vicenda al caricamento, prima ancora di provare qualcosa.
+ */
+function versoLaMacchinaDelParco(User $membro, Strumento $macchina): string
+{
+    return route('piattaforma.parco.impersona', ['utente' => $membro->id, 'strumento' => $macchina->id]);
 }
 
 // ─── 1. Il permesso: 403, non un elenco vuoto ────────────────────────────────
@@ -629,6 +643,428 @@ it('keeps the sort action from accepting a column it does not know', function ()
     expect($componente->get('sortBy'))->toBe('cliente');
 });
 
+// ─── 6-bis. I filtri di STATO: due assi, e tutti e due in SQL ────────────────
+
+it('filters by the semaforo of a client that is not its own, instead of finding nothing', function () {
+    // 🔴 Il difetto che questo filtro rischia più di ogni altro, ed è muto nei
+    // DUE versi. Le tre fonti dell'arancione sono sottoquery: costruite con i
+    // global scope addosso — cioè come le costruisce `Strumento::conStato()` —
+    // su un elenco cross-cliente non trovano nulla, perché chi guarda sta
+    // nell'Ente di EasyLab. «Solo arancioni» tornerebbe vuoto.
+    Intervento::factory()->forStrumento($this->autoclaveBianchi)->scaduto()->create();
+
+    alComandoDelParco($this->superadmin);
+
+    Livewire::test(ParcoGlobale::class)
+        ->set('stato', StatoSemaforo::Arancione->value)
+        ->assertSee('Autoclave Bianchi')
+        ->assertDontSee('Autoclave Rossi');
+});
+
+it('never calls green the orange machine of another client', function () {
+    // ⛔ L'altra metà, e la peggiore delle due: il verde è il COMPLEMENTO delle
+    // tre fonti, quindi con sottoquery scopate ogni macchina altrui lo
+    // soddisfa. L'elenco sarebbe plausibile — nomi giusti, conteggi giusti — e
+    // direbbe «in regola» di una macchina con uno scaduto in pancia, sulla
+    // scheda da cui si decide se intervenire.
+    Intervento::factory()->forStrumento($this->autoclaveBianchi)->scaduto()->create();
+
+    alComandoDelParco($this->superadmin);
+
+    Livewire::test(ParcoGlobale::class)
+        ->set('stato', StatoSemaforo::Verde->value)
+        ->assertSee('Autoclave Rossi')
+        ->assertDontSee('Autoclave Bianchi');
+});
+
+it('feeds the filter from all three orange sources, across clients', function () {
+    // Le tre fonti (🔗 ADR-005 · ADR-004 · ADR-020), ognuna su una macchina di
+    // un cliente che non è il proprio. La terza è la più facile da perdere:
+    // richiede il doppio salto garanzie → ricambio_utilizzo → strumenti **e**
+    // il bypass del privacy scope, dentro il perimetro.
+    $perIntervento = Strumento::factory()->forNode($this->sedeBianchi)->create(['nome' => 'Centrifuga Intervento']);
+    $perGaranzia = Strumento::factory()->forNode($this->sedeBianchi)->create(['nome' => 'Centrifuga Garanzia']);
+    $perRicambio = Strumento::factory()->forNode($this->sedeBianchi)->create(['nome' => 'Centrifuga Ricambio']);
+
+    Intervento::factory()->forStrumento($perIntervento)->scaduto()->create();
+    Garanzia::factory()->forStrumento($perGaranzia)->scaduta()->create();
+
+    $ricambio = Ricambio::factory()->forTenant($this->sedeBianchi)->create(['nome' => 'Guarnizione Bianchi']);
+    $utilizzo = RicambioUtilizzo::factory()->forStrumento($perRicambio)->forRicambio($ricambio)->create();
+    Garanzia::factory()->forRicambio($utilizzo)->scaduta()->create();
+
+    alComandoDelParco($this->superadmin);
+
+    $arancioni = Livewire::test(ParcoGlobale::class)
+        ->set('perPage', 100)
+        ->set('stato', StatoSemaforo::Arancione->value)
+        ->viewData('strumenti')->getCollection()->pluck('nome')->all();
+
+    expect($arancioni)->toEqualCanonicalizing([
+        'Centrifuga Intervento', 'Centrifuga Garanzia', 'Centrifuga Ricambio',
+    ]);
+});
+
+it('lets the forced state decide the filter, and keeps red a forced only affair', function () {
+    // 🔗 ADR-005 punto 5, in due direzioni: un forzato verde NASCONDE un
+    // arancione vero, e il rosso non lo produce nessuna fonte — quindi il suo
+    // ramo non deve nemmeno interrogarle.
+    Intervento::factory()->forStrumento($this->autoclaveBianchi)->scaduto()->create();
+    $this->autoclaveBianchi->forzaSemaforo(StatoSemaforo::Verde, $this->superadmin, 'Verificata a mano');
+    $this->autoclaveRossi->forzaSemaforo(StatoSemaforo::Rosso, $this->superadmin, 'Fuori uso');
+
+    // 🔴 Due macchine NON forzate, e senza di loro questo test non poteva
+    // fallire sulla seconda metà del proprio nome. Con le sole due autoclavi
+    // ogni riga dentro il perimetro aveva `forced_state` valorizzato, quindi il
+    // ramo `whereNull('forced_state') …` non poteva selezionare niente in
+    // nessuno dei tre casi: togliendo il `return` anticipato del ramo Rosso —
+    // cioè facendo diventare «■ Non idoneo» un elenco di macchine IN REGOLA —
+    // le tre asserzioni restavano identiche. La verde è quella che lo coglie: è
+    // il complemento delle tre fonti, cioè ciò che il ramo mutato pesca.
+    $libera = Strumento::factory()->forNode($this->sedeBianchi)->create(['nome' => 'Bilancia Libera']);
+    $scaduta = Strumento::factory()->forNode($this->sedeBianchi)->create(['nome' => 'Bilancia Scaduta']);
+    Intervento::factory()->forStrumento($scaduta)->scaduto()->create();
+
+    expect($libera->forced_state)->toBeNull()->and($scaduta->forced_state)->toBeNull();
+
+    alComandoDelParco($this->superadmin);
+
+    $conStato = fn (StatoSemaforo $stato) => Livewire::test(ParcoGlobale::class)
+        ->set('perPage', 100)
+        ->set('stato', $stato->value)
+        ->viewData('strumenti')->getCollection()->pluck('nome')->all();
+
+    expect($conStato(StatoSemaforo::Verde))->toBe(['Autoclave Bianchi', 'Bilancia Libera'])
+        ->and($conStato(StatoSemaforo::Rosso))->toBe(['Autoclave Rossi'])
+        ->and($conStato(StatoSemaforo::Arancione))->toBe(['Bilancia Scaduta']);
+});
+
+it('partitions exactly like the per-Ente filter does, on an Ente where both are legitimate', function () {
+    // 🔴 **Il filo fra le due copie della composizione.** Le regole — «aperto
+    // ed entro la soglia», «garanzia entro la soglia», il doppio salto — restano
+    // UNA sola e vivono sui model, che `StrumentiPerStato` chiama partendo da un
+    // builder non scopato. A esistere in due copie è il modo di **comporle**:
+    // «almeno una» per l'arancione, «il complemento di tutte» per il verde, «il
+    // forzato vince» sopra a entrambe, che stanno anche in
+    // `Strumento::scopeConStato()`.
+    //
+    // Qui si gira su un Ente solo, dove entrambe le forme sono legittime, e si
+    // confrontano gli INSIEMI DI ID. Cambiarne una sola diventa rosso.
+    $scaduto = Strumento::factory()->forNode($this->sedeRossi)->create(['nome' => 'Bagno Scaduto']);
+    $imminente = Strumento::factory()->forNode($this->sedeRossi)->create(['nome' => 'Bagno Imminente']);
+    $garanzia = Strumento::factory()->forNode($this->sedeRossi)->create(['nome' => 'Bagno Garanzia']);
+    $pezzo = Strumento::factory()->forNode($this->sedeRossi)->create(['nome' => 'Bagno Pezzo']);
+    $forzatoVerde = Strumento::factory()->forNode($this->sedeRossi)->create(['nome' => 'Bagno Forzato Verde']);
+    $forzatoRosso = Strumento::factory()->forNode($this->sedeRossi)->create(['nome' => 'Bagno Forzato Rosso']);
+
+    Intervento::factory()->forStrumento($scaduto)->scaduto()->create();
+    Intervento::factory()->forStrumento($imminente)->create(['data_scadenza' => today()->addDays(3)->toDateString()]);
+    Garanzia::factory()->forStrumento($garanzia)->scaduta()->create();
+
+    $ricambio = Ricambio::factory()->forTenant($this->sedeRossi)->create(['nome' => 'Guarnizione Rossi']);
+    $utilizzo = RicambioUtilizzo::factory()->forStrumento($pezzo)->forRicambio($ricambio)->create();
+    Garanzia::factory()->forRicambio($utilizzo)->scaduta()->create();
+
+    Intervento::factory()->forStrumento($forzatoVerde)->scaduto()->create();
+    $forzatoVerde->forzaSemaforo(StatoSemaforo::Verde, $this->superadmin, 'Verificata a mano');
+    $forzatoRosso->forzaSemaforo(StatoSemaforo::Rosso, $this->superadmin, 'Fuori uso');
+
+    alComandoDelParco($this->superadmin);
+
+    $dalParco = [];
+
+    foreach (StatoSemaforo::cases() as $stato) {
+        $dalParco[$stato->value] = Livewire::test(ParcoGlobale::class)
+            ->set('modo', Perimetro::SCELTI)
+            ->set('accountIds', [$this->rossi->id])
+            ->set('perPage', 100)
+            ->set('stato', $stato->value)
+            ->viewData('strumenti')->getCollection()->pluck('id')->sort()->values()->all();
+    }
+
+    // La partizione è esaustiva: i tre insiemi ricompongono il parco del
+    // cliente — sette macchine, le sei di qui più l'autoclave del beforeEach.
+    // Senza questa riga il confronto qui sotto sarebbe soddisfatto anche da due
+    // filtri sbagliati **allo stesso modo**.
+    expect(array_merge(...array_values($dalParco)))->toHaveCount(7);
+
+    $this->actingAs($this->adminRossi->fresh());
+
+    foreach (StatoSemaforo::cases() as $stato) {
+        expect(Strumento::query()->conStato($stato)->pluck('id')->sort()->values()->all())
+            ->toBe($dalParco[$stato->value]);
+    }
+});
+
+it('reads the obsolescence threshold of EACH site, and not one for the whole platform', function () {
+    // 🔴 La soglia è per Ente (🔗 ADR-014), e su una vista cross-cliente questo
+    // smette di essere un dettaglio: una soglia sola applicata a tutte le righe
+    // contraddirebbe il badge ⏳ della riga accanto per ogni cliente che ha
+    // scelto un valore diverso dal proprio vicino. Le due macchine qui sotto
+    // hanno la STESSA età: a separarle è solo la soglia della loro sede.
+    $this->sedeRossi->update(['soglia_obsolescenza_anni' => 5]);
+    $this->sedeBianchi->update(['soglia_obsolescenza_anni' => 15]);
+
+    Strumento::factory()->forNode($this->sedeRossi)->create([
+        'nome' => 'Cappa Rossi', 'data_installazione' => today()->subYears(10)->toDateString(),
+    ]);
+    Strumento::factory()->forNode($this->sedeBianchi)->create([
+        'nome' => 'Cappa Bianchi', 'data_installazione' => today()->subYears(10)->toDateString(),
+    ]);
+
+    // ⚠️ Il confine è INCLUSIVO — installata esattamente N anni fa oggi è già
+    // obsoleta — e si esprime come `< limite+1`, mai come `<=`: su SQLite le
+    // colonne `date` sono stringhe e il confronto è lessicografico, quindi un
+    // `<=` passerebbe qui e cadrebbe in CI su Postgres.
+    Strumento::factory()->forNode($this->sedeRossi)->create([
+        'nome' => 'Cappa Confine', 'data_installazione' => today()->subYears(5)->toDateString(),
+    ]);
+    Strumento::factory()->forNode($this->sedeRossi)->create([
+        'nome' => 'Cappa Giovane', 'data_installazione' => today()->subYears(5)->addDay()->toDateString(),
+    ]);
+
+    alComandoDelParco($this->superadmin);
+
+    $nomi = Livewire::test(ParcoGlobale::class)
+        ->set('perPage', 100)
+        ->set('soloObsoleti', true)
+        ->viewData('strumenti')->getCollection()->pluck('nome')->all();
+
+    // ⚠️ Appartenenza e non uguaglianza: `StrumentoFactory` genera una
+    // `data_installazione` a caso fra dodici anni fa e oggi, quindi le macchine
+    // del `beforeEach` entrano o no in questo elenco a seconda del seme. Un
+    // `toBe([...])` sarebbe verde due volte su tre.
+    expect($nomi)->toContain('Cappa Rossi');
+    expect($nomi)->toContain('Cappa Confine');
+    expect($nomi)->not->toContain('Cappa Bianchi');
+    expect($nomi)->not->toContain('Cappa Giovane');
+});
+
+it('calls obsolete exactly the machines the per-Ente filter calls obsolete', function () {
+    // Il secondo filo differenziale, gemello di quello sul semaforo: il confine
+    // `< limite+1` e il fallback della soglia esistono anche in
+    // `Strumento::scopeObsoleti()`, e le due copie devono partizionare uguale.
+    $this->sedeRossi->update(['soglia_obsolescenza_anni' => 7]);
+
+    foreach ([0, 6, 7, 8, 20] as $anni) {
+        Strumento::factory()->forNode($this->sedeRossi)->create([
+            'nome' => 'Stufa da '.$anni.' anni',
+            'data_installazione' => today()->subYears($anni)->toDateString(),
+        ]);
+    }
+
+    // Senza data di installazione non è mai obsoleta: manca la base del calcolo.
+    Strumento::factory()->forNode($this->sedeRossi)->create([
+        'nome' => 'Stufa senza data', 'data_installazione' => null,
+    ]);
+
+    alComandoDelParco($this->superadmin);
+
+    $dalParco = Livewire::test(ParcoGlobale::class)
+        ->set('modo', Perimetro::SCELTI)
+        ->set('accountIds', [$this->rossi->id])
+        ->set('perPage', 100)
+        ->set('soloObsoleti', true)
+        ->viewData('strumenti')->getCollection()->pluck('id')->sort()->values()->all();
+
+    expect($dalParco)->not->toBeEmpty();
+
+    $this->actingAs($this->adminRossi->fresh());
+
+    expect(Strumento::query()->obsoleti()->pluck('id')->sort()->values()->all())->toBe($dalParco);
+});
+
+it('keeps the two axes separate, instead of folding age into the semaforo', function () {
+    // ⚠️ Semaforo e obsolescenza sono due assi (🔗 ADR-005, ADR-014): una
+    // macchina vecchia e in regola è **verde e obsoleta**, e i due filtri si
+    // compongono. Fonderli in una tendina sola renderebbe quella coppia
+    // inesprimibile, oltre a contraddire il badge ⏳ che nel Design System §4
+    // convive col pallino invece di sostituirlo.
+    $this->sedeBianchi->update(['soglia_obsolescenza_anni' => 5]);
+
+    $vecchiaEVerde = Strumento::factory()->forNode($this->sedeBianchi)->create([
+        'nome' => 'Muffola Vecchia', 'data_installazione' => today()->subYears(9)->toDateString(),
+    ]);
+    $vecchiaEArancione = Strumento::factory()->forNode($this->sedeBianchi)->create([
+        'nome' => 'Muffola Scaduta', 'data_installazione' => today()->subYears(9)->toDateString(),
+    ]);
+    Intervento::factory()->forStrumento($vecchiaEArancione)->scaduto()->create();
+
+    alComandoDelParco($this->superadmin);
+
+    $nomi = Livewire::test(ParcoGlobale::class)
+        ->set('modo', Perimetro::SCELTI)
+        ->set('accountIds', [$this->bianchi->id])
+        ->set('perPage', 100)
+        ->set('soloObsoleti', true)
+        ->set('stato', StatoSemaforo::Verde->value)
+        ->viewData('strumenti')->getCollection()->pluck('nome')->all();
+
+    expect($nomi)->toContain('Muffola Vecchia');
+    expect($nomi)->not->toContain('Muffola Scaduta');
+});
+
+it('filters before paginating, or the page would be short and the total a lie', function () {
+    // 🔴 La ragione per cui questo filtro vive in SQL e non in PHP sulle righe
+    // già in pagina, dove il semaforo si **mostra**: filtrare dopo `paginate()`
+    // darebbe una pagina di una riga su venti, un totale che conta anche le
+    // righe scartate e pagine vuote nella barra in fondo. Un filtro che mente
+    // sui propri conteggi è peggio di un filtro assente, ed è per questo che
+    // fino a oggi questa scheda il filtro non ce l'aveva.
+    Strumento::factory()->count(40)->forNode($this->sedeBianchi)->create();
+    Intervento::factory()->forStrumento($this->autoclaveBianchi)->scaduto()->create();
+
+    alComandoDelParco($this->superadmin);
+
+    $pagina = Livewire::test(ParcoGlobale::class)
+        ->set('stato', StatoSemaforo::Arancione->value)
+        ->viewData('strumenti');
+
+    expect($pagina->total())->toBe(1)
+        ->and($pagina->getCollection())->toHaveCount(1)
+        ->and($pagina->lastPage())->toBe(1);
+});
+
+it('does not filter, and does not announce a filter, on a semaforo value it does not know', function () {
+    // ⚠️ Filtro **applicato** e filtro **annunciato** passano dallo stesso
+    // `statoScelto()`. `?stato=giallo` non toglie righe, e non deve nemmeno far
+    // dire «Nessun risultato per i filtri applicati» su un elenco che filtrato
+    // non è: manderebbe a togliere un filtro che il componente ha già scartato.
+    // È un difetto che l'elenco per-Ente ha avuto per davvero, con due liste
+    // scritte a mano che sono divergute.
+    alComandoDelParco($this->superadmin);
+
+    Livewire::test(ParcoGlobale::class)
+        ->set('stato', 'giallo')
+        ->assertSee('Autoclave Rossi')
+        ->assertSee('Autoclave Bianchi');
+
+    Livewire::test(ParcoGlobale::class)
+        ->set('modo', Perimetro::SCELTI)
+        ->set('accountIds', [$this->verdi->id])
+        ->set('stato', 'giallo')
+        ->assertSee('Nessuna macchina per i clienti nel perimetro')
+        ->assertDontSee('Nessun risultato per i filtri applicati');
+});
+
+it('blames the filters when a state that IS known matches nothing', function () {
+    // Il rovescio del test qui sopra, e insieme sono la coppia che rende
+    // «annunciato» e «applicato» la stessa cosa: nessuna macchina è forzata a
+    // rosso, quindi l'elenco è vuoto **per via del filtro** e lo dice.
+    alComandoDelParco($this->superadmin);
+
+    Livewire::test(ParcoGlobale::class)
+        ->set('stato', StatoSemaforo::Rosso->value)
+        ->assertSee('Nessun risultato per i filtri applicati')
+        ->assertDontSee('Nessuna macchina per i clienti nel perimetro');
+
+    Livewire::test(ParcoGlobale::class)
+        ->set('modo', Perimetro::SCELTI)
+        ->set('accountIds', [$this->verdi->id])
+        ->set('soloObsoleti', true)
+        ->assertSee('Nessun risultato per i filtri applicati')
+        ->assertDontSee('Nessuna macchina per i clienti nel perimetro');
+});
+
+it('goes back to the first page when either state filter changes', function () {
+    // Cambiare filtro cambia l'insieme: restare a pagina 2 atterrerebbe fuori
+    // dall'elenco.
+    Strumento::factory()->count(40)->forNode($this->sedeBianchi)->create([
+        'data_installazione' => today()->toDateString(),
+    ]);
+
+    alComandoDelParco($this->superadmin);
+
+    Livewire::test(ParcoGlobale::class)
+        ->call('setPage', 2)
+        ->set('stato', StatoSemaforo::Verde->value)
+        ->assertSet('paginators.page', 1);
+
+    Livewire::test(ParcoGlobale::class)
+        ->call('setPage', 2)
+        ->set('soloObsoleti', true)
+        ->assertSet('paginators.page', 1);
+});
+
+it('costs a single extra query when the obsolescence filter is on, not one per row', function () {
+    // ⚠️ Le soglie si leggono **una volta**, raggruppate per valore: un ramo
+    // `OR` per sede — la forma di `scopeObsoleti()`, corretta là dove gli Enti
+    // sono uno o pochi — qui crescerebbe col numero di clienti, cioè con
+    // l'unica dimensione che questa scheda esiste per far crescere.
+    //
+    // ⚠️ Le due macchine si fissano vecchie apposta: se il filtro svuotasse la
+    // pagina, la misura «con» risparmierebbe le tre fonti del semaforo e la
+    // rilettura dei clienti — cioè conterebbe **meno** query di quella «senza»,
+    // e il test misurerebbe una pagina vuota invece di un filtro.
+    $this->autoclaveRossi->update(['data_installazione' => today()->subYears(20)->toDateString()]);
+    $this->autoclaveBianchi->update(['data_installazione' => today()->subYears(20)->toDateString()]);
+
+    $this->actingAs($this->superadmin);
+
+    // Un giro a vuoto per scaldare la cache dei permessi di spatie.
+    Livewire::test(ParcoGlobale::class);
+
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+    Livewire::withQueryParams([])->test(ParcoGlobale::class);
+    $senza = count(DB::getQueryLog());
+    DB::disableQueryLog();
+
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+    // `withQueryParams()` e non `set()`: `set()` monta col default e poi
+    // RIRENDERIZZA, cioè misurerebbe due pagine invece di una.
+    Livewire::withQueryParams(['soloObsoleti' => true])->test(ParcoGlobale::class);
+    $con = count(DB::getQueryLog());
+    DB::disableQueryLog();
+
+    expect($con)->toBe($senza + 1);
+});
+
+// ─── 6-ter. Il tasto «impersona» atterra SULLA MACCHINA ─────────────────────
+
+it('lands on the machine of the row even when the member had to be picked', function () {
+    // La modale si apre DA una riga, quindi conosce la macchina: i due rami del
+    // tasto — membro unico e membro da scegliere — devono portare allo stesso
+    // posto, o metà delle righe continuerebbe a rimbalzare in dashboard.
+    $secondo = User::factory()->create(['tenant_id' => $this->sedeBianchi->id, 'name' => 'Carla Bianchi']);
+    $secondo->assignRole('Tenant');
+    $this->bianchi->aggiungiMembro($secondo);
+
+    alComandoDelParco($this->superadmin);
+
+    $html = Livewire::test(ParcoGlobale::class)
+        ->call('apriSceltaSuMacchina', $this->bianchi->id, $this->autoclaveBianchi->id)
+        ->html();
+
+    expect($html)->toContain(versoLaMacchinaDelParco($this->adminBianchi, $this->autoclaveBianchi).'"');
+    expect($html)->toContain(versoLaMacchinaDelParco($secondo, $this->autoclaveBianchi).'"');
+});
+
+it('forgets the machine of the previous row when the picker is reopened without one', function () {
+    // 🔴 `apriScelta()` resta chiamabile senza nominare una macchina — da un
+    // test, e dalla property che il browser può spingere — e passa da
+    // `chiudiOgniModale()`, che azzera `macchinaScelta`. Senza quell'azzeramento
+    // la modale del cliente B offrirebbe di atterrare sulla macchina del
+    // cliente A: il controller lo intercetterebbe, ma sarebbe una destinazione
+    // sbagliata offerta da noi.
+    alComandoDelParco($this->superadmin);
+
+    $html = Livewire::test(ParcoGlobale::class)
+        ->call('apriSceltaSuMacchina', $this->bianchi->id, $this->autoclaveBianchi->id)
+        ->call('apriScelta', $this->rossi->id)
+        ->html();
+
+    // ⚠️ Si guarda la **modale** e non la pagina: ogni riga della tabella porta
+    // ormai un `/strumento/<id>` legittimo, quindi una negazione sull'HTML
+    // intero sarebbe rossa per sempre — e una sull'id sbagliato sarebbe
+    // soddisfatta dalla riga di quella stessa macchina.
+    $modale = substr($html, strpos($html, 'Impersona un membro di'));
+
+    expect($modale)->toContain(route('impersonate', $this->adminRossi).'"');
+    expect($modale)->not->toContain('/strumento/');
+});
+
 // ─── 7. L'ordinamento è TOTALE: la prova sta nell'SQL ───────────────────────
 
 it('always ends the ordering with the id tie break', function (string $colonna) {
@@ -797,9 +1233,13 @@ it('costs the same number of queries whether the parco has three rows or sixty',
 it('offers to impersonate the single member of the client on the row', function () {
     alComandoDelParco($this->superadmin);
 
+    // ⚠️ La rotta è quella che ATTERRA SULLA MACCHINA, non `impersonate` nuda:
+    // il tasto esiste per intervenire in fretta, e la destinazione fissa del
+    // pacchetto costringeva a ritrovare a mano la macchina appena vista in
+    // elenco (Marco, 29 Ago 2026).
     Livewire::test(ParcoGlobale::class)
         ->assertSee('Impersona')
-        ->assertSee(route('impersonate', $this->adminRossi), false);
+        ->assertSee(versoLaMacchinaDelParco($this->adminRossi, $this->autoclaveRossi), false);
 });
 
 it('binds the impersonate button to the client of ITS OWN row', function () {
@@ -819,15 +1259,23 @@ it('binds the impersonate button to the client of ITS OWN row', function () {
     $rigaRossi = rigaDelParco($html, $this->autoclaveRossi->id);
     $rigaBianchi = rigaDelParco($html, $this->autoclaveBianchi->id);
 
-    // La virgoletta di chiusura fa parte dell'ago: `…/take/1` è un prefisso di
-    // `…/take/12`, e senza di essa l'asserzione negativa potrebbe essere
+    // La virgoletta di chiusura fa parte dell'ago: `…/strumento/1` è un prefisso
+    // di `…/strumento/12`, e senza di essa l'asserzione negativa potrebbe essere
     // soddisfatta da un link sbagliato.
-    $verso = fn (User $membro) => route('impersonate', $membro).'"';
+    $verso = fn (User $membro, Strumento $macchina) => versoLaMacchinaDelParco($membro, $macchina).'"';
 
-    expect($rigaRossi)->toContain($verso($this->adminRossi));
-    expect($rigaRossi)->not->toContain($verso($this->adminBianchi));
-    expect($rigaBianchi)->toContain($verso($this->adminBianchi));
-    expect($rigaBianchi)->not->toContain($verso($this->adminRossi));
+    expect($rigaRossi)->toContain($verso($this->adminRossi, $this->autoclaveRossi));
+    expect($rigaRossi)->not->toContain($verso($this->adminBianchi, $this->autoclaveRossi));
+    expect($rigaBianchi)->toContain($verso($this->adminBianchi, $this->autoclaveBianchi));
+    expect($rigaBianchi)->not->toContain($verso($this->adminRossi, $this->autoclaveBianchi));
+
+    // 🔴 E la seconda metà della legatura, che prima non esisteva: il link porta
+    // anche la MACCHINA della riga. Un id di strumento preso dalla prima riga
+    // farebbe entrare nel cliente giusto e atterrare sulla macchina sbagliata —
+    // o, se quella macchina è di un'altra sede, in dashboard con un messaggio
+    // che sembra un difetto.
+    expect($rigaRossi)->not->toContain('/strumento/'.$this->autoclaveBianchi->id.'"');
+    expect($rigaBianchi)->not->toContain('/strumento/'.$this->autoclaveRossi->id.'"');
 });
 
 it('opens the member picker for the client of ITS OWN row', function () {
@@ -843,8 +1291,9 @@ it('opens the member picker for the client of ITS OWN row', function () {
 
     $riga = rigaDelParco(Livewire::test(ParcoGlobale::class)->html(), $this->autoclaveBianchi->id);
 
-    expect($riga)->toContain('apriScelta('.$this->bianchi->id.')');
-    expect($riga)->not->toContain('apriScelta('.$this->rossi->id.')');
+    expect($riga)->toContain('apriSceltaSuMacchina('.$this->bianchi->id.', '.$this->autoclaveBianchi->id.')');
+    expect($riga)->not->toContain('apriSceltaSuMacchina('.$this->rossi->id.', ');
+    expect($riga)->not->toContain(', '.$this->autoclaveRossi->id.')');
 });
 
 it('asks which member, instead of picking the first one an order by happened to return', function () {
@@ -958,6 +1407,7 @@ it('never writes, and the proof is structural', function () {
     $sorgenti = [
         app_path('Livewire/Piattaforma/ParcoGlobale.php'),
         app_path('Support/Piattaforma/RigheParcoStrumenti.php'),
+        app_path('Support/Piattaforma/StrumentiPerStato.php'),
         resource_path('views/livewire/piattaforma/parco-globale.blade.php'),
     ];
 
@@ -1025,4 +1475,232 @@ it('sorts from the arrow the page is actually showing, not from a forged propert
         ->call('sort', 'cliente')
         ->assertSet('sortBy', 'cliente')
         ->assertSet('sortDir', 'desc');
+});
+
+// ─── 11. Le tre correzioni del 29 Ago 2026 ──────────────────────────────────
+
+it('forgets the machine of the previous row when the picker is reopened from the browser', function () {
+    // 🔴 La modale ha DUE strade di apertura, e finora solo una azzerava la
+    // macchina ricordata. `apriScelta()` passa da `chiudiOgniModale()`; la
+    // property spinta dal browser — `$wire.set('sceltaImpersonazione', …)`, che
+    // il trait documenta come reale e difende col Gate — no: entra da
+    // `updatingSceltaImpersonazione()`, che autorizza e rilegge l'account, e
+    // basta.
+    //
+    // Il risultato non è una falla di autorizzazione (chi atterra sulla
+    // macchina di un altro cliente finisce in dashboard con un messaggio), ma è
+    // una destinazione sbagliata offerta da NOI: la modale dice «Impersona un
+    // membro di Gruppo Rossi» e il link porta la macchina di Lab Bianchi.
+    alComandoDelParco($this->superadmin);
+
+    $componente = Livewire::test(ParcoGlobale::class)
+        ->call('apriSceltaSuMacchina', $this->bianchi->id, $this->autoclaveBianchi->id)
+        ->set('sceltaImpersonazione', $this->rossi->id)
+        ->assertSet('macchinaScelta', null);
+
+    $html = $componente->html();
+    $inizio = strpos($html, 'Impersona un membro di');
+
+    expect($inizio)->not->toBeFalse();
+
+    // ⚠️ Si guarda la **modale** e non la pagina: ogni riga della tabella porta
+    // un `/strumento/<id>` legittimo, quindi una negazione sull'HTML intero
+    // sarebbe rossa per sempre.
+    $modale = substr($html, $inizio);
+
+    expect($modale)->toContain(route('impersonate', $this->adminRossi).'"');
+    expect($modale)->not->toContain('/strumento/');
+});
+
+it('forgets the machine of the previous row when the picker is closed and reopened', function () {
+    // La terza strada verso lo stesso stato: si chiude la modale col suo tasto
+    // — `chiudiScelta()`, che azzerava il solo cliente — e si riapre dalla
+    // property. Senza l'azzeramento la macchina della riga di prima sopravvive
+    // a entrambi i gesti.
+    alComandoDelParco($this->superadmin);
+
+    Livewire::test(ParcoGlobale::class)
+        ->call('apriSceltaSuMacchina', $this->bianchi->id, $this->autoclaveBianchi->id)
+        ->call('chiudiScelta')
+        ->assertSet('macchinaScelta', null);
+});
+
+it('shows the obsolescence badge on the row, with the threshold of ITS OWN site', function () {
+    // 🔴 La scheda filtrava per obsolescenza senza MOSTRARLA: «⏳» compariva
+    // una volta sola in tutta la vista, nell'etichetta del checkbox. Spuntando
+    // «Solo obsoleti» si otteneva un elenco di righe visivamente identiche a
+    // prima, e nessuna colonna diceva perché quelle e non altre.
+    //
+    // ⛔ E il rimedio ovvio era sbagliato: `<x-ui.obsoleto>` chiama
+    // `Strumento::isObsoleto()` → `sogliaObsolescenza()` → `$this->tenant`, che
+    // passa dal `TenantScope` e cross-cliente risolve a NULL, ricadendo sul
+    // default 10 — cioè direbbe il falso proprio sulle sedi con soglia diversa,
+    // che è il caso che il filtro gestisce con cura. Le due macchine qui sotto
+    // hanno la STESSA età: a separarle è solo la soglia della loro sede.
+    $this->sedeRossi->update(['soglia_obsolescenza_anni' => 5]);
+    $this->sedeBianchi->update(['soglia_obsolescenza_anni' => 15]);
+
+    $cappaRossi = Strumento::factory()->forNode($this->sedeRossi)->create([
+        'nome' => 'Cappa Rossi', 'data_installazione' => today()->subYears(10)->toDateString(),
+    ]);
+    $cappaBianchi = Strumento::factory()->forNode($this->sedeBianchi)->create([
+        'nome' => 'Cappa Bianchi', 'data_installazione' => today()->subYears(10)->toDateString(),
+    ]);
+
+    alComandoDelParco($this->superadmin);
+
+    $html = Livewire::test(ParcoGlobale::class)->set('perPage', 100)->html();
+
+    expect(rigaDelParco($html, $cappaRossi->id))->toContain('Obsoleto');
+    expect(rigaDelParco($html, $cappaBianchi->id))->not->toContain('Obsoleto');
+
+    // Il tooltip dice la soglia VERA della sede, non il fallback a 10: è la
+    // frase che rende la selezione leggibile invece che arbitraria.
+    expect(rigaDelParco($html, $cappaRossi->id))->toContain('oltre la soglia di 5 anni');
+});
+
+it('badges on the row exactly the machines the obsolescence filter selects', function () {
+    // 🔴 Il filo fra ciò che la riga DICE e ciò che il filtro SELEZIONA. Sono
+    // due letture diverse della stessa regola (🔗 ADR-014) — una in PHP sulla
+    // riga, una in SQL prima di paginare — e il difetto che nasce quando
+    // divergono è muto: un badge ⏳ su una riga che il filtro non prende, o il
+    // contrario. Con tre soglie diverse in gioco, e il confine INCLUSIVO.
+    $this->sedeRossi->update(['soglia_obsolescenza_anni' => 5]);
+    $this->sedeBianchi->update(['soglia_obsolescenza_anni' => 15]);
+    $terzi = Account::factory()->create(['ragione_sociale' => 'Studio Terzi', 'piano' => 'free']);
+    // La terza soglia è quella di default, che la colonna dichiara NOT NULL:
+    // il fallback a 10 di `sogliaObsolescenza()` è difensivo, non raggiungibile
+    // da qui, e non va provato con una fixture che il DB rifiuta.
+    $sedeTerzi = UnitaOrganizzativa::factory()->ente()->perAccount($terzi)->create([
+        'nome' => 'Sede Terzi', 'soglia_obsolescenza_anni' => 10,
+    ]);
+
+    foreach ([[$this->sedeRossi, 5], [$this->sedeBianchi, 15], [$sedeTerzi, 10]] as [$sede, $soglia]) {
+        foreach ([0, $soglia - 1, $soglia, $soglia + 1] as $eta) {
+            Strumento::factory()->forNode($sede)->create([
+                'nome' => 'Muffola '.$sede->nome.' '.$eta,
+                'data_installazione' => today()->subYears($eta)->toDateString(),
+            ]);
+        }
+
+        // Il confine è INCLUSIVO e si esprime `< limite+1`: installata
+        // esattamente N anni fa oggi è già obsoleta, il giorno dopo no.
+        Strumento::factory()->forNode($sede)->create([
+            'nome' => 'Muffola '.$sede->nome.' confine',
+            'data_installazione' => today()->subYears($soglia)->addDay()->toDateString(),
+        ]);
+
+        // Senza data non è mai obsoleta: manca la base del calcolo.
+        Strumento::factory()->forNode($sede)->create([
+            'nome' => 'Muffola '.$sede->nome.' senza data', 'data_installazione' => null,
+        ]);
+    }
+
+    alComandoDelParco($this->superadmin);
+
+    $tutte = Livewire::test(ParcoGlobale::class)->set('perPage', 100);
+    $html = $tutte->html();
+
+    $conBadge = $tutte->viewData('strumenti')->getCollection()
+        ->filter(fn (Strumento $s) => str_contains(rigaDelParco($html, $s->id), 'Obsoleto'))
+        ->pluck('id')->sort()->values()->all();
+
+    $dalFiltro = Livewire::test(ParcoGlobale::class)
+        ->set('perPage', 100)
+        ->set('soloObsoleti', true)
+        ->viewData('strumenti')->getCollection()->pluck('id')->sort()->values()->all();
+
+    expect($conBadge)->not->toBeEmpty();
+    expect($conBadge)->toBe($dalFiltro);
+});
+
+it('never lets the view reassign a property the component owns', function () {
+    // 🔴 Nel `@forelse` il blocco `@php` assegnava `$stato = $righe->semaforo(…)`,
+    // sovrascrivendo la property pubblica `$stato` — il filtro semaforo, che
+    // Livewire passa alla vista. Dopo il primo giro di loop la variabile era uno
+    // `StatoSemaforo` invece della stringa arrivata dalla query string, e restava
+    // tale per tutto il resto del template.
+    //
+    // Oggi nulla, sotto la tabella, rilegge quelle property: il difetto è
+    // INVISIBILE a qualunque test comportamentale, ed è la ragione per cui la
+    // prova è strutturale. Basta una striscia dei filtri attivi in fondo alla
+    // pagina — `@if ($stato) …` — perché annunci lo stato dell'ULTIMA riga
+    // invece del filtro scelto, e solo a tabella piena.
+    // ⚠️ I commenti si tolgono, come nel guardrail delle scritture: questi
+    // blocchi spiegano per esteso perché una property non va assegnata, e un
+    // guardrail che legge il testo invece del codice punisce chi documenta.
+    // Compilando, `{{-- --}}` sparisce e `@php … @endphp` diventa PHP vero: i
+    // suoi commenti tornano commenti, e li toglie il tokenizer.
+    $vista = collect(token_get_all(Blade::compileString(file_get_contents(
+        resource_path('views/livewire/piattaforma/parco-globale.blade.php')
+    ))))
+        ->reject(fn ($t) => is_array($t) && in_array($t[0], [T_COMMENT, T_DOC_COMMENT], true))
+        ->map(fn ($t) => is_array($t) ? $t[1] : $t)
+        ->implode('');
+
+    $proprieta = collect((new ReflectionClass(ParcoGlobale::class))->getProperties(ReflectionProperty::IS_PUBLIC))
+        ->reject(fn (ReflectionProperty $p) => $p->isStatic())
+        ->map(fn (ReflectionProperty $p) => $p->getName());
+
+    expect($proprieta)->toContain('stato');
+
+    foreach ($proprieta as $nome) {
+        // `=` seguito da qualunque cosa che non sia `=` o `>`: si escludono
+        // `==`, `===` e `=>`, che non sono assegnamenti.
+        expect(preg_match('/\$'.$nome.'\s*=[^=>]/', $vista))->toBe(0);
+    }
+});
+
+it('keeps the obsolescence filter from growing a binding per site in the perimeter', function () {
+    // ⚠️ `sediPerSoglia()` raggruppa per valore di soglia — K rami invece di N —
+    // ma ogni ramo portava la lista ESPLICITA degli id delle sedi, cioè un
+    // binding per sede del perimetro: l'asse che il docblock dichiara di aver
+    // messo al riparo, «l'unica dimensione che questa scheda esiste per far
+    // crescere». Il confine principale sulle stesse sedi è una sottoquery poche
+    // righe sopra, e questo può esserlo altrettanto.
+    //
+    // Si misura sull'**SQL** e non sui dati: il risultato è identico nelle due
+    // forme, quindi nessun test comportamentale può cogliere la differenza.
+    $sql = function (): array {
+        $componente = new ParcoGlobale;
+        $componente->soloObsoleti = true;
+
+        $macchine = (new ReflectionClass($componente))->getMethod('macchine');
+        $macchine->setAccessible(true);
+
+        $query = $macchine->invoke($componente, Perimetro::tutti());
+
+        return [$query->toSql(), count($query->getBindings())];
+    };
+
+    // ⚠️ Una soglia SOLA per tutte le sedi, prima e dopo: a crescere dev'essere
+    // N — il numero di sedi — e non K, il numero di soglie distinte, che è
+    // l'asse su cui un ramo in più è previsto e dichiarato.
+    foreach ([$this->sedeRossi, $this->sedeBianchi, $this->sedeVerdi] as $sede) {
+        $sede->update(['soglia_obsolescenza_anni' => 7]);
+    }
+
+    $this->actingAs($this->superadmin);
+
+    [, $poche] = $sql();
+
+    for ($i = 0; $i < 20; $i++) {
+        UnitaOrganizzativa::factory()->ente()->perAccount($this->rossi)->create([
+            'nome' => 'Sede Rossi '.$i, 'soglia_obsolescenza_anni' => 7,
+        ]);
+    }
+
+    [, $molte] = $sql();
+
+    expect($molte)->toBe($poche);
+});
+
+it('refuses to guess a threshold for a row that did not come through the page query', function () {
+    // ⛔ Il fallback accomodante — un `?? 10` su una colonna assente — sarebbe
+    // il difetto stesso che il badge esiste per evitare: la soglia sbagliata su
+    // tutte le righe, in silenzio e in modo plausibile. Chi disegna una riga
+    // senza la join deve saperlo subito, non scoprirlo da un tooltip che mente.
+    $righe = RigheParcoStrumenti::perPagina(collect(), Perimetro::tutti());
+
+    expect(fn () => $righe->soglia(new Strumento))->toThrow(LogicException::class);
 });

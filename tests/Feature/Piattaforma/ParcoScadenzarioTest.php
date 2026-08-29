@@ -378,6 +378,83 @@ it('never leaves a row without a client, so no intervention can be read as anybo
 
 // ─── 4. I confini di data: si provano sui giorni che li circondano ──────────
 
+it('filters the list from the tile that was clicked, and marks it as the active one', function () {
+    // ⚠️ **La strada vera è questa**: le tre tile chiamano `filtra()`, mentre
+    // ogni altro test di partizione scrive la property. Un `filtra()` che
+    // scrivesse la partizione senza `resetPage()` — o che non la scrivesse
+    // affatto — lascerebbe le tile inerti con tutti gli altri test verdi.
+    Carbon::setTestNow(Carbon::parse('2026-06-15 09:00:00'));
+
+    apertoIl($this->autoclaveRossi, '2026-06-14', 'Scaduta ieri');
+    apertoIl($this->autoclaveRossi, '2026-06-20', 'Fra cinque giorni');
+
+    Livewire::test(ParcoScadenzario::class)
+        ->call('filtra', 'scaduti')
+        ->assertSet('stato', 'scaduti')
+        ->assertViewHas('statoAttivo', fn ($v) => $v === 'scaduti')
+        ->assertSee('Scaduta ieri')
+        ->assertDontSee('Fra cinque giorni')
+        // E «Tutti gli interventi aperti» rimette tutto: `null` è un valore
+        // legittimo della partizione, non un valore da scartare.
+        ->call('filtra', null)
+        ->assertViewHas('statoAttivo', fn ($v) => $v === null)
+        ->assertSee('Fra cinque giorni');
+});
+
+it('says the same number on the lit tile and at the foot of the table', function () {
+    // 🔴 Due numeri per lo stesso insieme, sulla stessa schermata: la tile
+    // dice «Scaduti 3» e il piede della tabella «1–20 di 1», e chi guarda
+    // venti clienti non ha modo di sapere quale dei due sia vero. Non può
+    // succedere finché contatori e righe partono dalla **stessa** `base()`;
+    // succede appena qualcuno «ottimizza» i tre `count()` partendo da
+    // `ParcoClienti::interventi()`, che non porta né il filtro sugli strumenti
+    // ancora leggibili né la ricerca.
+    //
+    // ⚠️ Le fixture sono scelte perché la lente sia **falsificabile**: con
+    // tre righe scadute di cui due tenute fuori da `base()` — una dalla
+    // ricerca, una dalla macchina cestinata — i due numeri coincidono solo se
+    // il conteggio passa davvero di lì.
+    Carbon::setTestNow(Carbon::parse('2026-06-15 09:00:00'));
+
+    $centrifuga = comeIlCliente(fn () => Strumento::factory()->forNode($this->sedeRossi)->create(['nome' => 'Centrifuga Rossi']));
+    $dismessa = comeIlCliente(fn () => Strumento::factory()->forNode($this->sedeRossi)->create(['nome' => 'Banco di riserva']));
+
+    apertoIl($this->autoclaveRossi, '2026-06-14', 'Autoclave: taratura annuale');
+    apertoIl($centrifuga, '2026-06-13', 'Verifica di sicurezza elettrica');
+    apertoIl($dismessa, '2026-06-12', 'Autoclave di riserva da tarare');
+
+    $dismessa->delete();
+
+    Livewire::test(ParcoScadenzario::class)
+        ->set('search', 'autoclave')
+        ->set('stato', 'scaduti')
+        ->assertSee('Autoclave: taratura annuale')
+        ->assertDontSee('Verifica di sicurezza elettrica')
+        ->assertDontSee('Autoclave di riserva da tarare')
+        ->tap(fn ($c) => expect($c->viewData('contatori')['scaduti'])->toBe(1))
+        ->tap(fn ($c) => expect($c->viewData('interventi')->total())->toBe($c->viewData('contatori')['scaduti']));
+});
+
+it('wires every tile to the filter, so none of them can be an inert decoration', function () {
+    // 🔴 Il test qui sopra prova il **metodo**, non il bottone: dal punto
+    // di vista del server `->call('filtra', 'scaduti')` è la stessa strada di
+    // `->set('stato', ...)`, quindi cancellare i quattro `wire:click` dal Blade
+    // lascerebbe in pagina quattro riquadri con etichette e numeri giusti e
+    // **inerti** — il Superadmin clicca «Scaduti» e la pagina non si muove —
+    // senza che nulla diventi rosso. Il cablaggio è il prodotto: qui si guarda
+    // l'HTML.
+    //
+    // ⚠️ `assertSeeHtml` e non `assertSee`: quest'ultima **escapa** l'ago, e
+    // gli apostrofi dell'argomento non si ritroverebbero mai nella pagina.
+    Livewire::test(ParcoScadenzario::class)
+        ->assertSeeHtml('wire:click="filtra(\'scaduti\')"')
+        ->assertSeeHtml('wire:click="filtra(\'in_scadenza\')"')
+        ->assertSeeHtml('wire:click="filtra(\'oltre\')"')
+        // ⚠️ E il ritorno: senza, «Tutti gli interventi aperti» resta come
+        // unica via per togliere la partizione, e diventerebbe un vicolo cieco.
+        ->assertSeeHtml('wire:click="filtra(null)"');
+});
+
 it('keeps an intervention due today out of the overdue partition', function () {
     // ⛔ `isScaduto()` dice che ciò che scade OGGI **non è ancora scaduto**, e
     // il confine si esprime come `< oggi`. Un `<=` — o un `whereDate` — lo
@@ -854,6 +931,129 @@ it('refuses to open the member picker to somebody who may look but not impersona
         ->call('apriScelta', $this->rossi->id)
         ->assertForbidden()
         ->assertSet('sceltaImpersonazione', null);
+});
+
+// ─── 6-bis. Impersonare dal parco ATTERRA sulla macchina della riga ─────────
+
+it('sends the impersonate button of a row to the machine of that row, not to the dashboard', function () {
+    // 🔴 È la ragione per cui la rotta `piattaforma.parco.impersona` esiste: la
+    // rotta del pacchetto rimanda a una destinazione **fissa**, quindi si
+    // finiva in dashboard e bisognava ritrovare a mano la macchina appena vista
+    // in elenco — su un parco di molti clienti, per giunta cambiando Ente.
+    //
+    // ⚠️ **Due righe con due macchine diverse, e non una sola**: con una riga
+    // in tabella un link che porta la macchina giusta e uno che ne porta una
+    // qualunque — la prima della pagina, un id ricopiato — rendono la stessa
+    // identica pagina.
+    $centrifugaRossi = comeIlCliente(fn () => Strumento::factory()->forNode($this->sedeRossi)->create(['nome' => 'Centrifuga Rossi']));
+
+    apertoIl($this->autoclaveRossi, today()->addDays(5)->toDateString(), 'Taratura autoclave');
+    apertoIl($centrifugaRossi, today()->addDays(6)->toDateString(), 'Taratura centrifuga');
+
+    // ⚠️ **L'ago è ancorato all'`href` intero**, virgolette comprese, e non
+    // è pedanteria: `assertSee` cerca una **sottostringa**, e un url che
+    // finisce con un id nudo è il prefisso di ogni id che comincia per quelle
+    // cifre. Se un domani la fixture spostasse gli id a 1 e 12, una regressione
+    // in cui entrambe le righe puntano alla macchina dell'ULTIMA renderebbe una
+    // pagina con `/strumento/12`: `…/strumento/1` passerebbe come prefisso e il
+    // test resterebbe verde con i due tasti sbagliati.
+    Livewire::test(ParcoScadenzario::class)
+        ->assertSeeHtml('href="'.route('piattaforma.parco.impersona', ['utente' => $this->annaRossi->id, 'strumento' => $this->autoclaveRossi->id]).'"')
+        ->assertSeeHtml('href="'.route('piattaforma.parco.impersona', ['utente' => $this->annaRossi->id, 'strumento' => $centrifugaRossi->id]).'"')
+        // ⛔ E la rotta del pacchetto non è più in pagina: senza questo, un link
+        // lasciato indietro accanto a quello nuovo passerebbe inosservato — la
+        // riga si vede una volta sola, ed è quella su cui si clicca.
+        ->assertDontSee(route('impersonate', $this->annaRossi->id));
+});
+
+it('carries that same machine into the picker, when the client has more than one member', function () {
+    // ⚠️ Il caso in cui il rimbalzo costa di più — si è già scelto fra due
+    // persone — è proprio quello in cui la destinazione si perdeva: la scelta
+    // del membro è per **account**, e l'account non sa di macchine. Senza il
+    // parametro, con un membro solo si atterrava sulla scheda e con due in
+    // dashboard.
+    $marioRossi = User::factory()->create(['name' => 'Mario Rossi', 'tenant_id' => $this->sedeRossi->id]);
+    $marioRossi->assignRole('Admin');
+    $this->rossi->aggiungiMembro($marioRossi);
+
+    apertoIl($this->autoclaveRossi, today()->addDays(5)->toDateString(), 'Taratura autoclave');
+
+    Livewire::test(ParcoScadenzario::class)
+        // Due candidati: la riga offre la scelta, non il link diretto.
+        ->assertSee('Impersona (2)')
+        ->call('apriSceltaSuStrumento', $this->rossi->id, $this->autoclaveRossi->id)
+        ->assertSet('strumentoImpersonazione', $this->autoclaveRossi->id)
+        // Stesso ago ancorato all'`href` della riga: un id nudo è il prefisso
+        // di ogni id che comincia per quelle cifre.
+        ->assertSeeHtml('href="'.route('piattaforma.parco.impersona', ['utente' => $marioRossi->id, 'strumento' => $this->autoclaveRossi->id]).'"')
+        ->assertSeeHtml('href="'.route('piattaforma.parco.impersona', ['utente' => $this->annaRossi->id, 'strumento' => $this->autoclaveRossi->id]).'"')
+        ->assertDontSee(route('impersonate', $marioRossi->id));
+});
+
+it('never carries the machine of one row into a picker opened without one', function () {
+    // 🔴 Il negativo che tiene in piedi il reset dentro `chiudiOgniModale()`:
+    // `strumentoImpersonazione` sopravvive fra un update e l'altro, quindi
+    // senza reset la seconda apertura erediterebbe la destinazione della prima
+    // — e si atterrerebbe sulla scheda di un'altra macchina, **dopo** aver già
+    // cambiato identità. Un errore che non si vede: la scheda si apre, i dati
+    // ci sono, sono solo quelli sbagliati.
+    $marioRossi = User::factory()->create(['name' => 'Mario Rossi', 'tenant_id' => $this->sedeRossi->id]);
+    $marioRossi->assignRole('Admin');
+    $this->rossi->aggiungiMembro($marioRossi);
+
+    apertoIl($this->autoclaveRossi, today()->addDays(5)->toDateString(), 'Taratura autoclave');
+
+    Livewire::test(ParcoScadenzario::class)
+        ->call('apriSceltaSuStrumento', $this->rossi->id, $this->autoclaveRossi->id)
+        ->assertSet('strumentoImpersonazione', $this->autoclaveRossi->id)
+        // La seconda apertura passa dal metodo del concern, che di macchine non
+        // sa nulla: è la strada da cui la cabina apre la stessa modale.
+        ->call('apriScelta', $this->rossi->id)
+        ->assertSet('strumentoImpersonazione', null)
+        ->assertDontSee(route('piattaforma.parco.impersona', ['utente' => $marioRossi->id, 'strumento' => $this->autoclaveRossi->id]))
+        // ⚠️ E la modale resta una via d'ingresso: senza la macchina si ricade
+        // sulla rotta del pacchetto, non su un link che non c'è. È questa —
+        // non la riga della tabella — la strada da cui il ripiego scatta
+        // davvero, e qui la si percorre **dalla pagina** invece che chiamando
+        // il metodo in isolamento.
+        ->assertSeeHtml('href="'.route('impersonate', $marioRossi->id).'"');
+});
+
+it('refuses to open the picker on a machine to somebody who may look but not impersonate', function () {
+    // 🔴 `apriSceltaSuStrumento()` è un **secondo ingresso** alla modale, e un
+    // secondo ingresso con guardie più larghe è il modo in cui una regola si
+    // aggira senza accorgersene. Delega ad `apriScelta()` — che porta il gate —
+    // e delega **prima** di assegnare: assegnando per primo, chi il gate nega
+    // lascerebbe comunque scritta la property che costruisce l'href.
+    $ruolo = Role::findOrCreate('Osservatore Parco', 'web');
+    $ruolo->givePermissionTo(Permission::findByName('tenants.view_all', 'web'));
+
+    $guardone = User::factory()->create(['tenant_id' => $this->sedeRossi->id]);
+    $guardone->assignRole($ruolo);
+
+    $this->actingAs($guardone->fresh());
+
+    Livewire::test(ParcoScadenzario::class)
+        ->call('apriSceltaSuStrumento', $this->rossi->id, $this->autoclaveRossi->id)
+        ->assertForbidden()
+        ->assertSet('sceltaImpersonazione', null)
+        ->assertSet('strumentoImpersonazione', null);
+});
+
+it('still offers a way in when there is no machine to land on', function () {
+    // Il ripiego: senza una destinazione si entra comunque come quel cliente —
+    // atterrare su un 404 sarebbe peggio — invece di costruire un link verso un
+    // id che non c'è.
+    //
+    // ⚠️ Questo prova il **metodo**, e il metodo da solo non dice dove il
+    // ripiego scatti davvero: dalla riga della tabella non scatta (le righe
+    // sono già filtrate sulle macchine leggibili, e cestinarne una fa sparire
+    // la riga, non la macchina della riga). Scatta dalla modale aperta senza
+    // macchina, ed è il test qui sopra a percorrerla **dalla pagina**.
+    $componente = Livewire::test(ParcoScadenzario::class)->instance();
+
+    expect($componente->linkImpersona($this->annaRossi->id, null))
+        ->toBe(route('impersonate', $this->annaRossi->id));
 });
 
 it('offers no way to write anything from the schedule of the client park', function () {

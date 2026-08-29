@@ -28,14 +28,17 @@ use InvalidArgumentException;
  * filtro in cima alla pagina dice altro. `ParcoBypassGuardrailTest` lo rende
  * rosso; questo docblock dice perché il guardrail ha ragione.
  *
- * ⚠️ **`GaranziaRicambioPrivacyScope` resta applicato su `ParcoClienti::ricambi()`,
- * e questa classe non lo aggira per vie traverse.** Non c'è nessuna colonna
+ * ⚠️ **Né garanzie né utilizzi compaiono qui, e la ragione è che la porta non
+ * li consegna — non che uno scope li filtri.** Non c'è nessuna colonna
  * «garanzia» in questa scheda, e non ci deve arrivare per deduzione: se domani
- * servisse, si legge da `ParcoClienti::garanzie()`, che quello scope se lo porta
- * dietro. Nemmeno gli **utilizzi** compaiono — `RicambioUtilizzo` è
- * deliberatamente fuori dalla porta (due scope in più, cioè due domande a cui
- * questa schermata non deve rispondere), quindi qui non si dice su quali
- * macchine un pezzo sia montato.
+ * servisse, si legge da `ParcoClienti::garanzie()`. ⛔ Chi la scrivesse invece
+ * qui non sarebbe coperto da niente: `GaranziaRicambioPrivacyScope` (🔗 ADR-029)
+ * lo registra `Garanzia`, non `Ricambio`, quindi su questo builder non esiste
+ * un filtro da cui ereditare il controllo — le righe uscirebbero **nude**.
+ * Nemmeno gli **utilizzi** compaiono: `RicambioUtilizzo` è deliberatamente
+ * fuori dalla porta (due scope in più, cioè due domande a cui questa schermata
+ * non deve rispondere), quindi qui non si dice su quali macchine un pezzo sia
+ * montato.
  *
  * ## Ciò che NON si può ordinare, e perché è una decisione
  *
@@ -243,10 +246,10 @@ final class RicambiDelParco
         }
 
         // ⚠️ `toBase()` e non `get()` sull'Eloquent builder: `toBase()` **applica**
-        // gli scope e poi consegna il query builder, quindi il perimetro e
-        // `GaranziaRicambioPrivacyScope` restano dove sono — si perde solo
-        // l'idratazione in model, che qui è puro costo: di queste righe servono
-        // due colonne e nessun comportamento.
+        // gli scope e poi consegna il query builder, quindi il perimetro della
+        // porta e il soft delete restano dove sono — si perde solo l'idratazione
+        // in model, che qui è puro costo: di queste righe servono due colonne e
+        // nessun comportamento.
         $gemelli = ParcoClienti::ricambi($perimetro)
             ->whereIn('ricambi.nome_normalizzato', $pagina->pluck('nome_normalizzato')->unique()->values()->all())
             ->distinct()

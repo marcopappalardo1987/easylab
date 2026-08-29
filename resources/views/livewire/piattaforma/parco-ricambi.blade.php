@@ -249,7 +249,21 @@
                                              l'utente in sessione, e una risposta
                                              Livewire lascerebbe in pagina un
                                              componente montato per l'utente
-                                             precedente, col suo scope. --}}
+                                             precedente, col suo scope.
+
+                                             ⛔ E la rotta è quella del
+                                             pacchetto, NON quella del Parco che
+                                             atterra sulla macchina: questa riga
+                                             è una voce di catalogo, e un pezzo
+                                             non ha una macchina univoca — sta
+                                             su zero, una o venti. Sceglierne
+                                             una la farebbe decidere a una
+                                             query, e l'indirizzo del pulsante
+                                             direbbe per giunta dove il pezzo è
+                                             montato: ciò che questa scheda non
+                                             dice (ADR-029). Il perché per
+                                             esteso sta nel docblock del
+                                             componente. --}}
                                         <a href="{{ route('impersonate', $candidati->first()) }}"
                                            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-brand hover:bg-brand-soft"
                                            title="Impersona {{ $candidati->first()->name }} ({{ $cliente->ragione_sociale }})">

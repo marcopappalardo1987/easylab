@@ -49,3 +49,5 @@ Thumbs.db
 
 # Stato di esecuzione del restyling (lucchetti, segnali, scatti) — non è sorgente
 /.restyling/
+
+.ai/

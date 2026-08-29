@@ -168,6 +168,14 @@
                             // compilata un blocco intero.
                             $titolare = $titolari[$intervento->tenant_id] ?? ['cliente' => '', 'sede' => '', 'account_id' => null];
                             $macchina = $macchine[$intervento->strumento_id] ?? null;
+                            // L'id e non il model: è ciò che il link della
+                            // riga passa alla rotta. Qui non può essere `null`
+                            // — le righe sono già filtrate sulle macchine
+                            // leggibili, e la mappa nasce dallo stesso builder
+                            // nella stessa richiesta — ma la vista non si fida
+                            // di una mappa che potrebbe non contenere la
+                            // chiave, come già per il cliente qui sotto.
+                            $macchinaId = $macchina?->id;
                             $scaduto = $intervento->isScaduto();
                             $manca = \App\Support\Piattaforma\ScadenzarioParco::quantoManca($intervento->data_scadenza);
                             $accountId = $titolare['account_id'];
@@ -227,14 +235,19 @@
                                          sessione, e una risposta Livewire
                                          lascerebbe in pagina un componente
                                          montato per l'utente precedente, col suo
-                                         scope e i suoi permessi già risolti. --}}
-                                    <a href="{{ route('impersonate', $suoi->first()) }}"
+                                         scope e i suoi permessi già risolti.
+
+                                         La destinazione la sceglie il
+                                         componente: con la macchina della riga
+                                         si atterra sulla sua scheda, senza si
+                                         ricade sulla rotta del pacchetto. --}}
+                                    <a href="{{ $this->linkImpersona($suoi->first()->id, $macchinaId) }}"
                                        class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-brand hover:bg-brand-soft"
                                        title="Impersona {{ $suoi->first()->name }}">
                                         <span aria-hidden="true">👁</span> Impersona
                                     </a>
                                 @elseif ($suoi->count() > 1)
-                                    <button type="button" wire:click="apriScelta({{ $accountId }})"
+                                    <button type="button" wire:click="apriSceltaSuStrumento({{ $accountId }}, {{ $macchinaId ?? 'null' }})"
                                             class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-brand hover:bg-brand-soft">
                                         <span aria-hidden="true">👁</span> Impersona ({{ $suoi->count() }})
                                     </button>
@@ -325,7 +338,11 @@
                                     <span class="block text-sm font-medium text-ink">{{ $membro->name }}</span>
                                     <span class="block text-xs text-ink-3">{{ $membro->email }}</span>
                                 </span>
-                                <a href="{{ route('impersonate', $membro) }}"
+                                {{-- Stessa destinazione della riga da cui la
+                                     modale si è aperta: sceglierlo qui in modo
+                                     diverso vorrebbe dire che con un membro solo
+                                     si atterra sulla macchina e con due no. --}}
+                                <a href="{{ $this->linkImpersona($membro->id, $strumentoImpersonazione) }}"
                                    class="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-ink hover:bg-brand-hover">
                                     <span aria-hidden="true">👁</span> Entra
                                 </a>

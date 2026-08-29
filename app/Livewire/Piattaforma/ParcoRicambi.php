@@ -50,12 +50,42 @@ use Livewire\WithPagination;
  * dubbio dà l'insieme **vuoto**, non «tutti»), e `ParcoClienti::clienti()` lo
  * **interseca** con l'insieme legittimo. Un id forgiato non allarga.
  *
- * ⚠️ **Le garanzie non compaiono in questa scheda, e non è una dimenticanza.**
- * `ParcoClienti::ricambi()` lascia applicato `GaranziaRicambioPrivacyScope`
- * (🔗 ADR-029), che non è uno scope di tenancy: risponde a «questo utente ha
- * titolo a vedere le garanzie dei pezzi montati?». Mostrare qui una garanzia —
- * o dedurla da un conteggio — significherebbe aggirare quella domanda per via
- * traversa. Se domani servisse, si legge da `ParcoClienti::garanzie()`.
+ * ⚠️ **Le garanzie non compaiono in questa scheda, e non è una dimenticanza —
+ * ma la ragione non è uno scope.** `ParcoClienti::ricambi()` consegna il solo
+ * catalogo pezzi. Il filtro di 🔗 ADR-029 — `GaranziaRicambioPrivacyScope`, che
+ * non è di tenancy e risponde a «questo utente ha titolo a vedere le garanzie
+ * dei pezzi montati?» — lo registra `Garanzia::booted()`, unico punto del
+ * progetto a farlo: su un builder di `Ricambio` quel filtro non c'è mai stato.
+ *
+ * ⛔ Quindi qui **non c'è niente da cui una colonna nuova erediti un controllo.**
+ * Il giorno in cui servisse la colonna «in garanzia?» — la domanda naturale su un
+ * catalogo pezzi — un `join` o un `withCount` scritto qui la mostrerebbe **senza
+ * nessuna verifica per riga**, a un ruolo che potesse avere `tenants.view_all`
+ * e non `garanzie.ricambio.view`. La strada è `ParcoClienti::garanzie()`, il
+ * builder su cui quella domanda viene posta davvero.
+ *
+ * ⛔ **Il tasto «impersona» resta sulla rotta del pacchetto, e non è una svista.**
+ * Dal 29 Ago 2026 il Parco ha una seconda porta — `piattaforma.parco.impersona`
+ * — che impersona e **atterra sulla macchina** della riga invece di rimbalzare
+ * in dashboard. La usano le schede in cui la riga *è* una macchina. Qui la riga
+ * è una **voce di catalogo**, e un pezzo non ha una macchina: `ricambi` non
+ * porta nessuna colonna verso `strumenti` (ERD §7.1), e il ponte verso le
+ * macchine è la tabella degli utilizzi — deliberatamente fuori dalla porta, e
+ * che questa scheda non legge. Due conseguenze, e ciascuna basterebbe da sola:
+ *
+ *   1. **non esiste una macchina univoca**: un pezzo a catalogo sta su zero,
+ *      una o venti macchine, e sceglierne una vorrebbe dire lasciarla decidere
+ *      all'ordinamento di una query. Atterrare sulla macchina **sbagliata** è
+ *      peggio che atterrare in dashboard: chi arriva crede di essere dove
+ *      voleva, e agisce lì;
+ *   2. **anche se la macchina fosse una sola, dirlo sarebbe una fuga**:
+ *      l'indirizzo del pulsante direbbe «questo pezzo è montato su quella
+ *      macchina», cioè la domanda a cui questa scheda non risponde (🔗 ADR-029).
+ *      Un dato non trapela solo dalle colonne di una tabella: trapela anche
+ *      dalla **destinazione di un link**.
+ *
+ * Il giorno in cui esistesse una scheda degli utilizzi, il tasto che atterra
+ * sulla macchina nascerebbe **lì**, dove la riga una macchina ce l'ha davvero.
  */
 #[Layout('components.layouts.app')]
 class ParcoRicambi extends Component

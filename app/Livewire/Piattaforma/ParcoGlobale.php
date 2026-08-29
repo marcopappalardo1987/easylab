@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Piattaforma;
 
+use App\Enums\StatoSemaforo;
 use App\Livewire\Piattaforma\Concerns\OffreImpersonazione;
 use App\Models\Account;
 use App\Models\Garanzia;
@@ -10,6 +11,7 @@ use App\Support\Piani;
 use App\Support\Piattaforma\ParcoClienti;
 use App\Support\Piattaforma\Perimetro;
 use App\Support\Piattaforma\RigheParcoStrumenti;
+use App\Support\Piattaforma\StrumentiPerStato;
 use App\Support\Tenancy\VistaPiattaforma;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -60,20 +62,23 @@ use Livewire\WithPagination;
  * non duplicano — e una `inner` potrebbe solo far **sparire** righe in silenzio,
  * che su una vista di sorveglianza è il guasto peggiore.
  *
- * ## Il semaforo, e il filtro che NON c'è
+ * ## Il semaforo: si MOSTRA riga per riga, si FILTRA in SQL
  *
  * ⛔ `Strumento::conStato()`, `ordinaPerStato()` e `obsoleti()` sono la forma SQL
  * della regola e compongono sottoquery **scopate per tenant**: su questo elenco
- * classificherebbero come verdi le macchine altrui. Il semaforo si calcola
+ * classificherebbero come verdi le macchine altrui. Il semaforo si **mostra**
  * quindi con `Semaforo::calcola()` sulle sole righe in pagina, via
  * `RigheParcoStrumenti` — tre query costanti, la regola resta una sola.
  *
- * ⚠️ **Conseguenza dichiarata**: qui non esiste il filtro «solo arancioni»
- * dell'elenco per-Ente, e non è una dimenticanza. Filtrarlo in PHP dopo la
- * paginazione darebbe pagine incomplete e un totale falso; farlo in SQL
- * vorrebbe dire riscrivere `Strumento::fontiArancione()` non-scopata, cioè una
- * seconda copia della regola del semaforo. Si preferisce un filtro assente a un
- * filtro che mente. La strada per averlo è scritta in `RigheParcoStrumenti`.
+ * ⚠️ Ma mostrare e filtrare sono due domande diverse, e la seconda non si può
+ * rispondere sulla pagina: filtrare in PHP **dopo** `paginate()` darebbe pagine
+ * di dimensione variabile, un totale che conta anche le righe scartate e pagine
+ * vuote nella barra in fondo. I due filtri di stato chiesti da Marco il 29 Ago
+ * 2026 — il semaforo (🔗 ADR-005) e l'obsolescenza (🔗 ADR-014), che sono due
+ * **assi diversi** e restano due controlli distinti — vivono perciò in
+ * `StrumentiPerStato`, che costruisce le tre fonti dell'arancione **non
+ * scopate** e dentro il perimetro. Il debito che ne nasce — la composizione
+ * esiste in due copie — è dichiarato là, e legato da due test differenziali.
  *
  * ## Il costo
  *
@@ -123,6 +128,31 @@ class ParcoGlobale extends Component
     #[Url]
     public string $search = '';
 
+    /**
+     * Filtro semaforo (🔗 ADR-005): `verde` | `arancione` | `rosso`.
+     *
+     * Arriva dalla query string come tutto il resto, quindi non si usa mai
+     * grezzo: passa da `statoScelto()`, che è **l'unico** punto in cui la
+     * stringa diventa un `StatoSemaforo` — e lo stesso punto da cui
+     * `haFiltriAttivi()` decide se annunciarlo. Un valore ignoto non filtra e
+     * non viene annunciato: le due risposte non possono divergere perché sono
+     * la stessa chiamata. Nell'elenco per-Ente sono due liste scritte a mano,
+     * ed erano già divergute (`?stato=giallo` mandava a togliere un filtro che
+     * il componente aveva già scartato).
+     */
+    #[Url]
+    public ?string $stato = null;
+
+    /**
+     * Filtro obsolescenza (🔗 ADR-014): asse **diverso** dal semaforo, non un
+     * suo quarto valore. Una macchina vecchia e in regola è verde e obsoleta, e
+     * fonderli in una tendina sola renderebbe quella coppia inesprimibile —
+     * oltre a contraddire il badge ⏳, che nel Design System §4 convive col
+     * pallino invece di sostituirlo. Due controlli, quindi, componibili.
+     */
+    #[Url]
+    public bool $soloObsoleti = false;
+
     #[Url]
     public string $sortBy = 'cliente';
 
@@ -156,6 +186,21 @@ class ParcoGlobale extends Component
     private const SORT_DEFAULT = 'cliente';
 
     /**
+     * La macchina della riga da cui la scelta del membro è stata aperta, o
+     * `null` se l'apertura non ne nominava nessuna.
+     *
+     * ⚠️ **Non è un'autorizzazione, ed è importante che non lo sembri.** Arriva
+     * dal browser come ogni property, e un id forgiato non allarga niente: la
+     * rotta di atterraggio ha le proprie guardie (le quattro del pacchetto più
+     * il permesso del parco) e, se dopo l'impersonazione quella macchina non è
+     * visibile all'impersonato, atterra in dashboard **dicendolo** invece di
+     * dare un 404. Il peggio che un valore inventato ottiene è quindi il
+     * messaggio «quella macchina non è di questa sede» — e i sette test di
+     * `ImpersonaVersoStrumentoTest` lo congelano.
+     */
+    public ?int $macchinaScelta = null;
+
+    /**
      * Chiude ogni modale della pagina.
      *
      * Richiesto da `OffreImpersonazione::apriScelta()`, che lo chiama per
@@ -166,6 +211,59 @@ class ParcoGlobale extends Component
     public function chiudiOgniModale(): void
     {
         $this->sceltaImpersonazione = null;
+
+        // 🔴 Azzerata **qui** e non solo in `apriSceltaSuMacchina()`, e non è
+        // simmetria: `OffreImpersonazione::apriScelta()` chiama questo metodo
+        // prima di aprire, quindi il `call('apriScelta', …)` — l'apertura che
+        // non nomina nessuna macchina — riparte da `null` invece di ereditare
+        // quella della riga precedente.
+        //
+        // ⛔ **Ma questa riga da sola non basta, e per un anno di lettura ha
+        // dichiarato di bastare.** La modale ha TRE strade di apertura e solo
+        // questa passa di qui: `updatingSceltaImpersonazione()` — la property
+        // spinta dal browser, che il trait documenta come reale e difende col
+        // Gate — chiede il permesso, rilegge l'account e ritorna, senza toccare
+        // la macchina. Le altre due sono chiuse da `updatedSceltaImpersonazione()`
+        // e da `chiudiScelta()` qui sotto.
+        $this->macchinaScelta = null;
+    }
+
+    /**
+     * La macchina si dimentica anche quando il cliente cambia **dal browser**.
+     *
+     * 🔴 `$wire.set('sceltaImpersonazione', …)` è la seconda strada di apertura
+     * della modale, dichiarata e difesa da `OffreImpersonazione`, e non passa da
+     * `apriScelta()` — quindi non passa da `chiudiOgniModale()`. Senza questo
+     * gancio la modale si ridisegnava col titolo e i membri del cliente B
+     * tenendosi la macchina del cliente A: il link «Entra» portava a impersonare
+     * un membro di B **verso una macchina di A**.
+     *
+     * Non è una falla di autorizzazione — la rotta di atterraggio se ne accorge
+     * e manda in dashboard dicendolo — ma è una destinazione sbagliata offerta
+     * **da noi**, cioè un messaggio d'errore che sembra un difetto prodotto da
+     * un link che questa pagina ha appena disegnato.
+     *
+     * ⚠️ `updated` e non `updating`: l'hook `updating` di quella property vive
+     * nel trait, che è condiviso con la cabina di regia — dove `macchinaScelta`
+     * non esiste. Qui si aggiunge, non si riscrive.
+     */
+    public function updatedSceltaImpersonazione(): void
+    {
+        $this->macchinaScelta = null;
+    }
+
+    /**
+     * Chiudere la modale dimentica anche la macchina.
+     *
+     * La terza strada verso lo stesso stato: si chiude col tasto — che nel
+     * trait azzera il solo cliente — e si riapre dalla property. La macchina
+     * della riga di prima sopravviveva a entrambi i gesti. Qui «chiudere la
+     * scelta» e «chiudere ogni modale» sono la stessa cosa, perché la modale è
+     * una sola.
+     */
+    public function chiudiScelta(): void
+    {
+        $this->chiudiOgniModale();
     }
 
     /**
@@ -190,6 +288,36 @@ class ParcoGlobale extends Component
     public function updatingSearch(): void
     {
         $this->resetPage();
+    }
+
+    public function updatingStato(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingSoloObsoleti(): void
+    {
+        $this->resetPage();
+    }
+
+    /**
+     * Apre la scelta del membro **ricordando la macchina della riga**.
+     *
+     * L'ordine conta: `apriScelta()` è la sola porta dell'impersonazione — gata
+     * su `utenti.impersonate` e rilegge l'account dalla porta di piattaforma —
+     * e passa da `chiudiOgniModale()`, che azzera `macchinaScelta`. La riga qui
+     * sotto viene quindi **dopo**, o si azzererebbe da sé.
+     *
+     * ⚠️ Nessuna guardia aggiuntiva sulla macchina, di proposito: aggiungerne
+     * una qui suggerirebbe che sia lei a proteggere qualcosa. La destinazione la
+     * valida chi ci atterra, che è l'unico posto in cui si sa chi si è
+     * diventati.
+     */
+    public function apriSceltaSuMacchina(int $accountId, int $strumentoId): void
+    {
+        $this->apriScelta($accountId);
+
+        $this->macchinaScelta = $strumentoId;
     }
 
     /** Cambiando la dimensione di pagina, la pagina corrente non ha più senso. */
@@ -253,7 +381,24 @@ class ParcoGlobale extends Component
      */
     public function haFiltriAttivi(): bool
     {
-        return filled($this->search);
+        return filled($this->search)
+            || $this->soloObsoleti
+            || $this->statoScelto() !== null;
+    }
+
+    /**
+     * Lo stato semaforo scelto, **normalizzato una volta sola**.
+     *
+     * 🔴 Filtro applicato e filtro annunciato passano entrambi di qui, e questa
+     * è la ragione per cui il metodo esiste: `?stato=giallo` non filtra nulla,
+     * e non deve nemmeno far dire «Nessun risultato per i filtri applicati» su
+     * un elenco che filtrato non è — sarebbe mandare a togliere un filtro che
+     * il componente ha già scartato. Nell'elenco per-Ente la stessa whitelist è
+     * scritta in due posti, ed è divergere che le riesce meglio.
+     */
+    private function statoScelto(): ?StatoSemaforo
+    {
+        return StatoSemaforo::tryFrom((string) $this->stato);
     }
 
     /**
@@ -352,6 +497,14 @@ class ParcoGlobale extends Component
             ->select([
                 'strumenti.*',
                 'sede.nome as sede_nome',
+                // ⏳ La soglia di obsolescenza viaggia **con la riga** (🔗 ADR-014).
+                // Il badge non può chiederla al model: `sogliaObsolescenza()`
+                // passa da `$this->tenant`, relazione scopata che cross-cliente
+                // risolve a NULL e ricade sul default 10 — direbbe «oltre la
+                // soglia di 10 anni» proprio sulle sedi che ne hanno scelta
+                // un'altra, cioè contraddirebbe il filtro sulla stessa riga. La
+                // join la ha già in tavola: costa una colonna, non una query.
+                'sede.soglia_obsolescenza_anni as sede_soglia',
                 'cliente.id as cliente_id',
                 'cliente.ragione_sociale as cliente_nome',
             ])
@@ -371,6 +524,21 @@ class ParcoGlobale extends Component
                     ->orWhereRaw('LOWER(COALESCE(strumenti.modello, \'\')) LIKE ?', [$like])
                     ->orWhereRaw('LOWER(COALESCE(strumenti.matricola, \'\')) LIKE ?', [$like]);
             });
+        }
+
+        // ⛔ I due filtri di stato si applicano **prima** di `paginate()`, e
+        // passano da `StrumentiPerStato` invece che da `Strumento::conStato()` /
+        // `->obsoleti()`: quelli compongono sottoquery scopate per tenant e su
+        // un builder cross-cliente direbbero «verde» per le macchine altrui.
+        // Il perché per esteso sta nel docblock di quella classe.
+        $stato = $this->statoScelto();
+
+        if ($stato !== null) {
+            StrumentiPerStato::semaforo($query, $stato, $perimetro);
+        }
+
+        if ($this->soloObsoleti) {
+            StrumentiPerStato::obsoleti($query, $perimetro);
         }
 
         return $query;

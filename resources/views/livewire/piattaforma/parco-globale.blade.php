@@ -72,22 +72,40 @@
                 </div>
             @endif
 
+            {{-- Filtro semaforo (🔗 ADR-005): stato EFFETTIVO, cioè forzato se
+                 c'è. Stesse etichette dell'elenco per-Ente: due schermi che
+                 chiamano lo stesso stato con due nomi diversi sono due stati,
+                 per chi legge. --}}
+            <div>
+                <label for="stato" class="block text-xs font-medium tracking-wide text-ink-3 uppercase">Stato</label>
+                <select id="stato" wire:model.live="stato"
+                    class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none sm:w-52">
+                    <option value="">Tutti gli stati</option>
+                    <option value="arancione">◐ Azione richiesta</option>
+                    <option value="verde">● In regola</option>
+                    <option value="rosso">■ Non idoneo</option>
+                </select>
+            </div>
+
             <div class="min-w-56 flex-1">
                 <label for="search" class="block text-xs font-medium tracking-wide text-ink-3 uppercase">Cerca</label>
                 <x-ui.input name="search" wire:model.live.debounce.300ms="search"
                     class="mt-1" placeholder="Nome, modello, matricola…" />
             </div>
-        </div>
 
-        {{-- ⚠️ Il filtro «solo arancioni» dell'elenco per-Ente qui NON c'è, ed è
-             una scelta scritta: la sua forma SQL è scopata per tenant e
-             classificherebbe come verdi le macchine altrui; rifarla non-scopata
-             sarebbe una seconda copia della regola del semaforo (🔗 ADR-005).
-             Meglio un filtro assente di uno che mente. --}}
-        <p class="mt-3 text-xs text-ink-3">
-            Lo stato del semaforo si legge su ogni riga, ma non è un filtro:
-            la sua forma SQL vale dentro un solo Ente, e qui direbbe il falso.
-        </p>
+            {{-- Obsolescenza (🔗 ADR-014): asse indipendente dal semaforo, e la
+                 soglia è quella di CIASCUNA sede — qui più che altrove, perché
+                 i clienti in elenco l'hanno scelta ognuno per sé.
+
+                 ⚠️ `border` esplicito accanto al colore: senza, la preflight di
+                 Tailwind v4 (`border: 0 solid` su `*`) rende il contorno inerte
+                 e il quadratino non ha bordo. --}}
+            <label class="flex items-center gap-2 py-2.5 text-sm whitespace-nowrap text-ink-2">
+                <input type="checkbox" wire:model.live="soloObsoleti"
+                    class="rounded border border-border-strong text-brand focus:ring-ring">
+                ⏳ Solo obsoleti
+            </label>
+        </div>
     </x-ui.card>
 
     {{-- ─── Tabella ────────────────────────────────────────────────────────
@@ -130,17 +148,54 @@
                 <tbody class="divide-y divide-border">
                     @forelse ($strumenti as $macchina)
                         @php
-                            $stato = $righe->semaforo($macchina);
+                            // ⚠️ `$statoRiga` e non `$stato`: `$stato` è la property
+                            // pubblica che porta il FILTRO semaforo, e Livewire la
+                            // passa alla vista. Assegnarla qui la sostituiva, dal primo
+                            // giro di loop in poi, con lo `StatoSemaforo` dell'ultima
+                            // riga disegnata — invisibile oggi, perché nulla sotto la
+                            // tabella la rilegge, e pronta a mentire alla prima striscia
+                            // dei filtri attivi messa in fondo alla pagina. Un test
+                            // strutturale lo vieta per tutte le property del componente.
+                            $statoRiga = $righe->semaforo($macchina);
+                            $obsoleta = $righe->obsoleta($macchina);
+                            $sogliaRiga = $righe->soglia($macchina);
                             $scadenza = $righe->scadenza($macchina, $vedeGaranzieRicambio);
                             $candidati = $candidatiPerAccount[$macchina->cliente_id] ?? collect();
                             $puoImpersonare = auth()->user()->can('utenti.impersonate');
+
+                            // 🔴 Si entra e si ATTERRA SULLA MACCHINA della riga,
+                            // non in dashboard: il tasto serve a intervenire in
+                            // fretta, e la rotta del pacchetto rimanda a una
+                            // destinazione fissa — bisognava ritrovare a mano la
+                            // macchina appena vista in elenco (Marco, 29 Ago 2026).
+                            // Le guardie sono le stesse del pacchetto più il
+                            // permesso del parco, e stanno nel controller.
+                            $sullaMacchina = fn ($membro) => route('piattaforma.parco.impersona', [
+                                'utente' => $membro->id,
+                                'strumento' => $macchina->id,
+                            ]);
                         @endphp
 
                         <tr wire:key="parco-str-{{ $macchina->id }}" class="hover:bg-surface-sunken">
                             <td class="px-3 py-3">
-                                <span class="inline-flex items-center gap-1">
-                                    <x-ui.semaforo :stato="$stato" />
+                                <span class="inline-flex flex-wrap items-center gap-1">
+                                    <x-ui.semaforo :stato="$statoRiga" />
                                     <x-ui.semaforo-forzato :strumento="$macchina" />
+                                    {{-- ⏳ Obsolescenza (🔗 ADR-014, DS §4): asse
+                                         SEPARATO, convive col pallino invece di
+                                         sostituirlo. Markup inline e non
+                                         `<x-ui.obsoleto>`: quel componente chiede la
+                                         soglia al model, cioè a una relazione scopata
+                                         che qui risolve a NULL e ricade su 10 — direbbe
+                                         «oltre la soglia di 10 anni» sulle sedi che ne
+                                         hanno un'altra, contraddicendo il filtro sulla
+                                         riga accanto. La soglia arriva dalla join. --}}
+                                    @if ($obsoleta)
+                                        <span class="inline-flex items-center gap-1 rounded-full bg-obs-soft px-2 py-0.5 text-xs font-medium text-obs-soft-ink"
+                                              title="Installato il {{ $macchina->data_installazione->format('d/m/Y') }} — oltre la soglia di {{ $sogliaRiga }} anni">
+                                            <span aria-hidden="true">⏳</span> Obsoleto
+                                        </span>
+                                    @endif
                                 </span>
                             </td>
 
@@ -167,13 +222,13 @@
                                          sostituisce l'utente in sessione, e una risposta
                                          Livewire lascerebbe in pagina un componente montato
                                          per l'utente precedente, col suo scope. --}}
-                                    <a href="{{ route('impersonate', $candidati->first()) }}"
+                                    <a href="{{ $sullaMacchina($candidati->first()) }}"
                                        class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-brand hover:bg-brand-soft"
-                                       title="Impersona {{ $candidati->first()->name }}">
+                                       title="Entra come {{ $candidati->first()->name }} sulla scheda di {{ $macchina->nome }}">
                                         <span aria-hidden="true">👁</span> Impersona
                                     </a>
                                 @elseif ($candidati->count() > 1)
-                                    <button type="button" wire:click="apriScelta({{ $macchina->cliente_id }})"
+                                    <button type="button" wire:click="apriSceltaSuMacchina({{ $macchina->cliente_id }}, {{ $macchina->id }})"
                                             class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-brand hover:bg-brand-soft">
                                         <span aria-hidden="true">👁</span> Impersona ({{ $candidati->count() }})
                                     </button>
@@ -239,6 +294,16 @@
                 // col titolo troncato e la lista vuota.
                 $scelto = $this->clienteScelto();
                 $suoi = $this->candidatiScelti();
+
+                // La modale si apre DA una riga, quindi conosce la macchina e
+                // atterra lì come il tasto singolo. Il ramo `null` non è teorico:
+                // `apriScelta()` resta chiamabile senza nominarne una — da un
+                // test, o dalla property spinta dal browser — e in quel caso si
+                // torna alla destinazione fissa del pacchetto invece di inventare
+                // una macchina.
+                $versoIlMembro = fn ($membro) => $macchinaScelta === null
+                    ? route('impersonate', $membro)
+                    : route('piattaforma.parco.impersona', ['utente' => $membro->id, 'strumento' => $macchinaScelta]);
             @endphp
 
             @if ($scelto)
@@ -255,7 +320,7 @@
                                     <span class="block text-sm font-medium text-ink">{{ $membro->name }}</span>
                                     <span class="block text-xs text-ink-3">{{ $membro->email }}</span>
                                 </span>
-                                <a href="{{ route('impersonate', $membro) }}"
+                                <a href="{{ $versoIlMembro($membro) }}"
                                    class="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-ink hover:bg-brand-hover">
                                     <span aria-hidden="true">👁</span> Entra
                                 </a>

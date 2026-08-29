@@ -41,7 +41,9 @@ use Livewire\WithPagination;
  * audit con dentro chi agiva e per conto di chi (🔗 ADR-018, ADR-027) — il
  * contesto che una scrittura cross-cliente perderebbe proprio dove serve di più.
  * Per questo accanto a ogni riga c'è il tasto «impersona»: è ciò che rende quel
- * confine rapido invece che fastidioso.
+ * confine rapido invece che fastidioso — e **atterra sulla scheda della
+ * macchina della riga** (`piattaforma.parco.impersona`), non in dashboard, che
+ * costringeva a ritrovare a mano la macchina appena vista in elenco.
  *
  * ⛔ **Si legge da `ParcoClienti`, mai da `VistaPiattaforma`**: i builder della
  * cabina non sono filtrati per cliente (servono a *contare* tutti i clienti, non
@@ -170,6 +172,26 @@ class ParcoScadenzario extends Component
     }
 
     /**
+     * La **macchina** della riga da cui si è aperta la scelta del membro, o
+     * `null` se quella riga non ne ha più una leggibile.
+     *
+     * Serve perché la scelta del membro è per *account* — `apriScelta()` vive
+     * nel concern condiviso con la cabina, che di macchine non ne ha — mentre
+     * qui l'impersonazione ha una **destinazione**: la scheda dello strumento
+     * che si stava guardando. Senza, la modale rimanderebbe in dashboard
+     * proprio nel caso in cui ritrovare la macchina a mano costa di più, cioè
+     * quando i membri sono più d'uno.
+     *
+     * ⚠️ È una property pubblica, cioè input del browser a ogni update. **Non è
+     * una guardia e non finge di esserlo**: cambia soltanto la destinazione del
+     * link, e chi la riceve — `ImpersonaVersoStrumento` — rilegge la macchina
+     * dalla porta, ne confronta il tenant con quello dell'impersonato e
+     * altrimenti atterra in dashboard dicendolo. Le guardie dell'impersonazione
+     * stanno tutte lì, insieme a quelle del pacchetto.
+     */
+    public ?int $strumentoImpersonazione = null;
+
+    /**
      * Chiude ogni modale della pagina.
      *
      * `OffreImpersonazione::apriScelta()` la chiama per tenere l'invariante
@@ -180,6 +202,70 @@ class ParcoScadenzario extends Component
     public function chiudiOgniModale(): void
     {
         $this->sceltaImpersonazione = null;
+
+        // ⚠️ E con lei la **macchina**: `apriScelta()` passa di qui, quindi
+        // riaprire la scelta da una riga senza macchina non può ereditare la
+        // destinazione di quella precedente — che porterebbe l'operatore sulla
+        // scheda di un'altra macchina, magari di un altro cliente, dopo aver
+        // già cambiato identità.
+        $this->strumentoImpersonazione = null;
+    }
+
+    /**
+     * Apre la scelta del membro **portandosi dietro la macchina della riga**.
+     *
+     * ⛔ **Si delega, non si riscrive**: `apriScelta()` è il metodo del concern
+     * e porta con sé il `Gate::authorize('utenti.impersonate')` e la rilettura
+     * dell'account dalla porta. Aprire la modale da qui — un `$this->scelta… =
+     * $accountId` — sarebbe un secondo ingresso con guardie più larghe, cioè il
+     * modo in cui una regola si aggira senza accorgersene.
+     *
+     * ⚠️ E l'ordine non è indifferente: `apriScelta()` chiama
+     * `chiudiOgniModale()`, che **azzera la macchina**. Assegnando per primo la
+     * destinazione verrebbe cancellata subito dopo, e la modale rimanderebbe in
+     * dashboard — cioè il difetto che questo metodo esiste per togliere, in una
+     * forma che si legge come corretta.
+     */
+    public function apriSceltaSuStrumento(int $accountId, ?int $strumentoId = null): void
+    {
+        $this->apriScelta($accountId);
+
+        $this->strumentoImpersonazione = $strumentoId;
+    }
+
+    /**
+     * Il link «impersona» di una riga: verso la **scheda della macchina**,
+     * quando la riga ne ha una.
+     *
+     * 🔴 Sta qui e non in Blade perché è la stessa decisione presa in due posti
+     * — la riga col candidato unico e la modale coi candidati multipli — e due
+     * copie divergono: quella meno guardata resterebbe sulla rotta del
+     * pacchetto, cioè continuerebbe a rimbalzare in dashboard senza che nulla
+     * diventi rosso. Chiesto da Marco il 29 Ago 2026: il tasto del parco serve
+     * a intervenire in fretta, e il rimbalzo gli toglie proprio quello.
+     *
+     * La rotta del pacchetto resta il **ripiego** quando non c'è una macchina su
+     * cui atterrare: entrare come quel cliente ha senso lo stesso, atterrare su
+     * un 404 no.
+     *
+     * ⚠️ **Dove il ripiego scatta davvero, e dove no.** Scatta dalla modale
+     * aperta da `apriScelta()` — la strada del concern, che di macchine non sa
+     * nulla ed è quella da cui apre la cabina — e dopo `chiudiOgniModale()`,
+     * che azzera la destinazione apposta. **Non** scatta dalla riga della
+     * tabella: `ScadenzarioParco::base()` tiene solo gli interventi di una
+     * macchina ancora leggibile e `macchine()` costruisce la mappa dallo
+     * *stesso* builder nella *stessa* richiesta, quindi la chiave non può
+     * mancare — cestinare uno strumento con la pagina aperta non lascia una
+     * riga senza macchina, fa **sparire la riga**. Lì `$macchinaId === null` è
+     * difesa in profondità, oggi irraggiungibile: sta scritto perché il
+     * prossimo lettore non si fidi di uno scenario che non esiste per
+     * giustificare altro codice.
+     */
+    public function linkImpersona(int $utenteId, ?int $strumentoId): string
+    {
+        return $strumentoId === null
+            ? route('impersonate', $utenteId)
+            : route('piattaforma.parco.impersona', ['utente' => $utenteId, 'strumento' => $strumentoId]);
     }
 
     /**

@@ -10,6 +10,7 @@ use App\Models\Strumento;
 use App\Support\Semaforo;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
+use LogicException;
 
 /**
  * Le tre fonti del semaforo per le **righe in pagina** del Parco clienti
@@ -32,13 +33,18 @@ use Illuminate\Support\Collection;
  * La regola non viene riscritta da nessuna parte: `Semaforo::calcola()` resta
  * l'unica definizione, e questa classe è solo il suo approvvigionamento.
  *
- * ⚠️ **Conseguenza dichiarata**: senza la forma SQL non esiste un filtro «solo
- * arancioni» su questa scheda. Filtrare in PHP *dopo* la paginazione darebbe
- * pagine incomplete e conteggi falsi — il difetto che `ElencoStrumenti` evita
- * facendolo in SQL — quindi il filtro non c'è invece di esserci sbagliato. Il
- * giorno in cui servisse, la strada è **una sola**: rendere le tre fonti di
- * `Strumento::fontiArancione()` costruibili non-scopate e farle passare dalla
- * porta, così che la regola resti una. Non un secondo `whereExists` scritto qui.
+ * ⚠️ **Questa classe MOSTRA il semaforo, non lo filtra** — e la distinzione è
+ * diventata operativa il 29 Ago 2026, quando il filtro per stato è stato
+ * chiesto. Filtrare in PHP *dopo* la paginazione darebbe pagine incomplete e
+ * conteggi falsi, quindi il filtro **non passa di qui**: vive in
+ * `StrumentiPerStato`, che costruisce le tre fonti non-scopate e le fa passare
+ * dalla porta. Nessun `whereExists` scritto in questa classe, che continua a
+ * rispondere a una domanda sola: «come sta la riga che sto disegnando».
+ *
+ * ⛔ Resta aperta la strada scritta qui sotto — le fonti di
+ * `Strumento::fontiArancione()` costruibili non-scopate — che è ciò che
+ * risparmierebbe a `StrumentiPerStato` la seconda copia della **composizione**:
+ * il debito è dichiarato là, e legato da due test differenziali.
  *
  * ## Il costo, che è la ragione per cui la classe prende una PAGINA e non un builder
  *
@@ -142,6 +148,64 @@ final class RigheParcoStrumenti
             $this->garanzie->get($strumento->id)?->data_scadenza_effettiva,
             $this->garanzieRicambio->get($strumento->id)?->data_scadenza_effettiva,
         );
+    }
+
+    /**
+     * ⏳ La riga è **obsoleta**? (🔗 ADR-014), con la soglia della SUA sede.
+     *
+     * 🔴 Esiste perché il badge non poteva essere `<x-ui.obsoleto>`, e la
+     * differenza non è di stile: quel componente chiama
+     * `Strumento::isObsoleto()` → `sogliaObsolescenza()` → `$this->tenant`, che
+     * è una relazione verso `UnitaOrganizzativa` — cioè **scopata per tenant**.
+     * Su questa vista risolve a NULL per ogni cliente che non è il proprio e
+     * ricade sul default 10: il badge direbbe «oltre la soglia di 10 anni»
+     * proprio sulle sedi che ne hanno scelta un'altra, cioè **contraddirebbe il
+     * filtro** sulla riga accanto. Sarebbe anche un N+1, ed è la ragione per
+     * cui l'errore si nota tardi: la pagina resta plausibile.
+     *
+     * La soglia arriva quindi dalla `leftJoin` che la pagina ha già in tavola
+     * (`sede.soglia_obsolescenza_anni as sede_soglia`), e questa classe non fa
+     * nessuna query in più per rispondere.
+     *
+     * ⚠️ **Il confine è lo stesso in tutte e tre le forme**: qui `lte(oggi −
+     * N anni)` come `Strumento::isObsoleto()`, in SQL `< limite+1` come
+     * `StrumentiPerStato::obsoleti()` e `Strumento::scopeObsoleti()`. È
+     * INCLUSIVO: installata esattamente N anni fa oggi è già obsoleta. Un test
+     * differenziale confronta il badge con la selezione del filtro riga per
+     * riga, perché due letture della stessa regola che divergono danno un
+     * difetto muto — un ⏳ su una riga che il filtro non prende.
+     */
+    public function obsoleta(Strumento $strumento): bool
+    {
+        if ($strumento->data_installazione === null) {
+            return false;
+        }
+
+        return $strumento->data_installazione->lte(today()->subYears($this->soglia($strumento)));
+    }
+
+    /**
+     * La soglia di obsolescenza **della sede della riga**, in anni.
+     *
+     * ⛔ **Rumorosa quando la colonna non c'è, invece che accomodante.** Un
+     * `?? 10` su una riga che non è passata dalla join darebbe la soglia
+     * sbagliata a tutti, in silenzio e in modo plausibile: è esattamente il
+     * difetto che questo metodo esiste per impedire, riprodotto dalla sua
+     * stessa salvaguardia. Il fallback a 10 vale solo per una colonna **letta**
+     * e nulla, che è il fallback di `Strumento::sogliaObsolescenza()` e quello
+     * di `StrumentiPerStato`: le tre letture devono cadere insieme.
+     */
+    public function soglia(Strumento $strumento): int
+    {
+        if (! array_key_exists('sede_soglia', $strumento->getAttributes())) {
+            throw new LogicException(
+                'RigheParcoStrumenti: la riga non porta `sede_soglia`. La soglia di obsolescenza '
+                .'viaggia con la query di pagina (`sede.soglia_obsolescenza_anni as sede_soglia`) '
+                .'perché la relazione `tenant` è scopata e cross-cliente risolve a NULL.'
+            );
+        }
+
+        return (int) ($strumento->getAttributes()['sede_soglia'] ?? 10);
     }
 
     /**

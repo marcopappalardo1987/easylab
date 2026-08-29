@@ -3,14 +3,18 @@
 use App\Livewire\Piattaforma\ParcoRicambi;
 use App\Models\Account;
 use App\Models\Ricambio;
+use App\Models\Scopes\GaranziaRicambioPrivacyScope;
+use App\Models\Scopes\TenantScope;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
+use App\Support\Piattaforma\ParcoClienti;
 use App\Support\Piattaforma\Perimetro;
 use App\Support\Piattaforma\RicambiDelParco;
 use App\Support\Tenancy\VistaPiattaforma;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 
@@ -31,10 +35,11 @@ use Spatie\Permission\Models\Role;
  *   2. **Il perimetro**: arriva dal browser, quindi ogni forma di forgiatura —
  *      selezione vuota, id inventato, id dell'account di piattaforma, modo
  *      inesistente, piano fuori catalogo — deve **restringere**, mai allargare.
- *   3. **La privacy dei ricambi** (🔗 ADR-029): `ParcoClienti::ricambi()` lascia
- *      applicato `GaranziaRicambioPrivacyScope`, e questa scheda non deve
- *      mostrare per vie traverse ciò che quello nasconde — né garanzie, né
- *      utilizzi.
+ *   3. **La privacy dei ricambi** (🔗 ADR-029): questa scheda non deve mostrare
+ *      per vie traverse né garanzie né utilizzi. ⛔ E la difesa è il **non-uso**,
+ *      non uno scope: `GaranziaRicambioPrivacyScope` lo registra `Garanzia`,
+ *      non `Ricambio`, quindi righe di garanzia prese da qui uscirebbero senza
+ *      nessun filtro.
  *   4. **La sola lettura**: da qui si guarda. Ogni modifica passa
  *      dall'impersonazione, che lascia una riga di audit col contesto.
  *
@@ -545,11 +550,11 @@ it('closes the chooser as the only modal of the page', function () {
 // ─── 8. La privacy dei ricambi (ADR-029) e la sola lettura ───────────────────
 
 it('never reaches for warranties nor for mountings on this tab', function (string $vietato) {
-    // 🔴 `ParcoClienti::ricambi()` toglie il solo `TenantScope` e LASCIA
-    // applicato `GaranziaRicambioPrivacyScope`, che non è di tenancy: risponde a
-    // «questo utente ha titolo a vedere le garanzie dei pezzi montati?». Questa
-    // scheda non deve mostrare per vie traverse ciò che quello nasconde, e
-    // `RicambioUtilizzo` è deliberatamente fuori dalla porta.
+    // 🔴 `ParcoClienti::ricambi()` toglie il solo `TenantScope` e consegna il
+    // catalogo: né garanzie né utilizzi. ⛔ E — si veda il test qui sotto — non
+    // c'è nessuno scope di privacy che li filtrerebbe se qualcuno andasse a
+    // prenderli da qui: quello di ADR-029 lo registra `Garanzia`, non
+    // `Ricambio`. La sola difesa è il non-uso, ed è questo test.
     //
     // ⚠️ Un'assenza non si osserva guardando una pagina che già non li mostra:
     // si osserva leggendo il sorgente. I commenti si tolgono, perché i docblock
@@ -562,6 +567,55 @@ it('never reaches for warranties nor for mountings on this tab', function (strin
     'il model degli utilizzi' => ['RicambioUtilizzo'],
     'la tabella degli utilizzi' => ['ricambio_utilizzo'],
 ]);
+
+it('never credits the ricambi door with a privacy scope that Ricambio does not register', function () {
+    // 🔴 Il guardrail qui sopra dice il VERO sul comportamento e per anni ha
+    // detto il FALSO sulla ragione: che le garanzie non compaiano perché
+    // `ParcoClienti::ricambi()` «lascia applicato» il filtro di ADR-029. Quel
+    // filtro su questo builder non c'è mai stato, e una garanzia dichiarata che
+    // non esiste è peggio di nessuna garanzia — è la riga che si legge invece
+    // di riverificare, il giorno in cui qualcuno aggiunge la colonna «in
+    // garanzia?» e la crede già coperta.
+    $this->actingAs($this->superadmin);
+
+    // ── 1. Il fatto ─────────────────────────────────────────────────────────
+    // `GaranziaRicambioPrivacyScope` lo registra `Garanzia::booted()`, ed è
+    // l'unico punto del progetto che lo faccia. `Ricambio` monta
+    // `BelongsToTenant` (cioè `TenantScope`) e `SoftDeletes`, e nient'altro.
+    $registrati = array_keys((new Ricambio)->getGlobalScopes());
+
+    expect($registrati)->toContain(TenantScope::class)
+        ->and($registrati)->toContain(SoftDeletingScope::class)
+        ->and($registrati)->not->toContain(GaranziaRicambioPrivacyScope::class)
+        // La porta toglie il solo `TenantScope`: su questo builder resta il
+        // soft delete, e nessun filtro di privacy da ereditare.
+        ->and(ParcoClienti::ricambi(Perimetro::tutti())->removedScopes())->toBe([TenantScope::class]);
+
+    // ── 2. Ciò che il blocco DICE del fatto ─────────────────────────────────
+    // ⚠️ Qui si legge il sorgente **coi commenti**, al contrario di ogni altro
+    // guardrail di questo file: l'oggetto della prova è proprio la prosa. Le
+    // tre formule sono quelle che la bugia aveva usato — «lascia applicato»,
+    // «resta applicato», «restano dove sono» — cercate nella stessa frase del
+    // nome dello scope (`[^.]` non attraversa il punto). Restano vietate finché
+    // vale il fatto qui sopra: il giorno in cui `Ricambio` registrasse davvero
+    // quello scope, è il punto 1 a diventare rosso per primo, e allora questa
+    // metà va rilassata invece che aggirata.
+    //
+    // ⛔ Lo scanner NON legge questo file di test: il pattern stesso contiene
+    // sia il nome sia le formule, e si troverebbe da solo.
+    $formule = '(?:lascia(?:no)?\s+applicat|rest(?:a|ano)\s+applicat|rest(?:a|ano)\s+dove\s+sono)';
+    $nome = 'GaranziaRicambioPrivacyScope';
+
+    preg_match_all(
+        "/(?:{$nome}[^.]{0,240}{$formule}|{$formule}[^.]{0,240}{$nome})/iu",
+        sorgentiGrezzeDellaSchedaRicambi(),
+        $bugie,
+    );
+
+    // L'array dei riscontri e non un conteggio: sul rosso Pest stampa la frase
+    // colpevole, che è l'unica cosa che serve per correggerla.
+    expect($bugie[0])->toBe([]);
+});
 
 it('never writes anything from this tab', function (string $vietato) {
     // ADR-037 concede la LETTURA cross-cliente e lascia la scrittura
@@ -819,7 +873,77 @@ it('shows no chooser at all until one is opened', function () {
         ->assertDontSee('Impersona un membro di Studio Verdi');
 });
 
+// ─── 14. La rotta che atterra sulla macchina: qui NON si usa ─────────────────
+//
+// 🔴 Dal 29 Ago 2026 il Parco ha una seconda porta all'impersonazione,
+// `piattaforma.parco.impersona`, che entra in casa del cliente e **atterra
+// sulla macchina** della riga invece di rimbalzare in dashboard. Le schede in
+// cui la riga È una macchina la usano; questa no, e i tre test qui sotto
+// esistono perché quel «no» è una **decisione** e non una dimenticanza — cioè
+// esattamente la specie di cosa che il prossimo passaggio «completa» per
+// simmetria, se nessuno l'ha scritta.
+//
+// I due motivi, e ciascuno basta da solo: una voce di catalogo non ha una
+// macchina univoca (sta su zero, una o venti), e anche se ne avesse una sola
+// l'indirizzo del pulsante direbbe **dove il pezzo è montato**, che è la
+// domanda a cui questa scheda non risponde (🔗 ADR-029).
+
+it('never points the impersonation button at a machine, because a catalogue part has none', function () {
+    // ⚠️ L'`assertSee` non è decorativo: senza, l'asserzione negativa sarebbe
+    // soddisfatta anche da una pagina che non ha nessun pulsante — cioè un test
+    // che non può fallire. Prima si prova che il pulsante c'è, poi dove porta.
+    $this->actingAs($this->superadmin);
+
+    schedaRicambi(['modo' => Perimetro::SCELTI, 'clientiScelti' => [$this->rossi->id]])
+        ->assertSee('Impersona')
+        ->assertSee(route('impersonate', $this->membroRossi), false)
+        ->assertDontSee('/piattaforma/parco/impersona/', false);
+});
+
+it('keeps the member chooser on the plain route as well', function () {
+    // L'altro ramo: col cliente che ha due membri il link non sta nella riga ma
+    // dentro la modale, e una scheda che avesse cambiato rotta in un posto solo
+    // sarebbe metà corretta — che qui vuol dire scorretta.
+    [$verdi, $primo, $secondo] = studioVerdiConDueMembri();
+
+    $this->actingAs($this->superadmin);
+
+    schedaRicambi(['modo' => Perimetro::SCELTI, 'clientiScelti' => [$verdi->id]])
+        ->call('apriScelta', $verdi->id)
+        ->assertSee(route('impersonate', $primo), false)
+        ->assertSee(route('impersonate', $secondo), false)
+        ->assertDontSee('/piattaforma/parco/impersona/', false);
+});
+
+it('does not name the machine-landing route anywhere in its own sources', function () {
+    // Il rovescio strutturale delle due prove qui sopra, che guardano UNA
+    // pagina renderizzata su UN perimetro: un ramo che nessuna fixture del
+    // blocco raggiunge resterebbe altrimenti scoperto.
+    //
+    // ⚠️ Lo scanner toglie i commenti, quindi il nome della rotta si può
+    // spiegare per esteso nei docblock — dove infatti sta scritto perché non si
+    // usa — senza far diventare rosso questo test: punisce il codice, non chi
+    // documenta. È lo stesso criterio dei guardrail su garanzie e utilizzi.
+    expect(sorgentiDellaSchedaRicambi())->not->toContain('piattaforma.parco.impersona');
+});
+
 // ─── Lo scanner del blocco ───────────────────────────────────────────────────
+
+/**
+ * I tre file della scheda: l'elenco sta **in un posto solo**, perché i due
+ * scanner qui sotto ne guardano gli stessi file da due angoli diversi e due
+ * elenchi che divergessero lascerebbero un file scoperto da uno dei due.
+ *
+ * @return list<string>
+ */
+function fileDellaSchedaRicambi(): array
+{
+    return [
+        app_path('Livewire/Piattaforma/ParcoRicambi.php'),
+        app_path('Support/Piattaforma/RicambiDelParco.php'),
+        resource_path('views/livewire/piattaforma/parco-ricambi.blade.php'),
+    ];
+}
 
 /**
  * I tre file della scheda, **senza commenti**.
@@ -836,14 +960,20 @@ it('shows no chooser at all until one is opened', function () {
  */
 function sorgentiDellaSchedaRicambi(): string
 {
-    $file = [
-        app_path('Livewire/Piattaforma/ParcoRicambi.php'),
-        app_path('Support/Piattaforma/RicambiDelParco.php'),
-        resource_path('views/livewire/piattaforma/parco-ricambi.blade.php'),
-    ];
-
-    return collect($file)
+    return collect(fileDellaSchedaRicambi())
         ->map(fn (string $percorso) => senzaCommentiScheda(file_get_contents($percorso)))
+        ->implode("\n");
+}
+
+/**
+ * Gli stessi tre file, **coi commenti**: l'unico guardrail del blocco a cui la
+ * prosa interessa. Vive accanto allo scanner ripulito perché l'elenco dei file
+ * è uno solo — due elenchi che divergono sarebbero un file scoperto.
+ */
+function sorgentiGrezzeDellaSchedaRicambi(): string
+{
+    return collect(fileDellaSchedaRicambi())
+        ->map(fn (string $percorso) => file_get_contents($percorso))
         ->implode("\n");
 }
 
