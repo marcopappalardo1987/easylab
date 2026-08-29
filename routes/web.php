@@ -21,6 +21,7 @@ use App\Livewire\Piattaforma\Cabina;
 use App\Livewire\Piattaforma\EditorRuoli;
 use App\Livewire\Piattaforma\Errori;
 use App\Livewire\Piattaforma\Listino;
+use App\Livewire\Piattaforma\ParcoGlobale;
 use App\Livewire\Piattaforma\RegistroAudit;
 use App\Livewire\Piattaforma\SchedaErrore;
 use App\Livewire\Ricambi\RicercaRicambi;
@@ -196,6 +197,21 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     Route::get('/piattaforma/piani', Listino::class)
         ->middleware('can:'.Listino::PERMESSO)
         ->name('piattaforma.piani');
+
+    // 🔴 Il parco di TUTTI i clienti, in SOLA LETTURA (🔗 ADR-037).
+    //
+    // ⛔ La riga che tiene in piedi ADR-018: qui si **guarda** oltre il proprio
+    // Ente, non si scrive. Ogni modifica continua a passare
+    // dall'impersonazione, che è per cliente e lascia una traccia con dentro
+    // chi la stava facendo e per conto di chi — il contesto che una scrittura
+    // cross-cliente perderebbe proprio dove serve di più.
+    //
+    // `tenants.view_all` e non un permesso nuovo: significa letteralmente «vedi
+    // oltre il tuo Ente», è già del solo Developer/Superadmin ed è nel set
+    // bloccato, quindi l'editor dei ruoli non può regalarlo a un cliente.
+    Route::get('/piattaforma/parco', ParcoGlobale::class)
+        ->middleware('can:'.ParcoGlobale::PERMESSO)
+        ->name('piattaforma.parco');
 
     // 🔴 L'error tracker interno (S6), e qui il permesso è **un terzo ancora**:
     // `can:system.logs.view`. Il criterio non cambia — si gata su un permesso
