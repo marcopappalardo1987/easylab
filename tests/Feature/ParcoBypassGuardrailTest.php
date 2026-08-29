@@ -123,7 +123,12 @@ it('keeps the scan honest about the files it actually reads', function () {
     $piattaforma = array_keys(sorgentiDiPiattaforma());
     $parco = array_keys(sorgentiDelParco());
 
-    expect($piattaforma)->toContain('app/Livewire/Piattaforma/ParcoGlobale.php')
+    // ⚠️ Anche lo strato di QUERY, o gli invarianti tornerebbero ciechi
+    // proprio sui file che decidono l'isolamento — che è il buco del 29 Ago.
+    expect($piattaforma)->toContain('app/Support/Piattaforma/Perimetro.php')
+        // …e la porta resta l'unica esente, per nome.
+        ->and($piattaforma)->not->toContain('app/Support/Piattaforma/ParcoClienti.php')
+        ->and($piattaforma)->toContain('app/Livewire/Piattaforma/ParcoGlobale.php')
         ->and($parco)->toContain('app/Livewire/Piattaforma/ParcoGlobale.php')
         ->and(count($parco))->toBeGreaterThan(1)
         ->and(array_keys(sorgentiApplicative()))->toContain('app/Support/Piattaforma/ParcoClienti.php');
@@ -198,11 +203,33 @@ it('keeps the door itself naming the scopes it takes off', function () {
  */
 function sorgentiDiPiattaforma(): array
 {
-    return codiceDelle([
+    // 🔴 **`app/Support/Piattaforma` va scandita, ed era il buco.**
+    //
+    // La prima stesura guardava il solo strato UI, con una ragione scritta nel
+    // docblock: «la porta non è qui dentro, includerla renderebbe l'invariante
+    // 1 rosso il giorno in cui è stato scritto». Vera per la porta — falsa per
+    // tutto il resto della cartella. Lì vive lo **strato di query delle tre
+    // schede**, cioè esattamente i file che decidono l'isolamento, e i due
+    // invarianti erano ciechi proprio su quelli.
+    //
+    // ⚠️ E `BypassNudiGuardrailTest` non chiudeva il buco: conta la forma NUDA
+    // `withoutGlobalScopes()`, mentre lì dentro una rimozione **per nome**
+    // sarebbe stata invisibile a entrambe le reti. Segnalato dal correttore
+    // dello scadenzario, che il file non poteva toccarlo perché condiviso con
+    // gli altri due agenti.
+    //
+    // Si esenta la SOLA porta, per nome: è l'unico file a cui togliere gli
+    // scope è il mestiere.
+    $sorgenti = codiceDelle([
         app_path('Livewire/Piattaforma'),
+        app_path('Support/Piattaforma'),
         resource_path('views/livewire/piattaforma'),
         resource_path('views/components/parco'),
     ]);
+
+    unset($sorgenti['app/Support/Piattaforma/ParcoClienti.php']);
+
+    return $sorgenti;
 }
 
 /**
