@@ -365,3 +365,77 @@ it('renders the sede names in the panel once opened, while impersonating', funct
         ->assertSee('Le tue sedi')
         ->assertSee('Sede Sud');
 });
+
+// --- Dove si atterra dopo il cambio di sede ---
+//
+// 🗓️ Chiesto da Marco il 28 Ago 2026: «vorrei restare nella pagina in cui ho
+// switchato, ma della sede che ho selezionato». Fino a quel giorno si tornava
+// sempre in dashboard, e la ragione scritta era vera solo a metà — vale per una
+// pagina che nomina un id dell'altra sede, non per un elenco.
+
+it('stays on the same page when that page makes sense in the new sede', function () {
+    $this->actingAs($this->membro);
+
+    session()->setPreviousUrl(route('scadenzario.index'));
+
+    Livewire::test(SwitcherEnte::class)
+        ->call('passa', $this->enteB->id)
+        ->assertRedirect(route('scadenzario.index'));
+});
+
+it('falls back to the dashboard when the page names something of the sede just left', function () {
+    // ⛔ `/strumenti/42` è una macchina dell'altra sede: dopo il cambio darebbe
+    // un 404 dal messaggio incomprensibile. Il criterio è meccanico — se la
+    // rotta ha parametri, quel parametro è sempre l'id di qualcosa che stava
+    // di là — così non c'è nessun elenco di eccezioni da tenere aggiornato.
+    $strumento = Strumento::factory()->forNode($this->enteA)->create();
+
+    $this->actingAs($this->membro);
+
+    session()->setPreviousUrl(route('strumenti.show', $strumento));
+
+    Livewire::test(SwitcherEnte::class)
+        ->call('passa', $this->enteB->id)
+        ->assertRedirect(route('dashboard'));
+});
+
+it('drops the query string, which names things of the sede just left', function () {
+    // ⚠️ Un filtro come `?strumentoId=7` nomina una macchina dell'altra sede:
+    // portarselo dietro mostrerebbe un elenco vuoto con un filtro attivo che
+    // non si capisce — il difetto che l'archivio documenti aveva già avuto.
+    $this->actingAs($this->membro);
+
+    session()->setPreviousUrl(route('documenti.index').'?strumentoId=7');
+
+    Livewire::test(SwitcherEnte::class)
+        ->call('passa', $this->enteB->id)
+        ->assertRedirect(route('documenti.index'));
+});
+
+it('names the sede you are ACTUALLY in, and offers the one you came from', function () {
+    // 🔴 Difetto introdotto dallo spostamento effimero, e segnalato da Marco lo
+    // stesso giorno (28 Ago 2026): lo switcher leggeva `users.tenant_id`, che
+    // durante un'impersonazione NON cambia. Risultato: la barra diceva il nome
+    // della sede di partenza mentre la pagina mostrava già i dati dell'altra, e
+    // l'elenco offriva come «altra sede» proprio quella in cui ci si trovava —
+    // mentre quella da cui si era partiti spariva, cioè non si poteva tornare.
+    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id]);
+    $superadmin->assignRole('Superadmin');
+    $this->actingAs($superadmin)->get(route('impersonate', $this->membro));
+
+    Livewire::test(SwitcherEnte::class)->call('passa', $this->enteB->id);
+
+    Livewire::test(SwitcherEnte::class)
+        // Il nome è quello della sede in cui si è ADESSO…
+        ->assertSet('nomeEnte', 'Sede Sud')
+        ->call('alterna')
+        // …e l'elenco offre la strada del RITORNO, non un doppione di sé.
+        //
+        // ⚠️ Si asserisce sui BERSAGLI dei bottoni e non sui nomi: «Sede Sud»
+        // compare comunque in pagina, ed è giusto — è l'etichetta del bottone
+        // che dice dove sei. Un `assertDontSee('Sede Sud')` sarebbe stato rosso
+        // per la ragione sbagliata, cioè avrebbe misurato l'etichetta invece
+        // dell'elenco.
+        ->assertSee("passa({$this->enteA->id})")
+        ->assertDontSee("passa({$this->enteB->id})");
+});

@@ -13,6 +13,7 @@ use App\Models\UnitaOrganizzativa;
 use App\Support\Notifiche\AvvisiObsolescenza;
 use App\Support\Piani;
 use App\Support\Provisioning\ProvisionaEnte;
+use App\Support\Tenancy\CurrentTenant;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -199,7 +200,11 @@ class Albero extends Component
         }
 
         return $account->enti()
-            ->where('id', '!=', Auth::user()?->tenant_id)
+            // ⚠️ `CurrentTenant::id()` e non `tenant_id`: durante
+            // un'impersonazione lo spostamento fra sedi è effimero e la colonna
+            // resta ferma sulla sede di partenza. Leggendola, questa riga
+            // elencava fra le «altre» proprio la sede che si sta guardando.
+            ->where('id', '!=', CurrentTenant::id())
             ->orderBy('nome')
             ->pluck('nome');
     }

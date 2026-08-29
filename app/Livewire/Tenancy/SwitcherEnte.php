@@ -7,8 +7,10 @@ use App\Models\User;
 use App\Support\AuditLog;
 use App\Support\Tenancy\CurrentTenant;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Livewire\Component;
+use Throwable;
 
 /**
  * Il contesto Ente in top bar, con lo switcher fra le proprie sedi (ADR-032).
@@ -48,8 +50,35 @@ class SwitcherEnte extends Component
             return; // tecnico esterno / utente di piattaforma: nessun contesto Ente.
         }
 
-        $this->nomeEnte = $user->ente?->nome;
-        $this->sediRaggiungibili = $this->sedi()->where('id', '!=', $user->tenant_id)->count();
+        // 🔴 **Si legge `CurrentTenant::id()`, non `$user->tenant_id`.**
+        // Da quando lo spostamento durante un'impersonazione è effimero (vive
+        // in sessione, non sull'utente) le due cose divergono: `tenant_id`
+        // resta la sede di partenza mentre i dati mostrati sono già quelli
+        // della sede scelta. Leggendo la colonna, lo switcher diceva il nome
+        // della sede SBAGLIATA e offriva come «altra» proprio quella in cui ci
+        // si trovava — mentre quella da cui si era partiti spariva
+        // dall'elenco, cioè non si poteva tornare indietro. Segnalato da Marco
+        // il 28 Ago 2026, ed era un difetto introdotto dallo spostamento
+        // effimero stesso.
+        //
+        // `CurrentTenant` è il risolutore da cui dipendono già tutti i global
+        // scope: qui si guarda la stessa verità che vede il resto della pagina.
+        $corrente = CurrentTenant::id();
+
+        // ⚠️ **Nessun bypass, e non è un caso**: un nodo Ente porta come
+        // `tenant_id` il proprio id, quindi il `TenantScope` — che filtra
+        // proprio su `CurrentTenant::id()` — lascia passare esattamente la
+        // sede in cui si è adesso, e nient'altro. È la query più stretta
+        // possibile, e il soft delete resta applicato.
+        //
+        // Due strade sbagliate già percorse, entrambe scartate per una ragione:
+        // `withoutGlobalScopes()` nudo toglierebbe anche il soft delete
+        // (`BypassNudiGuardrailTest` lo rende rosso, ed è giusto), e leggere da
+        // `sediRaggiungibili()` era troppo stretto — un utente la cui sede non
+        // passa dal pivot del contratto perdeva del tutto l'etichetta.
+        $this->nomeEnte = UnitaOrganizzativa::whereKey($corrente)->value('nome');
+
+        $this->sediRaggiungibili = $this->sedi()->where('id', '!=', $corrente)->count();
     }
 
     public function apri(): void
@@ -112,7 +141,7 @@ class SwitcherEnte extends Component
                 ->withProperties(['effimero' => true, 'impersonazione' => true])
                 ->log('sede.cambiata');
 
-            $this->redirect(route('dashboard'));
+            $this->redirect($this->doveTornare());
 
             return;
         }
@@ -121,10 +150,60 @@ class SwitcherEnte extends Component
             return;
         }
 
-        // Full reload verso la dashboard, non navigate SPA e non la pagina
-        // corrente: il cambio di tenant cambia tutto (sidebar, liste, scope) e
-        // la pagina da cui si parte appartiene al tenant appena lasciato.
-        $this->redirect(route('dashboard'));
+        // Full reload, non navigate SPA: il cambio di tenant cambia tutto —
+        // sidebar, liste, scope.
+        $this->redirect($this->doveTornare());
+    }
+
+    /**
+     * 🔴 **Dove si atterra dopo aver cambiato sede: la STESSA pagina, se ha
+     * senso anche nella sede nuova; la dashboard altrimenti.**
+     *
+     * Chiesto da Marco il 28 Ago 2026 — «vorrei restare nella pagina in cui ho
+     * switchato». Fino a quel giorno si tornava sempre in dashboard, e la
+     * ragione scritta era vera solo a metà: «la pagina da cui si parte
+     * appartiene al tenant appena lasciato». Vale per `/strumenti/42`, dove il
+     * `42` è una macchina dell'altra sede e dopo il cambio darebbe un 404 dal
+     * messaggio incomprensibile. NON vale per `/documenti`, `/scadenzario`,
+     * `/strumenti`: sono domande che ogni sede sa rispondere per sé, ed è
+     * proprio lì che si passa di sede per confrontare.
+     *
+     * Il criterio è quindi meccanico e non un elenco da tenere aggiornato a
+     * mano: **se la rotta ha parametri, si torna in dashboard**. Un parametro è
+     * sempre l'id di qualcosa che apparteneva alla sede lasciata.
+     *
+     * ⚠️ **La query string si perde, ed è voluto**: un filtro come
+     * `?strumentoId=7` nomina una macchina dell'altra sede, e portarselo dietro
+     * mostrerebbe un elenco vuoto con un filtro attivo che non si capisce — il
+     * difetto che l'archivio documenti aveva già avuto.
+     *
+     * ⛔ Si accetta solo un percorso della NOSTRA applicazione: un `Referer` è
+     * un'intestazione che arriva dal browser, e rimandarci sopra senza
+     * verificare sarebbe una redirezione aperta.
+     */
+    private function doveTornare(): string
+    {
+        $precedente = url()->previous();
+
+        if (! str_starts_with($precedente, url('/'))) {
+            return route('dashboard');
+        }
+
+        $percorso = '/'.ltrim((string) parse_url($precedente, PHP_URL_PATH), '/');
+
+        try {
+            $rotta = app('router')->getRoutes()
+                ->match(Request::create($percorso, 'GET'));
+        } catch (Throwable) {
+            return route('dashboard');
+        }
+
+        // ⚠️ Serve ANCHE un nome: le rotte senza nome di questa applicazione
+        // sono redirect di servizio (la radice `/`), e rimandarci sopra
+        // significherebbe atterrare su un rimbalzo invece che su una pagina.
+        return $rotta->parameterNames() === [] && $rotta->getName() !== null
+            ? url($percorso)
+            : route('dashboard');
     }
 
     /**
@@ -170,7 +249,9 @@ class SwitcherEnte extends Component
         }
 
         return $this->sedi()
-            ->where('id', '!=', $this->user()->tenant_id)
+            // Stessa ragione di `mount()`: si esclude la sede in cui si è
+            // ADESSO, che durante un'impersonazione non è `tenant_id`.
+            ->where('id', '!=', CurrentTenant::id())
             ->orderBy('nome')
             ->get(['id', 'nome']);
     }
