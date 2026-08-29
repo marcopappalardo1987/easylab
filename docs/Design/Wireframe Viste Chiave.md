@@ -287,7 +287,7 @@ Numeri globali, clienti, impersonazione, le leve amministrative. 🔗 ADR-001, A
 >
 > **L'avviso sui piani fuori catalogo acquista la via d'uscita**: accanto a «Mostrali» c'è ora «Vai al listino», gatato su `billing.manage_global`. Senza, l'avviso era una diagnosi senza cura — chi lo leggeva non aveva da lì nessuna strada verso l'unica schermata che ripara il problema (§7.1).
 >
-> La **sub-nav di piattaforma è a cinque voci**: Clienti · Registro di audit · Ruoli e permessi · **Piani** · Errori. Ogni voce si filtra sul proprio permesso, e sono quattro permessi diversi per cinque voci. «Piani» sta **in mezzo e non in fondo**, ed è una decisione di presentazione con una ragione: l'ultima resta così quella del solo Developer (`system.logs.view`), e la fila che il Superadmin vede finisce dove finisce il suo insieme di permessi invece di avere un buco in mezzo.
+> La **sub-nav di piattaforma è a cinque voci**: Clienti · Registro di audit · Ruoli e permessi · **Piani** · Errori. *(⚠️ Aggiornato il 29 Ago 2026: sono **sei**, con «Parco clienti» inserito fra Piani ed Errori — §8. La regola di presentazione regge invariata e per la stessa ragione: l'ultima voce resta quella del solo Developer, e la fila che il Superadmin vede continua a finire dove finisce il suo insieme di permessi. La voce nuova non porta un permesso nuovo: è `tenants.view_all`, lo stesso di «Clienti».)* Ogni voce si filtra sul proprio permesso, e sono quattro permessi diversi per cinque voci. «Piani» sta **in mezzo e non in fondo**, ed è una decisione di presentazione con una ragione: l'ultima resta così quella del solo Developer (`system.logs.view`), e la fila che il Superadmin vede finisce dove finisce il suo insieme di permessi invece di avere un buco in mezzo.
 
 ### 4.1 Editor Permessi Ruolo ‹sub-vista, `roles.manage`› — 🔗 ADR-016
 
@@ -356,12 +356,15 @@ Hub di navigazione: albero Ente→Dipartimento→Sottolaboratorio a sinistra, st
 | §5 Alberatura + Lista | Admin, Resp. Reparto | S2 |
 | §7.1 Listino dei piani — `/piattaforma/piani` | Superadmin, Developer (`billing.manage_global`) | **S7 — 28 Ago 2026** (🔗 ADR-035) |
 | §7.2 Registrazione pubblica — `/registrati` | **nessuno**: chi la apre non esiste ancora | **S7 — 28 Ago 2026** (🔗 ADR-012, ADR-032) |
+| §8 Parco clienti — `/piattaforma/parco` (+ `/scadenzario`, `/ricambi`) | Superadmin, Developer (`tenants.view_all`), **in sola lettura** | **29 Ago 2026** (🔗 ADR-037) |
 | Archivio documentale d'Ente — `/documenti` | tutti con `documenti.view`; l'indice PDF vuole **anche** `documenti.export_pdf` | **S7** (🔗 ADR-026/031) |
 | Scadenzario — `/scadenzario` | tutti con `interventi.view` | **S7** (🔗 ADR-005/030) |
 | Abbonamento — `/abbonamento` | chi può `manage` l'Account, **anche in lockout** | **S7** (🔗 ADR-013/032) |
 | Marchio email dell'Ente — `/anagrafica/marchio` | Admin (`unita_organizzativa.update`) | **S7** (🔗 ADR-033) |
 
 > **Aggiornata il 28 Ago 2026 (S7), con sei righe e nessun disegno nuovo per quattro di esse.** Le due schermate che ricevono un wireframe vero stanno in §7, e il criterio è scritto lì. Le altre quattro non lo ricevono per la ragione che questo documento applica dal 25 Ago: **`/documenti` e `/scadenzario` sono la stessa forma di §5** — filtri in query string, tabella paginata, empty state esplicito, `tabella-a-card` sotto i 640px — e ridisegnarle sarebbe una seconda copia dello stesso disegno destinata a divergerne. Non è una deduzione di questo documento: `Scadenzario` cita **§5** nel proprio docblock ed è il codice a dichiarare da dove prende la forma. `/anagrafica/marchio` è un form con due campi e un'anteprima. E `/abbonamento` ha un layout banale — un titolo, tre voci di riepilogo, una card — mentre tutto ciò che ha di non ovvio è **autorizzazione e non struttura**: sta fuori dal gruppo protetto perché un moroso deve poter pagare, quindi non ha `can:` di rotta e le sue quattro ricadute (impersonazione, portale disponibile, piano gratuito, nessun portale) sono rami di testo. Quella materia è già scritta dove serve — commento della rotta in `routes/web.php` e `Tech Stack §4` — e un box ASCII la nasconderebbe invece di dirla.
+>
+> **Aggiunta il 29 Ago 2026: il Parco clienti, che il wireframe se lo guadagna** (§8). Non è la forma di §5 allargata, ed è il criterio di questo documento a chiederlo: ha un **filtro di perimetro a tre modi** che decide *di chi* sono le righe, due colonne — cliente e sede — che su una vista cross-cliente sono una difesa e non una comodità, e un'ultima colonna con **quattro esiti diversi**. Sono tre rotte, non una: la fila di schede è un partial condiviso (`x-parco.nav`), e i tre componenti restano disgiunti.
 >
 > **Le due lavorazioni di S7 che non compaiono in tabella non sono viste**: i grafici e le esportazioni della cabina stanno **dentro §4**, e l'alert di obsolescenza non ha schermate proprie — entra in un'email e nella campanella già esistenti.
 
@@ -489,6 +492,63 @@ Non è una schermata: sono **quattro**, con quattro gate diversi, e il disegno s
 **L'interruttore chiude solo l'ingresso.** `config('easylab.registrazione.aperta')` a `false` fa rispondere **404** — non 403, che dichiarerebbe l'esistenza della pagina — al solo passo ①. I passi ②–④ restano aperti apposta: chi ha già pagato deve poter completare, e chiudergli la porta significherebbe aver incassato senza consegnare.
 
 ⚠️ **Limite dichiarato.** `Registrazione` è **esentato** dal guardrail di isolamento per tenant (`NON_TENANT_MODELS`), sulla stessa forma già usata per `Account`, `Errore` e `Piano`: una registrazione pendente un tenant non ce l'ha ancora — è ciò che deve nascere — e il confine qui è il **permesso**, non il tenant. E nulla di questo percorso è mai stato provato su Stripe vero: la porta del checkout ha una finta in suite, e il percorso felice verso la rete si verifica su staging con le chiavi di test.
+
+---
+
+## 8. Parco clienti ‹`tenants.view_all`› — `/piattaforma/parco` 🔗 ADR-037 (29 Ago 2026)
+
+Tre rotte e tre componenti — **Strumenti**, **Scadenzario**, **Ricambi** — che mostrano al Superadmin e al Developer le righe di **tutti** i clienti, in **sola lettura**. È la risposta alla domanda di lavoro quotidiana di chi fa manutenzione su molti Enti («quali macchine di quali clienti scadono questa settimana»), che fino a ieri costava dodici impersonazioni e dodici elenchi tenuti a mente.
+
+> 🔴 **Il confine è la ragione per cui il disegno è accettabile, e va letto prima del box.** Da qui si **guarda** oltre il proprio Ente; **non si scrive**. Nessuna delle tre schede ha un bottone che modifichi alcunché: ogni modifica continua a passare dall'impersonazione, che è per cliente e lascia nel registro di audit chi agiva e per conto di chi (🔗 ADR-018, ADR-027). Il tasto `[👁 Impersona]` accanto a ogni riga non è un ornamento: è **la funzione della pagina**, ciò che rende quel confine rapido invece che fastidioso. Il nome della macchina, per la stessa ragione, **non è un link**: `strumenti.show` risolve col route model binding e quindi passa dai global scope, cioè risponderebbe 404 su ogni cliente che non è il proprio — e un link che porta a un 404 è peggio di nessun link.
+
+```
+┌───────────────────────────────────────────────────────────────────────────────┐
+│ Easy Lab · Piattaforma                                        🔔  👤 EasyLab ▼│
+│ Clienti · Audit · Ruoli e permessi · Piani · «Parco clienti» · Errori         │
+│ ───────────────────────────────────────────────────────────────────────────── │
+│  ‹Strumenti›   Scadenzario   Ricambi        ← tre schede, tre rotte vere      │
+│                                                                               │
+│  Strumenti di tutti i clienti   ‹il titolo dice il perimetro›                 │
+│  Sola lettura: per intervenire si entra come una persona del cliente.         │
+│  ┌──────────────────────────────────────────────────────────────────────────┐ │
+│  │ CLIENTI                   ‹PIANO›           CERCA                        │ │
+│  │ [Tutti i clienti     ▼]   [— scegli… ▼]    🔍 Nome, modello, matricola…  │ │
+│  │  · Tutti i clienti         ‹solo se il modo è «Per piano»›               │ │
+│  │  · Per piano                                                             │ │
+│  │  · Quelli che scelgo  →   CLIENTI SCELTI (2)  ┌──────────────────┐       │ │
+│  │                                              │ [x] Osp. S.Giov. │ ▲      │ │
+│  │                                              │ [ ] Lab Rossi    │        │ │
+│  │                                              │ [x] Clin. Aurora │ ▼      │ │
+│  │                                              └──────────────────┘        │ │
+│  │ Lo stato del semaforo si legge su ogni riga, ma NON è un filtro.         │ │
+│  └──────────────────────────────────────────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────────────────────────┐ │
+│  │St│Cliente ↑    │Sede      │Macchina    │Modello│Matric│Pross.sc. │Azioni │ │
+│  ├──┼─────────────┼──────────┼────────────┼───────┼──────┼──────────┼───────┤ │
+│  │🔴│Osp. S.Giov. │Lab Micro.│Autoclave   │AC-200 │8841  │Tarat.sca…│👁     │ │
+│  │🟠│Osp. S.Giov. │Lab Anal. │Centrifuga  │CF-12  │1207  │Manut.4 gg│👁 ×3  │ │
+│  │🟢│Clin. Aurora │Biobanca  │Frigo -80   │FR-3   │—     │—         │nessuno│ │
+│  │🟢│Clin. Aurora │Biobanca  │Cappa chim. │CH-9   │0442  │Verif. 2 m│—      │ │
+│  └──────────────────────────────────────────────────────────────────────────┘ │
+│  Righe per pagina [20 ▼]                                ‹ 1 2 3 ›             │
+└───────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Il perimetro sta per primo, da solo, e ha tre modi.** È il filtro che decide **di chi** sono le righe, e metterlo dopo la ricerca farebbe credere che l'elenco sia già di tutti. Il terzo modo apre un multi-select, e l'etichetta porta il **conteggio** dei clienti scelti: 🔴 una selezione **vuota** vale **nessuna riga**, mai «tutti» — è la trappola che `Perimetro` esiste per chiudere (l'insieme vuoto *è* `scelti([])`, che compila `0 = 1`), e la vista lo dice a schermo invece di lasciarlo dedurre. Stessa forma sulle altre due schede, con le etichette che divergono di una parola: «Quelli che scelgo» sugli strumenti, «Scelti a mano» su scadenzario e ricambi. ⚠️ Anche il **titolo** dice il perimetro — «Strumenti di tutti i clienti», «…dei clienti sul piano SaaS», «…di 3 clienti scelti» — e non è cosmesi: il rischio di questa pagina non è sbagliare macchina, è impersonare dalla riga del cliente sbagliato, e un titolo fisso che allarga il perimetro a parole ci lavorerebbe contro. Tutte e tre le proprietà del perimetro sono `#[Url]`, quindi una vista filtrata si manda per link — ed è anche il motivo per cui arrivano dal browser e vengono rivalidate **intersecandole** con `VistaPiattaforma::accounts()`, non validandole.
+
+**Cliente e sede sono colonne, su ogni riga, e non si possono togliere.** Su una vista cross-cliente il rischio non è sbagliare macchina: è sbagliare **cliente**, e chi impersona dalla riga sbagliata entra in casa di qualcun altro. I due nomi arrivano da due `leftJoin` e non da un `with()` — le relazioni passano da `UnitaOrganizzativa`, che porta `TenantScope`, e un eager load le risolverebbe a `NULL` per quasi tutta la pagina, cioè una colonna di trattini plausibile e muta.
+
+⚠️ **Le colonne derivate non sono ordinabili, ed è dichiarato nel disegno.** Si ordina per cliente, sede, macchina, modello, matricola — colonne vere, che la join rende tali. **Stato** e **prossima scadenza** no: ordinarli richiederebbe le sottoquery correlate per riga dell'elenco per-Ente (scopate, quindi qui *false*) o una loro copia non-scopata, cioè una seconda regola del semaforo. Per la stessa ragione **manca il filtro «solo arancioni»** di §5, e la pagina lo scrive sotto i filtri invece di lasciar cercare un controllo che non c'è: filtrarlo in PHP dopo la paginazione darebbe pagine incomplete e un totale falso. Si preferisce un filtro assente a un filtro che mente.
+
+**L'ultima colonna ha quattro esiti, e nessuno è una cella vuota.** Un solo membro impersonabile → link `<a href>` GET (mai un'azione Livewire: `take()` sostituisce l'utente in sessione, e una risposta Livewire lascerebbe in pagina un componente montato con lo scope del precedente); più d'uno → `[👁 Impersona (n)]` che apre la scelta; nessuno → il testo «Nessun membro impersonabile» col perché nel `title`, perché un'assenza muta su questa piattaforma è già stata scambiata per un difetto; senza `utenti.impersonate` → un trattino. Nel box qui sopra i quattro esiti sono abbreviati per larghezza (`👁`, `👁 ×3`, `nessuno`, `—`); a schermo sono per esteso. La logica è quella di `OffreImpersonazione`, lo stesso trait della cabina (§4): Developer mai impersonabile, chi già impersona non impersona nessuno.
+
+**Le due schede sorelle cambiano la tabella, non l'impianto.** Lo **Scadenzario** antepone le **tre partizioni di §1 come riquadri cliccabili** — Scaduti · In scadenza (entro la soglia) · Oltre, più «Tutti gli interventi aperti» — e le sue colonne sono Cliente · Sede · Macchina · Tipo · Descrizione · Scadenza · Quanto manca · Azioni, con i filtri Stato e Tipo. I **Ricambi** elencano Cliente · Sede · Pezzo · In catalogo dal · Codice · **Presso** · Azioni, dove «Presso» conta quanti clienti *del perimetro* hanno lo stesso pezzo a catalogo — l'unico numero della schermata che esiste solo perché la vista è trasversale; lì si ordina per pezzo e per data d'inserimento, e la pagina **dice a parole** che per cliente non si ordina (servirebbe una join che perde gli scope o una sottoquery scopata che tornerebbe `NULL` per ogni Ente altrui), rimandando al filtro «Clienti».
+
+⚠️ **Gli empty state sono tre messaggi diversi, non uno.** «Nessun piano scelto» e «Nessun cliente selezionato» sono fatti distinti da «nessun risultato», e mandano a togliere il filtro **giusto**: col modo «per piano» e nessun piano scelto il perimetro è vuoto ma il multi-select dei clienti non è nemmeno a schermo, e mandare lì è mandare a cercare un difetto. Ognuno chiude con la frase che regge tutto il disegno — *«Un piano non scelto non vale “tutti”»*, *«Una selezione vuota non vale “tutti”»* — e la dice a schermo perché è esattamente l'invariante che un `if` scritto male romperebbe in silenzio.
+
+**Ciò che questo disegno NON contiene**, per scelta e non per dimenticanza: nessuna cella modificabile e nessuna azione di massa (ADR-037, alternativa scartata (a) — un filtro che silenziosamente vale «tutti» trasformerebbe una correzione in un'operazione su ogni cliente della piattaforma); nessun `[CSV]`/`[PDF]` come quelli di §4; nessuna scheda per `RicambioUtilizzo`, tenuto **fuori dalla porta** insieme alla domanda di privacy che porta con sé.
+
+🔴 **Due limiti dichiarati, che il disegno da solo non mostra.** **(a)** La regola con cui si compone l'etichetta della colonna «Prossima scadenza» è **duplicata** fra `RigheParcoStrumenti` e l'elenco per-Ente di §5: non è stata estratta, è tenuta allineata da un **test di accoppiamento** che calcola l'etichetta di qui e la cerca nella pagina per-Ente. Un'estrazione resta il rimedio vero, e finché non c'è la rete è quel test. **(b)** Il modo «per piano» offre i soli codici a **catalogo** (`Piani::codici()`): i clienti fermi su un piano dismesso — quelli che la cabina segnala col badge `fuori catalogo` e ripara da §7.1 — **non sono esprimibili** da questa tendina. Si raggiungono da «Tutti i clienti» o sceglendoli a mano. È l'asimmetria fra le due schermate, e va tolta riparando il dato in §7.1, non allargando la tendina.
 
 ---
 
