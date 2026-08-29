@@ -140,9 +140,24 @@
                      fatto il 29 Ago 2026. Qui si dice cos'e' e cosa fare. --}}
                 <p class="text-sm text-ink-2">
                     <span class="font-medium text-ink">Nessun account di piattaforma.</span>
-                    Il Superadmin nasce solo se <code class="text-xs">SUPERADMIN_EMAIL</code> e
-                    <code class="text-xs">SUPERADMIN_PASSWORD</code> erano valorizzate al primo
-                    seeding: senza, il seeder si salta da se'. Impostale e riseminalo.
+                    Il deploy esegue le migration, non i seeder: se
+                    <code class="text-xs">SuperadminSeeder</code> non e' mai stato lanciato su
+                    questo ambiente, il Superadmin non esiste. Si crea con
+                    <code class="text-xs">php artisan db:seed --class=SuperadminSeeder --force</code>,
+                    con <code class="text-xs">SUPERADMIN_EMAIL</code> e
+                    <code class="text-xs">SUPERADMIN_PASSWORD</code> valorizzate.
+                </p>
+                {{-- ⛔ Il comando e' nominato PER CLASSE, e la riga qui sotto dice
+                     perche': un `db:seed` nudo passa da `DatabaseSeeder`, che
+                     chiama `RolesAndPermissionsSeeder`, il cui `syncPermissions()`
+                     DETACHA e riattacca dalla config — cancellando ogni
+                     personalizzazione fatta da /piattaforma/ruoli, in entrambe le
+                     direzioni. Un avviso che dicesse solo «riseminalo» inviterebbe
+                     proprio al gesto distruttivo. --}}
+                <p class="mt-1 text-xs text-warn-soft-ink">
+                    ⚠️ Solo quella classe: un <code class="text-xs">db:seed</code> senza
+                    <code class="text-xs">--class</code> rilancia anche il seeder dei permessi, che
+                    riazzera la matrice dei ruoli sulle impostazioni di partenza.
                 </p>
             @else
                 <p class="text-sm text-ink-2">
