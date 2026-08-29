@@ -761,3 +761,20 @@ it('puts the Scadenzario in the sidebar only for whoever may see the interventi'
         // Il positivo, senza cui la riga sopra sarebbe verde su una nav vuota.
         ->and($nav($senza))->toContain('Strumenti');
 });
+
+it('wires the tiles to the filter, so they cannot go inert with the suite green', function () {
+    // 🔴 Lacuna segnalata il 29 Ago 2026 dal correttore del Parco, che la stessa
+    // aveva appena chiusa sulla scheda gemella: i test delle tile chiamano
+    // `filtra()` come METODO, e nessuna asserzione tocca il `wire:click` del
+    // Blade. Cancellandoli dal markup le tre tile diventerebbero decorazioni
+    // inerti — si cliccherebbe e non succederebbe niente — con la suite verde.
+    //
+    // ⚠️ Si asserisce sul markup e non sul comportamento perché è il markup a
+    // mancare: il metodo è già provato sopra, ed è proprio quella copertura che
+    // rende il buco invisibile. Le due metà insieme sono la rete.
+    $html = $this->actingAs($this->admin)->get(route('scadenzario.index'))->assertOk()->getContent();
+
+    expect($html)->toContain('wire:click="filtra(\'scaduti\')"')
+        ->and($html)->toContain('wire:click="filtra(\'in_scadenza\')"')
+        ->and($html)->toContain('wire:click="filtra(\'oltre\')"');
+});

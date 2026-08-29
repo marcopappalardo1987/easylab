@@ -984,6 +984,10 @@ gantt
 > 1. il **guardrail era cieco proprio dove serviva** — scandiva il solo strato UI, mentre `app/Support/Piattaforma` (dove vive lo strato di query delle tre schede, cioè i file che *decidono* l'isolamento) restava fuori. E la rete gemella non lo copriva, perché conta la forma **nuda** `withoutGlobalScopes()` mentre lì una rimozione **per nome** sarebbe stata invisibile a entrambe;
 > 2. `sort()` leggeva la property grezza mentre `render()` normalizza — trovato dal correttore di **un'altra scheda**, che lo stesso difetto l'aveva appena avuto in casa propria.
 >
+> ✅ **Completato il 29 Ago, dopo il primo giro di verifica di Marco**: **filtri per stato** su Strumenti (due assi tenuti separati — semaforo di ADR-005 e obsolescenza di ADR-014, perché mescolarli renderebbe impossibile chiedere «rosse *e* vecchie») e su Scadenzario (le stesse partizioni e gli stessi nomi della vista per-Ente: due risposte diverse alla stessa domanda si contraddirebbero sullo stesso intervento). E il tasto impersona **atterra sulla scheda della macchina** invece di rimbalzare in dashboard, con una rotta propria che riscrive le quattro guardie del pacchetto — un secondo ingresso all'impersonazione con guardie più larghe è il modo in cui una regola si aggira senza accorgersene.
+>
+> ⚠️ Sui **ricambi nessun filtro di stato**, ed è una scelta: un ricambio non ha un semaforo. L'agente ha proposto «montato / a magazzino» e l'ha lasciato in nota invece di costruirlo, perché è una decisione di prodotto che nessuno ha preso.
+>
 > ⚠️ **Limiti dichiarati, che vanno in coda a questa voce come debito**: la regola dell'etichetta «prossima scadenza» è **duplicata** fra il parco e l'elenco per-Ente — oggi tenuta insieme da un test di accoppiamento, non da un'estrazione — e il perimetro «per piano» **non sa esprimere i clienti su un piano fuori catalogo**, che la cabina invece filtra da sempre.
 
 ---
