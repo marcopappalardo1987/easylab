@@ -5,6 +5,7 @@ use App\Http\Controllers\AperturaPortaleStripe;
 use App\Http\Controllers\EsportaElencoDocumenti;
 use App\Http\Controllers\EsportaStoricoPdf;
 use App\Http\Controllers\FugaDaLockout;
+use App\Http\Controllers\ImpersonaVersoStrumento;
 use App\Http\Controllers\ImpostaPasswordInvito;
 use App\Http\Controllers\PaginaBloccato;
 use App\Http\Controllers\RegistrazionePubblica;
@@ -220,6 +221,22 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     Route::get('/piattaforma/parco/ricambi', ParcoRicambi::class)
         ->middleware('can:'.ParcoRicambi::PERMESSO)
         ->name('piattaforma.parco.ricambi');
+
+    // Impersona e atterra sulla scheda della macchina che si stava guardando.
+    //
+    // ⚠️ Rotta PROPRIA e non quella del pacchetto, che rimanda a una
+    // destinazione fissa: il tasto del parco serve a intervenire in fretta, e
+    // un rimbalzo in dashboard gli toglie proprio quello. Le quattro guardie
+    // del pacchetto sono riscritte nel controller — un secondo ingresso
+    // all'impersonazione con guardie diverse è il modo in cui una regola si
+    // aggira senza accorgersene.
+    //
+    // ⛔ `whereNumber` su entrambi: senza, un segmento non numerico finirebbe
+    // nel route-model binding a farsi cercare come id.
+    Route::get('/piattaforma/parco/impersona/{utente}/strumento/{strumento}', ImpersonaVersoStrumento::class)
+        ->whereNumber('utente')->whereNumber('strumento')
+        ->middleware('can:'.ParcoGlobale::PERMESSO)
+        ->name('piattaforma.parco.impersona');
 
     // 🔴 L'error tracker interno (S6), e qui il permesso è **un terzo ancora**:
     // `can:system.logs.view`. Il criterio non cambia — si gata su un permesso
