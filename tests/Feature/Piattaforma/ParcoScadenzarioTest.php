@@ -151,6 +151,21 @@ function apertoIl(Strumento $strumento, string $data, string $descrizione, ?Tipo
     return comeIlCliente(fn () => Intervento::factory()->forStrumento($strumento)->create($attributi));
 }
 
+/**
+ * Segna dei clienti fra i **preferiti** di una persona, scrivendo il pivot.
+ *
+ * ⚠️ Si scrive il pivot invece di passare da `Preferiti::alterna()`, e la
+ * differenza conta: `alterna()` rilegge l'account dall'insieme legittimo e si
+ * rifiuta di segnare EasyLab o un cestinato, quindi con quella strada i test
+ * dell'**intersezione** non potrebbero nemmeno costruire il caso da falsificare.
+ * Qui la riga in tabella c'è — com'è per un cliente cestinato *dopo* essere
+ * stato segnato — e ciò che deve tenere è `ParcoClienti::clienti()`.
+ */
+function preferisce(User $utente, Account ...$clienti): void
+{
+    $utente->clientiPreferiti()->syncWithoutDetaching(collect($clienti)->pluck('id')->all());
+}
+
 // ─── 1. Il permesso: 403, non un elenco vuoto ────────────────────────────────
 
 it('sends a guest to the login instead of the client park schedule', function () {
@@ -233,73 +248,243 @@ it('shows the rows of every client, not only the ones of the tenant the viewer b
         ->assertSee('Taratura Bianchi');
 });
 
-it('never widens the perimeter with a forged account id', function () {
+it('never lets the perimeter dropdown claim «all clients» over a page that shows none', function (string $modoDalBrowser) {
+    // 🔴 La tendina è disegnata dal VALORE della property, non dal markup: un
+    // `modo` senza `<option>` corrispondente non lascia la `<select>` vuota — il
+    // browser evidenzia la **prima** voce, «Tutti i clienti», sopra una pagina
+    // che tutti i clienti non li mostra. E da lì non si esce: riselezionare
+    // quella voce non emette nessun evento, perché il valore mostrato è già
+    // quello.
+    //
+    // ⚠️ `scelti` è nella lista dei casi apposta: è un modo ancora **valido nel
+    // dominio** — `Perimetro::nessuno()` è `scelti([])` — ma non è più una voce
+    // della tendina, quindi un link salvato che lo porta va ricondotto come un
+    // modo inventato. Senza questa riga il ripiego sarebbe il difetto stesso.
     apertoIl($this->autoclaveRossi, today()->addDays(5)->toDateString(), 'Taratura Rossi');
     apertoIl($this->cappaBianchi, today()->addDays(6)->toDateString(), 'Taratura Bianchi');
 
-    Livewire::test(ParcoScadenzario::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('clientiScelti', [$this->rossi->id + $this->bianchi->id + $this->easylab->id + 999])
+    Livewire::test(ParcoScadenzario::class, ['modo' => $modoDalBrowser])
+        ->assertSet('modo', Perimetro::PREFERITI)
         ->assertDontSee('Taratura Rossi')
+        ->assertDontSee('Taratura Bianchi')
+        ->assertSee('Non hai ancora clienti preferiti');
+})->with([
+    'la scelta a mano di un link salvato' => [Perimetro::SCELTI],
+    'un modo forgiato' => ['tutto-quanto'],
+]);
+
+it('normalises an unknown mode that arrives from an update, not only from the url', function () {
+    // `mount()` non rigira sugli update: la property arriva dal browser a ogni
+    // richiesta, quindi la stessa normalizzazione serve anche di là.
+    apertoIl($this->autoclaveRossi, today()->addDays(5)->toDateString(), 'Taratura Rossi');
+
+    Livewire::test(ParcoScadenzario::class)
+        ->set('modo', 'tutto-quanto')
+        ->assertSet('modo', Perimetro::PREFERITI)
+        ->assertDontSee('Taratura Rossi');
+});
+
+it('forgets a plan that is not on the catalogue instead of showing it as chosen', function () {
+    // L'altra metà della stessa guardia: la tendina dei piani mente allo stesso
+    // modo, e mostrerebbe il primo piano a catalogo come se fosse stato scelto.
+    Livewire::test(ParcoScadenzario::class, ['modo' => Perimetro::PER_PIANO, 'piano' => 'platino'])
+        ->assertSet('modo', Perimetro::PER_PIANO)
+        ->assertSet('piano', null);
+});
+
+it('keeps the plan the operator actually chose', function () {
+    // Il rovescio: una normalizzazione troppo avida svuoterebbe il filtro buono.
+    apertoIl($this->autoclaveRossi, today()->addDays(5)->toDateString(), 'Taratura Rossi');
+    apertoIl($this->cappaBianchi, today()->addDays(6)->toDateString(), 'Taratura Bianchi');
+
+    Livewire::test(ParcoScadenzario::class, ['modo' => Perimetro::PER_PIANO, 'piano' => 'free'])
+        ->assertSet('piano', 'free')
+        ->assertSee('Taratura Rossi')
         ->assertDontSee('Taratura Bianchi');
 });
 
-it('never widens the perimeter with an id that exists but is not a client', function () {
-    // 🔴 **Il caso che falsifica davvero.** Un id INESISTENTE — come la somma
-    // del test qui sopra — non prova niente sull'intersezione: un `whereIn`
-    // nudo, senza il filtro sull'account di piattaforma e senza il soft delete,
-    // tornerebbe comunque zero righe e resterebbe verde. L'id di EasyLab invece
-    // c'è: è legittimo come riga della tabella e illegittimo come cliente, e
-    // solo la riconvalida contro l'insieme selezionabile lo tiene fuori.
+it('never widens the perimeter with a favourite that exists but is not a client', function () {
+    // 🔴 **Il caso che falsifica davvero.** Un id INESISTENTE non proverebbe
+    // niente sull'intersezione: un `whereIn` nudo, senza il filtro sull'account
+    // di piattaforma e senza il soft delete, tornerebbe comunque zero righe e
+    // resterebbe verde. L'id di EasyLab invece c'è: è legittimo come riga della
+    // tabella e illegittimo come cliente, e solo la riconvalida contro
+    // l'insieme selezionabile lo tiene fuori.
     //
-    // ⚠️ Ed è QUI che l'id arriva davvero dal browser: la porta ha il suo
-    // negativo (`ParcoClientiTest`), ma la scheda è il punto di ingresso.
+    // ⚠️ La riga del pivot si scrive a mano (vedi `preferisce()`): passando da
+    // `Preferiti::alterna()` questo caso non si potrebbe nemmeno costruire — ed
+    // è esattamente la forma che ha nella realtà, quando un cliente viene
+    // cestinato DOPO essere stato segnato.
     apertoIl($this->bancoEasylab, today()->addDays(3)->toDateString(), 'Taratura EasyLab');
     apertoIl($this->autoclaveRossi, today()->addDays(5)->toDateString(), 'Taratura Rossi');
 
     // Il controllo, che è ciò che rende falsificabili le due negazioni qui
-    // sotto: con un id **legittimo** la riga si vede, quindi «non si vede» non è
-    // una proprietà della pagina — è l'effetto del perimetro.
-    Livewire::test(ParcoScadenzario::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('clientiScelti', [$this->rossi->id])
+    // sotto: con un preferito **legittimo** la riga si vede, quindi «non si
+    // vede» non è una proprietà della pagina — è l'effetto del perimetro.
+    preferisce($this->superadmin, $this->rossi);
+
+    Livewire::test(ParcoScadenzario::class, ['modo' => Perimetro::PREFERITI])
         ->assertSee('Taratura Rossi');
 
-    Livewire::test(ParcoScadenzario::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('clientiScelti', [$this->easylab->id])
+    $this->superadmin->clientiPreferiti()->detach();
+    preferisce($this->superadmin, $this->easylab);
+
+    Livewire::test(ParcoScadenzario::class, ['modo' => Perimetro::PREFERITI])
         ->assertDontSee('Taratura EasyLab')
-        // ⛔ E nemmeno le righe di chi cliente lo è: un id che l'intersezione
-        // scarta lascia un perimetro **vuoto**, non un perimetro senza filtro.
+        // ⛔ E nemmeno le righe di chi cliente lo è: un preferito che
+        // l'intersezione scarta lascia un perimetro **vuoto**, non un perimetro
+        // senza filtro.
         ->assertDontSee('Taratura Rossi');
 });
 
-it('reads an empty selection as nobody, never as no filter', function () {
+it('says the favourites are empty when none of them is a visible client any more', function () {
+    // 🔴 «Insieme vuoto» non è solo `eNessuno()`, che guarda la lista **grezza**
+    // degli id: i preferiti possono essere pieni di id e vuoti di CLIENTI — un
+    // account diventato di piattaforma, o cestinato, dopo la segnatura. Senza
+    // guardare l'insieme già intersecato la tabella cadeva sul `default` e
+    // diceva «Nessun intervento aperto sui clienti selezionati» di clienti che
+    // non ci sono — cioè annunciava un parco in regola al posto di un perimetro
+    // vuoto, che è la distinzione per cui questo `match` esiste.
+    apertoIl($this->bancoEasylab, today()->addDays(3)->toDateString(), 'Taratura EasyLab');
+
+    preferisce($this->superadmin, $this->easylab);
+
+    Livewire::test(ParcoScadenzario::class, ['modo' => Perimetro::PREFERITI])
+        ->assertSee('Non hai ancora clienti preferiti')
+        ->assertDontSee('Nessun intervento aperto sui clienti selezionati')
+        ->assertDontSee('Taratura EasyLab');
+});
+
+it('reads an empty set of favourites as nobody, never as no filter', function () {
     // ⛔ È la trappola centrale di ADR-037: «nessuno selezionato» è la
     // condizione più facile da leggere come «nessun filtro», e la differenza fra
     // le due letture è fra zero righe e le righe di tutti i clienti.
     apertoIl($this->autoclaveRossi, today()->addDays(5)->toDateString(), 'Taratura Rossi');
     apertoIl($this->cappaBianchi, today()->addDays(6)->toDateString(), 'Taratura Bianchi');
 
-    Livewire::test(ParcoScadenzario::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('clientiScelti', [])
+    Livewire::test(ParcoScadenzario::class, ['modo' => Perimetro::PREFERITI])
         ->assertDontSee('Taratura Rossi')
         ->assertDontSee('Taratura Bianchi')
-        // E lo si DICE: una tabella vuota si legge come «questi clienti non
-        // hanno scadenze», che è un fatto diverso da «non hai scelto nessuno».
-        ->assertSee('Nessun cliente selezionato');
+        // E lo si DICE, mandando dove i preferiti si segnano davvero: «scegline
+        // almeno uno dal filtro qui sopra» manderebbe a un controllo che in
+        // questo modo non esiste.
+        ->assertSee('Non hai ancora clienti preferiti')
+        ->assertDontSee('Nessun cliente selezionato: scegli chi vuoi guardare.');
 });
 
-it('keeps the other client out when only one is picked', function () {
+it('keeps the other client out when only one is a favourite', function () {
     apertoIl($this->autoclaveRossi, today()->addDays(5)->toDateString(), 'Taratura Rossi');
     apertoIl($this->cappaBianchi, today()->addDays(6)->toDateString(), 'Taratura Bianchi');
 
-    Livewire::test(ParcoScadenzario::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('clientiScelti', [$this->rossi->id])
+    preferisce($this->superadmin, $this->rossi);
+
+    Livewire::test(ParcoScadenzario::class, ['modo' => Perimetro::PREFERITI])
         ->assertSee('Taratura Rossi')
         ->assertDontSee('Taratura Bianchi');
+});
+
+it('never lets one platform person see through another one\'s favourites', function () {
+    // 🔴 Il pivot non porta `tenant_id` — la riga attraversa i tenant per
+    // definizione — quindi il confine qui è **l'utente**, e una `whereIn` presa
+    // dalla tabella invece che dalla relazione mostrerebbe a ciascuno i
+    // preferiti di tutti. Due Superadmin seguono clienti diversi.
+    apertoIl($this->autoclaveRossi, today()->addDays(5)->toDateString(), 'Taratura Rossi');
+    apertoIl($this->cappaBianchi, today()->addDays(6)->toDateString(), 'Taratura Bianchi');
+
+    $altro = User::factory()->create([
+        'name' => 'Altra Direzione',
+        'tenant_id' => $this->sedeRossi->id,
+        'two_factor_confirmed_at' => now(),
+    ]);
+    $altro->assignRole('Superadmin');
+
+    preferisce($this->superadmin, $this->rossi);
+    preferisce($altro, $this->bianchi);
+
+    Livewire::test(ParcoScadenzario::class, ['modo' => Perimetro::PREFERITI])
+        ->assertSee('Taratura Rossi')
+        ->assertDontSee('Taratura Bianchi');
+
+    // Il controllo speculare: l'altro vede i SUOI, quindi «non si vede» qui
+    // sopra non è una proprietà della fixture.
+    $this->actingAs($altro->fresh());
+
+    Livewire::test(ParcoScadenzario::class, ['modo' => Perimetro::PREFERITI])
+        ->assertSee('Taratura Bianchi')
+        ->assertDontSee('Taratura Rossi');
+});
+
+it('never lets a binned client back in through a favourite that survived it', function () {
+    // Il preferito resta in tabella — il pivot non sa nulla del soft delete —
+    // e l'intersezione lo scarta. È il caso che nasce davvero: si cestina un
+    // cliente mesi dopo averlo segnato.
+    apertoIl($this->autoclaveRossi, today()->addDays(5)->toDateString(), 'Taratura Rossi');
+    apertoIl($this->cappaBianchi, today()->addDays(6)->toDateString(), 'Taratura Bianchi');
+
+    preferisce($this->superadmin, $this->rossi, $this->bianchi);
+
+    $this->bianchi->delete();
+
+    Livewire::test(ParcoScadenzario::class, ['modo' => Perimetro::PREFERITI])
+        ->assertSee('Taratura Rossi')
+        ->assertDontSee('Taratura Bianchi')
+        // ⚠️ E il conteggio dice il VERO: «2 preferiti» sopra una tabella
+        // costruita su 1 sarebbe la stessa specie di bugia di un titolo statico
+        // sopra un elenco filtrato.
+        ->assertSee('I miei preferiti (1)')
+        ->assertDontSee('Lab Bianchi');
+});
+
+it('shows the favourites it is actually filtering on, by name and by count', function () {
+    apertoIl($this->autoclaveRossi, today()->addDays(5)->toDateString(), 'Taratura Rossi');
+
+    preferisce($this->superadmin, $this->rossi, $this->bianchi);
+
+    Livewire::test(ParcoScadenzario::class, ['modo' => Perimetro::PREFERITI])
+        ->assertSee('I miei preferiti (2)')
+        ->assertSee('Gruppo Rossi')
+        ->assertSee('Lab Bianchi')
+        // Dove si cambiano, che è l'altra metà del messaggio.
+        // ⚠️ `escape: false`: l'apostrofo di «nell'elenco» esce dal render come
+        // `&#039;`, e un ago con l'apostrofo vero non si troverebbe mai — cioè
+        // l'asserzione fallirebbe con la pagina giusta sotto gli occhi.
+        ->assertSee('Gestisci i preferiti nell\'elenco Clienti', escape: false);
+});
+
+it('says in its own title which clients it is showing', function () {
+    // 🔴 Fino al 29 Ago 2026 questo H1 era una stringa fissa in Blade:
+    // «Scadenzario di tutti i clienti», anche filtrando su un cliente solo e
+    // anche con **zero** preferiti, cioè sopra tre contatori a zero. Su una
+    // pagina da cui si impersona è la bugia che costa: il rischio non è
+    // sbagliare macchina, è entrare in casa del cliente sbagliato.
+    apertoIl($this->autoclaveRossi, today()->addDays(5)->toDateString(), 'Taratura Rossi');
+
+    Livewire::test(ParcoScadenzario::class)
+        ->assertSee('Scadenzario di tutti i clienti');
+
+    preferisce($this->superadmin, $this->rossi);
+
+    Livewire::test(ParcoScadenzario::class, ['modo' => Perimetro::PREFERITI])
+        ->assertSee('Scadenzario di 1 cliente preferito')
+        ->assertDontSee('Scadenzario di tutti i clienti');
+
+    preferisce($this->superadmin, $this->bianchi);
+
+    Livewire::test(ParcoScadenzario::class, ['modo' => Perimetro::PREFERITI])
+        ->assertSee('Scadenzario di 2 clienti preferiti');
+
+    Livewire::test(ParcoScadenzario::class, ['modo' => Perimetro::PER_PIANO, 'piano' => 'free'])
+        ->assertSee('Scadenzario dei clienti sul piano')
+        ->assertDontSee('Scadenzario di tutti i clienti');
+});
+
+it('does not call the perimeter «everyone» while the plan is still unchosen', function () {
+    // Il modo «per piano» senza piano è l'insieme vuoto (`nessuno()` è
+    // `scelti([])`), e il titolo non deve né dire «tutti» né annunciare i
+    // preferiti sopra una tendina che dice «Per piano».
+    Livewire::test(ParcoScadenzario::class, ['modo' => Perimetro::PER_PIANO])
+        ->assertSee('Scadenzario: nessun piano selezionato')
+        ->assertDontSee('Scadenzario di tutti i clienti');
 });
 
 it('never lets the per-plan perimeter admit another plan', function () {
@@ -347,9 +532,9 @@ it('keeps the counters inside the perimeter, so they cannot contradict the rows'
     apertoIl($this->autoclaveRossi, today()->subDays(3)->toDateString(), 'Scaduta Rossi');
     apertoIl($this->cappaBianchi, today()->subDays(4)->toDateString(), 'Scaduta Bianchi');
 
-    Livewire::test(ParcoScadenzario::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('clientiScelti', [$this->rossi->id])
+    preferisce($this->superadmin, $this->rossi);
+
+    Livewire::test(ParcoScadenzario::class, ['modo' => Perimetro::PREFERITI])
         ->assertViewHas('contatori', fn (array $c) => $c['scaduti'] === 1);
 });
 
@@ -855,17 +1040,19 @@ it('says the park has nothing open, when nothing is filtering the list', functio
         ->assertDontSee('Nessun risultato per i filtri applicati');
 });
 
-it('does not read the whole client list for a dropdown the page is not showing', function () {
-    // La tendina dei clienti sta dentro il solo modo «scelti»: negli altri due
-    // — compreso «tutti», che è il default — la query sull'intera tabella
-    // account si eseguiva lo stesso e la collection veniva scartata, a ogni
-    // render, cioè a ogni pausa di digitazione nella ricerca.
+it('does not read the favourites for a block the page is not showing', function () {
+    // L'elenco dei preferiti sta dentro il solo modo «preferiti»: negli altri
+    // due — compreso «tutti», che è il default — la query si eseguirebbe lo
+    // stesso e la collection verrebbe scartata, a ogni render, cioè a ogni
+    // pausa di digitazione nella ricerca.
+    preferisce($this->superadmin, $this->rossi, $this->bianchi);
+
     Livewire::test(ParcoScadenzario::class)
-        ->assertViewHas('selezionabili', fn ($c) => $c->isEmpty())
-        // ⚠️ E l'altra metà, o «non leggerla mai» passerebbe questo test: quando
-        // la tendina c'è, dentro ci sono i clienti.
-        ->set('modo', Perimetro::SCELTI)
-        ->assertViewHas('selezionabili', fn ($c) => $c->pluck('ragione_sociale')->contains('Gruppo Rossi'))
+        ->assertViewHas('preferiti', fn ($c) => $c->isEmpty())
+        // ⚠️ E l'altra metà, o «non leggerli mai» passerebbe questo test: quando
+        // il blocco c'è, dentro ci sono i clienti.
+        ->set('modo', Perimetro::PREFERITI)
+        ->assertViewHas('preferiti', fn ($c) => $c->pluck('ragione_sociale')->contains('Gruppo Rossi'))
         ->assertSee('Lab Bianchi');
 });
 
@@ -883,12 +1070,12 @@ it('says so, instead of showing nothing, when a client has no impersonable membe
     // piattaforma. Bianchi non ha membri: la cella lo dice.
     apertoIl($this->cappaBianchi, today()->addDays(6)->toDateString(), 'Taratura Bianchi');
 
+    // ⚠️ Il perimetro serve davvero: col default «tutti» l'elenco conterrebbe
+    // anche la riga di Rossi, che un membro ce l'ha.
+    preferisce($this->superadmin, $this->bianchi);
+
     Livewire::test(ParcoScadenzario::class)
-        ->set('modo', Perimetro::SCELTI)
-        // ⚠️ `clientiScelti` senza `modo` è INERTE — il default è «tutti» — e
-        // l'elenco conterrebbe anche la riga di Rossi, che un membro ce l'ha.
-        ->set('modo', Perimetro::SCELTI)
-        ->set('clientiScelti', [$this->bianchi->id])
+        ->set('modo', Perimetro::PREFERITI)
         ->assertSee('Nessun membro impersonabile');
 });
 
@@ -899,10 +1086,10 @@ it('never offers the Developer, who is the one account that is never impersonabl
 
     apertoIl($this->cappaBianchi, today()->addDays(6)->toDateString(), 'Taratura Bianchi');
 
+    preferisce($this->superadmin, $this->bianchi);
+
     Livewire::test(ParcoScadenzario::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('clientiScelti', [$this->bianchi->id])
+        ->set('modo', Perimetro::PREFERITI)
         ->assertSee('Nessun membro impersonabile')
         ->assertDontSee('Il Developer');
 });

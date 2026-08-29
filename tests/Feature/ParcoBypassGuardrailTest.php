@@ -126,6 +126,16 @@ it('keeps the scan honest about the files it actually reads', function () {
     // ⚠️ Anche lo strato di QUERY, o gli invarianti tornerebbero ciechi
     // proprio sui file che decidono l'isolamento — che è il buco del 29 Ago.
     expect($piattaforma)->toContain('app/Support/Piattaforma/Perimetro.php')
+        // 🔴 E `Preferiti`, che è l'unico file del pacchetto a **scrivere** a
+        // partire da un id di Account arrivato dal browser (🔗 ADR-037). Sta
+        // qui e non fra le sorgenti del parco perché lo scanner del punto 2
+        // riconosce il parco **dal nome**, e questo file non si chiama
+        // `Parco*`: gli invarianti 1 e 3 sono quindi la sua sola copertura, e
+        // se la cartella smettesse di essere scandita perderebbe anche quella.
+        // Il lavoro dell'invariante 2 lo fa da sé, leggendo l'insieme legittimo
+        // da `ParcoClienti::selezionabili()` — la porta del PARCO — invece che
+        // da quella della cabina, che di qui passerebbe inosservata.
+        ->and($piattaforma)->toContain('app/Support/Piattaforma/Preferiti.php')
         // …e la porta resta l'unica esente, per nome.
         ->and($piattaforma)->not->toContain('app/Support/Piattaforma/ParcoClienti.php')
         ->and($piattaforma)->toContain('app/Livewire/Piattaforma/ParcoGlobale.php')

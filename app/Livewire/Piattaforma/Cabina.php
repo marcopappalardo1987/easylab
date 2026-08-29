@@ -8,6 +8,7 @@ use App\Livewire\Piattaforma\Concerns\EsportaClienti;
 use App\Livewire\Piattaforma\Concerns\FissaVisibilitaSede;
 use App\Livewire\Piattaforma\Concerns\OffreImpersonazione;
 use App\Livewire\Piattaforma\Concerns\ProvisionaCliente;
+use App\Livewire\Piattaforma\Concerns\SegnaPreferiti;
 use App\Support\Piattaforma\AndamentiPiattaforma;
 use App\Support\Piattaforma\MetrichePiattaforma;
 use Illuminate\Contracts\View\View;
@@ -67,7 +68,7 @@ use Livewire\Component;
 #[Layout('components.layouts.app')]
 class Cabina extends Component
 {
-    use AmministraAccount, ElencaClienti, EsportaClienti, FissaVisibilitaSede, OffreImpersonazione, ProvisionaCliente;
+    use AmministraAccount, ElencaClienti, EsportaClienti, FissaVisibilitaSede, OffreImpersonazione, ProvisionaCliente, SegnaPreferiti;
 
     /**
      * Chiude ogni modale della pagina.

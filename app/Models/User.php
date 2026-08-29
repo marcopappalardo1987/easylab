@@ -158,6 +158,24 @@ class User extends Authenticatable
     }
 
     /**
+     * I clienti **preferiti** di questa persona (🔗 ADR-037): il perimetro
+     * «i miei preferiti» del Parco clienti.
+     *
+     * ⛔ **Non è un'autorizzazione e non va usata come tale.** Dice quali clienti
+     * l'utente ha messo da parte, non quali può vedere: l'insieme legittimo
+     * resta `VistaPiattaforma::accounts()`, con cui `ParcoClienti::clienti()`
+     * interseca. Un preferito segnato quando l'account era vivo sopravvive al
+     * suo cestinamento — la riga cade nell'intersezione, non nel `whereIn`.
+     *
+     * Si legge sempre da `App\Support\Piattaforma\Preferiti`, che è la porta
+     * gata: questa relazione è la sua forma Eloquent, non il suo sostituto.
+     */
+    public function clientiPreferiti(): BelongsToMany
+    {
+        return $this->belongsToMany(Account::class, 'clienti_preferiti')->withTimestamps();
+    }
+
+    /**
      * Le sedi (nodi ente) ancora raggiungibili dall'utente: quelle degli
      * account di cui è membro, esclusi gli account in lockout (ADR-013) e gli
      * enti cestinati. Servita dall'unique (user_id, account_id) del pivot.

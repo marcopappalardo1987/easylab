@@ -49,14 +49,25 @@ trait ProvisionaCliente
     /** L'account a cui agganciare la sede nuova; `null` = nasce un cliente nuovo. */
     public ?int $provisioningAccount = null;
 
-    /** @var array<string,string> */
+    /**
+     * ⚠️ **`nome` cambia significato fra i due gesti**, ed è la ragione per cui
+     * `nomeSede` esiste solo nel primo: creando un **cliente nuovo** `nome` è la
+     * **ragione sociale** dell'Account e `nomeSede` è il nome del suo primo Ente;
+     * agganciando una sede a un account **esistente** `nome` È il nome della
+     * sede, e un secondo campo chiederebbe due volte la stessa cosa. Le
+     * etichette di validazione seguono il ramo, o direbbero il falso in uno dei
+     * due (🔗 ADR-032).
+     *
+     * @var array<string,?string>
+     */
     public array $nuovo = [
         'nome' => '',
+        'nomeSede' => '',
         'adminEmail' => '',
         'adminName' => '',
     ];
 
-    private const CAMPI_NUOVO = ['nome', 'adminEmail', 'adminName'];
+    private const CAMPI_NUOVO = ['nome', 'nomeSede', 'adminEmail', 'adminName'];
 
     public function apriProvisioning(?int $accountId = null): void
     {
@@ -129,12 +140,31 @@ trait ProvisionaCliente
         $this->nuovo['adminName'] = $pulito('adminName');
         $this->nuovo['adminEmail'] = mb_strtolower($pulito('adminEmail'));
 
+        // ⚠️ **Vuoto = non scelto, e si normalizza PRIMA di validare.** Il campo
+        // è facoltativo, quindi il caso normale è la stringa vuota: lasciata
+        // tale, `min:2` la rifiuterebbe e il form si bloccherebbe su un campo
+        // che nessuno era tenuto a compilare. `null` è l'unico valore che
+        // `nullable` lascia passare — e più a valle è ciò che `ProvisionaEnte`
+        // legge come «tieni la ragione sociale».
+        //
+        // Dalla **stessa** strada degli altri tre: `nuovo` è un array pubblico,
+        // quindi un update può consegnare un array annidato e `trim(array)` è un
+        // `TypeError`, cioè un 500 al posto di un errore di validazione.
+        $sede = $pulito('nomeSede');
+        $this->nuovo['nomeSede'] = $sede !== '' ? $sede : null;
+
         $dati = $this->validate([
             'nuovo.nome' => ['required', 'string', 'min:2', 'max:255'],
+            'nuovo.nomeSede' => ['nullable', 'string', 'min:2', 'max:255'],
             'nuovo.adminEmail' => ['required', 'email', 'max:255'],
             'nuovo.adminName' => ['required', 'string', 'min:2', 'max:255'],
         ], [], [
-            'nuovo.nome' => 'nome della sede',
+            // L'etichetta dice il vero **nel ramo in cui si sta**: sul cliente
+            // nuovo `nome` è la ragione sociale, e chiamarlo «nome della sede»
+            // manderebbe l'operatore a correggere il campo sbagliato — accanto
+            // a un campo che la sede la chiede davvero.
+            'nuovo.nome' => $account === null ? 'ragione sociale' : 'nome della sede',
+            'nuovo.nomeSede' => 'nome della prima sede',
             'nuovo.adminEmail' => 'email dell\'amministratore',
             'nuovo.adminName' => 'nome dell\'amministratore',
         ])['nuovo'];
@@ -151,6 +181,12 @@ trait ProvisionaCliente
                 // piattaforma compreso — senza chiedere `manage` e senza passare
                 // dalla porta, mostrando comunque un messaggio di successo.
                 esigiAccountNuovo: $account === null,
+                // Solo sul cliente nuovo: agganciando una sede a un account
+                // esistente `nome` È già il nome della sede, e passare anche
+                // questo significherebbe onorare un campo che la modale non
+                // mostra — cioè lasciar decidere il nome del nodo a un valore
+                // che l'operatore non ha visto (le property sono pubbliche).
+                nomeSede: $account === null ? ($dati['nomeSede'] ?? null) : null,
             ))->esegui();
         } catch (ProvisioningRifiutato $rifiuto) {
             // Il messaggio è già in italiano e già destinato a un umano: si

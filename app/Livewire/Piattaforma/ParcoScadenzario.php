@@ -5,9 +5,10 @@ namespace App\Livewire\Piattaforma;
 use App\Enums\TipoIntervento;
 use App\Livewire\Piattaforma\Concerns\OffreImpersonazione;
 use App\Support\Piani;
-use App\Support\Piattaforma\ParcoClienti;
 use App\Support\Piattaforma\Perimetro;
+use App\Support\Piattaforma\Preferiti;
 use App\Support\Piattaforma\ScadenzarioParco;
+use App\Support\Piattaforma\TitoloPerimetro;
 use App\Support\Semaforo;
 use App\Support\Tenancy\VistaPiattaforma;
 use Illuminate\Contracts\View\View;
@@ -54,12 +55,28 @@ use Livewire\WithPagination;
  *
  * ## Il perimetro arriva dal browser
  *
- * `modo`, `clientiScelti` e `piano` sono property pubbliche, cioè input non
- * fidato a ogni update. Non si validano qui: si passano a
+ * `modo` e `piano` sono property pubbliche, cioè input non fidato a ogni
+ * update. La **forma** non si valida qui: si passano a
  * `Perimetro::daRichiesta()`, che normalizza e in caso di dubbio torna
  * `nessuno()` — mai «tutti» — e da lì a `ParcoClienti`, che **interseca** gli id
  * con l'insieme legittimo. Le due metà stanno in due posti apposta (forma e
  * appartenenza), e nessuna delle due vive in questo file.
+ *
+ * 🔴 Il terzo modo è **«i miei preferiti»** (29 Ago 2026): non più una
+ * `<select multiple>` da ricomporre a ogni visita, ma un insieme durevole della
+ * persona, segnato con la ★ nell'elenco Clienti. I suoi id **non arrivano dal
+ * browser** — li legge `Preferiti::perimetro()`, gata sullo stesso permesso —
+ * quindi la property `clientiScelti` è sparita invece di restare inerte: un
+ * `#[Url]` che nessun ramo può onorare è un link che promette un filtro e non
+ * lo applica.
+ *
+ * ⚠️ E qui vive l'**unica** guardia che questo file possiede in proprio:
+ * `normalizzaControlli()`. `modo` e `piano` non finiscono solo nella query,
+ * finiscono in due `<select wire:model.live>`, e una `<select>` legata a un
+ * valore senza `<option>` corrispondente evidenzia la **prima** voce — «Tutti i
+ * clienti» — sopra una tabella che tutti i clienti non li mostra. Da lì non si
+ * esce: riselezionare quella voce non emette nessun evento, perché il valore
+ * mostrato è già quello.
  *
  * ## Costo
  *
@@ -69,9 +86,10 @@ use Livewire\WithPagination;
  * `Intervento` e non da `Strumento`, quindi nessuna sottoquery correlata per
  * riga e nessun ordinamento su colonna derivata.
  *
- * L'undicesimo — la tendina dei clienti selezionabili — si esegue **solo nel
- * modo in cui la tendina è in pagina**: negli altri due era una lettura
- * dell'intera tabella account scartata a ogni render.
+ * L'undicesimo — l'elenco dei clienti preferiti — si esegue **solo nel modo in
+ * cui quel blocco è in pagina**: negli altri due sarebbe una lettura scartata a
+ * ogni render. Era la stessa disciplina della tendina dei selezionabili che i
+ * preferiti hanno sostituito, e vale per la stessa ragione.
  *
  * ⚠️ **Macchina, cliente e sede NON si prendono dalle relazioni.**
  * `$intervento->strumento` e la risalita al nodo passano da modelli scopati sul
@@ -88,23 +106,9 @@ class ParcoScadenzario extends Component
 
     public const PERMESSO = VistaPiattaforma::PERMESSO;
 
-    /** Su quali clienti si sta guardando: uno dei tre modi di `Perimetro`. */
+    /** Su quali clienti si sta guardando: `tutti`, `piano` o `preferiti`. */
     #[Url]
     public string $modo = Perimetro::TUTTI;
-
-    /**
-     * Gli account scelti a mano, quando `modo` è `scelti`.
-     *
-     * ⛔ Il nome non è `clienti`: Livewire condivide con la vista le property
-     * pubbliche **dopo** i dati passati a `view()`, quindi una chiave omonima
-     * verrebbe sovrascritta dal valore grezzo della query string. È la stessa
-     * trappola per cui la direzione dell'ordinamento si chiama `direzione` in
-     * vista e `sortDir` qui.
-     *
-     * @var array<int|string>
-     */
-    #[Url]
-    public array $clientiScelti = [];
 
     /** Il piano commerciale, quando `modo` è `piano`. */
     #[Url]
@@ -136,12 +140,77 @@ class ParcoScadenzario extends Component
 
     private const PER_PAGE_DEFAULT = 20;
 
-    public function updatingModo(): void
+    /**
+     * I tre modi che la tendina del perimetro sa disegnare.
+     *
+     * ⚠️ **Non** è la terna del `match` di `Perimetro::daRichiesta()`: quella
+     * risponde «quale perimetro» e fa cadere su `nessuno()` anche il modo
+     * **valido** «piano» finché il piano manca. Qui la domanda è un'altra —
+     * «questo modo esiste **nella tendina**?» — e serve a far dire il vero al
+     * **controllo**, non alla query. I nomi restano quelli di `Perimetro`: qui
+     * si duplica l'insieme, mai le stringhe.
+     *
+     * 🔴 `Perimetro::SCELTI` non c'è, e resta valido nel dominio (`nessuno()` è
+     * `scelti([])`): un `?modo=scelti` rimasto in un link salvato è, per questa
+     * pagina, un modo che la tendina non sa disegnare — quindi cade sotto la
+     * stessa normalizzazione di un modo inventato.
+     */
+    private const MODI = [Perimetro::TUTTI, Perimetro::PER_PIANO, Perimetro::PREFERITI];
+
+    /**
+     * 🔴 Le due property che **disegnano un controllo** si normalizzano subito.
+     *
+     * Il difetto è quello descritto nel docblock di classe: una `<select>`
+     * legata a un valore senza `<option>` corrispondente evidenzia la prima
+     * voce, e da lì non si esce. La forma è la stessa di `ParcoRicambi`, ed è
+     * deliberatamente la stessa: il difetto è identico, quindi la risposta non
+     * può essere diversa a seconda della scheda.
+     *
+     * Il modo che non si è capito diventa `preferiti`, **non** `tutti`: è il
+     * fail-closed di `Perimetro::nessuno()` detto anche dal controllo — chi non
+     * ha preferiti vede zero righe e un consiglio vero, chi ne ha vede i suoi.
+     */
+    public function mount(): void
     {
-        $this->resetPage();
+        $this->normalizzaControlli();
     }
 
-    public function updatingClientiScelti(): void
+    /**
+     * ⚠️ `mount()` non rigira sugli update, e le property arrivano dal browser a
+     * **ogni** richiesta: senza questi due hook la normalizzazione varrebbe solo
+     * per la prima pagina caricata.
+     */
+    public function updatedModo(): void
+    {
+        $this->normalizzaControlli();
+    }
+
+    public function updatedPiano(): void
+    {
+        $this->normalizzaControlli();
+    }
+
+    private function normalizzaControlli(): void
+    {
+        if (! in_array($this->modo, self::MODI, true)) {
+            $this->modo = Perimetro::PREFERITI;
+        }
+
+        // Un piano fuori catalogo è già l'insieme vuoto per `Perimetro`; qui
+        // torna a essere «nessun piano scelto» anche per la tendina, che
+        // altrimenti mostrerebbe la prima voce come se fosse stata scelta.
+        //
+        // ⚠️ `null` e non `''`: qui la property è nullable e la `<option>`
+        // vuota vale `''`, che Livewire riporta come stringa — entrambi i
+        // valori vanno a `nessuno()` in `daRichiesta()`, e il ramo qui sotto li
+        // riconduce a uno solo perché la tendina possa evidenziare «Scegli un
+        // piano…» invece del primo piano a catalogo.
+        if ($this->piano !== null && $this->piano !== '' && ! Piani::esiste($this->piano)) {
+            $this->piano = null;
+        }
+    }
+
+    public function updatingModo(): void
     {
         $this->resetPage();
     }
@@ -331,13 +400,24 @@ class ParcoScadenzario extends Component
     /**
      * Il perimetro come arriva dal browser — normalizzato **fuori di qui**.
      *
-     * Un `modo` sconosciuto, un piano fuori catalogo o un id malformato cadono
-     * su `nessuno()`, mai su «tutti»: fra i due errori possibili, mostrare più
-     * di quanto è stato chiesto è quello che non si vede.
+     * Un `modo` sconosciuto o un piano fuori catalogo cadono su `nessuno()`,
+     * mai su «tutti»: fra i due errori possibili, mostrare più di quanto è
+     * stato chiesto è quello che non si vede.
      */
     private function perimetro(): Perimetro
     {
-        return Perimetro::daRichiesta($this->modo, $this->clientiScelti, $this->piano);
+        // 🔴 Il modo «preferiti» non passa da `daRichiesta()`, e non è una
+        // svista: i suoi id non arrivano dal browser, arrivano dal database,
+        // quindi l'unico costruttore è `Preferiti::perimetro()` — gata sullo
+        // stesso permesso della porta. Un chiamante che se lo dimenticasse
+        // otterrebbe `nessuno()`, cioè zero righe.
+        if ($this->modo === Perimetro::PREFERITI) {
+            return Preferiti::perimetro();
+        }
+
+        // ⚠️ La lista di id è **vuota** per costruzione: la scelta a mano non
+        // esiste più in questa pagina, e i due modi rimasti non la leggono.
+        return Perimetro::daRichiesta($this->modo, [], $this->piano);
     }
 
     /**
@@ -408,7 +488,17 @@ class ParcoScadenzario extends Component
             'oltre' => ScadenzarioParco::partiziona($base(), 'oltre')->count(),
         ];
 
+        // 🔴 Il titolo dice **su chi** si sta guardando, e la regola è una sola
+        // per le tre schede (`TitoloPerimetro`). Fino al 29 Ago 2026 questo H1
+        // era scritto a mano in Blade e diceva «di tutti i clienti» in tutti e
+        // tre i modi — anche con zero preferiti, cioè sopra tre contatori a
+        // zero. Su una pagina da cui si impersona, un testo che allarga il
+        // perimetro a parole lavora contro la sola cosa che conta: sapere di
+        // CHI sono le righe che si stanno guardando.
+        $preferiti = $this->modo === Perimetro::PREFERITI ? Preferiti::clienti() : collect();
+
         return view('livewire.piattaforma.parco-scadenzario', [
+            'titolo' => TitoloPerimetro::componi('Scadenzario', $perimetro, $preferiti->count()),
             'interventi' => $interventi,
             'titolari' => $titolari,
             'macchine' => ScadenzarioParco::macchine(
@@ -431,22 +521,24 @@ class ParcoScadenzario extends Component
             // dallo stesso posto da cui la legge la query.
             'soglia' => Semaforo::giorniImminente(),
             'tipi' => TipoIntervento::cases(),
-            // La tendina del filtro: l'insieme **legittimo**, cioè lo stesso
-            // contro cui `ParcoClienti::clienti()` interseca gli id scelti.
-            // Ordinata con il tie-break sull'id come ogni altro elenco.
+            // I preferiti di chi guarda, in SOLA LETTURA: nomi e conteggio.
+            // L'ordine per ragione sociale col tie-break sull'id e
+            // l'intersezione con l'insieme legittimo stanno dentro
+            // `Preferiti::clienti()` — un preferito verso un account nel
+            // frattempo cestinato, o verso l'account di piattaforma, non
+            // compare qui e non porta righe.
             //
-            // ⚠️ Si legge SOLO nel modo in cui la tendina è in pagina, e la
-            // condizione è la stessa che la vista usa per disegnarla (`$modo`,
+            // ⚠️ Si legge SOLO nel modo in cui l'elenco è in pagina, e la
+            // condizione è la stessa che la vista usa per disegnarlo (`$modo`,
             // la property pubblica): negli altri due modi — «tutti» è il
-            // default, quindi il caso normale — era una lettura dell'intera
-            // tabella account buttata via, ripetuta a ogni render, cioè a ogni
-            // pausa di digitazione nella ricerca.
-            'selezionabili' => $this->modo === Perimetro::SCELTI
-                ? ParcoClienti::selezionabili()
-                    ->orderBy('accounts.ragione_sociale')
-                    ->orderBy('accounts.id')
-                    ->get(['accounts.id', 'accounts.ragione_sociale'])
-                : collect(),
+            // default, quindi il caso normale — sarebbe una query buttata via a
+            // ogni render, cioè a ogni pausa di digitazione nella ricerca. È la
+            // stessa disciplina che valeva per la tendina dei selezionabili,
+            // applicata a ciò che l'ha sostituita.
+            // ⚠️ La **stessa** collezione già letta per il titolo: leggerla
+            // due volte sarebbe una query in più per la stessa risposta, a
+            // ogni pausa di digitazione nella ricerca.
+            'preferiti' => $preferiti,
             'piani' => Piani::codici(),
             // ⛔ «Nessun cliente selezionato» e «questi clienti non hanno
             // scadenze» sono due fatti diversi, e una tabella vuota li

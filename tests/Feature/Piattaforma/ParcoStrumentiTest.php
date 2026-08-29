@@ -108,6 +108,23 @@ function alComandoDelParco(User $superadmin): void
 }
 
 /**
+ * Segna questi clienti come **preferiti** di chi guarda (🔗 ADR-037).
+ *
+ * ⚠️ Si scrive sul pivot e non passa da `Preferiti::alterna()`, di proposito:
+ * quella porta rifiuta ciò che non è un cliente visibile, e metà dei test qui
+ * sotto ha bisogno esattamente di un preferito **illegittimo** — verso EasyLab,
+ * verso un account cestinato — per provare che l'intersezione tiene comunque.
+ * Passando dalla porta non si potrebbe nemmeno costruire il caso.
+ *
+ * `sync` e non `attach`: il preferito è un insieme, e un test che ne segna due
+ * volte lo stesso cliente deve descrivere lo stesso stato.
+ */
+function preferisci(User $chiGuarda, Account ...$clienti): void
+{
+    $chiGuarda->clientiPreferiti()->sync(collect($clienti)->pluck('id')->all());
+}
+
+/**
  * Il frammento di HTML di **una riga**, ritagliato sulla sua `wire:key`.
  *
  * 🔴 Cercare un link sulla pagina intera non prova a quale riga appartenga: su
@@ -244,9 +261,9 @@ it('keeps the sites of one client apart, and counts the rows once each', functio
 
     alComandoDelParco($this->superadmin);
 
+    preferisci($this->superadmin, $this->rossi);
     $pagina = Livewire::test(ParcoGlobale::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('accountIds', [$this->rossi->id])
+        ->set('modo', Perimetro::PREFERITI)
         ->viewData('strumenti');
 
     // ⚠️ `total()` e non `assertSee`: una riga duplicata dalle due join è
@@ -266,50 +283,212 @@ it('keeps the sites of one client apart, and counts the rows once each', functio
 
 // ─── 4. Il perimetro: restringe o non cambia, mai allarga ────────────────────
 
-it('narrows to the chosen clients', function () {
+it('narrows to the favourite clients', function () {
     alComandoDelParco($this->superadmin);
 
+    preferisci($this->superadmin, $this->rossi);
     Livewire::test(ParcoGlobale::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('accountIds', [$this->rossi->id])
+        ->set('modo', Perimetro::PREFERITI)
         ->assertSee('Autoclave Rossi')
         ->assertDontSee('Autoclave Bianchi');
 });
 
-it('shows nothing at all when the selection is empty, and says so', function () {
+it('shows nothing at all when there is no favourite, and says where to add one', function () {
     // ⛔ «Vuoto» e «tutti» sono un carattere di distanza e nessuno dei due dà
-    // errore: un `if ($scelti)` che tratta la selezione vuota come «nessun
+    // errore: un `if ($preferiti)` che tratta l'insieme vuoto come «nessun
     // filtro» mostrerebbe le righe di tutti a chi ne aveva chieste zero. È il
     // difetto già pagato dall'export che ignorava i filtri.
+    //
+    // ⚠️ E il messaggio manda dove la ★ c'è davvero — l'elenco Clienti — non a
+    // un filtro di questa pagina, che nel modo preferiti non esiste.
     alComandoDelParco($this->superadmin);
 
+    preferisci($this->superadmin);
     Livewire::test(ParcoGlobale::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('accountIds', [])
+        ->set('modo', Perimetro::PREFERITI)
         ->assertDontSee('Autoclave Rossi')
         ->assertDontSee('Autoclave Bianchi')
-        ->assertSee('Nessun cliente selezionato');
+        ->assertSee('Non hai ancora clienti preferiti');
 });
 
-it('never widens the perimeter with a forged account id', function () {
+it('never widens the perimeter with account ids forged in the query string', function () {
+    // 🔴 Dopo la ★ gli id del perimetro **non arrivano più dal browser**: la
+    // property che li portava è stata tolta, non lasciata inerte. Un
+    // `?modo=scelti&accountIds[]=…` salvato mesi fa — o scritto a mano — arriva
+    // comunque, e questo test congela le due metà della risposta: il modo si
+    // normalizza a `preferiti`, e l'array è un parametro che nessuna property
+    // `#[Url]` raccoglie più.
+    //
+    // ⚠️ L'id di «Gruppo Rossi» è **legittimo**, ed è il punto: se il residuo
+    // fosse ancora vivo, questa riga mostrerebbe le sue macchine.
+    //
+    // ⛔ E si passa dalla **query string** e non da `set()`: `set('accountIds')`
+    // su una property che non esiste solleva, cioè proverebbe la sparizione
+    // invece del comportamento. Il difetto vero arriva da un URL.
     alComandoDelParco($this->superadmin);
 
-    Livewire::test(ParcoGlobale::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('accountIds', [$this->rossi->id + 9_999])
+    preferisci($this->superadmin);
+
+    Livewire::withQueryParams([
+        'modo' => Perimetro::SCELTI,
+        'accountIds' => [$this->rossi->id, $this->rossi->id + 9_999],
+    ])
+        ->test(ParcoGlobale::class)
+        ->assertSet('modo', Perimetro::PREFERITI)
         ->assertDontSee('Autoclave Rossi')
         ->assertDontSee('Autoclave Bianchi');
 });
 
-it('refuses to hand over the platform rows even when its own id is picked', function () {
+it('does not carry a hand-picked id list in its public state at all', function () {
+    // ⚠️ Il compagno strutturale del test qui sopra, e non è zelo: quello resta
+    // verde anche se la property tornasse, purché la normalizzazione del modo
+    // regga. Ma una lista di id pubblica e `#[Url]` è l'unico filo per cui il
+    // browser potrebbe tornare a dettare un `whereIn` su questa vista, e la sua
+    // innocuità dipenderebbe per intero dal fatto che quella normalizzazione non
+    // abbia mai un buco. Tolto il filo, la garanzia è strutturale — ed è la
+    // stessa scelta delle altre due schede, che la property l'hanno tolta.
+    $pubbliche = collect((new ReflectionClass(ParcoGlobale::class))->getProperties(ReflectionProperty::IS_PUBLIC))
+        ->map(fn (ReflectionProperty $p) => $p->name)
+        ->filter(fn (string $nome) => str_contains(mb_strtolower($nome), 'account')
+            || str_contains(mb_strtolower($nome), 'client'))
+        ->values();
+
+    expect($pubbliche->all())->toBe(
+        [],
+        "Il Parco strumenti espone di nuovo una lista di clienti come property pubblica.\n\n".
+        "Gli id del perimetro vengono dal DATABASE (`Preferiti::perimetro()`), non dal browser: una\n".
+        "property pubblica omonima è la selezione arbitraria che la ★ esiste per sottrarre, sotto un\n".
+        "nome nuovo — e `#[Url]` la renderebbe pure condivisibile per link.\n\n".
+        'Trovate: '.$pubbliche->implode(', ')
+    );
+});
+
+it('does not let a saved url select a mode the dropdown cannot draw', function (string $modo) {
+    // 🔴 Questa è la strada del **`mount()`**, non quella dell'update: un
+    // `?modo=scelti&accountIds[]=…` messo fra i preferiti del browser mesi fa,
+    // o un `?modo=` scritto a mano, arriva dalla query string e non passa da
+    // `updatedModo()`. Senza la normalizzazione lì, la tendina mostrerebbe la
+    // sua PRIMA voce — «Tutti i clienti» — sopra una tabella vuota, e da lì non
+    // si uscirebbe: riselezionare la voce già mostrata non emette nessun evento.
+    //
+    // ⚠️ `assertSet` guarda la property, cioè ciò che la `<select>` riceverà:
+    // è l'asserzione che distingue «il perimetro è vuoto» (vero anche prima)
+    // da «il controllo dice il vero» (che è il difetto chiuso qui).
+    alComandoDelParco($this->superadmin);
+
+    preferisci($this->superadmin);
+
+    Livewire::withQueryParams(['modo' => $modo, 'accountIds' => [$this->rossi->id]])
+        ->test(ParcoGlobale::class)
+        ->assertSet('modo', Perimetro::PREFERITI)
+        ->assertDontSee('Autoclave Rossi')
+        ->assertSee('Non hai ancora clienti preferiti');
+})->with([
+    'il modo scelti, che la ★ ha sostituito' => [Perimetro::SCELTI],
+    'una stringa forgiata a mano' => ['tuttissimi'],
+]);
+
+it('forgets a plan that is not on the catalogue instead of showing it as chosen', function () {
+    // 🔴 L'altra metà della guardia sul modo, e la ragione è identica: `piano`
+    // finisce in una `<select wire:model.live>`, e una tendina legata a un
+    // valore senza `<option>` corrispondente non resta vuota. Qui la prima voce
+    // è «— scegli un piano —», quindi il controllo non mente sul nome; ma la
+    // property e la query string continuerebbero a portare `platino`, cioè un
+    // filtro **annunciato nell'URL** che nessun controllo mostra e nessuna riga
+    // riflette. Le altre due schede lo riconducevano già: qui no, ed erano tre
+    // schermi con tre comportamenti.
+    //
+    // ⚠️ `null` e non `''`: la property è nullable, e i due valori vanno
+    // entrambi a `nessuno()` — ricondurli a uno solo è ciò che permette alla
+    // tendina di evidenziare la voce vuota.
+    alComandoDelParco($this->superadmin);
+
+    Livewire::withQueryParams(['modo' => Perimetro::PER_PIANO, 'piano' => 'platino'])
+        ->test(ParcoGlobale::class)
+        ->assertSet('modo', Perimetro::PER_PIANO)
+        ->assertSet('piano', null)
+        ->assertSee('Nessun piano selezionato');
+
+    // E anche dall'update, che è la strada che `mount()` non copre.
+    Livewire::test(ParcoGlobale::class)
+        ->set('modo', Perimetro::PER_PIANO)
+        ->set('piano', 'platino')
+        ->assertSet('piano', null)
+        ->assertSee('Nessun piano selezionato');
+});
+
+it('keeps a plan that the operator really chose', function () {
+    // Il rovescio obbligatorio: una normalizzazione che azzera tutto passerebbe
+    // il test qui sopra e romperebbe il filtro.
+    alComandoDelParco($this->superadmin);
+
+    Livewire::withQueryParams(['modo' => Perimetro::PER_PIANO, 'piano' => 'saas'])
+        ->test(ParcoGlobale::class)
+        ->assertSet('piano', 'saas')
+        ->assertDontSee('Nessun piano selezionato');
+});
+
+it('refuses to hand over the platform rows even when its own id is a favourite', function () {
     // L'id di EasyLab è legittimo come intero e illegittimo come cliente:
-    // l'intersezione con `VistaPiattaforma::accounts()` lo fa sparire.
+    // l'intersezione con `VistaPiattaforma::accounts()` lo fa sparire. La ★
+    // dell'elenco Clienti non lo offrirebbe, ma il pivot è una tabella e una
+    // riga ce la si può trovare — un account che diventa `di_piattaforma` dopo
+    // la segnatura arriva esattamente qui.
+    alComandoDelParco($this->superadmin);
+
+    preferisci($this->superadmin, $this->easylab);
+    Livewire::test(ParcoGlobale::class)
+        ->set('modo', Perimetro::PREFERITI)
+        ->assertDontSee('Autoclave EasyLab')
+        ->assertDontSee('Autoclave Rossi');
+});
+
+it('drops a favourite that has been trashed in the meantime', function () {
+    // ⚠️ Il preferito sopravvive al cestinamento del cliente — il pivot non ha
+    // `deleted_at` — e senza l'intersezione le macchine di un Ente cestinato
+    // tornerebbero a schermo per la sola persona che l'aveva segnato: un parco
+    // che mostra righe diverse a due Superadmin, e nessuno dei due saprebbe
+    // perché.
+    alComandoDelParco($this->superadmin);
+
+    preferisci($this->superadmin, $this->rossi, $this->bianchi);
+
+    $this->rossi->delete();
+
+    Livewire::test(ParcoGlobale::class)
+        ->set('modo', Perimetro::PREFERITI)
+        ->assertDontSee('Autoclave Rossi')
+        ->assertSee('Autoclave Bianchi')
+        ->assertSee('Strumenti di 1 cliente preferito');
+});
+
+it('shows the favourites of the acting user, never those of another one', function () {
+    // 🔴 Il preferito è una preferenza **della persona**, non del cliente: due
+    // Superadmin seguono clienti diversi. Un `clientiPreferiti()` letto da un
+    // utente qualsiasi — o una lettura senza `where user_id` — darebbe a
+    // ciascuno il parco dell'altro, e la pagina resterebbe plausibile.
+    $secondoSuperadmin = User::factory()->create([
+        'tenant_id' => $this->sedeEasylab->id,
+        'two_factor_confirmed_at' => now(),
+    ]);
+    $secondoSuperadmin->assignRole('Superadmin');
+    $this->easylab->aggiungiMembro($secondoSuperadmin);
+
+    preferisci($this->superadmin, $this->rossi);
+    preferisci($secondoSuperadmin, $this->bianchi);
+
     alComandoDelParco($this->superadmin);
 
     Livewire::test(ParcoGlobale::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('accountIds', [$this->easylab->id])
-        ->assertDontSee('Autoclave EasyLab')
+        ->set('modo', Perimetro::PREFERITI)
+        ->assertSee('Autoclave Rossi')
+        ->assertDontSee('Autoclave Bianchi');
+
+    alComandoDelParco($secondoSuperadmin);
+
+    Livewire::test(ParcoGlobale::class)
+        ->set('modo', Perimetro::PREFERITI)
+        ->assertSee('Autoclave Bianchi')
         ->assertDontSee('Autoclave Rossi');
 });
 
@@ -487,21 +666,21 @@ it('tells an empty perimeter apart from an empty search and from an empty parco'
     // sede e nessuna macchina: il perimetro è pieno, il parco è vuoto.
     alComandoDelParco($this->superadmin);
 
+    preferisci($this->superadmin, $this->verdi);
     Livewire::test(ParcoGlobale::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('accountIds', [$this->verdi->id])
+        ->set('modo', Perimetro::PREFERITI)
         ->assertSee('Nessuna macchina per i clienti nel perimetro')
         ->assertDontSee('Nessun cliente selezionato')
         ->assertDontSee('Nessun risultato per i filtri applicati');
 });
 
 it('sends to the filter that is actually on screen when the perimeter is empty', function (array $stato, string $messaggio, string $mai) {
-    // 🔴 Il perimetro si svuota in tre modi, e i controlli a schermo sono
+    // 🔴 Il perimetro si svuota in modi diversi, e i controlli a schermo sono
     // diversi in ognuno. Col modo «per piano» e nessun piano scelto
     // `daRichiesta()` cade su `nessuno()`, che è `scelti([])`: il perimetro è
-    // vuoto, ma il multi-select dei clienti NON è renderizzato — e «scegline
-    // almeno uno dal filtro qui sopra» manda a cercare un controllo che non
-    // c'è, cioè a cercare un difetto.
+    // vuoto, ma la tendina dei piani è l'unico controllo renderizzato — e
+    // mandare altrove manda a cercare un difetto. Nel modo preferiti il rimando
+    // esce del tutto dal Parco: la ★ sta nell'elenco Clienti.
     alComandoDelParco($this->superadmin);
 
     $componente = Livewire::test(ParcoGlobale::class);
@@ -515,21 +694,25 @@ it('sends to the filter that is actually on screen when the perimeter is empty',
     'per piano, senza piano scelto' => [
         ['modo' => Perimetro::PER_PIANO, 'piano' => ''],
         'Nessun piano selezionato',
-        'Nessun cliente selezionato',
+        'Non hai ancora clienti preferiti',
     ],
     'per piano, con un piano fuori catalogo' => [
         ['modo' => Perimetro::PER_PIANO, 'piano' => 'platino'],
         'Nessun piano selezionato',
-        'Nessun cliente selezionato',
+        'Non hai ancora clienti preferiti',
     ],
+    // ⚠️ I due modi che la tendina non sa disegnare cadono **sullo stesso**
+    // messaggio, ed è la conseguenza voluta della normalizzazione: il controllo
+    // dice «★ I miei preferiti» e il messaggio manda alla ★. Prima dicevano
+    // «Perimetro non valido» sotto una tendina che diceva «Tutti i clienti».
     'un modo che non esiste' => [
         ['modo' => 'tuttissimi'],
-        'Perimetro non valido',
-        'Nessun cliente selezionato',
+        'Non hai ancora clienti preferiti',
+        'Nessun piano selezionato',
     ],
-    'clienti scelti, nessuno scelto' => [
-        ['modo' => Perimetro::SCELTI, 'accountIds' => []],
-        'Nessun cliente selezionato',
+    'il modo scelti, che non ha più un controllo' => [
+        ['modo' => Perimetro::SCELTI],
+        'Non hai ancora clienti preferiti',
         'Nessun piano selezionato',
     ],
 ]);
@@ -541,24 +724,54 @@ it('does not call a client without machines what is not a client at all', functi
     // domanda — quel cliente non è senza macchine, non è nel perimetro.
     alComandoDelParco($this->superadmin);
 
+    preferisci($this->superadmin, $this->easylab);
     Livewire::test(ParcoGlobale::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('accountIds', [$this->easylab->id])
-        ->assertSee('Nessun cliente selezionato')
+        ->set('modo', Perimetro::PREFERITI)
+        ->assertSee('Non hai ancora clienti preferiti')
         ->assertDontSee('Nessuna macchina per i clienti nel perimetro');
 });
 
-it('counts the clients it is really showing, not the ids the browser sent', function () {
-    // ⚠️ `count($accountIds)` è l'array GREZZO: un id ripetuto conta due volte
-    // e l'id di EasyLab conta uno, e l'etichetta annuncia clienti che in
-    // tabella non ci sono.
+it('counts the clients it is really showing, not the rows of the pivot', function () {
+    // ⚠️ `count($perimetro->accountIds)` è la lista GREZZA dei preferiti:
+    // l'id di EasyLab ci sta dentro e non porta nessuna riga, e l'etichetta
+    // annuncerebbe clienti che in tabella non ci sono. Il conteggio giusto è
+    // quello dell'insieme già **intersecato**.
     alComandoDelParco($this->superadmin);
 
+    preferisci($this->superadmin, $this->rossi, $this->easylab);
     Livewire::test(ParcoGlobale::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('accountIds', [$this->rossi->id, $this->rossi->id, $this->easylab->id])
-        ->assertSee('Clienti scelti (1)')
-        ->assertDontSee('Clienti scelti (3)');
+        ->set('modo', Perimetro::PREFERITI)
+        ->assertSee('I miei preferiti (1)')
+        ->assertDontSee('I miei preferiti (2)');
+});
+
+it('names the favourites on screen and points to where they are chosen', function () {
+    // La lista è in SOLA lettura: la ★ vive nell'elenco Clienti, e una pagina
+    // che dice «i miei preferiti» senza dire dove si cambiano lascia l'insieme
+    // senza una via d'uscita — è il difetto opposto a quello del multi-select,
+    // che li faceva ricomporre ogni volta.
+    alComandoDelParco($this->superadmin);
+
+    preferisci($this->superadmin, $this->rossi);
+
+    $html = Livewire::test(ParcoGlobale::class)
+        ->set('modo', Perimetro::PREFERITI)
+        ->html();
+
+    expect($html)->toContain('Gruppo Rossi');
+
+    // ⚠️ `toContain(route('piattaforma.index'))` da solo NON prova niente: quella
+    // rotta è già nella barra di navigazione della piattaforma, in cima a ogni
+    // pagina. L'ago è la coppia href + testo, cioè **questo** rimando.
+    //
+    // ⚠️ E l'href porta il **frammento** `#elenco-clienti`: senza, il link
+    // atterrava in cima alla cabina — quattro KPI e tre grafici sopra la
+    // tabella con le ★, a mille pixel di scorrimento — cioè mandava nel posto
+    // giusto facendolo sembrare quello sbagliato.
+    expect($html)->toMatch('/href="'.preg_quote(route('piattaforma.index').'#elenco-clienti', '/').'"[^>]*>\s*Gestisci i preferiti/');
+    // ⛔ Nessun controllo che scriva i preferiti da qui: rimetterebbe in piedi,
+    // sotto un nome nuovo, la `<select multiple>` che la ★ sostituisce.
+    expect($html)->not->toContain('wire:model.live="accountIds"');
 });
 
 it('says in its own title which clients it is showing', function () {
@@ -574,16 +787,16 @@ it('says in its own title which clients it is showing', function () {
     Livewire::test(ParcoGlobale::class)
         ->assertSee('Strumenti di tutti i clienti');
 
+    preferisci($this->superadmin, $this->rossi);
     Livewire::test(ParcoGlobale::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('accountIds', [$this->rossi->id])
-        ->assertSee('Strumenti di 1 cliente scelto')
+        ->set('modo', Perimetro::PREFERITI)
+        ->assertSee('Strumenti di 1 cliente preferito')
         ->assertDontSee('Strumenti di tutti i clienti');
 
+    preferisci($this->superadmin, $this->rossi, $this->bianchi);
     Livewire::test(ParcoGlobale::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('accountIds', [$this->rossi->id, $this->bianchi->id])
-        ->assertSee('Strumenti di 2 clienti scelti')
+        ->set('modo', Perimetro::PREFERITI)
+        ->assertSee('Strumenti di 2 clienti preferiti')
         ->assertDontSee('Strumenti di tutti i clienti');
 
     Livewire::test(ParcoGlobale::class)
@@ -591,6 +804,25 @@ it('says in its own title which clients it is showing', function () {
         ->set('piano', 'saas')
         ->assertSee('Strumenti dei clienti sul piano '.Piani::etichetta('saas'))
         ->assertDontSee('Strumenti di tutti i clienti');
+
+    // Zero preferiti: il titolo resta al plurale generico e **non** annuncia un
+    // numero, che sarebbe «Strumenti di 0 clienti preferiti».
+    preferisci($this->superadmin);
+    Livewire::test(ParcoGlobale::class)
+        ->set('modo', Perimetro::PREFERITI)
+        ->assertSee('Strumenti dei clienti preferiti')
+        ->assertDontSee('Strumenti di tutti i clienti');
+
+    // 🔴 «Per piano» finché il piano manca: `nessuno()` è `scelti([])`, quindi
+    // il perimetro dice SCELTI mentre il controllo a schermo dice «Per piano».
+    // Il titolo segue il controllo, o annuncerebbe i preferiti a chi sta
+    // guardando un'altra tendina.
+    preferisci($this->superadmin, $this->rossi);
+    Livewire::test(ParcoGlobale::class)
+        ->set('modo', Perimetro::PER_PIANO)
+        ->set('piano', '')
+        ->assertSee('Strumenti: nessun piano selezionato')
+        ->assertDontSee('cliente preferito');
 });
 
 it('shows a matricola valorised to zero, instead of reading it as missing', function () {
@@ -774,9 +1006,9 @@ it('partitions exactly like the per-Ente filter does, on an Ente where both are 
     $dalParco = [];
 
     foreach (StatoSemaforo::cases() as $stato) {
+        preferisci($this->superadmin, $this->rossi);
         $dalParco[$stato->value] = Livewire::test(ParcoGlobale::class)
-            ->set('modo', Perimetro::SCELTI)
-            ->set('accountIds', [$this->rossi->id])
+            ->set('modo', Perimetro::PREFERITI)
             ->set('perPage', 100)
             ->set('stato', $stato->value)
             ->viewData('strumenti')->getCollection()->pluck('id')->sort()->values()->all();
@@ -860,9 +1092,9 @@ it('calls obsolete exactly the machines the per-Ente filter calls obsolete', fun
 
     alComandoDelParco($this->superadmin);
 
+    preferisci($this->superadmin, $this->rossi);
     $dalParco = Livewire::test(ParcoGlobale::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('accountIds', [$this->rossi->id])
+        ->set('modo', Perimetro::PREFERITI)
         ->set('perPage', 100)
         ->set('soloObsoleti', true)
         ->viewData('strumenti')->getCollection()->pluck('id')->sort()->values()->all();
@@ -892,9 +1124,9 @@ it('keeps the two axes separate, instead of folding age into the semaforo', func
 
     alComandoDelParco($this->superadmin);
 
+    preferisci($this->superadmin, $this->bianchi);
     $nomi = Livewire::test(ParcoGlobale::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('accountIds', [$this->bianchi->id])
+        ->set('modo', Perimetro::PREFERITI)
         ->set('perPage', 100)
         ->set('soloObsoleti', true)
         ->set('stato', StatoSemaforo::Verde->value)
@@ -939,9 +1171,9 @@ it('does not filter, and does not announce a filter, on a semaforo value it does
         ->assertSee('Autoclave Rossi')
         ->assertSee('Autoclave Bianchi');
 
+    preferisci($this->superadmin, $this->verdi);
     Livewire::test(ParcoGlobale::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('accountIds', [$this->verdi->id])
+        ->set('modo', Perimetro::PREFERITI)
         ->set('stato', 'giallo')
         ->assertSee('Nessuna macchina per i clienti nel perimetro')
         ->assertDontSee('Nessun risultato per i filtri applicati');
@@ -958,9 +1190,9 @@ it('blames the filters when a state that IS known matches nothing', function () 
         ->assertSee('Nessun risultato per i filtri applicati')
         ->assertDontSee('Nessuna macchina per i clienti nel perimetro');
 
+    preferisci($this->superadmin, $this->verdi);
     Livewire::test(ParcoGlobale::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('accountIds', [$this->verdi->id])
+        ->set('modo', Perimetro::PREFERITI)
         ->set('soloObsoleti', true)
         ->assertSee('Nessun risultato per i filtri applicati')
         ->assertDontSee('Nessuna macchina per i clienti nel perimetro');
@@ -1154,9 +1386,9 @@ it('orders by the site column, and not by the client one, when Sede is picked', 
 
     alComandoDelParco($this->superadmin);
 
+    preferisci($this->superadmin, $this->rossi);
     $componente = Livewire::test(ParcoGlobale::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('accountIds', [$this->rossi->id]);
+        ->set('modo', Perimetro::PREFERITI);
 
     $sedi = fn () => $componente->viewData('strumenti')->getCollection()->pluck('sede_nome')->all();
 
@@ -1184,6 +1416,50 @@ it('orders by the client column across clients, in both directions', function ()
 });
 
 // ─── 8. Il costo: query costanti al crescere delle righe ─────────────────────
+
+it('does not read the client list in the modes that do not draw one', function () {
+    // 🔴 Finché c'era la `<select multiple>`, `render()` leggeva e idratava
+    // **ogni** account della piattaforma a ogni giro — anche nel modo «tutti»,
+    // dove nessun controllo la mostrava, e a ogni battuta nella casella di
+    // ricerca, che gira in `wire:model.live.debounce`. Sparito il multi-select,
+    // quella lettura è puro spreco: resta solo dove qualcosa la disegna.
+    //
+    // ⚠️ Si guarda la **forma SQL** e non il numero di query: un conteggio
+    // resterebbe verde se una lettura sparisse e un'altra nascesse. L'ago è
+    // `order by "accounts"."ragione_sociale"`, che è l'ordinamento dell'elenco
+    // dei clienti e di nient'altro in questa pagina.
+    $elencoClienti = fn () => collect(DB::getQueryLog())
+        ->pluck('query')
+        ->filter(fn (string $q) => str_contains($q, 'order by "accounts"."ragione_sociale"'))
+        ->count();
+
+    alComandoDelParco($this->superadmin);
+
+    preferisci($this->superadmin, $this->rossi);
+
+    // Un giro a vuoto: spatie carica ruoli e permessi al primo controllo, e
+    // sono query della sessione, non della pagina.
+    Livewire::test(ParcoGlobale::class);
+
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+    Livewire::test(ParcoGlobale::class)->set('modo', Perimetro::TUTTI);
+    $conTutti = $elencoClienti();
+    DB::disableQueryLog();
+
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+    Livewire::test(ParcoGlobale::class)->set('modo', Perimetro::PREFERITI);
+    $conPreferiti = $elencoClienti();
+    DB::disableQueryLog();
+
+    expect($conTutti)->toBe(0);
+
+    // ⚠️ E il confronto ha bisogno del secondo termine: senza, un `preferiti()`
+    // che non legge mai nulla soddisferebbe la riga qui sopra — cioè il test
+    // sarebbe verde su una pagina che i preferiti non li mostra.
+    expect($conPreferiti)->toBeGreaterThan(0);
+});
 
 it('costs the same number of queries whether the parco has three rows or sixty', function () {
     // ⚠️ È una vista su TUTTI i clienti: l'elenco per-Ente ha già un debito noto
@@ -1324,9 +1600,9 @@ it('says out loud that nobody can be impersonated, instead of leaving a silent b
 
     alComandoDelParco($this->superadmin);
 
+    preferisci($this->superadmin, $solo);
     Livewire::test(ParcoGlobale::class)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('accountIds', [$solo->id])
+        ->set('modo', Perimetro::PREFERITI)
         ->assertSee('Autoclave Neri')
         ->assertSee('Nessun membro impersonabile');
 });
@@ -1348,10 +1624,10 @@ it('keeps the open member picker alive when the perimeter changes underneath it'
 
     alComandoDelParco($this->superadmin);
 
+    preferisci($this->superadmin, $this->rossi);
     Livewire::test(ParcoGlobale::class)
         ->call('apriScelta', $this->bianchi->id)
-        ->set('modo', Perimetro::SCELTI)
-        ->set('accountIds', [$this->rossi->id])
+        ->set('modo', Perimetro::PREFERITI)
         ->assertDontSee('Autoclave Bianchi')
         ->assertSee('Impersona un membro di Lab Bianchi')
         ->assertSee('Bruno Bianchi');

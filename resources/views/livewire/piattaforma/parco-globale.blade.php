@@ -36,9 +36,15 @@
                 <label for="modo" class="block text-xs font-medium tracking-wide text-ink-3 uppercase">Clienti</label>
                 <select id="modo" wire:model.live="modo"
                     class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none sm:w-56">
+                    {{-- ⛔ Nessuna `<option value="scelti">`: quel modo non ha
+                         più un controllo. Il componente normalizza a
+                         `preferiti` proprio perché una `<select>` legata a un
+                         valore senza `<option>` evidenzia la PRIMA voce — cioè
+                         direbbe «Tutti i clienti» sopra una tabella che tutti i
+                         clienti non li mostra. --}}
                     <option value="tutti">Tutti i clienti</option>
                     <option value="piano">Per piano</option>
-                    <option value="scelti">Quelli che scelgo</option>
+                    <option value="preferiti">★ I miei preferiti</option>
                 </select>
             </div>
 
@@ -55,20 +61,48 @@
                 </div>
             @endif
 
-            @if ($modo === 'scelti')
-                <div>
-                    <label for="accountIds" class="block text-xs font-medium tracking-wide text-ink-3 uppercase">
-                        Clienti scelti ({{ $clientiScelti }})
-                    </label>
-                    {{-- ⚠️ Selezione VUOTA = nessuna riga, mai «tutti»: è la
-                         trappola che `Perimetro` esiste per chiudere, e la vista
-                         lo dice a schermo invece di lasciarlo dedurre. --}}
-                    <select id="accountIds" wire:model.live="accountIds" multiple size="4"
-                        class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none sm:w-72">
-                        @foreach ($selezionabili as $cliente)
-                            <option value="{{ $cliente->id }}">{{ $cliente->ragione_sociale }}</option>
-                        @endforeach
-                    </select>
+            {{-- ★ I preferiti sono in SOLA LETTURA, e non per pigrizia: si
+                 scelgono altrove — con la stella nell'elenco Clienti della
+                 cabina — perché sono una preferenza durevole della persona e
+                 non un filtro da ricomporre a ogni visita. Qui si dice quali
+                 sono, quanti sono e dove si cambiano; un controllo che li
+                 modificasse da questa pagina rimetterebbe in piedi, sotto un
+                 nome nuovo, la `<select multiple>` che la ★ sostituisce.
+
+                 ⚠️ Insieme VUOTO = nessuna riga, mai «tutti»: è la trappola che
+                 `Perimetro` esiste per chiudere, e il messaggio dell'elenco lo
+                 dice a schermo invece di lasciarlo dedurre. --}}
+            {{-- ⚠️ `w-full` — cioè una RIGA propria dentro la barra — e non una
+                 colonna accanto agli altri controlli, per due ragioni misurate:
+                 (a) i nomi sono lunghi e sono N, e in una colonna stretta sei
+                 preferiti diventavano sei righe incolonnate con mezza barra
+                 vuota accanto; (b) la barra è `items-end`, quindi un riquadro
+                 più alto dei suoi vicini li fa **scendere** — la `select`
+                 «Clienti» finiva a metà altezza, staccata dalla propria
+                 etichetta. Su una riga sua non tira giù nessuno. Un `flex-1` non
+                 basta: qui i controlli in barra sono quattro e il riquadro
+                 ricadeva sul proprio `min-w`. La **stessa** forma sulle altre
+                 due schede: un filtro che si presenta in tre modi diversi è, per
+                 chi guarda, tre filtri. --}}
+            @if ($modo === 'preferiti')
+                <div class="w-full">
+                    <p class="block text-xs font-medium tracking-wide text-ink-3 uppercase">
+                        I miei preferiti ({{ $preferiti->count() }})
+                    </p>
+                    <div class="mt-1 rounded-md border border-border-strong bg-surface-sunken px-3 py-2 text-sm text-ink">
+                        @if ($preferiti->isEmpty())
+                            <p class="text-ink-3">Nessuno, per ora.</p>
+                        @else
+                            <p class="leading-relaxed">{{ $preferiti->pluck('ragione_sociale')->implode(', ') }}</p>
+                        @endif
+                        {{-- L'ancora porta alla barra dei filtri dell'elenco
+                             Clienti: senza, il link atterra in cima alla cabina
+                             e la tabella con le ★ resta sotto i grafici. --}}
+                        <a href="{{ route('piattaforma.index') }}#elenco-clienti"
+                            class="mt-1 inline-block text-xs font-medium text-brand hover:underline">
+                            Gestisci i preferiti nell'elenco Clienti
+                        </a>
+                    </div>
                 </div>
             @endif
 
@@ -249,9 +283,11 @@
                                  arriva dal componente perché deve conoscere il modo
                                  GREZZO, cioè quali filtri questa vista sta davvero
                                  disegnando: col modo «per piano» e nessun piano
-                                 scelto il perimetro è vuoto ma il multi-select dei
-                                 clienti non esiste a schermo, e mandare lì è mandare
-                                 a cercare un difetto. --}}
+                                 scelto il perimetro è vuoto ma la tendina dei piani
+                                 è l'unico controllo a schermo, e mandare altrove è
+                                 mandare a cercare un difetto. Senza preferiti il
+                                 rimando esce del tutto da questa pagina — la ★ sta
+                                 nell'elenco Clienti — e il messaggio lo dice. --}}
                             <td colspan="8" class="px-3 py-10 text-center text-sm text-ink-3">{{ $messaggioVuoto }}</td>
                         </tr>
                     @endforelse

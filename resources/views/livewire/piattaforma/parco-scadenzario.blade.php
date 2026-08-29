@@ -25,7 +25,7 @@
     <x-piattaforma.nav />
     <x-parco.nav />
 
-    <h1 class="mt-6 text-2xl font-bold tracking-tight text-ink">Scadenzario di tutti i clienti</h1>
+    <h1 class="mt-6 text-2xl font-bold tracking-tight text-ink">{{ $titolo }}</h1>
 
     {{-- Il perimetro si NOMINA sotto al titolo: un totale senza perimetro
          finisce citato in riunione per un altro. --}}
@@ -44,7 +44,10 @@
                     class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none sm:w-56">
                     <option value="tutti">Tutti i clienti</option>
                     <option value="piano">Per piano</option>
-                    <option value="scelti">Scelti a mano</option>
+                    {{-- L'etichetta è IDENTICA sulle tre schede del Parco: due
+                         schermi che chiamano lo stesso perimetro con due nomi
+                         diversi sono due perimetri, per chi legge. --}}
+                    <option value="preferiti">★ I miei preferiti</option>
                 </select>
             </div>
 
@@ -61,15 +64,34 @@
                 </div>
             @endif
 
-            @if ($modo === 'scelti')
-                <div>
-                    <label for="perimetro-clienti" class="block text-sm font-medium text-ink">Quali clienti</label>
-                    <select id="perimetro-clienti" wire:model.live="clientiScelti" multiple size="4"
-                        class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none sm:w-64">
-                        @foreach ($selezionabili as $cliente)
-                            <option value="{{ $cliente->id }}">{{ $cliente->ragione_sociale }}</option>
-                        @endforeach
-                    </select>
+            {{-- I preferiti si LEGGONO qui e si CAMBIANO nell'elenco Clienti:
+                 niente select multipla, e nessun secondo posto in cui
+                 modificarli — che sarebbe un secondo insieme il giorno in cui i
+                 due divergessero. --}}
+            {{-- ⚠️ Forma IDENTICA a quella delle altre due schede: riquadro
+                 contornato su `bg-surface-sunken`, una **riga propria**
+                 (`w-full`) dentro la barra, link in fondo. Prima era testo nudo
+                 dentro una colonna `sm:w-64`, e con sei preferiti diventava sei
+                 righe incolonnate a sinistra con mezza barra vuota accanto — e
+                 la `select` «Clienti», che la barra allinea in basso, scendeva a
+                 metà riquadro staccandosi dalla propria etichetta. --}}
+            @if ($modo === 'preferiti')
+                <div class="w-full">
+                    <p class="block text-sm font-medium text-ink">I miei preferiti ({{ $preferiti->count() }})</p>
+                    <div class="mt-1 rounded-md border border-border-strong bg-surface-sunken px-3 py-2 text-sm text-ink">
+                        @if ($preferiti->isEmpty())
+                            <p class="text-ink-3">Nessuno, per ora.</p>
+                        @else
+                            <p class="leading-relaxed">{{ $preferiti->pluck('ragione_sociale')->implode(', ') }}</p>
+                        @endif
+                        {{-- L'ancora porta alla barra dei filtri dell'elenco
+                             Clienti: senza, il link atterra in cima alla cabina
+                             e la tabella con le ★ resta sotto i grafici. --}}
+                        <a href="{{ route('piattaforma.index') }}#elenco-clienti"
+                            class="mt-1 inline-block text-xs font-medium text-brand hover:underline">
+                            Gestisci i preferiti nell'elenco Clienti
+                        </a>
+                    </div>
                 </div>
             @endif
         </div>
@@ -108,7 +130,15 @@
     <x-ui.card class="mt-4">
         <div class="flex flex-wrap items-center gap-3">
             <div class="min-w-56 flex-1">
+                {{-- ⚠️ `aria-label` e non il solo `placeholder`: un segnaposto
+                     non è un nome accessibile — sparisce alla prima lettera
+                     digitata e lo screen reader annuncia «casella di testo» e
+                     basta. Le altre due schede il campo lo etichettano
+                     («CERCA», «Cerca un pezzo»); qui la barra è senza etichette
+                     per scelta di densità, quindi il nome va dato a mano. La
+                     tendina dei tipi, qui accanto, ce l'ha già. --}}
                 <x-ui.input name="search" wire:model.live.debounce.300ms="search"
+                    aria-label="Cerca per macchina o descrizione"
                     placeholder="Cerca per macchina o descrizione…" />
             </div>
 
@@ -273,7 +303,30 @@
                             // perimetro vuoto non è un parco senza scadenze.
                             // La condizione dei filtri NON si riscrive qui: il
                             // componente espone un predicato solo.
+                            // 🔴 E un perimetro vuoto non è un fatto solo: «non
+                            // hai preferiti» e «non hai scelto un piano» sono
+                            // due condizioni diverse, e mandano a due posti
+                            // diversi. Un «scegline almeno uno dal filtro qui
+                            // sopra» nel modo preferiti manderebbe a un
+                            // controllo che lì non esiste — i preferiti si
+                            // segnano nell'elenco Clienti.
                             $vuoto = match (true) {
+                                // ⚠️ L'insieme **già intersecato** e non `perimetroVuoto`: i
+                                // preferiti possono essere non vuoti di ID e vuoti di
+                                // CLIENTI — un preferito verso un account cestinato, o
+                                // diventato di piattaforma, dopo la segnatura — e
+                                // `eNessuno()` guarda la lista grezza, quindi quel caso
+                                // non lo vede: la tabella direbbe «questi clienti non
+                                // hanno scadenze» di clienti che non ci sono.
+                                $modo === 'preferiti' && $preferiti->isEmpty() => 'Non hai ancora clienti preferiti: segnali con la ★ nell\'elenco Clienti.',
+                                $perimetroVuoto && $modo === 'piano' => 'Nessun piano scelto: scegline uno, oppure torna a «Tutti i clienti».',
+                                // Difesa in profondità, oggi irraggiungibile:
+                                // tolta la voce «scelti» dalla tendina, un
+                                // perimetro vuoto nasce solo dai due rami qui
+                                // sopra. Sta scritto perché il giorno in cui un
+                                // quarto modo cadesse su «nessuno» la tabella
+                                // lo dica, invece di leggersi come «questi
+                                // clienti non hanno scadenze».
                                 $perimetroVuoto => 'Nessun cliente selezionato: scegli chi vuoi guardare.',
                                 $this->haFiltriAttivi() => 'Nessun risultato per i filtri applicati.',
                                 default => 'Nessun intervento aperto sui clienti selezionati.',

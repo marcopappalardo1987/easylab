@@ -107,6 +107,29 @@ function schedaRicambi(array $property = [])
 }
 
 /**
+ * Segna dei clienti fra i **preferiti** di una persona, scrivendo il pivot.
+ *
+ * ⚠️ Si scrive il pivot invece di passare da `Preferiti::alterna()`, e la
+ * differenza conta: `alterna()` rilegge l'account dall'insieme legittimo e si
+ * rifiuta di segnare EasyLab o un cestinato, quindi con quella strada i casi
+ * che provano l'**intersezione** non si potrebbero nemmeno costruire. Qui la
+ * riga in tabella c'è — com'è per un cliente cestinato *dopo* essere stato
+ * segnato — e ciò che deve tenere è `ParcoClienti::clienti()`.
+ */
+function segnaPreferiti(User $utente, Account ...$clienti): void
+{
+    $utente->clientiPreferiti()->syncWithoutDetaching(collect($clienti)->pluck('id')->all());
+}
+
+/** La scheda sul perimetro «i miei preferiti», con quei clienti già segnati. */
+function schedaRicambiSuPreferiti(User $utente, Account ...$clienti)
+{
+    segnaPreferiti($utente, ...$clienti);
+
+    return schedaRicambi(['modo' => Perimetro::PREFERITI]);
+}
+
+/**
  * Un cliente con **due** membri impersonabili, creato dentro il test che lo usa.
  *
  * ⚠️ Sta qui e non nel `beforeEach` di proposito: il ramo «più di un candidato»
@@ -229,24 +252,49 @@ it('never shows the platform account own catalogue', function () {
 
 // ─── 3. Il perimetro: restringe o non cambia, mai allarga ────────────────────
 
-it('treats an empty hand-picked selection as nobody, never as everybody', function () {
+it('treats an empty set of favourites as nobody, never as everybody', function () {
     // ⛔ «Nessuno selezionato» è la condizione più facile da leggere come
     // «nessun filtro», e su una vista cross-cliente la differenza fra le due
     // letture è fra zero righe e le righe di tutti.
     $this->actingAs($this->superadmin);
 
-    schedaRicambi(['modo' => Perimetro::SCELTI, 'clientiScelti' => []])
+    schedaRicambi(['modo' => Perimetro::PREFERITI])
         ->assertDontSee('Filtro Rosso')
         ->assertDontSee('Sonda Blu')
-        ->assertSee('Nessun cliente selezionato');
+        // Il messaggio manda dove i preferiti si segnano davvero: «scegli
+        // almeno un cliente» manderebbe a una `<select>` che in questo modo non
+        // esiste più.
+        ->assertSee('Non hai ancora clienti preferiti')
+        ->assertDontSee('Nessun cliente selezionato');
 });
 
-it('never widens the perimeter with a forged account id', function () {
+it('never lets one platform person filter on another one\'s favourites', function () {
+    // 🔴 Il pivot non porta `tenant_id` — la riga attraversa i tenant per
+    // definizione — quindi il confine qui è **l'utente**. Una lettura presa
+    // dalla tabella invece che dalla relazione mostrerebbe a ciascuno i
+    // preferiti di tutti, e due Superadmin seguono clienti diversi.
+    $altro = User::factory()->create([
+        'tenant_id' => $this->sedeRossiCentro->id,
+        'two_factor_confirmed_at' => now(),
+    ]);
+    $altro->assignRole('Superadmin');
+
+    segnaPreferiti($this->superadmin, $this->rossi);
+    segnaPreferiti($altro, $this->bianchi);
+
     $this->actingAs($this->superadmin);
 
-    schedaRicambi(['modo' => Perimetro::SCELTI, 'clientiScelti' => [999_999]])
-        ->assertDontSee('Filtro Rosso')
+    schedaRicambi(['modo' => Perimetro::PREFERITI])
+        ->assertSee('Filtro Rosso')
         ->assertDontSee('Sonda Blu');
+
+    // Il controllo speculare: l'altro vede i SUOI. Senza, il «non si vede» qui
+    // sopra sarebbe una proprietà della fixture e non del confine.
+    $this->actingAs($altro);
+
+    schedaRicambi(['modo' => Perimetro::PREFERITI])
+        ->assertSee('Sonda Blu')
+        ->assertDontSee('Filtro Rosso');
 });
 
 it('never lets the platform account be picked into the perimeter', function () {
@@ -254,9 +302,24 @@ it('never lets the platform account be picked into the perimeter', function () {
     // `VistaPiattaforma::accounts()` lo fa sparire invece di ammetterlo.
     $this->actingAs($this->superadmin);
 
-    schedaRicambi(['modo' => Perimetro::SCELTI, 'clientiScelti' => [$this->easylab->id]])
+    schedaRicambiSuPreferiti($this->superadmin, $this->easylab)
         ->assertDontSee('Cinghia Interna')
         ->assertDontSee('Filtro Rosso');
+});
+
+it('says the favourites are empty when none of them is a visible client any more', function () {
+    // 🔴 «Insieme vuoto» non è solo `eNessuno()`, che guarda la lista **grezza**
+    // degli id: i preferiti possono essere pieni di id e vuoti di CLIENTI — un
+    // account diventato di piattaforma, o cestinato, dopo la segnatura. Senza
+    // guardare l'insieme già intersecato la pagina cadeva sull'ultimo ramo e
+    // diceva «Nessun pezzo a catalogo con questi filtri» di clienti che non ci
+    // sono: la stessa forma di bugia del titolo statico sopra una tabella
+    // filtrata, e la stessa che le altre due schede evitano.
+    $this->actingAs($this->superadmin);
+
+    schedaRicambiSuPreferiti($this->superadmin, $this->easylab)
+        ->assertSee('Non hai ancora clienti preferiti')
+        ->assertDontSee('Nessun pezzo a catalogo con questi filtri');
 });
 
 it('never lets a soft-deleted client back into the perimeter', function () {
@@ -264,7 +327,7 @@ it('never lets a soft-deleted client back into the perimeter', function () {
 
     $this->bianchi->delete();
 
-    schedaRicambi(['modo' => Perimetro::SCELTI, 'clientiScelti' => [$this->bianchi->id]])
+    schedaRicambiSuPreferiti($this->superadmin, $this->bianchi)
         ->assertDontSee('Sonda Blu');
 });
 
@@ -276,7 +339,9 @@ it('falls back to nobody when the mode is not one of the three', function () {
     schedaRicambi(['modo' => 'tutto-quanto'])
         ->assertDontSee('Filtro Rosso')
         ->assertDontSee('Sonda Blu')
-        ->assertSee('Nessun cliente selezionato');
+        // Il ripiego è «preferiti», quindi è il suo messaggio a comparire:
+        // dice il vero sul controllo che la tendina sta mostrando.
+        ->assertSee('Non hai ancora clienti preferiti');
 });
 
 it('falls back to nobody when the plan is not on the catalogue', function () {
@@ -295,6 +360,39 @@ it('falls back to nobody when the plan filter is left empty', function () {
         ->assertDontSee('Sonda Blu');
 });
 
+it('says in its own title which clients it is showing', function () {
+    // 🔴 Fino al 29 Ago 2026 questo H1 era una stringa fissa in Blade —
+    // «Ricambi di tutti i clienti» — e restava tale filtrando su un cliente
+    // solo o su zero preferiti. Su una pagina da cui si impersona, un titolo
+    // che allarga il perimetro a parole lavora contro la sola cosa che conta:
+    // sapere di CHI sono le righe che si stanno leggendo.
+    $this->actingAs($this->superadmin);
+
+    schedaRicambi()->assertSee('Ricambi di tutti i clienti');
+
+    schedaRicambiSuPreferiti($this->superadmin, $this->rossi)
+        ->assertSee('Ricambi di 1 cliente preferito')
+        ->assertDontSee('Ricambi di tutti i clienti');
+
+    schedaRicambiSuPreferiti($this->superadmin, $this->bianchi)
+        ->assertSee('Ricambi di 2 clienti preferiti');
+
+    schedaRicambi(['modo' => Perimetro::PER_PIANO, 'piano' => 'free'])
+        ->assertSee('Ricambi dei clienti sul piano')
+        ->assertDontSee('Ricambi di tutti i clienti');
+});
+
+it('does not call the perimeter «everyone» while the plan is still unchosen', function () {
+    // «Per piano» senza piano è l'insieme vuoto: il titolo non deve dire
+    // «tutti», e nemmeno annunciare i preferiti sopra una tendina che dice
+    // «Per piano».
+    $this->actingAs($this->superadmin);
+
+    schedaRicambi(['modo' => Perimetro::PER_PIANO])
+        ->assertSee('Ricambi: nessun piano selezionato')
+        ->assertDontSee('Ricambi di tutti i clienti');
+});
+
 it('keeps only the clients on the chosen plan', function () {
     $this->actingAs($this->superadmin);
 
@@ -306,7 +404,7 @@ it('keeps only the clients on the chosen plan', function () {
 it('keeps only the hand-picked client', function () {
     $this->actingAs($this->superadmin);
 
-    schedaRicambi(['modo' => Perimetro::SCELTI, 'clientiScelti' => [$this->rossi->id]])
+    schedaRicambiSuPreferiti($this->superadmin, $this->rossi)
         ->assertSee('Filtro Rosso')
         ->assertDontSee('Sonda Blu');
 });
@@ -339,7 +437,7 @@ it('counts the spread inside the perimeter and not across the whole platform', f
     // giorno in cui si tocca `contesto()`.
     $this->actingAs($this->superadmin);
 
-    schedaRicambi(['modo' => Perimetro::SCELTI, 'clientiScelti' => [$this->rossi->id]])
+    schedaRicambiSuPreferiti($this->superadmin, $this->rossi)
         ->assertSee('solo qui')
         ->assertDontSee('2 clienti');
 });
@@ -481,7 +579,7 @@ it('ignores a click on a column that is not sortable', function () {
 it('offers impersonation next to the rows of a client that has an impersonable member', function () {
     $this->actingAs($this->superadmin);
 
-    schedaRicambi(['modo' => Perimetro::SCELTI, 'clientiScelti' => [$this->rossi->id]])
+    schedaRicambiSuPreferiti($this->superadmin, $this->rossi)
         ->assertSee('Impersona');
 });
 
@@ -491,7 +589,7 @@ it('says so instead of leaving an empty cell when nobody can be impersonated', f
     // davvero su questa piattaforma.
     $this->actingAs($this->superadmin);
 
-    schedaRicambi(['modo' => Perimetro::SCELTI, 'clientiScelti' => [$this->bianchi->id]])
+    schedaRicambiSuPreferiti($this->superadmin, $this->bianchi)
         ->assertSee('Nessun membro impersonabile')
         ->assertDontSee('Impersona');
 });
@@ -512,7 +610,7 @@ it('offers no impersonation at all to someone who has the parco but not the perm
 
     $this->actingAs($this->superadmin);
 
-    schedaRicambi(['modo' => Perimetro::SCELTI, 'clientiScelti' => [$this->rossi->id]])
+    schedaRicambiSuPreferiti($this->superadmin, $this->rossi)
         ->assertSee('Filtro Rosso')
         ->assertDontSee('Impersona');
 });
@@ -661,7 +759,7 @@ it('does not loosen the tenant scope for the rest of the request', function () {
 
 // ─── 10. I controlli in cima devono DIRE IL VERO ─────────────────────────────
 
-it('never lets the perimeter dropdown claim «all clients» over a page that shows none', function () {
+it('never lets the perimeter dropdown claim «all clients» over a page that shows none', function (string $modoDalBrowser) {
     // ⚠️ La tendina è disegnata da `wire:model`, cioè dal VALORE della property e
     // non dal markup: un `modo` fuori catalogo non ha nessuna `<option>` che gli
     // corrisponda, e il browser evidenzia la prima — «Tutti i clienti» — sopra
@@ -670,11 +768,19 @@ it('never lets the perimeter dropdown claim «all clients» over a page that sho
     // quello stato non si esce.
     $this->actingAs($this->superadmin);
 
-    schedaRicambi(['modo' => 'tutto-quanto'])
-        ->assertSet('modo', Perimetro::SCELTI)
-        ->assertSee('Nessun cliente selezionato')
+    // ⚠️ `scelti` è fra i casi apposta: è un modo ancora **valido nel dominio**
+    // — `Perimetro::nessuno()` è `scelti([])` — ma non è più una voce della
+    // tendina, quindi un link salvato che lo porta va ricondotto come un modo
+    // inventato. Finché il ripiego restava `scelti`, era il ripiego stesso a
+    // diventare il difetto che questa guardia esiste per togliere.
+    schedaRicambi(['modo' => $modoDalBrowser])
+        ->assertSet('modo', Perimetro::PREFERITI)
+        ->assertSee('Non hai ancora clienti preferiti')
         ->assertDontSee('Filtro Rosso');
-});
+})->with([
+    'la scelta a mano di un link salvato' => [Perimetro::SCELTI],
+    'un modo forgiato' => ['tutto-quanto'],
+]);
 
 it('normalises an unknown mode that arrives from an update, not only from the url', function () {
     // `mount()` non rigira sugli update: la property arriva dal browser a ogni
@@ -683,7 +789,7 @@ it('normalises an unknown mode that arrives from an update, not only from the ur
 
     schedaRicambi()
         ->set('modo', 'tutto-quanto')
-        ->assertSet('modo', Perimetro::SCELTI)
+        ->assertSet('modo', Perimetro::PREFERITI)
         ->assertDontSee('Filtro Rosso');
 });
 
@@ -697,6 +803,9 @@ it('asks for a plan, and not for a client, while the plan filter is still empty'
     schedaRicambi(['modo' => Perimetro::PER_PIANO])
         ->assertSee('Nessun piano scelto')
         ->assertDontSee('Nessun cliente selezionato')
+        // ⛔ E nemmeno il messaggio dei preferiti: sono tre condizioni diverse,
+        // e ognuna manda in un posto diverso.
+        ->assertDontSee('Non hai ancora clienti preferiti')
         ->assertDontSee('Filtro Rosso');
 });
 
@@ -721,30 +830,47 @@ it('keeps the plan the operator actually chose', function () {
         ->assertDontSee('Nessun piano scelto');
 });
 
-it('never offers the platform account, nor a binned client, among the clients to pick', function () {
-    // ⚠️ La tendina è l'unico posto in cui le ragioni sociali compaiono in
-    // chiaro senza passare da una riga: un cliente cestinato elencato lì si
-    // legge, e un EasyLab scegliibile dà zero righe senza nessuna spiegazione.
+it('never lists the platform account, nor a binned client, among the favourites', function () {
+    // ⚠️ Il blocco dei preferiti è l'unico posto in cui le ragioni sociali
+    // compaiono in chiaro senza passare da una riga: un cliente cestinato
+    // elencato lì si legge, e un EasyLab elencato prometterebbe righe che non
+    // arrivano mai. `Preferiti::clienti()` passa dall'intersezione apposta.
     $this->actingAs($this->superadmin);
+
+    segnaPreferiti($this->superadmin, $this->rossi, $this->bianchi, $this->easylab);
 
     $this->bianchi->delete();
 
-    schedaRicambi(['modo' => Perimetro::SCELTI, 'clientiScelti' => []])
-        // La tendina è davvero piena: senza questa riga le due negative sarebbero
-        // soddisfatte anche da una `<select>` vuota.
+    schedaRicambi(['modo' => Perimetro::PREFERITI])
+        // L'elenco è davvero pieno: senza questa riga le due negative sarebbero
+        // soddisfatte anche da un blocco vuoto.
         ->assertSee('Gruppo Rossi')
         ->assertDontSee('EasyLab')
-        ->assertDontSee('Lab Bianchi');
+        ->assertDontSee('Lab Bianchi')
+        // ⚠️ E il conteggio dice il VERO: «3 preferiti» sopra una tabella
+        // costruita su 1 sarebbe la stessa specie di bugia di un titolo statico
+        // sopra un elenco filtrato.
+        ->assertSee('I miei preferiti (1)')
+        // Dove si cambiano, che è l'altra metà del messaggio. `escape: false`:
+        // l'apostrofo di «nell'elenco» esce dal render come `&#039;`, e un ago
+        // con l'apostrofo vero non si troverebbe mai.
+        ->assertSee('Gestisci i preferiti nell\'elenco Clienti', escape: false);
 });
 
-it('does not go and fetch the client list on the modes that never draw it', function (string $modo) {
-    // Una query e l'idratazione di ogni account della piattaforma, buttate via a
-    // ogni battuta nella casella di ricerca.
+it('does not go and fetch the favourites on the modes that never draw them', function (string $modo) {
+    // Una query buttata via a ogni battuta nella casella di ricerca, che gira
+    // in `wire:model.live.debounce`.
     $this->actingAs($this->superadmin);
+
+    segnaPreferiti($this->superadmin, $this->rossi);
 
     $scheda = schedaRicambi(['modo' => $modo, 'piano' => 'free']);
 
-    expect($scheda->viewData('selezionabili'))->toBeEmpty();
+    expect($scheda->viewData('preferiti'))->toBeEmpty();
+
+    // ⚠️ E l'altra metà, o «non leggerli mai» passerebbe questo test.
+    expect(schedaRicambi(['modo' => Perimetro::PREFERITI])->viewData('preferiti'))
+        ->toHaveCount(1);
 })->with([
     'tutti i clienti' => [Perimetro::TUTTI],
     'per piano' => [Perimetro::PER_PIANO],
@@ -769,9 +895,8 @@ it('goes back to page one whenever the question changes under the operator', fun
         ->assertSet('paginators.page', 1);
 })->with([
     'la ricerca' => ['search', 'guarnizione'],
-    'il modo' => ['modo', Perimetro::SCELTI],
+    'il modo' => ['modo', Perimetro::PREFERITI],
     'il piano' => ['piano', 'free'],
-    'i clienti scelti' => ['clientiScelti', [999_999]],
     'la taglia di pagina' => ['perPage', 50],
 ]);
 
@@ -833,7 +958,7 @@ it('points the impersonation link at the member, and never at the account', func
     // porta per caso quell'id.
     $this->actingAs($this->superadmin);
 
-    schedaRicambi(['modo' => Perimetro::SCELTI, 'clientiScelti' => [$this->rossi->id]])
+    schedaRicambiSuPreferiti($this->superadmin, $this->rossi)
         ->assertSee('Impersona')
         ->assertSee(route('impersonate', $this->membroRossi), false);
 });
@@ -852,7 +977,7 @@ it('lets the operator choose which member to enter as, when a client has more th
 
     $this->actingAs($this->superadmin);
 
-    schedaRicambi(['modo' => Perimetro::SCELTI, 'clientiScelti' => [$verdi->id]])
+    schedaRicambiSuPreferiti($this->superadmin, $verdi)
         ->assertSee('Impersona (2)')
         ->call('apriScelta', $verdi->id)
         ->assertSee('Impersona un membro di Studio Verdi')
@@ -869,7 +994,7 @@ it('shows no chooser at all until one is opened', function () {
 
     $this->actingAs($this->superadmin);
 
-    schedaRicambi(['modo' => Perimetro::SCELTI, 'clientiScelti' => [$verdi->id]])
+    schedaRicambiSuPreferiti($this->superadmin, $verdi)
         ->assertDontSee('Impersona un membro di Studio Verdi');
 });
 
@@ -894,7 +1019,7 @@ it('never points the impersonation button at a machine, because a catalogue part
     // che non può fallire. Prima si prova che il pulsante c'è, poi dove porta.
     $this->actingAs($this->superadmin);
 
-    schedaRicambi(['modo' => Perimetro::SCELTI, 'clientiScelti' => [$this->rossi->id]])
+    schedaRicambiSuPreferiti($this->superadmin, $this->rossi)
         ->assertSee('Impersona')
         ->assertSee(route('impersonate', $this->membroRossi), false)
         ->assertDontSee('/piattaforma/parco/impersona/', false);
@@ -908,7 +1033,7 @@ it('keeps the member chooser on the plain route as well', function () {
 
     $this->actingAs($this->superadmin);
 
-    schedaRicambi(['modo' => Perimetro::SCELTI, 'clientiScelti' => [$verdi->id]])
+    schedaRicambiSuPreferiti($this->superadmin, $verdi)
         ->call('apriScelta', $verdi->id)
         ->assertSee(route('impersonate', $primo), false)
         ->assertSee(route('impersonate', $secondo), false)

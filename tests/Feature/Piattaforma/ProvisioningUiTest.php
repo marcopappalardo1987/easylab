@@ -293,7 +293,7 @@ it('shows the new customer without making anyone go looking for it', function ()
 it('names the Ente where the Ente is actually born', function () {
     Livewire::test(Cabina::class)
         ->call('apriProvisioning')
-        ->assertSee('Nuovo cliente e primo Ente');
+        ->assertSee('Nuovo cliente e prima sede (Ente)');
 });
 
 it('names the Ente also when adding one to an existing customer', function () {
@@ -303,4 +303,107 @@ it('names the Ente also when adding one to an existing customer', function () {
     Livewire::test(Cabina::class)
         ->call('apriProvisioning', $cliente->id)
         ->assertSee('Nuovo Ente (sede) — Rossi SpA');
+});
+
+// --- Il nome della prima sede ---
+//
+// 🧭 Nel Parco clienti la colonna SEDE del primo Ente ripeteva la ragione
+// sociale, perché il provisioning usava un valore solo per due cose diverse. Il
+// nodo Ente non si può togliere (è la radice del tenant: `strumenti.tenant_id`
+// e compagnia puntano lì), ma il suo nome non deve più essere imposto.
+
+it('lets the first sede have a name of its own', function () {
+    Livewire::test(Cabina::class)
+        ->call('apriProvisioning')
+        // Il campo esiste, ed è dichiarato facoltativo dove lo si compila.
+        ->assertSee('Nome della prima sede (facoltativo)')
+        // E l'altro campo dice il vero: qui `nome` è la ragione sociale.
+        ->assertSee('Ragione sociale del cliente')
+        ->set('nuovo', [
+            'nome' => 'Gruppo Rossi SpA',
+            // Lo spazio in coda è il caso più comune di tutti (incollare da un
+            // gestionale) e non deve produrre una sede col nome sporco.
+            'nomeSede' => '  Laboratorio San Raffaele  ',
+            'adminEmail' => 'admin@rossi.test',
+            'adminName' => 'Anna Bianchi',
+        ])
+        ->call('creaCliente')
+        ->assertHasNoErrors();
+
+    $ente = UnitaOrganizzativa::withoutGlobalScopes()->where('nome', 'Laboratorio San Raffaele')->firstOrFail();
+
+    // I **due** valori, entrambi: la ragione sociale è dell'Account, il nome
+    // della sede è del nodo. Asserire solo il secondo lascerebbe passare una
+    // versione che rinomina anche il cliente.
+    expect($ente->account->ragione_sociale)->toBe('Gruppo Rossi SpA')
+        ->and($ente->nome)->toBe('Laboratorio San Raffaele');
+});
+
+it('keeps today behaviour when the sede is left blank', function () {
+    Livewire::test(Cabina::class)
+        ->call('apriProvisioning')
+        ->set('nuovo', [
+            'nome' => 'Clinica Aurora',
+            'nomeSede' => '',
+            'adminEmail' => 'aurora@demo.test',
+            'adminName' => 'Bruno Neri',
+        ])
+        ->call('creaCliente')
+        // ⚠️ Il campo è facoltativo: lasciato in bianco non deve inciampare in
+        // `min:2`, che è ciò che accadrebbe senza la normalizzazione a `null`.
+        ->assertHasNoErrors();
+
+    $ente = UnitaOrganizzativa::withoutGlobalScopes()->where('nome', 'Clinica Aurora')->firstOrFail();
+
+    expect($ente->account->ragione_sociale)->toBe('Clinica Aurora');
+});
+
+it('does not ask for a sede name when the sede IS the thing being named', function () {
+    $cliente = Account::factory()->saas()->create(['ragione_sociale' => 'Gruppo Rossi']);
+    UnitaOrganizzativa::factory()->ente()->perAccount($cliente)->create(['nome' => 'Sede di Milano']);
+
+    Livewire::test(Cabina::class)
+        ->call('apriProvisioning', $cliente->id)
+        ->assertDontSee('Nome della prima sede')
+        ->assertSee('Nome dell\'Ente (la sede)')
+        ->set('nuovo', [
+            'nome' => 'Sede di Bergamo',
+            // 🔴 Forgiato: `nuovo` è pubblico, quindi il campo che la modale non
+            // mostra si può inviare lo stesso. Non deve decidere il nome di un
+            // nodo che l'operatore ha nominato nell'altro campo — altrimenti la
+            // pagina scriverebbe qualcosa che nessuno ha visto.
+            'nomeSede' => 'Nome Iniettato',
+            'adminEmail' => 'bergamo@rossi.test',
+            'adminName' => 'Carla Verdi',
+        ])
+        ->call('creaCliente')
+        ->assertHasNoErrors();
+
+    expect(UnitaOrganizzativa::withoutGlobalScopes()->where('nome', 'Sede di Bergamo')->exists())->toBeTrue()
+        ->and(UnitaOrganizzativa::withoutGlobalScopes()->where('nome', 'Nome Iniettato')->exists())->toBeFalse();
+});
+
+it('calls the first field by what it actually is, in both branches', function () {
+    // L'etichetta di validazione è l'unica parola che l'operatore legge quando
+    // sbaglia: chiamare «nome della sede» un campo che chiede la **ragione
+    // sociale** lo manda a correggere l'altro campo — quello che la sede la
+    // chiede davvero, e che è lì accanto.
+    $nuovo = Livewire::test(Cabina::class)
+        ->call('apriProvisioning')
+        ->set('nuovo', ['nome' => '', 'adminEmail' => 'x@y.test', 'adminName' => 'Xy'])
+        ->call('creaCliente');
+
+    expect($nuovo->instance()->getErrorBag()->first('nuovo.nome'))->toContain('ragione sociale');
+
+    $cliente = Account::factory()->saas()->create(['ragione_sociale' => 'Gruppo Rossi']);
+    UnitaOrganizzativa::factory()->ente()->perAccount($cliente)->create(['nome' => 'Sede di Milano']);
+
+    $sede = Livewire::test(Cabina::class)
+        ->call('apriProvisioning', $cliente->id)
+        ->set('nuovo', ['nome' => '', 'adminEmail' => 'x@y.test', 'adminName' => 'Xy'])
+        ->call('creaCliente');
+
+    // Nell'altro ramo `nome` È il nome della sede, e l'etichetta storica resta
+    // quella giusta.
+    expect($sede->instance()->getErrorBag()->first('nuovo.nome'))->toContain('nome della sede');
 });

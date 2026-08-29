@@ -224,3 +224,56 @@ it('demands --account when the existing admin has several accounts', function ()
     expect(UnitaOrganizzativa::withoutGlobalScopes()->where('nome', 'Ente Conteso')->exists())->toBeFalse()
         ->and(Account::count())->toBe(2);
 });
+
+// --- Il nome della prima sede (--sede) ---
+//
+// 🧭 Nel Parco clienti la colonna SEDE del primo Ente ripeteva la ragione
+// sociale su ogni cliente, perché il provisioning usava lo stesso valore per
+// due cose diverse. La struttura non si può togliere — il nodo Ente è la radice
+// del tenant, e senza non c'è un posto dove mettere la prima macchina — ma il
+// nome sì.
+
+it('gives the first sede its own name with --sede', function () {
+    $this->artisan('easylab:provision-tenant', [
+        'nome' => 'Gruppo Rossi SpA',
+        '--sede' => 'Laboratorio San Raffaele',
+        '--admin-email' => 'admin@rossi.test',
+        '--admin-password' => 'secret-password',
+    ])->assertSuccessful()
+        // Il comando stampa il nome che l'Ente ha **davvero**: con `--sede` i due
+        // valori sono diversi, e stampare quello chiesto racconterebbe un
+        // provisioning che non è avvenuto così.
+        ->expectsOutputToContain('Ente «Laboratorio San Raffaele» creato');
+
+    $ente = UnitaOrganizzativa::withoutGlobalScopes()->where('nome', 'Laboratorio San Raffaele')->firstOrFail();
+
+    // I **due** valori, verificati entrambi: la ragione sociale resta
+    // dell'Account, il nome resta della sede. Asserire solo il secondo lascerebbe
+    // passare una versione che rinomina anche il cliente.
+    expect($ente->account->ragione_sociale)->toBe('Gruppo Rossi SpA')
+        ->and($ente->nome)->toBe('Laboratorio San Raffaele')
+        ->and($ente->tenant_id)->toBe($ente->id);
+});
+
+it('keeps the historical name when --sede is absent or empty', function () {
+    $this->artisan('easylab:provision-tenant', [
+        'nome' => 'Clinica Aurora',
+        '--admin-email' => 'aurora@demo.test',
+        '--admin-password' => 'secret-password',
+    ])->assertSuccessful();
+
+    // Valorizzata a vuoto vale come assente: «vuoto» non è un nome di sede, e la
+    // decisione sta in un posto solo (`ProvisionaEnte`).
+    $this->artisan('easylab:provision-tenant', [
+        'nome' => 'Clinica Boreale',
+        '--sede' => '   ',
+        '--admin-email' => 'boreale@demo.test',
+        '--admin-password' => 'secret-password',
+    ])->assertSuccessful();
+
+    foreach (['Clinica Aurora', 'Clinica Boreale'] as $nome) {
+        $ente = UnitaOrganizzativa::withoutGlobalScopes()->where('nome', $nome)->firstOrFail();
+
+        expect($ente->account->ragione_sociale)->toBe($nome);
+    }
+});

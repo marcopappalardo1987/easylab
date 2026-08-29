@@ -52,6 +52,18 @@ final readonly class Perimetro
     public const SCELTI = 'scelti';
 
     /**
+     * I clienti **preferiti** di chi sta guardando (🔗 ADR-037).
+     *
+     * Stessa forma di `SCELTI` — una lista di id — e sorgente opposta: quelli
+     * arrivano dal browser a ogni richiesta, questi dal database. La differenza
+     * non è cosmetica e non si poteva fondere in un modo solo, perché è ciò che
+     * decide **quale controllo** la pagina disegna e quale messaggio dà quando
+     * l'insieme è vuoto: «scegline almeno uno dal filtro qui sopra» manda a una
+     * `<select>` che nel modo preferiti non esiste.
+     */
+    public const PREFERITI = 'preferiti';
+
+    /**
      * @param  list<int>  $accountIds
      */
     private function __construct(
@@ -92,9 +104,47 @@ final readonly class Perimetro
      */
     public static function scelti(array $accountIds): self
     {
+        return new self(self::SCELTI, self::idValidi($accountIds), null);
+    }
+
+    /**
+     * Gli id normalizzati: interi, deduplicati, positivi.
+     *
+     * Una sola copia per i due modi che portano una lista: `scelti()` e
+     * `preferiti()` devono normalizzare **allo stesso modo**, o la stessa lista
+     * darebbe due perimetri diversi a seconda di come ci è arrivata.
+     *
+     * @param  array<int|string>  $accountIds
+     * @return list<int>
+     */
+    private static function idValidi(array $accountIds): array
+    {
         $id = array_values(array_unique(array_map('intval', $accountIds)));
 
-        return new self(self::SCELTI, array_values(array_filter($id, fn (int $i) => $i > 0)), null);
+        return array_values(array_filter($id, fn (int $i) => $i > 0));
+    }
+
+    /**
+     * I clienti preferiti, **già letti dal database**.
+     *
+     * 🔴 Non si costruisce da `daRichiesta()` di proposito: gli id non arrivano
+     * dal browser, quindi il posto in cui questo perimetro nasce è uno solo —
+     * `App\Support\Piattaforma\Preferiti::perimetro()`, che è gata. Passare
+     * qui `$this->accountIds` di un componente Livewire significherebbe
+     * riaprire, sotto un nome nuovo, esattamente la selezione arbitraria che
+     * questo modo sostituisce.
+     *
+     * ⚠️ La normalizzazione resta identica a `scelti()` — interi, deduplicati,
+     * positivi — perché la difesa vera non è la provenienza: è l'intersezione
+     * con `VistaPiattaforma::accounts()` che `ParcoClienti::clienti()` applica
+     * sopra questo `whereIn`. Un preferito verso un account cestinato dopo la
+     * segnatura sparisce **là**, non qui.
+     *
+     * @param  array<int|string>  $accountIds
+     */
+    public static function preferiti(array $accountIds): self
+    {
+        return new self(self::PREFERITI, self::idValidi($accountIds), null);
     }
 
     /** L'insieme vuoto, che è dove cade ogni input che non si è capito. */
@@ -118,6 +168,12 @@ final readonly class Perimetro
             self::TUTTI => self::tutti(),
             self::PER_PIANO => $piano === null || $piano === '' ? self::nessuno() : self::perPiano($piano),
             self::SCELTI => self::scelti($accountIds),
+            // ⛔ `PREFERITI` **non** si costruisce da qui, e cade quindi nel
+            // `default`: i suoi id vivono nel database, e prenderli da questo
+            // argomento — che è l'array pubblico di un componente Livewire —
+            // significherebbe lasciare al browser la lista che il modo esiste
+            // per sottrargli. Un chiamante che se ne dimenticasse ottiene zero
+            // righe, non le righe di tutti: l'errore cade dalla parte giusta.
             default => self::nessuno(),
         };
     }
@@ -131,6 +187,7 @@ final readonly class Perimetro
      */
     public function eNessuno(): bool
     {
-        return $this->modo === self::SCELTI && $this->accountIds === [];
+        return in_array($this->modo, [self::SCELTI, self::PREFERITI], true)
+            && $this->accountIds === [];
     }
 }

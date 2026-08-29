@@ -10,8 +10,10 @@ use App\Models\Strumento;
 use App\Support\Piani;
 use App\Support\Piattaforma\ParcoClienti;
 use App\Support\Piattaforma\Perimetro;
+use App\Support\Piattaforma\Preferiti;
 use App\Support\Piattaforma\RigheParcoStrumenti;
 use App\Support\Piattaforma\StrumentiPerStato;
+use App\Support\Piattaforma\TitoloPerimetro;
 use App\Support\Tenancy\VistaPiattaforma;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -80,11 +82,39 @@ use Livewire\WithPagination;
  * scopate** e dentro il perimetro. Il debito che ne nasce — la composizione
  * esiste in due copie — è dichiarato là, e legato da due test differenziali.
  *
+ * ## Il perimetro «i miei preferiti» (🔗 ADR-037)
+ *
+ * 🔴 Il modo «quelli che scelgo» **non esiste più a schermo**. Era una
+ * `<select multiple>` che non ricordava nulla fra una visita e l'altra: i
+ * clienti che si guardano spesso sono pochi e sempre gli stessi, e ricomporli a
+ * mano a ogni apertura era il costo dell'unica funzione per cui questa pagina
+ * esiste. Al suo posto c'è un insieme **durevole e per-persona**, che si segna
+ * con la ★ dall'elenco Clienti della cabina e si riusa da qui.
+ *
+ * ⛔ Ne discende che gli id del perimetro **non arrivano più dal browser**:
+ * `Perimetro::daRichiesta()` non sa costruire il modo preferiti apposta, e
+ * l'unico costruttore è `Preferiti::perimetro()`, che è gato. `perimetro()` qui
+ * sotto è quindi l'unico punto in cui i due mondi si incontrano.
+ *
+ * ⚠️ **Il modo `scelti` resta valido nel dominio e non lo è più nel controllo.**
+ * `Perimetro::nessuno()` è ancora `scelti([])`, cioè l'insieme vuoto su cui cade
+ * ogni input incompreso; ma una `<select>` legata a un valore che non
+ * corrisponde a nessuna `<option>` non resta vuota — il browser evidenzia la
+ * **prima**, cioè «Tutti i clienti», sopra una tabella che tutti i clienti non
+ * li mostra, e da lì non si esce perché riselezionare la prima voce non emette
+ * nessun evento. Il perché per esteso sta in `ParcoRicambi`, che ha pagato per
+ * primo quel difetto. Qui la normalizzazione porta a `preferiti` e non a
+ * `tutti`: è fail-closed (l'insieme può essere vuoto) e manda a un controllo che
+ * è davvero a schermo.
+ *
  * ## Il costo
  *
  * Query **costanti** al crescere delle righe: la pagina, il suo conteggio, le
  * tre fonti del semaforo sulle sole righe in pagina, gli account della pagina
- * (per l'impersonazione) e la tendina dei clienti. Nessuna sottoquery correlata
+ * (per l'impersonazione) e — **solo nel modo che li disegna** — i preferiti.
+ * L'elenco di *tutti* gli account non si legge più: serviva alla tendina
+ * scomparsa, e girava a ogni render, anche nel modo «tutti» dove nessun
+ * controllo lo mostrava. Nessuna sottoquery correlata
  * per riga — l'elenco per-Ente ne ha tre nell'ordinamento per stato e per
  * prossima scadenza, ed è il debito che la roadmap gli imputa: qui quelle due
  * colonne **non sono ordinabili**, così il debito non viene moltiplicato per il
@@ -107,20 +137,24 @@ class ParcoGlobale extends Component
     public const PERMESSO = VistaPiattaforma::PERMESSO;
 
     /**
-     * Il perimetro, in tre proprietà che arrivano dal **browser**.
+     * Il perimetro, in due proprietà che arrivano dal **browser**.
      *
      * ⛔ Non sono input fidati e non vengono usate mai direttamente: passano da
      * `Perimetro::daRichiesta()`, che normalizza la forma, e poi da
      * `ParcoClienti::clienti()`, che interseca gli id con l'insieme legittimo.
-     * Un modo che non esiste, un piano fuori catalogo o un id forgiato non
-     * allargano: cadono su `nessuno()` o spariscono nell'intersezione.
+     * Un modo che non esiste o un piano fuori catalogo non allargano: cadono su
+     * `nessuno()`.
+     *
+     * 🔴 E **nessuna lista di id**: dal 29 Ago 2026 la scelta a mano non ha più
+     * un controllo, quindi la property che la portava è sparita invece di
+     * restare inerte. Un `#[Url]` che nessun ramo può onorare è un link che
+     * promette un filtro e non lo dà — e, peggio, è l'unico filo per cui il
+     * browser potrebbe tornare a dettare un `whereIn`: la sua innocuità
+     * dipenderebbe per intero dal fatto che la normalizzazione del modo non
+     * abbia mai un buco. Tolto il filo, la garanzia è strutturale.
      */
     #[Url]
     public string $modo = Perimetro::TUTTI;
-
-    /** @var array<int|string> */
-    #[Url]
-    public array $accountIds = [];
 
     #[Url]
     public ?string $piano = null;
@@ -267,15 +301,87 @@ class ParcoGlobale extends Component
     }
 
     /**
+     * I tre modi che la tendina del perimetro sa disegnare.
+     *
+     * ⚠️ **Non** è la terna del `match` di `Perimetro::daRichiesta()`, e le due
+     * liste rispondono a domande diverse: là si chiede «quale perimetro», e
+     * `preferiti` non ci compare apposta perché i suoi id non vengono dal
+     * browser; qui si chiede «questo modo ha una `<option>`?», e `scelti` non ci
+     * compare più perché la sua `<select multiple>` non esiste. I nomi restano
+     * quelli di `Perimetro`: qui si duplica l'insieme, mai le stringhe.
+     */
+    private const MODI = [Perimetro::TUTTI, Perimetro::PER_PIANO, Perimetro::PREFERITI];
+
+    /**
+     * 🔴 Le due property che **disegnano un controllo** si normalizzano subito.
+     *
+     * `modo` non finisce solo nella query: finisce in una `<select
+     * wire:model.live>`, e una `<select>` legata a un valore che non corrisponde
+     * a nessuna `<option>` non resta vuota — il browser evidenzia la **prima**.
+     * Con un `?modo=scelti` salvato da prima della ★, o con un `?modo=tuttissimi`
+     * scritto a mano, il perimetro cadeva correttamente su `nessuno()` e la
+     * pagina mostrava zero righe, ma la tendina diceva «Tutti i clienti»: un
+     * controllo che mente sopra una tabella vuota. Peggio, da lì non si usciva —
+     * riselezionare «Tutti i clienti» non emette nessun evento, perché il valore
+     * mostrato è già quello.
+     *
+     * Il modo che non si è capito diventa `preferiti` e **non** `tutti`: è
+     * fail-closed (l'insieme dei preferiti può benissimo essere vuoto) e manda
+     * al solo controllo che, in quello stato, è davvero a schermo.
+     */
+    public function mount(): void
+    {
+        $this->normalizzaControlli();
+    }
+
+    /**
+     * ⚠️ `mount()` non rigira sugli update, e le property arrivano dal browser a
+     * **ogni** richiesta: senza questi due hook la normalizzazione varrebbe solo
+     * per la prima pagina caricata.
+     */
+    public function updatedModo(): void
+    {
+        $this->normalizzaControlli();
+    }
+
+    public function updatedPiano(): void
+    {
+        $this->normalizzaControlli();
+    }
+
+    /**
+     * ⚠️ **La forma è deliberatamente identica sulle tre schede del Parco.** Il
+     * difetto è lo stesso — una `<select>` legata a un valore senza `<option>`
+     * corrispondente — quindi la risposta non può cambiare a seconda della
+     * scheda: tre schermi che normalizzano in tre modi sono tre perimetri, per
+     * chi legge.
+     */
+    private function normalizzaControlli(): void
+    {
+        if (! in_array($this->modo, self::MODI, true)) {
+            $this->modo = Perimetro::PREFERITI;
+        }
+
+        // Un piano fuori catalogo è già l'insieme vuoto per `Perimetro`; qui
+        // torna a essere «nessun piano scelto» anche per la tendina, che
+        // altrimenti terrebbe in `?piano=` un codice che nessuna `<option>`
+        // nomina — e la pagina resterebbe con un filtro annunciato nell'URL e
+        // nessun controllo che lo mostri.
+        //
+        // ⚠️ `null` e non `''`: qui la property è nullable e la `<option>`
+        // vuota vale `''`, che Livewire riporta come stringa. Entrambi i valori
+        // cadono su `nessuno()` in `daRichiesta()`; ricondurli a uno solo serve
+        // alla tendina, che così evidenzia «— scegli un piano —».
+        if ($this->piano !== null && $this->piano !== '' && ! Piani::esiste($this->piano)) {
+            $this->piano = null;
+        }
+    }
+
+    /**
      * Cambiare perimetro cambia l'insieme: restare a pagina 7 atterrerebbe
      * fuori dall'elenco. Vale per ognuna delle tre proprietà, e per la ricerca.
      */
     public function updatingModo(): void
-    {
-        $this->resetPage();
-    }
-
-    public function updatingAccountIds(): void
     {
         $this->resetPage();
     }
@@ -356,17 +462,35 @@ class ParcoGlobale extends Component
     }
 
     /**
-     * Il perimetro **normalizzato**, unica via per cui le tre property entrano
+     * Il perimetro **normalizzato**, unica via per cui le due property entrano
      * in una query.
      *
      * `daRichiesta()` e non i costruttori nominati: è la forma scritta apposta
      * per ciò che arriva dal browser, e in caso di dubbio torna `nessuno()`
      * invece di `tutti()` — su una vista cross-cliente la differenza fra le due
      * risposte a un input incomprensibile è fra zero righe e le righe di tutti.
+     *
+     * 🔴 L'eccezione è il modo **preferiti**, e non è un'incoerenza: i suoi id
+     * non arrivano dal browser ma dal database, quindi `daRichiesta()` non sa
+     * costruirlo — con `modo='preferiti'` cade su `nessuno()`. L'unico
+     * costruttore è `Preferiti::perimetro()`, che chiede lo stesso permesso di
+     * questa pagina e rilegge la lista di chi sta guardando. Passare qui una
+     * property pubblica significherebbe riaprire, sotto un nome nuovo, la
+     * selezione arbitraria che il modo sostituisce.
      */
     public function perimetro(): Perimetro
     {
-        return Perimetro::daRichiesta($this->modo, $this->accountIds, $this->piano);
+        if ($this->modo === Perimetro::PREFERITI) {
+            return Preferiti::perimetro();
+        }
+
+        // ⚠️ La lista di id è **vuota** per costruzione, come sulle altre due
+        // schede: la scelta a mano non esiste più in questa pagina, e i due
+        // modi rimasti non la leggono. Scriverci una property pubblica
+        // rimetterebbe al browser, sotto un altro nome, la lista che i
+        // preferiti gli tolgono — ed è la sola strada per cui questa pagina
+        // potrebbe tornare ad allargare l'insieme delle righe.
+        return Perimetro::daRichiesta($this->modo, [], $this->piano);
     }
 
     /**
@@ -414,20 +538,31 @@ class ParcoGlobale extends Component
      * non c'è, cioè fa cercare un difetto. Per questo si guarda anche il modo
      * **grezzo**: è quello che decide quali filtri la vista disegna.
      *
-     * ⚠️ Il conteggio è dei clienti scelti **veri** — l'intersezione con la
-     * tendina — e non della lunghezza dell'array: un id di EasyLab o di un
-     * account cestinato è «scelto» per il browser e non è un cliente, quindi
-     * la risposta giusta resta «non hai selezionato nessun cliente» e non
-     * «questi clienti non hanno macchine».
+     * ⚠️ Il conteggio è dei clienti **veri** — l'intersezione con l'insieme
+     * legittimo — e non della lunghezza di una lista di id: un preferito verso
+     * EasyLab o verso un account cestinato dopo la segnatura è un id che esiste
+     * e non è un cliente, quindi la risposta giusta resta «non hai clienti
+     * preferiti» e non «questi clienti non hanno macchine».
+     *
+     * 🔴 E nel modo preferiti il rimando **non è a un filtro di questa pagina**:
+     * i preferiti si segnano con la ★ nell'elenco Clienti della cabina. Mandare
+     * a «scegline almeno uno dal filtro qui sopra» sarebbe la stessa forma di
+     * bugia del caso «per piano», con l'aggravante che qui il controllo non
+     * esiste in nessuna schermata del Parco.
      */
     private function messaggioElencoVuoto(Perimetro $perimetro, int $clientiScelti): string
     {
-        $nessunClienteScelto = $perimetro->modo === Perimetro::SCELTI && $clientiScelti === 0;
+        // ⚠️ `PREFERITI` accanto a `SCELTI`: l'insieme può essere **non vuoto**
+        // di id e vuoto di clienti — tre preferiti tutti cestinati — e
+        // `eNessuno()` da solo non lo vede. È lo stesso caso che l'id di EasyLab
+        // produceva col multi-select.
+        $nessunCliente = in_array($perimetro->modo, [Perimetro::SCELTI, Perimetro::PREFERITI], true)
+            && $clientiScelti === 0;
 
-        if ($perimetro->eNessuno() || $nessunClienteScelto) {
+        if ($perimetro->eNessuno() || $nessunCliente) {
             return match ($this->modo) {
                 Perimetro::PER_PIANO => 'Nessun piano selezionato: scegline uno dal filtro qui sopra.',
-                Perimetro::SCELTI => 'Nessun cliente selezionato: scegline almeno uno dal filtro qui sopra.',
+                Perimetro::PREFERITI => 'Non hai ancora clienti preferiti: segnali con la ★ nell\'elenco Clienti.',
                 default => 'Perimetro non valido: scegli i clienti dal filtro qui sopra.',
             };
         }
@@ -449,13 +584,7 @@ class ParcoGlobale extends Component
      */
     private function titolo(Perimetro $perimetro, int $clientiScelti): string
     {
-        return match (true) {
-            $perimetro->modo === Perimetro::TUTTI => 'Strumenti di tutti i clienti',
-            $perimetro->modo === Perimetro::PER_PIANO => 'Strumenti dei clienti sul piano '.Piani::etichetta($perimetro->piano),
-            $clientiScelti === 1 => 'Strumenti di 1 cliente scelto',
-            $clientiScelti > 1 => "Strumenti di {$clientiScelti} clienti scelti",
-            default => 'Strumenti dei clienti scelti',
-        };
+        return TitoloPerimetro::componi('Strumenti', $perimetro, $clientiScelti);
     }
 
     /** Opzioni del select. @return list<int> */
@@ -465,21 +594,29 @@ class ParcoGlobale extends Component
     }
 
     /**
-     * I clienti selezionabili nella tendina del perimetro.
+     * I clienti preferiti da mostrare, e **solo nel modo che li disegna**.
      *
-     * `selezionabili()` è la stessa `VistaPiattaforma::accounts()` contro cui
-     * `ParcoClienti::clienti()` interseca gli id scelti: la tendina offre
-     * quindi esattamente l'insieme legittimo, senza EasyLab e senza i
-     * cestinati — non per un `where` scritto qui, ma per costruzione.
+     * ⚠️ Qui c'era `selezionabili()`, cioè l'intera tabella `accounts` letta e
+     * idratata a **ogni** render — anche nel modo «tutti», dove la tendina non
+     * si disegnava; anche a ogni battuta nella casella di ricerca, che gira in
+     * `wire:model.live.debounce`. Serviva al multi-select, che non c'è più:
+     * `ParcoScadenzario` aveva già isolato la stessa lettura al proprio modo, e
+     * qui la lettura sparisce del tutto.
+     *
+     * `Preferiti::clienti()` e non la relazione nuda: è già **intersecata** con
+     * `VistaPiattaforma::accounts()`, quindi un preferito verso EasyLab o verso
+     * un account cestinato dopo la segnatura non compare in questo elenco — che
+     * è lo stesso insieme su cui la tabella qui sotto è costruita. Due
+     * definizioni diverse di «preferito» darebbero un conteggio che non
+     * corrisponde a nessuna riga.
      *
      * @return Collection<int, Account>
      */
-    public function selezionabili(): Collection
+    private function preferiti(): Collection
     {
-        return ParcoClienti::selezionabili()
-            ->orderBy('accounts.ragione_sociale')
-            ->orderBy('accounts.id')
-            ->get(['accounts.id', 'accounts.ragione_sociale', 'accounts.piano']);
+        return $this->modo === Perimetro::PREFERITI
+            ? Preferiti::clienti()
+            : new Collection;
     }
 
     /**
@@ -594,27 +731,27 @@ class ParcoGlobale extends Component
             ? new Collection
             : ParcoClienti::clienti($perimetro)->whereIn('accounts.id', $idClienti)->get();
 
-        $selezionabili = $this->selezionabili();
+        $preferiti = $this->preferiti();
 
-        // I clienti scelti **veri**: l'intersezione fra gli id arrivati dal
-        // browser e la tendina, che è già in memoria — quindi zero query.
+        // I clienti nel perimetro **veri**, cioè quelli che la tabella qui sotto
+        // può davvero mostrare.
         //
-        // ⚠️ Non `count($this->accountIds)`: quello è l'array grezzo. Un id
-        // ripetuto conterebbe due volte, l'id di EasyLab o di un account
-        // cestinato conterebbe uno, e il numero a schermo non corrisponderebbe
-        // a nessuna riga della tabella — su una vista di sorveglianza è la
-        // stessa forma di bugia del titolo statico.
-        $clientiScelti = count(array_intersect($perimetro->accountIds, $selezionabili->pluck('id')->all()));
+        // ⚠️ Non `count($perimetro->accountIds)`: quella è la lista grezza dei
+        // preferiti. Un preferito verso EasyLab, o verso un cliente cestinato
+        // dopo la segnatura, conterebbe uno e non porterebbe nessuna riga — e il
+        // numero a schermo non corrisponderebbe a niente. `Preferiti::clienti()`
+        // ha già intersecato, quindi il conteggio è la sua lunghezza e costa
+        // zero query in più.
+        $clientiScelti = $preferiti->count();
 
         return view('livewire.piattaforma.parco-globale', [
             'strumenti' => $strumenti,
             'righe' => RigheParcoStrumenti::perPagina($strumenti->getCollection(), $perimetro),
             'candidatiPerAccount' => $this->candidatiDellaPagina($clienti),
-            'selezionabili' => $selezionabili,
+            'preferiti' => $preferiti,
             'piani' => Piani::codici(),
             'perimetro' => $perimetro,
             'titolo' => $this->titolo($perimetro, $clientiScelti),
-            'clientiScelti' => $clientiScelti,
             'messaggioVuoto' => $this->messaggioElencoVuoto($perimetro, $clientiScelti),
             // ⚠️ **Non** `sortBy`/`sortDir`: Livewire passa alla vista le
             // property pubbliche del componente *e* i dati di `render()`, e in

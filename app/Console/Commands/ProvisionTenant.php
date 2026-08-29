@@ -30,6 +30,15 @@ use Illuminate\Support\Str;
  *                      il `tenant_id` dell'utente esistente NON si tocca:
  *                      l'Ente nuovo si raggiunge con lo switcher.
  *
+ * **`--sede=` separa i due nomi.** L'argomento `nome` è la **ragione sociale**
+ * del cliente; senza `--sede` il nodo Ente prende lo stesso valore, ed è il
+ * comportamento storico. Con `--sede` la prima sede si chiama come la chiama chi
+ * ci lavora — «Laboratorio San Raffaele» dentro «Gruppo Rossi SpA» — che è la
+ * differenza che il Parco clienti rendeva visibile: la colonna SEDE del primo
+ * Ente ripeteva la ragione sociale su ogni cliente. La sede **non si può
+ * omettere** (il nodo Ente è la radice del tenant: senza, non c'è un posto dove
+ * mettere la prima macchina), il suo nome sì.
+ *
  * Tutto in transazione: con cinque scritture (account, ente, tenant_id,
  * utente, pivot) un fallimento a metà lascerebbe un account orfano o un ente
  * senza intestatario.
@@ -50,7 +59,8 @@ use Illuminate\Support\Str;
 class ProvisionTenant extends Command
 {
     protected $signature = 'easylab:provision-tenant
-        {nome : Ragione sociale dell\'Ente}
+        {nome : Ragione sociale del cliente}
+        {--sede= : Nome della prima sede; assente, prende la ragione sociale}
         {--account= : ID dell\'account esistente a cui agganciare l\'Ente}
         {--admin-email= : Email dell\'utente Admin}
         {--admin-name= : Nome dell\'utente Admin}
@@ -70,6 +80,10 @@ class ProvisionTenant extends Command
                 adminName: $this->option('admin-name') ?: "Admin {$nome}",
                 passwordEsplicita: $this->option('admin-password'),
                 accountId: $this->option('account') !== null ? (int) $this->option('account') : null,
+                // `--sede` non valorizzata vale `null`; valorizzata a vuoto la
+                // normalizza `ProvisionaEnte`, che è il solo posto in cui «vuoto
+                // = non scelto» è deciso.
+                nomeSede: $this->option('sede'),
             ))->esegui();
         } catch (ProvisioningRifiutato $rifiuto) {
             $this->error($rifiuto->getMessage());
@@ -85,7 +99,10 @@ class ProvisionTenant extends Command
             return self::FAILURE;
         }
 
-        $this->info("Ente «{$nome}» creato (id {$esito->ente->id}).");
+        // ⚠️ `$esito->ente->nome` e non `$nome`: con `--sede` i due valori sono
+        // diversi, e stampare quello chiesto invece di quello scritto è il modo
+        // in cui un comando racconta un provisioning che non è avvenuto così.
+        $this->info("Ente «{$esito->ente->nome}» creato (id {$esito->ente->id}).");
         $this->info("Account: «{$esito->account->ragione_sociale}» (id {$esito->account->id}, ".($esito->accountNuovo ? 'nuovo' : 'esistente').').');
         $this->info("Admin: {$adminEmail}".($esito->adminNuovo ? '' : ' (utente esistente: resta sul suo Ente, il nuovo si raggiunge con lo switcher)'));
 

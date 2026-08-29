@@ -309,7 +309,13 @@
          digitato ereditava il fondo della pagina. La forma è quella di
          `x-ui.input` (DS §5.6/§8.2): contorno forte, `bg-surface` dichiarato,
          placeholder a `text-ink-3` e un solo anello di fuoco. --}}
-    <div class="mt-8 flex flex-wrap items-end gap-3">
+    {{-- `id` e non solo una classe: è il bersaglio del link «Gestisci i preferiti
+         nell'elenco Clienti» delle tre schede del Parco. Senza, quel link
+         atterrava in cima alla pagina — sopra quattro KPI e tre grafici — e chi
+         lo seguiva doveva cercare da sé la tabella con le ★, che è a circa
+         mille pixel di scorrimento. Il bersaglio è la **barra dei filtri** e non
+         la tabella, così la riga che spiega la ★ resta a schermo. --}}
+    <div id="elenco-clienti" class="mt-8 flex flex-wrap items-end gap-3 scroll-mt-6">
         <div class="min-w-56 flex-1">
             <label for="cerca-cliente" class="block text-sm font-medium text-ink">Cerca</label>
             <input id="cerca-cliente" type="search" wire:model.live.debounce.300ms="search"
@@ -379,6 +385,15 @@
         clienti che vi corrispondono, non solo la pagina.
     </p>
 
+    {{-- Il rimando alla vista che consuma la ★. Una riga e non un paragrafo: chi
+         guarda questo elenco deve sapere che la stella **serve altrove**, o la
+         segnerebbe senza capire cosa cambia. «Tuoi» al singolare di persona,
+         perché il pivot lega l'utente e non l'account. --}}
+    <p class="mt-1 text-xs text-ink-3">
+        La ★ mette un cliente fra i tuoi preferiti — solo tuoi — e alimenta il filtro
+        «I miei preferiti» delle tre schede del Parco clienti.
+    </p>
+
     {{-- ⚠️ **Deviazione dichiarata dalla checklist §7 del Design System**, che
          vuole `tabella-a-card` con i `data-etichetta` su ogni vista nuova: qui
          la tabella resta a scorrimento orizzontale sotto i 640px. La ragione è
@@ -397,8 +412,16 @@
                      quella applicata è una bugia piccola e quindi credibile. --}}
                 <thead class="border-b border-border bg-surface-sunken text-left text-xs uppercase tracking-wide text-ink-3">
                     <tr>
+                        {{-- La colonna della ★ non è ordinabile, ed è una scelta:
+                             ordinare per «preferito» rimescolerebbe l'elenco in
+                             base a un dato che vale solo per chi guarda, e la
+                             riga sarebbe in un posto diverso per ogni collega
+                             davanti allo stesso schermo. I preferiti si guardano
+                             da soli dal Parco clienti, che ha il filtro apposta. --}}
+                        <th scope="col" class="py-3 pl-4 pr-0"><span class="sr-only">Preferito</span></th>
+
                         @foreach ([
-                            'ragione_sociale' => ['Cliente', 'py-3 pl-4 pr-3'],
+                            'ragione_sociale' => ['Cliente', 'py-3 pl-2 pr-3'],
                             'piano' => ['Piano', 'px-3 py-3'],
                         ] as $colonna => [$etichetta, $classi])
                             <th scope="col" class="{{ $classi }}"
@@ -441,7 +464,45 @@
                         @endphp
 
                         <tr wire:key="cliente-{{ $cliente->id }}" class="align-top hover:bg-surface-sunken">
-                            <td class="py-3 pl-4 pr-3">
+                            {{-- 🔴 **La stella è di chi guarda, non del cliente**
+                                 (🔗 ADR-037): la riga vive su `clienti_preferiti`,
+                                 che lega una PERSONA a un Account. Due Superadmin
+                                 davanti a questa pagina vedono stelle diverse —
+                                 quindi qui non si stampa mai «segnato da N» né da
+                                 chi, che farebbe del preferito un attributo del
+                                 rapporto commerciale.
+
+                                 Pieno/vuoto si legge **senza colore**: ★ e ☆ sono
+                                 due glifi diversi, e `aria-pressed` dice lo stesso
+                                 a chi la pagina non la vede affatto. Il colore
+                                 accompagna, non informa. --}}
+                            <td class="py-3 pl-4 pr-0">
+                                @php
+                                    $preferito = $this->ePreferito($cliente->id);
+                                    $azioneStella = ($preferito ? 'Togli dai preferiti' : 'Aggiungi ai preferiti')
+                                        .': '.$cliente->ragione_sociale;
+                                @endphp
+
+                                <button type="button" wire:key="preferito-{{ $cliente->id }}"
+                                        wire:click="alternaPreferito({{ $cliente->id }})"
+                                        aria-pressed="{{ $preferito ? 'true' : 'false' }}"
+                                        aria-label="{{ $azioneStella }}"
+                                        title="{{ $azioneStella }}"
+                                        {{-- ⚠️ Il bersaglio è dichiarato `h-6 w-6` (24×24 CSS px), che è il
+                                             minimo di WCAG 2.2 §2.5.8: con la sola spaziatura `px-1 py-0.5`
+                                             misurava 24×20 e mancava il bersaglio in altezza. Ventiquattro e
+                                             non di più perché il `td` porta già `py-3`: la riga resta alta
+                                             49px come prima, cioè la colonna nuova non ha diradato la tabella.
+                                             ⚠️ E l'evidenziazione del passaggio del mouse è `bg-brand-soft` e
+                                             non `bg-surface-sunken`: la riga si colora **di quello** al
+                                             passaggio, quindi il vecchio valore era un feedback invisibile
+                                             esattamente nel momento in cui serviva. --}}
+                                        class="inline-flex h-6 w-6 items-center justify-center rounded-md text-base leading-none {{ $preferito ? 'text-brand' : 'text-ink-3' }} hover:bg-brand-soft hover:text-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                                    <span aria-hidden="true">{{ $preferito ? '★' : '☆' }}</span>
+                                </button>
+                            </td>
+
+                            <td class="py-3 pl-2 pr-3">
                                 {{-- Un solo figlio diretto: la checklist §7 del Design
                                      System avverte che in modalità card i figli del
                                      `<td>` finirebbero affiancati. --}}
@@ -580,7 +641,7 @@
 
                         @if ($espanso === $cliente->id)
                             <tr wire:key="sedi-{{ $cliente->id }}" class="bg-surface-sunken">
-                                <td colspan="7" class="px-4 py-3" id="sedi-{{ $cliente->id }}">
+                                <td colspan="8" class="px-4 py-3" id="sedi-{{ $cliente->id }}">
                                     {{-- `$sue` e non `$sediPerAccount` intero: la riga
                                          aperta mostra le sedi di QUESTO cliente, e la
                                          differenza fra le due espressioni è la sola cosa
@@ -618,7 +679,7 @@
                         @endif
                     @empty
                         <tr>
-                            <td colspan="7" class="px-4 py-8 text-center text-sm text-ink-3">
+                            <td colspan="8" class="px-4 py-8 text-center text-sm text-ink-3">
                                 Nessun cliente con questi filtri.
                             </td>
                         </tr>
@@ -674,7 +735,7 @@
     @if ($provisioningAperto)
         @php $perCliente = $this->clienteDelProvisioning(); @endphp
 
-        <x-ui.modal :title="$perCliente ? 'Nuovo Ente (sede) — '.$perCliente->ragione_sociale : 'Nuovo cliente e primo Ente'" close="chiudiProvisioning">
+        <x-ui.modal :title="$perCliente ? 'Nuovo Ente (sede) — '.$perCliente->ragione_sociale : 'Nuovo cliente e prima sede (Ente)'" close="chiudiProvisioning">
             @if ($perCliente)
                 <p class="text-sm text-ink-2">
                     L'Ente — la sede — si aggiunge al contratto di <strong>{{ $perCliente->ragione_sociale }}</strong>
@@ -695,12 +756,30 @@
                 </p>
             @endif
 
+            {{-- ⚠️ **`nome` non chiede la stessa cosa nei due rami**, e le
+                 etichette lo devono dire: creando un cliente nuovo è la
+                 **ragione sociale** dell'Account e la prima sede si nomina a
+                 parte (facoltativo: assente, si chiama come il cliente — che è
+                 l'imposizione che il Parco clienti rendeva visibile, la colonna
+                 SEDE che ripeteva la ragione sociale). Agganciando una sede a un
+                 account esistente, invece, `nome` È il nome della sede: un
+                 secondo campo chiederebbe due volte la stessa cosa. --}}
             <div class="mt-4 space-y-3">
-                @foreach ([
-                    'nome' => ['Nome dell\'Ente (la sede)', 'Ospedale San Giovanni'],
-                    'adminName' => ['Nome dell\'amministratore', 'Anna Bianchi'],
-                    'adminEmail' => ['Email dell\'amministratore', 'anna.bianchi@sangiovanni.it'],
-                ] as $campo => [$etichetta, $esempio])
+                @php
+                    $campiProvisioning = $perCliente
+                        ? ['nome' => ['Nome dell\'Ente (la sede)', 'Ospedale San Giovanni']]
+                        : [
+                            'nome' => ['Ragione sociale del cliente', 'Gruppo Ospedaliero San Giovanni SpA'],
+                            'nomeSede' => ['Nome della prima sede (facoltativo)', 'Come la ragione sociale'],
+                        ];
+
+                    $campiProvisioning += [
+                        'adminName' => ['Nome dell\'amministratore', 'Anna Bianchi'],
+                        'adminEmail' => ['Email dell\'amministratore', 'anna.bianchi@sangiovanni.it'],
+                    ];
+                @endphp
+
+                @foreach ($campiProvisioning as $campo => [$etichetta, $esempio])
                     <div wire:key="prov-{{ $campo }}">
                         <label for="prov-{{ $campo }}" class="block text-sm font-medium text-ink">{{ $etichetta }}</label>
                         <input id="prov-{{ $campo }}" type="text" wire:model="nuovo.{{ $campo }}"

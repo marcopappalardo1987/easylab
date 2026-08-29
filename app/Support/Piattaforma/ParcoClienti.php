@@ -112,12 +112,20 @@ final class ParcoClienti
     public const PERMESSO = VistaPiattaforma::PERMESSO;
 
     /**
-     * Gli account che si possono **scegliere** nel filtro: l'insieme legittimo.
+     * Gli account che si possono **scegliere**: l'insieme legittimo.
      *
      * È la sorgente di verità contro cui `clienti()` interseca il perimetro, ed
      * è la stessa `VistaPiattaforma::accounts()` — quindi senza EasyLab
      * (`di_piattaforma`) e senza i cestinati, per costruzione e non per un
      * `where` da ricordare qui.
+     *
+     * ⚠️ Dal 29 Ago 2026 «scegliere» non vuol più dire una `<select multiple>`
+     * in cima al Parco — quel controllo è diventato la ★ dei preferiti (🔗
+     * ADR-037) — ma **segnare un cliente**: è `Preferiti::alterna()` a
+     * chiamarla, prima di scrivere una riga di pivot a partire da un id che
+     * arriva dal browser. L'insieme è lo stesso di prima, e deve restarlo: un
+     * preferito che questa lista non contiene sarebbe una preferenza verso un
+     * soggetto che nessuna schermata sa disegnare.
      *
      * @return Builder<Account>
      */
@@ -155,6 +163,12 @@ final class ParcoClienti
             Perimetro::TUTTI => $clienti,
             Perimetro::PER_PIANO => $clienti->where('accounts.piano', $perimetro->piano),
             Perimetro::SCELTI => $clienti->whereIn('accounts.id', $perimetro->accountIds),
+            // Stessa clausola di `SCELTI`, e resta un ramo a parte: i due modi
+            // differiscono per **provenienza** degli id (browser contro
+            // database), che è ciò che decide i controlli e i messaggi della
+            // pagina, non la query. Fonderli qui costringerebbe a distinguerli
+            // di nuovo, più in là, in un posto che non è una porta.
+            Perimetro::PREFERITI => $clienti->whereIn('accounts.id', $perimetro->accountIds),
         };
     }
 

@@ -85,7 +85,50 @@ final class ProvisionaEnte
          * e un parametro in mezzo li romperebbe tutti in una volta.
          */
         private readonly ?string $passwordHash = null,
+        /**
+         * Il nome del **nodo Ente**, quando non deve essere la ragione sociale.
+         *
+         * Nasce da una domanda posta guardando il Parco clienti: la colonna
+         * SEDE del primo Ente ripeteva la ragione sociale, e la proposta era
+         * «che il tenant non abbia sedi di default, così le nomino io».
+         *
+         * ⛔ **La struttura non si può togliere**: il nodo Ente *è* la radice
+         * del tenant — `strumenti.tenant_id`, `interventi.tenant_id`,
+         * `garanzie.tenant_id` e `ricambi.tenant_id` puntano tutti lì — quindi
+         * un Account senza nessun Ente non è uno stato rappresentabile: non ci
+         * sarebbe un posto dove mettere la prima macchina. Ciò che si può
+         * togliere è **l'imposizione del nome**, che è poi ciò che serviva: la
+         * ragione sociale resta dell'Account, la sede si chiama come la chiama
+         * chi ci lavora («Laboratorio San Raffaele», non «Gruppo Rossi SpA»).
+         *
+         * Assente — o vuoto, che non è un nome — il comportamento è quello di
+         * sempre: nome dell'Ente = `$nome`. La normalizzazione sta **qui** e non
+         * nei chiamanti perché la decisione «vuoto = non scelto» dev'essere una
+         * sola: due copie divergono, e la divergenza si chiamerebbe «una sede
+         * con il nome vuoto» in una tabella che non ha altro da mostrare.
+         *
+         * ⚠️ **Ultimo parametro e opzionale**, per la ragione già scritta sopra
+         * `$esigiAccountNuovo` e `$passwordHash`: i chiamanti storici lo
+         * costruiscono senza, e un parametro in mezzo li romperebbe tutti in una
+         * volta.
+         *
+         * ⚠️ **Non tocca l'invito.** `InvitoUtente` continua a ricevere `$nome`,
+         * cioè la ragione sociale: la prima email che il cliente riceve deve
+         * nominare il **contratto** che sta aprendo, non il capannone.
+         */
+        private readonly ?string $nomeSede = null,
     ) {}
+
+    /**
+     * Come si chiama il nodo Ente: la sede se è stata nominata, altrimenti il
+     * nome del cliente. Vedi il docblock di `$nomeSede`.
+     */
+    private function nomeDellEnte(): string
+    {
+        $sede = trim((string) $this->nomeSede);
+
+        return $sede !== '' ? $sede : $this->nome;
+    }
 
     /**
      * La credenziale è già stata scelta da chi la userà: niente invito, e
@@ -122,7 +165,11 @@ final class ProvisionaEnte
 
             $ente = UnitaOrganizzativa::create([
                 'tipo' => TipoUnitaOrganizzativa::Ente,
-                'nome' => $this->nome,
+                // ⚠️ **Non `$this->nome`**: quello è la ragione sociale
+                // dell'Account, e usarlo anche qui era l'imposizione che il
+                // Parco clienti rendeva visibile (colonna SEDE = ragione
+                // sociale su ogni primo Ente). Vedi `$nomeSede`.
+                'nome' => $this->nomeDellEnte(),
                 'parent_id' => null,
             ]);
 

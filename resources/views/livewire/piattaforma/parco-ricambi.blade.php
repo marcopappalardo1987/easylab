@@ -7,8 +7,6 @@
     // intero dalla vista compilata, su questa stessa piattaforma.
     [$ordinatoPer, $direzione] = $ordinamento;
 
-    $nessunCliente = $perimetro->eNessuno();
-
     // 🔴 `eNessuno()` non distingue «selezione vuota» da «piano non ancora
     // scelto»: sono lo stesso perimetro — `nessuno()` — ma NON la stessa
     // domanda. Scegliendo «Per piano» il piano è ancora vuoto, e la pagina
@@ -16,6 +14,24 @@
     // nessuna lista di clienti da usare. Il testo si ramifica sul modo, che è
     // già normalizzato dal componente.
     $pianoDaScegliere = $modo === Perimetro::PER_PIANO && $piano === '';
+
+    // 🔴 E la stessa distinzione, un modo più in là: «non hai preferiti» non è
+    // «non hai scelto nessun cliente». Il consiglio «scegline almeno uno dal
+    // filtro qui sopra» manderebbe a una `<select>` che nel modo preferiti non
+    // esiste — i preferiti si segnano nell'elenco Clienti, e il messaggio deve
+    // mandare LÌ.
+    //
+    // ⚠️ Si guarda l'insieme **già intersecato** e non `eNessuno()`: i preferiti
+    // possono essere non vuoti di ID e vuoti di CLIENTI — un preferito verso un
+    // account cestinato, o diventato di piattaforma, dopo la segnatura — e
+    // `eNessuno()` guarda la lista grezza, quindi quel caso non lo vede. La
+    // pagina direbbe «questi clienti non hanno pezzi» di clienti che non ci
+    // sono. È la stessa condizione che le altre due schede calcolano.
+    $nessunPreferito = $modo === Perimetro::PREFERITI && $preferiti->isEmpty();
+
+    // ⛔ E il perimetro «senza clienti» comprende quel caso, o il messaggio
+    // comparirebbe SOPRA la tabella invece che al suo posto.
+    $nessunCliente = $perimetro->eNessuno() || $nessunPreferito;
 
     $puoImpersonare = auth()->user()?->can('utenti.impersonate') ?? false;
 
@@ -31,7 +47,7 @@
     <x-parco.nav />
 
     <div class="mt-6">
-        <h1 class="text-2xl font-bold tracking-tight text-ink">Ricambi di tutti i clienti</h1>
+        <h1 class="text-2xl font-bold tracking-tight text-ink">{{ $titolo }}</h1>
         <p class="mt-1 text-sm text-ink-2">
             Il catalogo pezzi dei clienti nel perimetro, in sola lettura. Ogni riga dice di chi è:
             per cambiare qualcosa si impersona il cliente, e la modifica resta a suo nome nel registro.
@@ -46,61 +62,89 @@
          cross-cliente la differenza fra le due letture è fra zero righe e le
          righe di tutti. `Perimetro` fa cadere lì ogni input che non si è capito,
          e questa pagina lo dice a schermo invece di mostrare una tabella vuota. --}}
-    <div class="mt-6 flex flex-wrap items-end gap-3">
+    {{-- ⚠️ La barra sta su una `x-ui.card` come sulle altre due schede del
+         Parco: era l'unica delle tre con i filtri appoggiati direttamente sullo
+         sfondo della pagina, e le tre si visitano di fila dalle stesse tre
+         linguette — una superficie che compare e scompare fra una linguetta e
+         l'altra si legge come «questa pagina è un'altra cosa». --}}
+    <x-ui.card class="mt-6">
+        <div class="flex flex-wrap items-end gap-3">
 
-        <div>
-            <label for="parco-modo" class="block text-sm font-medium text-ink">Clienti</label>
-            <select id="parco-modo" wire:model.live="modo"
-                    class="mt-1 block rounded-md border border-border-strong bg-surface px-2 py-2 text-sm text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
-                <option value="{{ Perimetro::TUTTI }}">Tutti i clienti</option>
-                <option value="{{ Perimetro::PER_PIANO }}">Per piano</option>
-                <option value="{{ Perimetro::SCELTI }}">Scelti a mano</option>
-            </select>
-        </div>
-
-        @if ($modo === Perimetro::PER_PIANO)
             <div>
-                <label for="parco-piano" class="block text-sm font-medium text-ink">Piano</label>
-                <select id="parco-piano" wire:model.live="piano"
+                <label for="parco-modo" class="block text-sm font-medium text-ink">Clienti</label>
+                <select id="parco-modo" wire:model.live="modo"
                         class="mt-1 block rounded-md border border-border-strong bg-surface px-2 py-2 text-sm text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
-                    <option value="">Scegli un piano</option>
-                    @foreach (Piani::codici() as $codice)
-                        <option value="{{ $codice }}">{{ Piani::etichetta($codice) }}</option>
+                    <option value="{{ Perimetro::TUTTI }}">Tutti i clienti</option>
+                    <option value="{{ Perimetro::PER_PIANO }}">Per piano</option>
+                    {{-- ⚠️ L'etichetta è IDENTICA sulle tre schede del Parco: due
+                         schermi che chiamano lo stesso perimetro con due nomi
+                         diversi sono due perimetri, per chi legge. --}}
+                    <option value="{{ Perimetro::PREFERITI }}">★ I miei preferiti</option>
+                </select>
+            </div>
+
+            @if ($modo === Perimetro::PER_PIANO)
+                <div>
+                    <label for="parco-piano" class="block text-sm font-medium text-ink">Piano</label>
+                    <select id="parco-piano" wire:model.live="piano"
+                            class="mt-1 block rounded-md border border-border-strong bg-surface px-2 py-2 text-sm text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                        <option value="">Scegli un piano</option>
+                        @foreach (Piani::codici() as $codice)
+                            <option value="{{ $codice }}">{{ Piani::etichetta($codice) }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            @endif
+
+            {{-- ⛔ Niente `<select multiple>`: i preferiti si LEGGONO qui e si
+                 CAMBIANO nell'elenco Clienti. Un secondo posto in cui modificarli
+                 sarebbe un secondo insieme il giorno in cui i due divergessero. --}}
+            {{-- ⚠️ Forma IDENTICA a quella delle altre due schede: riquadro
+                 contornato su `bg-surface-sunken`, una **riga propria** (`w-full`)
+                 dentro la barra, link in fondo. Prima era testo nudo appoggiato
+                 sullo sfondo della pagina, cioè lo stesso filtro con tre aspetti
+                 diversi su tre schermi che si visitano di fila. --}}
+            @if ($modo === Perimetro::PREFERITI)
+                <div class="w-full">
+                    <p class="block text-sm font-medium text-ink">
+                        I miei preferiti ({{ $preferiti->count() }})
+                    </p>
+                    <div class="mt-1 rounded-md border border-border-strong bg-surface-sunken px-3 py-2 text-sm text-ink">
+                        @if ($preferiti->isEmpty())
+                            <p class="text-ink-3">Nessuno, per ora.</p>
+                        @else
+                            <p class="leading-relaxed">{{ $preferiti->pluck('ragione_sociale')->implode(', ') }}</p>
+                        @endif
+                        {{-- L'ancora porta alla barra dei filtri dell'elenco
+                             Clienti: senza, il link atterra in cima alla cabina e
+                             la tabella con le ★ resta sotto i grafici. --}}
+                        <a href="{{ route('piattaforma.index') }}#elenco-clienti"
+                            class="mt-1 inline-block text-xs font-medium text-brand hover:underline">
+                            Gestisci i preferiti nell'elenco Clienti
+                        </a>
+                    </div>
+                </div>
+            @endif
+
+            <div class="min-w-56 flex-1">
+                <label for="parco-cerca" class="block text-sm font-medium text-ink">Cerca un pezzo</label>
+                <input id="parco-cerca" type="search" wire:model.live.debounce.300ms="search"
+                       placeholder="Nome del pezzo o codice costruttore"
+                       class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+            </div>
+
+            <div>
+                <label for="parco-per-pagina" class="block text-sm font-medium text-ink">Per pagina</label>
+                <select id="parco-per-pagina" wire:model.live="perPage"
+                        class="mt-1 block rounded-md border border-border-strong bg-surface px-2 py-2 text-sm text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                    @foreach ($this->opzioniPerPage() as $taglia)
+                        <option value="{{ $taglia }}">{{ $taglia }}</option>
                     @endforeach
                 </select>
             </div>
-        @endif
 
-        @if ($modo === Perimetro::SCELTI)
-            <div class="min-w-56">
-                <label for="parco-clienti" class="block text-sm font-medium text-ink">Quali clienti</label>
-                <select id="parco-clienti" multiple size="4" wire:model.live="clientiScelti"
-                        class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-2 py-2 text-sm text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
-                    @foreach ($selezionabili as $cliente)
-                        <option value="{{ $cliente->id }}">{{ $cliente->ragione_sociale }}</option>
-                    @endforeach
-                </select>
-            </div>
-        @endif
-
-        <div class="min-w-56 flex-1">
-            <label for="parco-cerca" class="block text-sm font-medium text-ink">Cerca un pezzo</label>
-            <input id="parco-cerca" type="search" wire:model.live.debounce.300ms="search"
-                   placeholder="Nome del pezzo o codice costruttore"
-                   class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
         </div>
-
-        <div>
-            <label for="parco-per-pagina" class="block text-sm font-medium text-ink">Per pagina</label>
-            <select id="parco-per-pagina" wire:model.live="perPage"
-                    class="mt-1 block rounded-md border border-border-strong bg-surface px-2 py-2 text-sm text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
-                @foreach ($this->opzioniPerPage() as $taglia)
-                    <option value="{{ $taglia }}">{{ $taglia }}</option>
-                @endforeach
-            </select>
-        </div>
-
-    </div>
+    </x-ui.card>
 
     @if ($ricercaIgnorata)
         <p class="mt-2 text-xs text-ink-3">
@@ -126,12 +170,26 @@
                 Un piano non scelto non vale «tutti».
             </p>
         </x-ui.card>
+    @elseif ($nessunPreferito)
+        <x-ui.card class="mt-4 border-warn-dot bg-warn-soft">
+            <p class="text-sm text-warn-soft-ink">
+                <span aria-hidden="true">⚠️</span>
+                Non hai ancora clienti preferiti: segnali con la ★ nell'elenco Clienti.
+                Qui non c'è niente da mostrare, e un insieme vuoto non vale «tutti».
+            </p>
+        </x-ui.card>
     @elseif ($nessunCliente)
+        {{-- ⚠️ Difesa in profondità, oggi irraggiungibile: tolta la voce «scelti
+             dalla tendina, un perimetro vuoto può nascere solo dal piano non
+             ancora scelto o dai preferiti mancanti, cioè dai due rami qui
+             sopra. Sta scritto perché il giorno in cui un quarto modo cadesse
+             su `nessuno()` la pagina lo dica, invece di mostrare una tabella
+             vuota che si legge come «questi clienti non hanno pezzi». --}}
         <x-ui.card class="mt-4 border-warn-dot bg-warn-soft">
             <p class="text-sm text-warn-soft-ink">
                 <span aria-hidden="true">⚠️</span>
                 Nessun cliente selezionato: qui non c'è niente da mostrare.
-                Scegli almeno un cliente, oppure passa a «Tutti i clienti».
+                Scegli un perimetro, oppure passa a «Tutti i clienti».
                 Una selezione vuota non vale «tutti».
             </p>
         </x-ui.card>

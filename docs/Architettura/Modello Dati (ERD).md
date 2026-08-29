@@ -238,6 +238,23 @@ I membri che amministrano il rapporto commerciale (condizione della Policy dietr
 
 *Unique* `(user_id, account_id)` — con `user_id` in **testa**, come `tecnico_cliente` mette il tecnico: il percorso caldo è «gli account dell'utente X», letto dallo switcher in top bar a ogni pagina. *(Questa sezione nasceva con l'ordine opposto: corretto attuando, il percorso caldo comanda.)* Più `index(account_id)` per la direzione opposta e per la FK su Postgres. Lo **switcher** fra gli Enti dei propri account (ADR-032 punto 4) verifica l'appartenenza qui e riscrive `users.tenant_id` in modo auditato (`Ente attivo cambiato`, canale audit) — una richiesta vede sempre un solo tenant, lo scoping (ADR-018) non cambia.
 
+#### `clienti_preferiti` (pivot — 🔗 ADR-037, 29 Ago 2026)
+
+I clienti che una **persona** di piattaforma ha messo da parte: il perimetro «i miei preferiti» delle tre schede del Parco clienti. Terzo pivot della famiglia di `tecnico_cliente` (§3.3) e `account_user`, e per la stessa ragione delle altre due — è una proprietà **di chi guarda**, non del cliente guardato. Un flag `preferito` su `accounts` direbbe il falso non appena i Superadmin sono due, perché renderebbe la preferenza un attributo del rapporto commerciale.
+
+Nasce da un difetto d'uso e non da un requisito nuovo: il perimetro «clienti scelti» viveva in una `<select multiple>` legata a `#[Url]`, quindi si ricomponeva a mano a ogni visita che non arrivasse da un link salvato. I clienti che si guardano spesso sono pochi e sempre gli stessi.
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `id` | bigint PK | |
+| `user_id` | bigint FK → `users.id`, cascade | |
+| `account_id` | bigint FK → `accounts.id`, cascade | |
+| timestamps | | «da quando» è preferito; costa nulla e un giorno risponde a «cosa seguivo a settembre». |
+
+*Unique* `(user_id, account_id)` — `user_id` in **testa** come nei due gemelli, e per lo stesso motivo: il percorso caldo è «i preferiti di X», letto a ogni render delle tre schede del parco. L'unique impedisce anche il doppione, che duplicherebbe le righe di ogni `whereIn` costruito qui sopra. Più `index(account_id)` per la FK su Postgres.
+
+🔴 **Nessun `tenant_id`, ed è la stessa natura di `accounts`**: la riga lega un utente di piattaforma a un Account, cioè attraversa i tenant per definizione. Il confine non sta qui — sta in `App\Support\Piattaforma\ParcoClienti::clienti()`, che **interseca** gli id con `VistaPiattaforma::accounts()`. Ne discende una proprietà che vale la pena scrivere: un preferito verso un cliente **cestinato** sopravvive in tabella (un cliente si ripesca dal cestino) ma non produce righe da nessuna parte, e non conta in nessun totale a schermo. La scrittura passa da `App\Support\Piattaforma\Preferiti::alterna()`, che rilegge l'account **dall'insieme legittimo** prima di scrivere: l'account di piattaforma (`di_piattaforma`) e uno cestinato non diventano preferiti nemmeno mandando il loro id a mano.
+
 #### `piani` e `prezzi_piano` (il listino a database — 🔗 ADR-035, attuato il 27 Ago 2026)
 
 *Sono sottosezioni di §4.3 e non due sezioni nuove per la stessa ragione per cui §5.3 non è stata rinumerata: i docblock di `App\Models\Piano` e `App\Models\Registrazione` citano «ERD §4.3», e quei riferimenti nel codice esistono davvero. Sono tabelle di **piattaforma** come `accounts`: vivono sopra gli Enti e **non portano `tenant_id`** — un listino non è il dato di un Ente, è ciò che gli Enti comprano.*
@@ -620,6 +637,7 @@ Legenda: ✅ pieno · ⚠️ ristretto (per sotto-albero/portafoglio/proprietà)
 | **ADR-033** Il blu del marchio | Nessuna tabella: è materia di Design System. Tocca il modello dati solo di riflesso, via il marchio email per Ente (ADR-011, §4.1). |
 | **ADR-034** Tema chiaro e scuro | `users.tema` (§3.1), NOT NULL default `sistema`, col CHECK nato insieme alla colonna. Il DB è la verità, `localStorage` è solo la cache che evita il lampo. |
 | **ADR-035** Il listino si governa dalla dashboard | **`piani`** + **`prezzi_piano`** (§4.3): il catalogo passa da `config/easylab.php` al DB, e la config resta il bootstrap letto una volta sola dalla migration di backfill. `accounts.piano` invariata come **stringa senza FK** — cambia solo ciò che quella stringa nomina. Nessun permesso nuovo (`billing.manage_global`). Attuato il 27 Ago 2026. |
+| **ADR-037** Il Parco clienti | Nessuna tabella per la **lettura** — è la porta `App\Support\Piattaforma\ParcoClienti` sopra lo schema che c'è già. Una sola per la **scelta**: il pivot **`clienti_preferiti`** (§4.3, 29 Ago 2026), che è una preferenza personale e non un dato del cliente. |
 
 ---
 
