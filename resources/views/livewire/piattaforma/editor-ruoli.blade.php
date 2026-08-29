@@ -188,7 +188,7 @@
                 <button type="button"
                         wire:click="$toggle('soloDifferenze')"
                         data-filtro-differenze="{{ $soloDifferenze ? 'attivo' : 'spento' }}"
-                        class="shrink-0 rounded-md border px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring {{ $soloDifferenze ? 'border-brand bg-brand text-brand-ink hover:bg-brand-hover' : 'border-border-strong text-ink hover:bg-surface-sunken' }}">
+                        class="shrink-0 rounded-md border px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring {{ $soloDifferenze ? 'border-brand bg-brand text-brand-ink hover:bg-brand-hover' : 'border border-border-strong text-ink hover:bg-surface-sunken' }}">
                     {{ $soloDifferenze ? 'Mostra tutti i permessi' : 'Mostra solo le differenze' }}
                 </button>
             @endif

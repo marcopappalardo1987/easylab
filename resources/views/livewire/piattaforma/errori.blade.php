@@ -51,7 +51,7 @@
                  property: `?stato=` arriva dalla query string e può valere
                  qualunque cosa, mentre la query ha usato la sentinella. --}}
             <select id="errori-stato" wire:model.live="stato"
-                    class="mt-1 block rounded-md border-border-strong bg-surface text-sm shadow-sm focus:border-brand focus:ring-ring">
+                    class="mt-1 block rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
                 <option value="">Tutti</option>
                 @foreach ($stati as $valore => $etichetta)
                     <option value="{{ $valore }}" @selected($statoAttivo === $valore)>{{ $etichetta }}</option>

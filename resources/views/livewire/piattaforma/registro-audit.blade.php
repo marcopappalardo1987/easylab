@@ -45,13 +45,13 @@
             <label for="audit-cerca" class="block text-sm font-medium text-ink-2">Cerca</label>
             <input id="audit-cerca" type="search" wire:model.live.debounce.300ms="cerca"
                    placeholder="Testo della descrizione"
-                   class="mt-1 block w-full rounded-md border-border-strong bg-surface text-sm shadow-sm focus:border-brand focus:ring-ring">
+                   class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
         </div>
 
         <div>
             <label for="audit-azione" class="block text-sm font-medium text-ink-2">Azione</label>
             <select id="audit-azione" wire:model.live="azione"
-                    class="mt-1 block rounded-md border-border-strong bg-surface text-sm shadow-sm focus:border-brand focus:ring-ring">
+                    class="mt-1 block rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
                 <option value="">Tutte</option>
                 {{-- La sentinella: le righe senza `event` sono gli atti — le
                      `activity()` esplicite, che nessuno scrittore marca. --}}
@@ -65,7 +65,7 @@
         <div>
             <label for="audit-soggetto" class="block text-sm font-medium text-ink-2">Soggetto</label>
             <select id="audit-soggetto" wire:model.live="soggetto"
-                    class="mt-1 block rounded-md border-border-strong bg-surface text-sm shadow-sm focus:border-brand focus:ring-ring">
+                    class="mt-1 block rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
                 <option value="">Tutti</option>
                 @foreach ($this->tipiSoggetto() as $tipo => $sostantivo)
                     <option value="{{ $tipo }}">{{ $sostantivo }}</option>
@@ -77,19 +77,19 @@
             <label for="audit-chi" class="block text-sm font-medium text-ink-2">Chi</label>
             <input id="audit-chi" type="search" wire:model.live.debounce.300ms="chi"
                    placeholder="Nome o email"
-                   class="mt-1 block rounded-md border-border-strong bg-surface text-sm shadow-sm focus:border-brand focus:ring-ring">
+                   class="mt-1 block rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
         </div>
 
         <div>
             <label for="audit-dal" class="block text-sm font-medium text-ink-2">Dal</label>
             <input id="audit-dal" type="date" wire:model.live="dal"
-                   class="mt-1 block rounded-md border-border-strong bg-surface text-sm shadow-sm focus:border-brand focus:ring-ring">
+                   class="mt-1 block rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
         </div>
 
         <div>
             <label for="audit-al" class="block text-sm font-medium text-ink-2">Al</label>
             <input id="audit-al" type="date" wire:model.live="al"
-                   class="mt-1 block rounded-md border-border-strong bg-surface text-sm shadow-sm focus:border-brand focus:ring-ring">
+                   class="mt-1 block rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
         </div>
     </div>
 
@@ -98,7 +98,7 @@
          console, webhook, coda. Senza, si trovano solo scorrendo. --}}
     <label class="mt-3 flex w-fit items-center gap-2 text-sm text-ink-2">
         <input type="checkbox" wire:model.live="senzaUtente"
-               class="rounded border-border-strong bg-surface text-brand focus:ring-ring">
+               class="rounded border border-border-strong bg-surface text-brand focus:ring-ring">
         Solo azioni senza utente autenticato
     </label>
 

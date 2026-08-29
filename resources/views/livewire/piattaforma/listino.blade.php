@@ -412,7 +412,7 @@
 
                 <label class="flex items-start gap-2 text-sm text-ink">
                     <input type="checkbox" wire:model="nuovo.gratuito"
-                           class="mt-0.5 rounded border-border-strong bg-surface text-brand focus:ring-ring">
+                           class="mt-0.5 rounded border border-border-strong bg-surface text-brand focus:ring-ring">
                     <span>
                         Piano <strong>gratuito</strong>: nessun customer e nessuna subscription su Stripe (ADR-002).
                         <span class="mt-0.5 block text-xs text-ink-3">

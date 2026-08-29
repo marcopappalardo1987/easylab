@@ -41,13 +41,13 @@
             <label for="doc-cerca" class="block text-sm font-medium text-ink-2">Cerca</label>
             <input id="doc-cerca" type="search" wire:model.live.debounce.300ms="cerca"
                    placeholder="Nome del file"
-                   class="mt-1 block w-full rounded-md border-border-strong bg-surface text-sm shadow-sm focus:border-brand focus:ring-ring">
+                   class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
         </div>
 
         <div>
             <label for="doc-tipo" class="block text-sm font-medium text-ink-2">Tipo</label>
             <select id="doc-tipo" wire:model.live="tipo"
-                    class="mt-1 block rounded-md border-border-strong bg-surface text-sm shadow-sm focus:border-brand focus:ring-ring">
+                    class="mt-1 block rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
                 <option value="">Tutti</option>
                 @foreach ($this->tipiDocumento() as $valore => $etichetta)
                     <option value="{{ $valore }}">{{ $etichetta }}</option>
@@ -60,7 +60,7 @@
             {{-- Solo le macchine che hanno almeno un documento visibile:
                  un'opzione che porta a zero risultati può solo frustrare. --}}
             <select id="doc-macchina" wire:model.live="strumentoId"
-                    class="mt-1 block rounded-md border-border-strong bg-surface text-sm shadow-sm focus:border-brand focus:ring-ring">
+                    class="mt-1 block rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
                 <option value="">Tutte</option>
                 @foreach ($macchine as $macchina)
                     {{-- ⚠️ **L'etichetta si compone in PHP, non concatenando
@@ -84,13 +84,13 @@
         <div>
             <label for="doc-dal" class="block text-sm font-medium text-ink-2">Dal</label>
             <input id="doc-dal" type="date" wire:model.live="dal"
-                   class="mt-1 block rounded-md border-border-strong bg-surface text-sm shadow-sm focus:border-brand focus:ring-ring">
+                   class="mt-1 block rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
         </div>
 
         <div>
             <label for="doc-al" class="block text-sm font-medium text-ink-2">Al</label>
             <input id="doc-al" type="date" wire:model.live="al"
-                   class="mt-1 block rounded-md border-border-strong bg-surface text-sm shadow-sm focus:border-brand focus:ring-ring">
+                   class="mt-1 block rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
         </div>
     </div>
 

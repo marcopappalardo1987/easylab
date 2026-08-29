@@ -274,7 +274,7 @@
                          si registra in un passo, senza transitare da scaduto-non-fatto. --}}
                     <label class="flex items-center gap-2 text-sm text-ink">
                         <input type="checkbox" wire:model.live="interventoForm.gia_eseguito"
-                            class="rounded border-border-strong text-brand focus:ring-ring">
+                            class="rounded border border-border-strong text-brand focus:ring-ring">
                         Già eseguito
                     </label>
                     @if ($interventoForm['gia_eseguito'])
@@ -290,7 +290,7 @@
                     <div class="border-t border-border pt-5">
                         <label class="flex items-center gap-2 text-sm text-ink">
                             <input type="checkbox" wire:model.live="ricambiEffettuati"
-                                class="rounded border-border-strong text-brand focus:ring-ring">
+                                class="rounded border border-border-strong text-brand focus:ring-ring">
                             Ricambio effettuato
                         </label>
 
@@ -389,7 +389,7 @@
                     <div class="rounded-md border border-border bg-surface-sunken p-4">
                         <label class="flex items-center gap-2 text-sm font-medium text-ink">
                             <input type="checkbox" wire:model.live="pianificaProssimaTaratura"
-                                class="rounded border-border-strong text-brand focus:ring-ring">
+                                class="rounded border border-border-strong text-brand focus:ring-ring">
                             Pianifica la prossima taratura
                         </label>
 
