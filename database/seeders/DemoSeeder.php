@@ -202,7 +202,7 @@ class DemoSeeder extends Seeder
         });
     }
 
-    private function popolaEnte(UnitaOrganizzativa $ente, ?Account $condiviso = null): void
+    protected function popolaEnte(UnitaOrganizzativa $ente, ?Account $condiviso = null): void
     {
         $nodi = $this->creaAlberatura($ente);
         $utenti = $this->creaUtenti($ente);
@@ -345,11 +345,12 @@ class DemoSeeder extends Seeder
         $righe = [];
         $adesso = now();
 
-        // Alcune decine di strumenti per nodo foglia → migliaia per Ente. Ogni
-        // unità pesca dal catalogo chiuso, così lo STESSO modello finisce in
-        // molti laboratori e la vista "Per modello" ha qualcosa da aggregare.
+        // Almeno 35 strumenti per nodo: con 12 dipartimenti e almeno 2
+        // laboratori ciascuno sono almeno 1.260 strumenti per Ente. Ogni unità
+        // pesca dal catalogo chiuso, così lo STESSO modello finisce in molti
+        // laboratori e la vista "Per modello" ha qualcosa da aggregare.
         foreach ($nodi as $nodo) {
-            foreach (range(1, random_int(20, 35)) as $ignored) {
+            foreach (range(1, random_int(35, 45)) as $ignored) {
                 $nome = $nomi[array_rand($nomi)];
                 $varianti = self::CATALOGO[$nome];
                 [$modello, $sigla] = $varianti[array_rand($varianti)];
@@ -736,7 +737,7 @@ class DemoSeeder extends Seeder
      * Gli insert() a blocchi saltano gli eventi Eloquent: qui si verifica a
      * posteriori che gli invarianti del dominio siano comunque rispettati.
      */
-    private function verificaInvarianti(): void
+    protected function verificaInvarianti(): void
     {
         $fattiSenzaData = Intervento::withoutGlobalScopes()
             ->where('stato', StatoIntervento::Fatto->value)->whereNull('data_esecuzione')->count();
@@ -828,7 +829,7 @@ class DemoSeeder extends Seeder
         }
     }
 
-    private function riepilogo(): void
+    protected function riepilogo(): void
     {
         $this->command?->table(
             ['Tabella', 'Righe totali'],

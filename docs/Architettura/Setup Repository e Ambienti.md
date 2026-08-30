@@ -186,10 +186,13 @@ Si eseguono dal tab **«Commands»** dell'ambiente (comandi non interattivi, mas
 ```bash
 php artisan db:seed --class=RolesAndPermissionsSeeder --force   # bootstrap RBAC
 php artisan db:seed --class=SuperadminSeeder --force            # il Superadmin, col suo Account e il suo Ente
+php artisan db:seed --class=StagingSeeder --force               # solo staging: 3 sedi EasyLab con dati dimostrativi
 php artisan easylab:provision-tenant "EasyLab" --admin-email=…  # primo Ente cliente + Admin (riceve l'invito)
 php artisan easylab:notifica-scadenze --senza-invio             # §3.1: obbligatorio
 php artisan cashier:webhook --url=https://<ambiente>/stripe/webhook   # §3.4
 ```
+
+`StagingSeeder` rifiuta ambienti diversi da `staging`, non cancella righe ed è rieseguibile: crea `EasyLab Milano`, `EasyLab Roma` ed `EasyLab Catania` sotto un unico account SaaS, con almeno 1.001 strumenti per sede e i relativi tecnici, fornitori, interventi, spostamenti, garanzie e ricambi. Se trova una delle tre sedi popolata solo in parte si ferma, invece di duplicarne l'alberatura.
 
 ⚠️ Il **SuperadminSeeder** va prima del provisioning e non dopo: è l'account che deve poter entrare quando non esiste ancora nessuno che possa invitarlo. Legge `SUPERADMIN_EMAIL`/`SUPERADMIN_PASSWORD` da `config/easylab.php` e **senza quelle variabili non crea nulla**, invece di ripiegare su un default — deroga consapevole ad ADR-012, motivata nel suo docblock.
 
