@@ -333,7 +333,12 @@ class RegistroAudit extends Component
             // senza, un `SpostamentoStrumento` con lo stesso id numerico di un
             // utente omonimo entrerebbe in elenco.
             $query->where('causer_type', (new User)->getMorphClass())
-                ->whereIn('causer_id', User::query()
+                // ⚠️ `withTrashed()`: da 🔗 ADR-038 una persona si cestina, e
+                // il registro di audit è **il** posto in cui deve continuare a
+                // essere nominabile. Senza, cercare per nome chi non lavora più
+                // qui non troverebbe nulla — cioè proprio la ricerca per cui
+                // il registro esiste.
+                ->whereIn('causer_id', User::withTrashed()
                     ->where(function ($q) {
                         foreach (['name', 'email'] as $colonna) {
                             // `LOWER(...) LIKE` e non `ILIKE`: quest'ultimo è
@@ -479,7 +484,10 @@ class RegistroAudit extends Component
         // chiede di leggere «attribuita all'Admin con per conto di il
         // Developer», e «#12» non è quello. Una query sola per pagina, sugli id
         // raccolti — resta O(1).
-        $impersonatori = User::whereIn(
+        // ⚠️ `withTrashed()` per la ragione del filtro «chi» qui sopra: un
+        // impersonatore che ha lasciato l'azienda deve restare un nome, o le
+        // righe più delicate del registro tornerebbero a dire un id.
+        $impersonatori = User::withTrashed()->whereIn(
             'id',
             $righe->getCollection()->map(fn ($r) => $r->properties?->get('impersonato_da'))->filter()->unique()
         )->pluck('name', 'id');

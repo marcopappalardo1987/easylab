@@ -32,6 +32,18 @@ class ProvisioningRifiutato extends RuntimeException
 
     public const LIMITE_RAGGIUNTO = 'limite_raggiunto';
 
+    /**
+     * L'email appartiene a una persona **cestinata** (🔗 ADR-038).
+     *
+     * ⛔ Non si riusa e non si ripristina di nascosto: `users.email` è unique
+     * senza condizione, quindi la riga cestinata occupa quell'indirizzo e un
+     * `firstOrCreate` cieco sbatterebbe sull'unique — un 500 raggiungibile
+     * dalla superficie pubblica. Ma nemmeno si resuscita per effetto
+     * collaterale: rimettere in servizio una persona è un gesto che qualcuno
+     * deve fare **guardandolo**, dalla schermata Utenti.
+     */
+    public const UTENTE_CESTINATO = 'utente_cestinato';
+
     public function __construct(string $messaggio, public readonly string $codice)
     {
         parent::__construct($messaggio);

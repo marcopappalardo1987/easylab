@@ -25,7 +25,7 @@
 
 | # | Trattamento | Finalità | Categorie interessati | Categorie dati | Base giuridica | Conservazione |
 |---|---|---|---|---|---|---|
-| T1 | **Gestione account & auth** | accesso, sicurezza (2FA) | utenti piattaforma | nome, email, hash password, 2FA, log accessi | esecuzione contratto / legittimo interesse (sicurezza) | durata rapporto + retention tecnica |
+| T1 | **Gestione account & auth** | accesso, sicurezza (2FA) | utenti piattaforma | nome, email, hash password, 2FA, log accessi | esecuzione contratto / legittimo interesse (sicurezza) | durata rapporto; dopo il cestino la riga resta oggi **senza scadenza** per preservare le attribuzioni storiche — **APERTO ADR-038** |
 | T2 | **Anagrafica strumenti & manutenzioni** | erogazione del servizio (semaforo, scadenze, interventi) | personale dei laboratori | dati strumenti, interventi, tecnico assegnato, note | esecuzione contratto | durata rapporto + storico |
 | T3 | **Documenti & certificati** | archiviazione/allegati (tarature, report) | personale dei laboratori | file su **Backblaze B2**, bucket privato in UE, accesso solo autenticato | esecuzione contratto | durata rapporto |
 | T4 | **Notifiche email/in-app** | promemoria scadenze ("email del futuro") | utenti destinatari | email, contenuto notifica | esecuzione contratto / legittimo interesse | **definita il 18 Ago 2026**: `avvisi_scadenza` 24 mesi (`model:prune` giornaliero), `notifications` 12 mesi |
@@ -128,6 +128,14 @@
 
 ---
 
+### Integrazione ADR-038 — persone cestinate e nomi dello staff
+
+| # | Trattamento | Finalità | Categorie interessati | Categorie dati | Base giuridica | Conservazione |
+|---|---|---|---|---|---|---|
+| T11 | **Portafoglio tecnici EasyLab e assegnazione presso i clienti** | organizzare chi può lavorare sulle macchine di ciascuna sede | personale EasyLab e personale dei clienti che usa la tendina | nome del tecnico EasyLab, stato attivo/invitato, sedi del portafoglio | **APERTO:** validare base e perimetro della comunicazione del nome dello staff ai singoli clienti | il pivot segue la permanenza nel portafoglio; il nome segue T1 |
+
+Il cestino di 🔗 ADR-038 è una misura operativa di revoca: nega login e nuove assegnazioni, ma **non soddisfa da solo una richiesta di cancellazione GDPR**, perché la persona e il suo nome restano leggibili nello storico tramite `withTrashed()`. Servono una retention/anonimizzazione validata e una procedura per distinguere revoca dell'accesso, obbligo di conservazione e diritto alla cancellazione. L'informativa per utenti/tecnici e il DPA EasyLab↔cliente devono inoltre dichiarare che il nome del tecnico EasyLab viene mostrato agli Enti inclusi nel suo portafoglio.
+
 ## 3. Misure di sicurezza (tecniche e organizzative)
 
 Già previste dall'architettura (mappate agli ADR):
@@ -174,6 +182,11 @@ Già previste dall'architettura (mappate agli ADR):
 ---
 
 ## 6. Punti APERTI (per il legale/DPO)
+
+**Nuovi con ADR-038, entrambi ancora aperti al 30 Ago 2026:**
+
+- fissare retention e possibile anonimizzazione di `users` dopo il cestino, senza rendere falsi interventi e audit storici; il soft delete non equivale alla cancellazione GDPR;
+- validare base giuridica, perimetro e testo di informativa/DPA per mostrare ai clienti i nomi dei tecnici EasyLab presenti nel portafoglio della loro sede.
 1. Confine **Titolare vs Responsabile** EasyLab nei diversi trattamenti (§1) — e, dal 28 Ago 2026, **la stessa domanda su Stripe** per la gamba in cui l'interessato ci parla direttamente (Checkout pubblico e Billing Portal, §2 T5).
 2. **Tempi di conservazione** per T1/T6 (§2). ~~T4~~ chiuso il 18 Ago 2026, ~~T8~~ chiuso il 24 Ago 2026, ~~T9~~ **chiuso alla nascita il 28 Ago 2026** (30 giorni, potatura attiva): l'unica voce senza rotazione applicata resta **T6**, il registro di audit — che nel frattempo è il posto in cui finiscono le righe di ogni **esportazione** di clienti.
 3. Necessità di **DPIA**.

@@ -303,9 +303,38 @@ it('assigns a tecnico of the same ente', function () {
         ->toBe($tecnico->id);
 });
 
-it('accepts an external Tecnico with no tenant (ADR-007)', function () {
+it('rejects an external Tecnico who is NOT in this sede portafoglio (ADR-038 replaces "every tecnico everywhere")', function () {
+    // 🔴 Riscritto il 29 Ago 2026. Fino a ieri questo test si chiamava «accepts
+    // an external Tecnico with no tenant» e congelava la regola vecchia: OGNI
+    // tecnico di piattaforma era assegnabile su OGNI cliente. ADR-038 la
+    // restringe al portafoglio `tecnico_cliente`, per due ragioni: ogni Admin
+    // cliente leggeva l'organigramma di EasyLab in una <select>, e un tecnico
+    // fuori portafoglio era assegnabile su una macchina che `AccessoTecnico`
+    // non gli fa nemmeno vedere. La riga qui sotto non è un'omissione: il
+    // tecnico esiste, ha il ruolo, non ha tenant — gli manca SOLO la riga di
+    // portafoglio, ed è quella che oggi decide.
     $esterno = User::factory()->create(['tenant_id' => null, 'name' => 'Gino Verdi']);
     $esterno->assignRole('Tecnico');
+
+    scheda($this->admin, $this->strumento)
+        ->call('openNuovoIntervento')
+        ->set('interventoForm.descrizione', 'Assegnato a esterno')
+        ->set('interventoForm.tipo', 'taratura_e_certificazione')
+        ->set('interventoForm.data_scadenza', today()->addWeek()->toDateString())
+        ->set('interventoForm.tecnico_id', $esterno->id) // id forgiato: non era in tendina
+        ->call('saveIntervento')
+        ->assertHasErrors('interventoForm.tecnico_id');
+
+    // ⛔ La validazione rifiuta PRIMA della transazione: nessuna riga scritta.
+    $this->assertDatabaseMissing('interventi', ['descrizione' => 'Assegnato a esterno']);
+});
+
+it('accepts the same external Tecnico once the sede enters his portafoglio (ADR-038)', function () {
+    // Lo stesso tecnico del test qui sopra, cambiata una sola cosa: la riga di
+    // portafoglio. È la prova differenziale che a decidere è quella e non altro.
+    $esterno = User::factory()->create(['tenant_id' => null, 'name' => 'Gino Verdi']);
+    $esterno->assignRole('Tecnico');
+    $esterno->portafoglioClienti()->attach($this->ente->id);
 
     scheda($this->admin, $this->strumento)
         ->call('openNuovoIntervento')
@@ -318,6 +347,38 @@ it('accepts an external Tecnico with no tenant (ADR-007)', function () {
 
     expect(Intervento::withoutGlobalScopes()->where('descrizione', 'Assegnato a esterno')->sole()->tecnico_id)
         ->toBe($esterno->id);
+});
+
+it('keeps an already assigned intervento after the portafoglio is revoked (ADR-030 second channel)', function () {
+    // ⚠️ Il portafoglio governa CHI è assegnabile, non CHI è assegnato. La
+    // revoca è un gesto di oggi e non deve riscrivere lo storico: l'intervento
+    // resta, e la pagina continua a dire il nome — l'assegnazione puntuale è il
+    // secondo canale di ADR-030 e non passa dal portafoglio.
+    $esterno = User::factory()->create(['tenant_id' => null, 'name' => 'Gino Verdi']);
+    $esterno->assignRole('Tecnico');
+    $esterno->portafoglioClienti()->attach($this->ente->id);
+
+    scheda($this->admin, $this->strumento)
+        ->call('openNuovoIntervento')
+        ->set('interventoForm.descrizione', 'Lavoro in corso')
+        ->set('interventoForm.tipo', 'taratura_e_certificazione')
+        ->set('interventoForm.data_scadenza', today()->addWeek()->toDateString())
+        ->set('interventoForm.tecnico_id', $esterno->id)
+        ->call('saveIntervento')
+        ->assertHasNoErrors();
+
+    $esterno->portafoglioClienti()->detach($this->ente->id);
+
+    $intervento = Intervento::withoutGlobalScopes()->where('descrizione', 'Lavoro in corso')->sole();
+    expect($intervento->tecnico_id)->toBe($esterno->id)
+        ->and($intervento->tecnicoLabel())->toBe('Gino Verdi');
+
+    // …ma da adesso non è più proponibile: la tendina lo ha perso.
+    $assegnatari = scheda($this->admin, $this->strumento)
+        ->call('openNuovoIntervento')
+        ->viewData('assegnatari');
+
+    expect($assegnatari->pluck('id')->all())->not->toContain($esterno->id);
 });
 
 it('rejects a tecnico belonging to another ente', function () {
@@ -350,11 +411,27 @@ it('rejects a user with no tenant and no Tecnico role', function () {
         ->assertHasErrors('interventoForm.tecnico_id');
 });
 
-it('lists tenant users and external Tecnici in the assegnatari select, never other tenants', function () {
+it('lists tenant users and only the portafoglio Tecnici in the assegnatari select (ADR-038)', function () {
+    // 🔴 Riscritto il 29 Ago 2026: prima bastava «essere Tecnico senza tenant».
+    // Ora la tendina è la STESSA query della validazione (Assegnabili), quindi
+    // i due tecnici esterni si separano proprio qui: `$inPortafoglio` c'è,
+    // `$fuoriPortafoglio` no — ed è il gesto che impedisce a un Admin cliente
+    // di leggere l'organigramma di EasyLab.
     $collega = User::factory()->create(['tenant_id' => $this->ente->id, 'name' => 'Collega A']);
-    $esterno = User::factory()->create(['tenant_id' => null, 'name' => 'Tecnico Esterno']);
-    $esterno->assignRole('Tecnico');
+
+    $inPortafoglio = User::factory()->create(['tenant_id' => null, 'name' => 'Tecnico Nostro']);
+    $inPortafoglio->assignRole('Tecnico');
+    $inPortafoglio->portafoglioClienti()->attach($this->ente->id);
+
+    $fuoriPortafoglio = User::factory()->create(['tenant_id' => null, 'name' => 'Tecnico Altrui']);
+    $fuoriPortafoglio->assignRole('Tecnico');
+
+    // …e uno in portafoglio su un ALTRO cliente: il pivot si legge per sede.
     $enteB = UnitaOrganizzativa::factory()->ente()->create();
+    $suUnAltroCliente = User::factory()->create(['tenant_id' => null, 'name' => 'Tecnico Di B']);
+    $suUnAltroCliente->assignRole('Tecnico');
+    $suUnAltroCliente->portafoglioClienti()->attach($enteB->id);
+
     $estraneo = User::factory()->create(['tenant_id' => $enteB->id, 'name' => 'Estraneo B']);
 
     $assegnatari = scheda($this->admin, $this->strumento)
@@ -363,8 +440,121 @@ it('lists tenant users and external Tecnici in the assegnatari select, never oth
 
     $ids = $assegnatari->pluck('id')->all();
     expect($ids)->toContain($collega->id)
-        ->toContain($esterno->id)
-        ->not->toContain($estraneo->id);
+        ->toContain($inPortafoglio->id);
+    expect($ids)->not->toContain($fuoriPortafoglio->id);
+    expect($ids)->not->toContain($suUnAltroCliente->id);
+    expect($ids)->not->toContain($estraneo->id);
+});
+
+it('rejects a user with no tenant and no Tecnico role even with a portafoglio row (ADR-038)', function () {
+    // ⚠️ L'unione è sul RUOLO, non sul tenant nullo: una riga di portafoglio da
+    // sola non promuove nessuno. Il caso è raggiungibile — Superadmin e
+    // Developer non hanno `tenant_id` — e senza il ramo sul ruolo un cliente
+    // vedrebbe in tendina il nome di chi amministra la piattaforma.
+    $piattaforma = User::factory()->create(['tenant_id' => null, 'name' => 'Non Tecnico']);
+    $piattaforma->portafoglioClienti()->attach($this->ente->id);
+
+    $assegnatari = scheda($this->admin, $this->strumento)
+        ->call('openNuovoIntervento')
+        ->viewData('assegnatari');
+
+    expect($assegnatari->pluck('id')->all())->not->toContain($piattaforma->id);
+
+    scheda($this->admin, $this->strumento)
+        ->call('openNuovoIntervento')
+        ->set('interventoForm.descrizione', 'Non deve salvare')
+        ->set('interventoForm.tipo', 'manutenzione_ordinaria')
+        ->set('interventoForm.data_scadenza', today()->addWeek()->toDateString())
+        ->set('interventoForm.tecnico_id', $piattaforma->id)
+        ->call('saveIntervento')
+        ->assertHasErrors('interventoForm.tecnico_id');
+
+    $this->assertDatabaseMissing('interventi', ['descrizione' => 'Non deve salvare']);
+});
+
+it('still lets an old intervento be edited after its assegnatario left (ADR-038)', function () {
+    // 🔴 La regola nuova restringe **chi si può assegnare**, non **cosa si può
+    // conservare**. `openModificaIntervento()` ricarica `tecnico_id` dalla
+    // riga, `tecnico_id` è `required`, e la tendina non offre più chi se n'è
+    // andato: senza l'unione con l'assegnatario in essere, correggere una
+    // descrizione rispondeva «Assegnatario non valido» su un campo che nessuno
+    // aveva toccato — cioè cestinare una persona rendeva **immodificabile ogni
+    // suo intervento storico**, che è il contrario di ciò che ADR-038 promette.
+    $uscito = User::factory()->create(['tenant_id' => $this->ente->id, 'name' => 'Ex Tecnico']);
+    $uscito->assignRole('Tecnico');
+
+    $intervento = Intervento::factory()->forStrumento($this->strumento)->assegnatoA($uscito)
+        ->create(['descrizione' => 'Taratura di marzo']);
+
+    $uscito->delete();
+
+    $pagina = scheda($this->admin, $this->strumento)
+        ->call('openModificaIntervento', $intervento->id)
+        ->set('interventoForm.descrizione', 'Taratura di marzo (corretta)')
+        ->call('saveIntervento')
+        ->assertHasNoErrors();
+
+    expect($intervento->fresh()->descrizione)->toBe('Taratura di marzo (corretta)')
+        ->and($intervento->fresh()->tecnico_id)->toBe($uscito->id);
+
+    // …e la tendina lo mostra, o si potrebbe salvare solo un valore invisibile.
+    expect($pagina->call('openModificaIntervento', $intervento->id)
+        ->viewData('assegnatari')->pluck('id')->all())->toContain($uscito->id);
+});
+
+it('never lets the editing exception widen into a new assignment (ADR-038)', function () {
+    // ⛔ Il controllo che rende onesta l'eccezione qui sopra: si conserva chi
+    // c'è già, non si accetta chiunque perché la modale è in modifica. Un
+    // secondo id fuori perimetro deve restare rifiutato **sulla stessa
+    // richiesta** in cui il primo sarebbe passato.
+    $uscito = User::factory()->create(['tenant_id' => $this->ente->id, 'name' => 'Ex Tecnico']);
+    $uscito->assignRole('Tecnico');
+
+    $intervento = Intervento::factory()->forStrumento($this->strumento)->assegnatoA($uscito)
+        ->create(['descrizione' => 'Taratura di marzo']);
+
+    $uscito->delete();
+
+    $altroCestinato = User::factory()->create(['tenant_id' => $this->ente->id, 'name' => 'Altro Uscito']);
+    $altroCestinato->delete();
+
+    scheda($this->admin, $this->strumento)
+        ->call('openModificaIntervento', $intervento->id)
+        ->set('interventoForm.tecnico_id', $altroCestinato->id)
+        ->call('saveIntervento')
+        ->assertHasErrors('interventoForm.tecnico_id');
+
+    expect($intervento->fresh()->tecnico_id)->toBe($uscito->id);
+
+    // E la tendina non lo propone: l'unione è di **uno** solo.
+    expect(scheda($this->admin, $this->strumento)
+        ->call('openModificaIntervento', $intervento->id)
+        ->viewData('assegnatari')->pluck('id')->all())->not->toContain($altroCestinato->id);
+});
+
+it('never proposes a trashed person, not even one of the same Ente (ADR-038)', function () {
+    // Il cestino non aggiunge un `if` da ricordare qui: cade dal global scope
+    // di SoftDeletes su `User`, ed è precisamente il punto di aver scelto il
+    // cestino invece di un flag `is_active`.
+    $uscito = User::factory()->create(['tenant_id' => $this->ente->id, 'name' => 'Ex Dipendente']);
+    $uscito->delete();
+
+    $assegnatari = scheda($this->admin, $this->strumento)
+        ->call('openNuovoIntervento')
+        ->viewData('assegnatari');
+
+    expect($assegnatari->pluck('id')->all())->not->toContain($uscito->id);
+
+    scheda($this->admin, $this->strumento)
+        ->call('openNuovoIntervento')
+        ->set('interventoForm.descrizione', 'Assegnato a un cestinato')
+        ->set('interventoForm.tipo', 'manutenzione_ordinaria')
+        ->set('interventoForm.data_scadenza', today()->addWeek()->toDateString())
+        ->set('interventoForm.tecnico_id', $uscito->id)
+        ->call('saveIntervento')
+        ->assertHasErrors('interventoForm.tecnico_id');
+
+    $this->assertDatabaseMissing('interventi', ['descrizione' => 'Assegnato a un cestinato']);
 });
 
 // --- Validazioni di forma ---

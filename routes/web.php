@@ -27,6 +27,7 @@ use App\Livewire\Piattaforma\ParcoRicambi;
 use App\Livewire\Piattaforma\ParcoScadenzario;
 use App\Livewire\Piattaforma\RegistroAudit;
 use App\Livewire\Piattaforma\SchedaErrore;
+use App\Livewire\Piattaforma\Tecnici;
 use App\Livewire\Ricambi\RicercaRicambi;
 use App\Livewire\Settings\PreferenzeNotifiche;
 use App\Livewire\Settings\TwoFactorAuthentication;
@@ -35,6 +36,7 @@ use App\Livewire\Strumenti\ImportStrumenti;
 use App\Livewire\Strumenti\ModelliStrumenti;
 use App\Livewire\Strumenti\SchedaStrumento;
 use App\Livewire\Strumenti\StampaQr;
+use App\Livewire\Utenti\ElencoUtenti;
 use Illuminate\Support\Facades\Route;
 
 // Login, logout, reset password, verifica email e 2FA sono registrati da Fortify
@@ -121,6 +123,18 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     Route::get('/fornitori', ElencoFornitori::class)
         ->middleware('can:fornitori.view')
         ->name('fornitori.index');
+
+    // 🔴 Le **persone dell'Ente** (🔗 ADR-038). Il permesso `utenti.view` è a
+    // catalogo dal primo giorno ed è già dell'Admin: nessun permesso nuovo,
+    // quindi nessun riseeding di `config/rbac.php`.
+    //
+    // ⚠️ È una schermata che **conferisce accessi**, quindi il `can:` di rotta è
+    // la prima rete e non l'unica: ogni azione che accetta un id dal browser
+    // riautorizza per conto suo, perché «puoi stare in questa pagina» non è
+    // «puoi toccare QUESTA persona».
+    Route::get('/utenti', ElencoUtenti::class)
+        ->middleware('can:'.ElencoUtenti::PERMESSO)
+        ->name('utenti.index');
     // Ricerca incrociata «dove è montato questo pezzo» (ADR-008). Pagina propria
     // e non un tab della scheda: la domanda parte dal pezzo e attraversa tutte
     // le macchine, mentre il tab Ricambi vive dentro una macchina sola.
@@ -255,6 +269,17 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     // Dentro il gruppo protetto come le altre tre: il Developer è un utente
     // tenant-bound con un account proprio (ADR-018), e un account in lockout
     // deve vedere /bloccato anche da qui.
+    // 🔴 I **tecnici di EasyLab** e i clienti su cui lavorano (🔗 ADR-038).
+    // Attua la UI del portafoglio `tecnico_cliente`, che ADR-007/030 prometteva
+    // «per S6» e che nessuna schermata ha mai scritto.
+    //
+    // ⚠️ Gata su `tenants.view_all` e **non** su `utenti.view`: quest'ultimo ce
+    // l'ha ogni Admin cliente ed è ridistribuibile dall'editor dei ruoli — lo
+    // stesso vizio per cui `audit.view` fu scartato poche righe più su.
+    Route::get('/piattaforma/tecnici', Tecnici::class)
+        ->middleware('can:'.Tecnici::PERMESSO)
+        ->name('piattaforma.tecnici');
+
     Route::get('/piattaforma/errori', Errori::class)
         ->middleware('can:'.Errori::PERMESSO)
         ->name('piattaforma.errori');

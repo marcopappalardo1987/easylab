@@ -185,15 +185,22 @@
                                 {{-- **Non** «Sistema»: sarebbe un'affermazione.
                                      Copre ospiti, console e coda.
 
-                                     ⚠️ E il titolo è **condizionale**: `users` non
-                                     ha soft delete, quindi cancellando un utente
-                                     `user_id` va a NULL per la chiave esterna
-                                     mentre `impersonato_da` — che è una colonna
-                                     nuda — resta. Dire «nessun utente
-                                     autenticato» accanto a un «per conto di»
-                                     valorizzato sarebbe un'affermazione falsa,
-                                     cioè il difetto che questo ramo evita
-                                     rifiutando «Sistema». --}}
+                                     ⚠️ E il titolo è **condizionale**: `user_id` è
+                                     una FK `nullOnDelete`, quindi cancellando
+                                     davvero un utente va a NULL mentre
+                                     `impersonato_da` — che è una colonna nuda —
+                                     resta. Dire «nessun utente autenticato»
+                                     accanto a un «per conto di» valorizzato
+                                     sarebbe un'affermazione falsa, cioè il
+                                     difetto che questo ramo evita rifiutando
+                                     «Sistema».
+
+                                     *Da 🔗 ADR-038 il caso normale non passa
+                                     più di qui: una persona si **cestina**, e
+                                     `user_id` resta — il nome lo trova
+                                     `withTrashed()` nel componente. Questo ramo
+                                     copre ciò che resta: ospiti, console, coda,
+                                     e le righe cancellate davvero.* --}}
                                 {{-- ⚠️ `text-neutral-400` era sotto AA per il testo (DS §2.2):
                                      questo trattino è un'informazione, non un separatore. --}}
                                 <span class="text-ink-3"

@@ -1,6 +1,6 @@
 🗄️ Modello Dati (ERD) — Easy Lab
 
-*Schema dati di riferimento per la V1 (MVP). Traduce in entità, relazioni e colonne le decisioni architetturali (`Decisioni Architetturali.md`, ADR-001 → ADR-027) e l'`Elenco Funzionalità Easy Lab.md`. Questo documento è il **contratto** per le migrazioni Laravel degli Sprint 1–2: ogni tabella di business qui descritta diventa una migration. In caso di conflitto fra questo file e un ADR, vince l'ADR (e questo file va corretto).*
+*Schema dati di riferimento per la V1 (MVP). Traduce in entità, relazioni e colonne le decisioni architetturali (`Decisioni Architetturali.md`, ADR-001 → ADR-038) e l'`Elenco Funzionalità Easy Lab.md`. Questo documento è il **contratto** per le migrazioni Laravel: ogni tabella di business qui descritta diventa una migration. In caso di conflitto fra questo file e un ADR, vince l'ADR (e questo file va corretto).*
 
 > **Stato:** bozza di Sprint 0 (task S0.1). Da approvare prima di scrivere le migrazioni.
 >
@@ -116,17 +116,17 @@ Utente della piattaforma. Auth/2FA via Jetstream/Fortify (ADR-012). Non tutti gl
 |---|---|---|
 | `id` | bigint PK | |
 | `name` | string | |
-| `email` | string unique | |
+| `email` | string unique globale | Il vincolo resta occupato anche da una riga cestinata. Ogni lookup di provisioning, registrazione o invito deve quindi usare `withTrashed()`: la stessa email non si ricrea, si offre il **ripristino** della persona quando il perimetro lo consente (🔗 ADR-038). |
 | `password` | string | |
 | `tenant_id` | bigint nullable, FK → `unita_organizzativa.id` | Valorizzato per Admin/Responsabile/Tenant **e per Developer/Superadmin**, che 🔗 ADR-018 ha reso tenant-bound (l'accesso cross-tenant passa solo dall'impersonazione). NULL per il **Tecnico esterno** (staff EasyLab), che accede per portafoglio ∪ assegnazione; valorizzato per il **Tecnico interno**, dipendente del laboratorio, dove però non è un criterio di accesso ma una difesa in profondità — 🔗 ADR-030. Con 🔗 ADR-032 (attuata il 18 Ago 2026) resta **uno solo per volta**, ma è riscrivibile dallo **switcher** fra gli Enti del proprio account (`User::passaAllEnte()`): azione dedicata e auditata, e la colonna è **fuori da `$fillable`** — quella è l'unica via. |
 
 > **Revisione del 17 Ago 2026 (S4 blocco 9).** Questa riga diceva «NULL per utenti piattaforma (Developer/Superadmin/Tecnico)» ed era falsa in due punti su tre: per Developer e Superadmin da 🔗 ADR-018, che li ha vincolati al proprio Ente, e per il Tecnico da 🔗 ADR-030, che ne riconosce due forme. Restava vera solo per il tecnico esterno, ed è il tipo di riga che si legge come specifica e nel frattempo ha smesso di descrivere il sistema.
 
 | `two_factor_secret` / `two_factor_recovery_codes` | text nullable | 2FA (Fortify). |
-| ~~`is_active`~~ | — | **Mai nata, e non nascerà così** (revisione del 18 Ago 2026, attuando 🔗 ADR-012). Questa riga descriveva un'abilitazione per-utente che nessuna migration ha mai creato. Lo stato «invitato» si deriva da **`email_verified_at IS NULL`** (+ password random mai comunicata) e il blocco per insoluto vive su `accounts.is_locked` (🔗 ADR-013, §4.3): un terzo interruttore sarebbe stata la terza sorgente di verità su «questo utente può entrare?». Se un domani servirà spegnere una *persona* — cosa diversa dal sospendere un *contratto* — sarà una decisione con la sua migration. |
+| ~~`is_active`~~ | — | Non esiste: 🔗 ADR-038 ha scelto il **soft delete**, non un terzo flag di accesso. Lo stato mostrato in UI deriva da `deleted_at` e `email_verified_at`, senza una colonna concorrente. Il lockout commerciale resta separato e vive su `accounts`. |
 | `riceve_email_scadenze` | boolean default true | Opt-out dal digest email (🔗 ADR-011, 18 Ago 2026) = diritto di opposizione del registro T4. Riguarda **solo l'email**: le notifiche in-app restano sempre. Fuori dall'attributo `Fillable`, come `visibilita_garanzie_ricambio` (ADR-029): si scrive solo da `/settings/notifiche`. |
 | `tema` | enum: `sistema` \| `chiaro` \| `scuro`, NOT NULL default `sistema` | Preferenza di tema (🔗 ADR-034). **Il DB è la verità, `localStorage` è la cache che evita il lampo**: chi entra da un dispositivo nuovo ritrova la propria scelta, e un tablet condiviso non impone a tutti quella dell'ultimo che l'ha toccato. NOT NULL con default, come `soglia_obsolescenza_anni` e `visibilita_garanzie_ricambio`: con una colonna nullable il default vivrebbe in due posti (un COALESCE in SQL e un `??` in PHP) liberi di divergere. Il CHECK nasce **con** la colonna — `enum()` è varchar + CHECK su entrambi i driver — a differenza di `strumenti.forced_state`, dove l'`ADD CONSTRAINT` si salta su SQLite. Fuori da `$fillable`. *(Riga aggiunta il 28 Ago 2026: la colonna era a DB dal 26 e questa tabella non la elencava — la stessa forma dell'omissione già annotata su `visibilita_garanzie_ricambio`.)* |
-| timestamps, `deleted_at` | | soft delete. |
+| timestamps, `deleted_at` | | Soft delete della persona (🔗 ADR-038). Una riga cestinata non autentica e sparisce da assegnatari, digest e impersonazione per il `SoftDeletingScope`; le relazioni di attribuzione storica la leggono invece con `withTrashed()`. La migration additiva è nel codice ma **non risulta ancora applicata al DB di sviluppo al 30 Ago 2026**. |
 
 **Ruoli** (spatie/laravel-permission): `Developer`, `Superadmin`, `Admin`, `Responsabile Reparto`, `Tenant`, `Tecnico`. Le tabelle `roles`/`permissions`/`model_has_roles`/`model_has_permissions`/`role_has_permissions` sono gestite dal pacchetto (ADR-006).
 
@@ -152,7 +152,7 @@ Portafoglio clienti del Tecnico. Grant a livello di Ente.
 | `ente_id` | bigint FK → `unita_organizzativa.id` (tipo `ente`) | Tenant del portafoglio. |
 | timestamps | | |
 
-*Unique* `(tecnico_id, ente_id)`. L'altro grant del tecnico (per assegnazione) deriva da `interventi.tecnico_id` (§5.2). Accesso effettivo del tecnico = strumenti dei tenant in portafoglio **∪** strumenti con un intervento assegnato (§6).
+*Unique* `(tecnico_id, ente_id)`. La UI di 🔗 ADR-038 amministra il pivot **sede per sede** da `/piattaforma/tecnici`: una riga conferisce al tecnico EasyLab l'accesso a tutte le macchine di quell'Ente e lo rende assegnabile sugli interventi di quella sede. L'altro grant del tecnico (per assegnazione) deriva da `interventi.tecnico_id` (§5.2). Accesso operativo effettivo del tecnico = strumenti dei tenant in portafoglio **∪** strumenti con un intervento assegnato (§6).
 
 ---
 
@@ -237,6 +237,8 @@ I membri che amministrano il rapporto commerciale (condizione della Policy dietr
 | timestamps | | |
 
 *Unique* `(user_id, account_id)` — con `user_id` in **testa**, come `tecnico_cliente` mette il tecnico: il percorso caldo è «gli account dell'utente X», letto dallo switcher in top bar a ogni pagina. *(Questa sezione nasceva con l'ordine opposto: corretto attuando, il percorso caldo comanda.)* Più `index(account_id)` per la direzione opposta e per la FK su Postgres. Lo **switcher** fra gli Enti dei propri account (ADR-032 punto 4) verifica l'appartenenza qui e riscrive `users.tenant_id` in modo auditato (`Ente attivo cambiato`, canale audit) — una richiesta vede sempre un solo tenant, lo scoping (ADR-018) non cambia.
+
+🔗 **ADR-038 aggiunge un produttore del pivot, non una seconda semantica.** Quando `/utenti` invita o promuove una persona come Admin, la aggiunge ai membri dell'Account dell'Ente. La demozione non la stacca automaticamente. Il cestino usa invece l'API dell'Account — che non può lasciare l'Account senza membri — e il ripristino di un Admin lo riaggiunge.
 
 #### `clienti_preferiti` (pivot — 🔗 ADR-037, 29 Ago 2026)
 
@@ -373,6 +375,8 @@ Cuore manutentivo. Le **tarature e certificazioni** sono interventi `tipo = tara
 | timestamps, `deleted_at` | | soft delete. |
 
 **Visibilità:** gli interventi sono **visibili anche al Tenant** (Funzionalità §2). Lo storico segue lo strumento anche dopo trasferimento cross-tenant (ADR-015).
+
+**Whitelist dell'assegnatario (🔗 ADR-038):** form e validazione condividono una sola query. Per una macchina sono selezionabili le persone vive dell'Ente della macchina, senza filtro di ruolo, unite ai tecnici EasyLab (`tenant_id IS NULL`, ruolo `Tecnico`) presenti in `tecnico_cliente` per **quella sede**. Un tecnico EasyLab fuori portafoglio non compare e un id forgiato viene rifiutato.
 **Indici:** `tenant_id`, `strumento_id`, `tecnico_id`, `data_scadenza`, `stato`; dal 27 Ago 2026 anche il composto **`(tenant_id, stato, data_scadenza)`**, che serve lo **Scadenzario** (`/scadenzario`). Quella vista è cross-macchina e **non nomina lo strumento**: sull'indice `(strumento_id, stato, data_scadenza)` — pensato per la scheda e per il semaforo, che lo nominano sempre — il prefisso sinistro non sarebbe selettivo e il piano ricadrebbe su una scansione con sort. ⛔ L'indice singolo su `tenant_id` **non è stato rimosso**, benché sia il prefisso sinistro del nuovo: toglierlo sarebbe una migration distruttiva (area rossa della Policy di Code Review) su una colonna con altri consumatori — ogni query scopata da `TenantScope` che non nomini né `stato` né `data_scadenza`. La ridondanza parziale è dichiarata qui e si ferma qui.
 
 > **Ricambi registrati dall'intervento** (ADR-022). Il form intervento porta una checkbox "Ricambio effettuato" e N righe `{nome, scadenza garanzia}`. La checkbox **non è una colonna**: la verità è l'esistenza di righe `ricambio_utilizzo` con quell'`intervento_id` (§7.2). Ogni riga salva, nella stessa transazione, catalogo + utilizzo + garanzia `soggetto = ricambio`.
@@ -585,6 +589,8 @@ Legenda: ✅ pieno · ⚠️ ristretto (per sotto-albero/portafoglio/proprietà)
 
 ---
 
+🔗 **Assegnabilità e accesso non sono la stessa query (ADR-038).** La tendina parte dalla sede della macchina; lo scope operativo del Tecnico parte dalla persona autenticata e unisce portafoglio e macchine già assegnate. Tenerli distinti impedisce sia di mostrare tutto l'organigramma EasyLab a ogni cliente, sia di trasformare una scelta nel form in un bypass degli scope.
+
 ## 11. Note di indicizzazione
 
 - **Scoping:** indice su `tenant_id` in **tutte** le tabelle di business; `reseller_id` dove utile alle query reseller (V1.1).
@@ -638,6 +644,7 @@ Legenda: ✅ pieno · ⚠️ ristretto (per sotto-albero/portafoglio/proprietà)
 | **ADR-034** Tema chiaro e scuro | `users.tema` (§3.1), NOT NULL default `sistema`, col CHECK nato insieme alla colonna. Il DB è la verità, `localStorage` è solo la cache che evita il lampo. |
 | **ADR-035** Il listino si governa dalla dashboard | **`piani`** + **`prezzi_piano`** (§4.3): il catalogo passa da `config/easylab.php` al DB, e la config resta il bootstrap letto una volta sola dalla migration di backfill. `accounts.piano` invariata come **stringa senza FK** — cambia solo ciò che quella stringa nomina. Nessun permesso nuovo (`billing.manage_global`). Attuato il 27 Ago 2026. |
 | **ADR-037** Il Parco clienti | Nessuna tabella per la **lettura** — è la porta `App\Support\Piattaforma\ParcoClienti` sopra lo schema che c'è già. Una sola per la **scelta**: il pivot **`clienti_preferiti`** (§4.3, 29 Ago 2026), che è una preferenza personale e non un dato del cliente. |
+| **ADR-038** Persone e portafoglio dichiarato | `users.deleted_at` abilita cestino/ripristino senza perdere le attribuzioni storiche; `users.email` resta unique globale. Le UI scrivono `account_user` per gli Admin e `tecnico_cliente` per il portafoglio per sede; `interventi.tecnico_id` resta il grant puntuale. Migration sul DB di sviluppo e verifica manuale ancora pendenti al 30 Ago 2026. |
 
 ---
 

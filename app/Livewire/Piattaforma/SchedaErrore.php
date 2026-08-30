@@ -217,12 +217,17 @@ class SchedaErrore extends Component
         // ⚠️ La seconda è che **`impersonato_da` può non risolvere**. `user_id`
         // è una FK `nullOnDelete` — o c'è o è `null` — mentre `impersonato_da` è
         // una colonna **nuda**, senza vincolo, scelta così perché sta sul
-        // percorso caldo dentro il gestore delle eccezioni. E `users` **non ha
-        // soft delete** (verificato: nessun `deleted_at`, nessun trait), quindi
-        // quell'id può puntare a un utente cancellato davvero. La `pluck` non
-        // lo trova, e la vista stampa il numero invece di cadere: chi legge deve
-        // sapere che qualcuno c'era, anche quando non se ne può più dire il nome.
-        $utenti = User::query()
+        // percorso caldo dentro il gestore delle eccezioni: quell'id può puntare
+        // a una riga cancellata davvero. La `pluck` non lo trova, e la vista
+        // stampa il numero invece di cadere — chi legge deve sapere che qualcuno
+        // c'era, anche quando non se ne può più dire il nome.
+        //
+        // 🔴 `withTrashed()` da 🔗 ADR-038: una persona ora si **cestina**, e
+        // `user_id` resta valorizzato. Senza questa riga la scheda di un errore
+        // stamperebbe «#12» al posto del nome esattamente per le persone che
+        // hanno lasciato l'azienda — cioè proprio quando si va a leggere chi
+        // stava usando l'applicazione quando è andata storta.
+        $utenti = User::withTrashed()
             ->whereIn('id', $occorrenze->getCollection()
                 ->flatMap(fn (OccorrenzaErrore $o): array => [$o->user_id, $o->impersonato_da])
                 ->filter()

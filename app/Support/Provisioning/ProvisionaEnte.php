@@ -147,10 +147,42 @@ final class ProvisionaEnte
     }
 
     /**
+     * L'email appartiene a una persona **cestinata**? Allora ci si ferma qui
+     * (🔗 ADR-038).
+     *
+     * 🔴 Sta in cima a `esegui()` e non dentro `risolviAccount()`, dove
+     * copriva solo metà dei casi: col ramo `--account=` quella risoluzione
+     * **ritorna prima** di guardare l'email, e il `firstOrCreate` più sotto
+     * sarebbe arrivato all'INSERT. `users.email` è unique senza condizione,
+     * quindi la riga cestinata occupa l'indirizzo: il risultato sarebbe stato
+     * un 500 al posto di un rifiuto — su un percorso che parte anche dalla
+     * registrazione pubblica.
+     *
+     * ⛔ E non si ripristina di nascosto: rimettere in servizio una persona è
+     * un gesto che qualcuno deve fare **guardandolo**, dalla schermata Utenti,
+     * non un effetto collaterale di «crea un cliente».
+     *
+     * @throws ProvisioningRifiutato
+     */
+    private function rifiutaSeCestinato(): void
+    {
+        $cestinato = User::onlyTrashed()->where('email', $this->adminEmail)->exists();
+
+        if ($cestinato) {
+            throw new ProvisioningRifiutato(
+                "L'indirizzo {$this->adminEmail} appartiene a una persona cestinata: ripristinala dalla schermata Utenti prima di riusarlo.",
+                ProvisioningRifiutato::UTENTE_CESTINATO,
+            );
+        }
+    }
+
+    /**
      * @throws ProvisioningRifiutato prima di qualunque scrittura
      */
     public function esegui(): EsitoProvisioning
     {
+        $this->rifiutaSeCestinato();
+
         $accountEsistente = $this->risolviAccount();
 
         $this->verificaLimiteDiPiano($accountEsistente);
@@ -237,6 +269,11 @@ final class ProvisionaEnte
             return $account;
         }
 
+        // Senza `withTrashed()`, e non è una dimenticanza: il caso «l'email è
+        // di una persona cestinata» è già stato rifiutato da
+        // `rifiutaSeCestinato()` in cima a `esegui()`. Leggerlo anche qui
+        // darebbe a quella riga un secondo esito possibile — «amministra già
+        // questi account» — per una persona che non amministra più niente.
         $utenteEsistente = User::where('email', $this->adminEmail)->first();
 
         if ($utenteEsistente === null) {

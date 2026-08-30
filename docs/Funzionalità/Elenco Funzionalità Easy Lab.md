@@ -13,6 +13,7 @@ Il sistema deve scalare dal piccolo laboratorio al grande polo universitario, ma
   - *Responsabile Reparto/Sotto-laboratorio:* Accesso limitato solo agli strumenti del proprio reparto assegnato.
 
 - **Data Isolation:** Nessun cliente può mai vedere i dati, i macchinari o i documenti di un altro cliente.
+- **Persone dell'Ente (🔗 ADR-038):** `/utenti` consente di invitare persone nel solo Ente corrente, conferire Admin, Responsabile Reparto, Tenant o Tecnico interno, cambiare ruolo, reinviare l'invito, cestinare e ripristinare. L'ultimo Admin e i ruoli Developer/Superadmin sono protetti; un Admin invitato o promosso entra fra i membri dell'Account.
 
 2. Anagrafica Strumenti, Ricambi e Tracciamento Interventi (Risevata solo a EasyLab, il tenant non vedrà questo)
 
@@ -61,6 +62,7 @@ Funzionalità pensate per l'operatività sul campo.
 - **Scansione e Accesso Istantaneo:** Il tecnico (o il cliente) inquadra il QR con lo smartphone e accede immediatamente alla scheda digitale dello strumento, bypassando la ricerca manuale. Funzionalità solo per EasyLab o tecnici.
   > **Regola di sicurezza (vedi ADR-003):** il QR è una scorciatoia di navigazione, non un accesso che bypassa i permessi. La scansione apre una **URL firmata**; se l'utente non è autenticato viene portato al login; la scheda è mostrata **solo** se ha i permessi su quello strumento (stesso tenant/ruolo). Nessun dato è mai visibile senza autenticazione.
 - **UI Responsiva Mobile:** Interfaccia ottimizzata per schermi piccoli, per permettere ai tecnici di leggere lo storico e inserire i report di fine intervento direttamente in laboratorio.
+- **Assegnatari coerenti col portafoglio (🔗 ADR-038):** per ogni macchina la tendina offre le persone vive del suo Ente e i soli tecnici EasyLab che hanno quella sede in portafoglio. Il tecnico interno appartiene all'Ente; quello esterno ha `tenant_id = NULL` e lavora su più clienti tramite portafoglio ∪ assegnazioni.
 
 5. Automazioni e Comunicazioni ("Email del Futuro")
 
@@ -96,6 +98,9 @@ Gli strumenti per te e per la gestione del business.
 
 - **User Impersonation:** Funzionalità con 1-click per "entrare nei panni" di un cliente (senza conoscerne la password) per fare assistenza tecnica sul software, risolvere bug o verificare la configurazione, con banner persistente per tornare Admin.
 - **Dashboard Globale:** Vista generale su tutti i clienti, numero di laboratori attivati, strumenti totali gestiti, MRR (Ricavi Mensili Ricorrenti) e log di sistema.
+- **Tecnici EasyLab e portafoglio (🔗 ADR-038):** `/piattaforma/tecnici`, riservata da `tenants.view_all` a Developer e Superadmin, invita tecnici col ruolo fisso `Tecnico` e nessun Ente, mostra quante sedi hanno in portafoglio e assegna/revoca le sedi. Ogni spunta apre tutte le macchine della sede e rende il tecnico selezionabile come assegnatario.
+
+> **Stato al 30 Ago 2026:** codice e documentazione della funzione esistono; restano pendenti l'applicazione della migration `users.deleted_at` al DB di sviluppo e la verifica manuale delle due pagine e della tendina.
 
 Non sappiamo a monte tutti i prodotti che monta una macchina ma dobbiamo avere solo il macchinario con la scheda tecnica. Poi quando viene fatta un attività potrò inserire il pezzo di ricambio con codice e descrizione e associarlo a una macchina.
 

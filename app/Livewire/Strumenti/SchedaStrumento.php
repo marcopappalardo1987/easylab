@@ -22,8 +22,8 @@ use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Rules\NomeRicambio;
 use App\Support\Tenancy\AccessoTecnico;
+use App\Support\Utenti\Assegnabili;
 use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -329,7 +329,24 @@ class SchedaStrumento extends Component
         // con il permesso, l'id deve appartenere alla stessa whitelist del select.
         if (Gate::allows('interventi.assign')) {
             $tecnicoId = $this->interventoForm['tecnico_id'] ?: null;
-            if ($tecnicoId !== null && ! $this->assegnabili()->whereKey($tecnicoId)->exists()) {
+            // 🔗 ADR-038: la whitelist è `App\Support\Utenti\Assegnabili`,
+            // la STESSA che riempie il select qui sotto in `render()`. Le due
+            // non possono divergere — è l'intero motivo per cui la definizione
+            // vive in un posto solo, fuori da questa classe.
+            // ⚠️ **∪ l'assegnatario già sulla riga**, quando si modifica. La
+            // regola nuova di ADR-038 restringe *chi si può assegnare*, non
+            // *cosa si può conservare*: senza questa eccezione un intervento
+            // storico diventava **non più salvabile** il giorno in cui il suo
+            // tecnico veniva cestinato o usciva dal portafoglio — la modale lo
+            // ricarica in `openModificaIntervento()`, la `<select>` non lo
+            // offre più, `tecnico_id` è `required`, e correggere una
+            // descrizione rispondeva «Assegnatario non valido» su un campo che
+            // nessuno aveva toccato. È esattamente il contrario di ciò che
+            // ADR-038 promette allo storico. Cambiarlo resta ristretto: solo
+            // *conservarlo* è ammesso.
+            if ($tecnicoId !== null
+                && $tecnicoId !== $this->assegnatarioInEssere()?->id
+                && ! Assegnabili::perStrumento($this->strumento)->whereKey($tecnicoId)->exists()) {
                 $this->addError('interventoForm.tecnico_id', 'Assegnatario non valido.');
 
                 return;
@@ -508,7 +525,7 @@ class SchedaStrumento extends Component
     }
 
     /**
-     * Unica definizione, come `assegnabili()`: la usa il render (checkbox
+     * Unica definizione, come `Assegnabili`: la usa il render (checkbox
      * visibile) e la usa il save (authorize). Il set completo dei tre permessi
      * è più stretto del solo `ricambio_utilizzo.create` del wireframe, ed è più
      * onesto: mostrare la checkbox a chi poi prende 403 è peggio che nasconderla.
@@ -903,18 +920,45 @@ class SchedaStrumento extends Component
     }
 
     /**
-     * Assegnatari proponibili, SPECULARE a Intervento::tecnicoLabel(): utenti
-     * dello stesso Ente ∪ Tecnici di piattaforma senza tenant (ADR-007).
-     * Un'unica definizione per select (render) e validazione (save): non
-     * possono divergere. User non ha global scope: la whitelist è esplicita.
+     * L'assegnatario **già scritto** sull'intervento in modifica, se c'è.
+     *
+     * `withTrashed()` di proposito: è la stessa lettura delle cinque relazioni
+     * di attribuzione storica (🔗 ADR-038) — una persona cestinata resta
+     * nominata da ciò che ha fatto, e resta quindi un valore legittimo da
+     * riscrivere così com'è.
      */
-    private function assegnabili(): Builder
+    private function assegnatarioInEssere(): ?User
     {
-        return User::query()->where(fn (Builder $q) => $q
-            ->where('tenant_id', $this->strumento->tenant_id)
-            ->orWhere(fn (Builder $q) => $q
-                ->whereNull('tenant_id')
-                ->whereHas('roles', fn ($q) => $q->where('name', 'Tecnico'))));
+        if ($this->editingInterventoId === null) {
+            return null;
+        }
+
+        return $this->strumento->interventi()
+            ->whereKey($this->editingInterventoId)
+            ->first()?->tecnico;
+    }
+
+    /**
+     * Le opzioni della tendina: `Assegnabili` ∪ chi è **già** sulla riga.
+     *
+     * Speculare esatto della validazione in `saveIntervento()` — è l'idioma di
+     * questa classe, «una definizione sola per il select e per il save» — con
+     * la stessa eccezione e per la stessa ragione: una tendina che non contiene
+     * il valore corrente costringe a cambiarlo per poter salvare altro.
+     *
+     * @return Collection<int, User>
+     */
+    private function assegnatariProponibili(): Collection
+    {
+        $assegnabili = Assegnabili::perStrumento($this->strumento)->orderBy('name')->get();
+
+        $inEssere = $this->assegnatarioInEssere();
+
+        if ($inEssere === null || $assegnabili->contains('id', $inEssere->id)) {
+            return $assegnabili;
+        }
+
+        return $assegnabili->push($inEssere)->sortBy('name')->values();
     }
 
     public function render()
@@ -964,8 +1008,11 @@ class SchedaStrumento extends Component
             'fornitori' => $this->showForm && Gate::allows('fornitori.view')
                 ? $this->fornitoriSelezionabili($this->strumento->tenant_id, $this->strumento->fornitore_id)->get()
                 : collect(),
+            // 🔗 ADR-038: le persone dell'Ente ∪ i tecnici EasyLab **in
+            // portafoglio su questa sede** — non più «ogni tecnico ovunque».
+            // Stessa sorgente della validazione in `saveIntervento()`.
             'assegnatari' => $this->showInterventoForm && Gate::allows('interventi.assign')
-                ? $this->assegnabili()->orderBy('name')->get()
+                ? $this->assegnatariProponibili()
                 : collect(),
             // Gated: chi non ha il permesso non paga nemmeno la query.
             'garanzie' => Gate::allows('garanzie.macchina.view')

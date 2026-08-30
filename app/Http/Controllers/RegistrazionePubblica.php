@@ -160,8 +160,22 @@ class RegistrazionePubblica extends Controller
 
         // 🔴 Il ramo anti-enumerazione. Nessuna riga, nessuna differenza
         // visibile: solo un'email diversa nella casella di chi la possiede.
-        if (User::query()->where('email', $email)->exists()) {
-            $this->avvisaChiEsisteGia($email);
+        // ⚠️ `withTrashed()`: da 🔗 ADR-038 `users.email` è unique **senza
+        // condizione**, quindi una persona cestinata continua a occupare
+        // l'indirizzo. Senza questa lettura la registrazione proseguirebbe fino
+        // al provisioning e morirebbe sull'unique — un 500 su un percorso
+        // pubblico e non autenticato. La risposta resta identica a quella del
+        // percorso felice: il ramo è anti-enumerazione, e deve restarlo.
+        $utente = User::withTrashed()->where('email', $email)->first();
+
+        if ($utente !== null) {
+            // ⚠️ L'avviso parte **solo per chi un accesso ce l'ha davvero**:
+            // scrivere «hai già un account» a una persona cestinata sarebbe
+            // dirle una cosa falsa. Chi guarda da fuori non distingue i due
+            // casi — la risposta HTTP è la stessa e nessuna riga viene scritta.
+            if (! $utente->trashed()) {
+                $this->avvisaChiEsisteGia($email);
+            }
 
             return $this->allaCasella($email);
         }

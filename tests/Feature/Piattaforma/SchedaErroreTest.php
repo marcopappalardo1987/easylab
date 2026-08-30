@@ -371,12 +371,17 @@ it('resolves every actor of the page in one query', function () {
 });
 
 it('never claims nobody was authenticated when someone was impersonating', function () {
-    // 🔴 `users` **non ha soft delete** (verificato nel blocco 1): cancellando un
-    // utente, `user_id` va a NULL per la chiave esterna mentre `impersonato_da`
-    // — colonna nuda, scelta apposta per non pagare una FK sul percorso caldo —
-    // **resta**. La pagina finiva così a dire «nessun utente autenticato»
-    // accanto a un «per conto di» valorizzato: un'affermazione falsa, cioè lo
-    // stesso difetto che il ramo accanto evita rifiutando la parola «Sistema».
+    // 🔴 `user_id` è una FK `nullOnDelete`: cancellando **davvero** un utente va
+    // a NULL, mentre `impersonato_da` — colonna nuda, scelta apposta per non
+    // pagare una FK sul percorso caldo — **resta**. La pagina finiva così a dire
+    // «nessun utente autenticato» accanto a un «per conto di» valorizzato:
+    // un'affermazione falsa, cioè lo stesso difetto che il ramo accanto evita
+    // rifiutando la parola «Sistema».
+    //
+    // ⚠️ Da 🔗 ADR-038 questo caso non è più quello normale — una persona si
+    // cestina, e allora `user_id` resta e il nome si legge lo stesso (il test
+    // qui sotto). Resta però raggiungibile, e va tenuto: copre le righe
+    // cancellate davvero, che il cestino non ha mai attraversato.
     $impersonatore = User::factory()->create(['name' => 'Developer EasyLab']);
     $vittima = User::factory()->create();
 
@@ -386,7 +391,9 @@ it('never claims nobody was authenticated when someone was impersonating', funct
         'impersonato_da' => $impersonatore->id,
     ]);
 
-    $vittima->delete();
+    // `forceDelete()` e non `delete()`: da ADR-038 il secondo cestina, e la FK
+    // non scatta. Qui si vuole proprio la riga sparita.
+    $vittima->forceDelete();
 
     $blocco = bloccoOccorrenza(schedaErrore($errore), $occorrenza->id);
 
@@ -394,4 +401,23 @@ it('never claims nobody was authenticated when someone was impersonating', funct
         ->and($blocco)->toContain('non è più presente')
         // E chi stava dietro si legge ancora, col nome.
         ->and($blocco)->toContain('Developer EasyLab');
+});
+
+it('still names the person who was using the app, after they have been binned', function () {
+    // 🔴 La conseguenza di 🔗 ADR-038 su questa pagina, e il motivo per cui il
+    // componente legge gli attori `withTrashed()`: si apre la scheda di un
+    // errore **per sapere chi stava facendo cosa**. Senza, la pagina
+    // stamperebbe «#12» al posto del nome esattamente per le persone che hanno
+    // lasciato l'azienda — cioè proprio quando quel nome serve a ricostruire.
+    $vittima = User::factory()->create(['name' => 'Anna Uscita']);
+
+    $errore = issueErrore();
+    $occorrenza = occorrenzaDi($errore, ['user_id' => $vittima->id]);
+
+    $vittima->delete();
+
+    $blocco = bloccoOccorrenza(schedaErrore($errore), $occorrenza->id);
+
+    expect($blocco)->toContain('Anna Uscita')
+        ->and($blocco)->not->toContain('#'.$vittima->id);
 });

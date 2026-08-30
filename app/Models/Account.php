@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Laravel\Cashier\Billable;
 use RuntimeException;
@@ -355,15 +356,23 @@ class Account extends Model
      */
     public function rimuoviMembro(User $utente): void
     {
-        $altri = $this->membri()->whereKeyNot($utente->id)->exists();
+        DB::transaction(function () use ($utente): void {
+            // 🔴 Il lock sulla riga dell'Account serializza il controllo e il
+            // detach. Senza, due richieste possono vedere ciascuna «l'altro
+            // membro esiste» e rimuovere entrambe, violando ADR-032 pur avendo
+            // eseguito correttamente la guardia una per volta.
+            self::query()->whereKey($this->getKey())->lockForUpdate()->firstOrFail();
 
-        if (! $altri) {
-            throw new RuntimeException(
-                "L'utente {$utente->id} è l'ultimo membro dell'account {$this->id}: un account non resta senza amministratori (ADR-032)."
-            );
-        }
+            $altri = $this->membri()->whereKeyNot($utente->id)->exists();
 
-        $this->membri()->detach($utente->id);
+            if (! $altri) {
+                throw new RuntimeException(
+                    "L'utente {$utente->id} è l'ultimo membro dell'account {$this->id}: un account non resta senza amministratori (ADR-032)."
+                );
+            }
+
+            $this->membri()->detach($utente->id);
+        });
     }
 
     /**

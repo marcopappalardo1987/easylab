@@ -451,6 +451,7 @@ it('never shows the name of an assegnatario who belongs to another Ente', functi
     // Il tecnico ESTERNO (`tenant_id` null, ADR-007) resta invece visibile.
     $esterno = User::factory()->create(['tenant_id' => null, 'name' => 'Marco Esterno']);
     $esterno->assignRole('Tecnico');
+    $esterno->portafoglioClienti()->attach($this->ente->id);
 
     Intervento::factory()->forStrumento($this->autoclave)->assegnatoA($estraneo)
         ->create(['descrizione' => 'Assegnato fuori Ente']);
@@ -461,6 +462,50 @@ it('never shows the name of an assegnatario who belongs to another Ente', functi
         ->assertSee('Assegnato fuori Ente')
         ->assertDontSee('Giulia Estranea')
         ->assertSee('Marco Esterno');
+});
+
+it('keeps naming an external Tecnico after his portafoglio is revoked (reading is wider than writing, ADR-038)', function () {
+    // 🔴 Riscritto il 29 Ago 2026. Il test qui sopra congelava «il tecnico
+    // esterno resta visibile» quando esterno voleva dire soltanto «senza
+    // tenant»; da ADR-038 la SCRITTURA vuole in più il portafoglio, e la
+    // domanda diventa: e la lettura?
+    //
+    // La risposta, decisa e motivata in `Intervento::tecnicoLabel()`, è NO —
+    // la lettura resta più larga della scrittura, e la disuguaglianza è nella
+    // direzione sicura (scrivibile ⊂ mostrabile). Se `tecnicoLabel()` seguisse
+    // il portafoglio, revocarlo riscriverebbe lo storico: interventi chiusi
+    // mesi fa direbbero «—», e il PDF dello storico stamperebbe un documento
+    // diverso da quello di ieri. È la stessa ragione per cui `tecnico()` è
+    // `withTrashed()`.
+    $esterno = User::factory()->create(['tenant_id' => null, 'name' => 'Marco Esterno']);
+    $esterno->assignRole('Tecnico');
+    $esterno->portafoglioClienti()->attach($this->ente->id);
+
+    Intervento::factory()->forStrumento($this->cappa)->assegnatoA($esterno)
+        ->create(['descrizione' => 'Taratura di marzo']);
+
+    $esterno->portafoglioClienti()->detach($this->ente->id);
+
+    Livewire::actingAs($this->admin)->test(Scadenzario::class)
+        ->assertSee('Taratura di marzo')
+        ->assertSee('Marco Esterno');
+});
+
+it('keeps naming a trashed assegnatario in the scadenzario (ADR-038)', function () {
+    // Il cestino toglie la persona dalle tendine e dalle email, non dallo
+    // storico: `Intervento::tecnico()` è `withTrashed()` apposta. Senza questo
+    // test la relazione potrebbe tornare stretta e la colonna direbbe «—» per
+    // ogni ex dipendente, in silenzio.
+    $uscito = User::factory()->create(['tenant_id' => $this->ente->id, 'name' => 'Ex Dipendente']);
+
+    Intervento::factory()->forStrumento($this->cappa)->assegnatoA($uscito)
+        ->create(['descrizione' => 'Controllo di aprile']);
+
+    $uscito->delete();
+
+    Livewire::actingAs($this->admin)->test(Scadenzario::class)
+        ->assertSee('Controllo di aprile')
+        ->assertSee('Ex Dipendente');
 });
 
 it('groups the rows by month without dropping any of them', function () {

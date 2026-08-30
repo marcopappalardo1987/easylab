@@ -570,7 +570,7 @@ gantt
 
   *⚠️ **Cinque test preesistenti hanno cambiato affermazione**, ciascuno annotato sul posto: quello che congelava il debito (rovesciato: ora l'assegnazione dà accesso, e il caso verifica anche che dia accesso a **quella sola macchina**), due di `GaranziaPrivacyTest` — dove il tecnico riceve ora il portafoglio, o misurerebbero l'accesso invece della privacy e passerebbero anche col privacy scope rotto —, uno di `InterventoActionsTest` e uno di `SchedaInterventiTest`, che si chiamava «shows the list to a Tecnico of the **ente**»: il titolo era già la regola sbagliata.*
 
-  *Suite **627 verdi su entrambi i driver**. Migration additiva `tecnico_cliente` (UNIQUE `(tecnico_id, ente_id)`, che è insieme il vincolo contro il doppione e l'indice della lettura calda). DemoSeeder: un tecnico esterno con portafoglio per ogni Ente, o il canale portafoglio non si vedrebbe mai funzionare. **La UI del portafoglio è rimandata a S6**, con la pagina permessi.*
+ *Suite **627 verdi su entrambi i driver**. Migration additiva `tecnico_cliente` (UNIQUE `(tecnico_id, ente_id)`, che è insieme il vincolo contro il doppione e l'indice della lettura calda). DemoSeeder: un tecnico esterno con portafoglio per ogni Ente, o il canale portafoglio non si vedrebbe mai funzionare. ~~La UI del portafoglio è rimandata a S6, con la pagina permessi.~~ **Chiusa il 30 Ago 2026 da ADR-038** con una superficie dedicata, `/piattaforma/tecnici`, separata dall'editor permessi.*
 - [x] `[STRETCH]` Merge doppioni di catalogo ricambi (tool admin). 🔗 ADR-008 — ⚠ **peso aumentato** da ADR-022
 
   *↪️ **Chiuso il 17 Ago 2026.** Non è una comodità: è la manutenzione di ciò che ADR-008 promette. ADR-022 ha spostato la chiave del collega-o-crea dal codice al NOME, e sul campo si scrive quello che si ha in testa — «Guarnizione O-Ring» e «Guarnizione OR» sono lo stesso pezzo per un tecnico e due voci per il database. Ogni voce di troppo degrada la ricerca incrociata, che è la ragione per cui il catalogo esiste.*
@@ -991,6 +991,19 @@ gantt
 > ⚠️ **Limiti dichiarati, che vanno in coda a questa voce come debito**: la regola dell'etichetta «prossima scadenza» è **duplicata** fra il parco e l'elenco per-Ente — oggi tenuta insieme da un test di accoppiamento, non da un'estrazione — e il perimetro «per piano» **non sa esprimere i clienti su un piano fuori catalogo**, che la cabina invece filtra da sempre.
 
 ---
+
+> ## 👥 Persone dell'Ente e tecnici EasyLab — ADR-038, 30 Agosto 2026
+>
+> - [x] Fondamenta: invito riusabile, ruoli conferibili, soft delete su `users`, attribuzioni storiche `withTrashed()`, email unique gestita anche nel cestino, audit esplicito e guardrail sulle scritture RBAC.
+> - [x] `/utenti`: invito/reinvito, cambio ruolo, stati attivo-invitato-cestinato-senza ruolo, cestino/ripristino, protezione ultimo Admin e Developer/Superadmin; Admin collegato ad `account_user`.
+> - [x] `/piattaforma/tecnici`: ruolo fisso Tecnico senza Ente, portafoglio per sede, conteggio sedi, cestino/ripristino; gate `tenants.view_all`.
+> - [x] Tendina interventi: persone vive della sede ∪ tecnici EasyLab nel portafoglio della sede, stessa whitelist in UI e validazione.
+> - [x] Documentazione canonica e ADR-038 allineate.
+> - [ ] Applicare la migration additiva `users.deleted_at` al **DB di sviluppo** con `php artisan migrate`.
+> - [ ] Verifica manuale nel browser: invitare una persona da `/utenti`; creare un tecnico EasyLab, assegnargli una sede e verificare la tendina «Assegnatario» su una macchina di quella sede; controllare entrambi i temi e le larghezze previste.
+> - [ ] Chiudere con legale/DPO le due pendenze: retention/anonimizzazione della persona cestinata; base e informativa/DPA per la comunicazione ai clienti dei nomi dei tecnici EasyLab.
+>
+> **Stato:** implementazione presente in locale e non dichiarata conclusa finché migration e verifica manuale restano aperte. Nessun esito di suite è registrato qui per questo blocco finché l'integrazione non lo comunica.
 
 > ## 🧹 Chiusura delle pendenze pre-S7 — 27/28 Agosto 2026
 >

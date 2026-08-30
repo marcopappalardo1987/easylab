@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Lab404\Impersonate\Models\Impersonate;
@@ -29,8 +30,25 @@ use Spatie\Permission\Traits\HasRoles;
 #[Hidden(['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes'])]
 class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
-    use HasFactory, HasRoles, Impersonate, Notifiable, TwoFactorAuthenticatable;
+    /**
+     * @use HasFactory<UserFactory>
+     *
+     * 🔴 `SoftDeletes` dal 29 Ago 2026 (🔗 ADR-038), ed è una guardia di
+     * accesso travestita da colonna: il provider di autenticazione di Laravel
+     * costruisce la query dal model, quindi applica i global scope — una
+     * persona cestinata **non viene trovata al login**, senza che nessuno abbia
+     * scritto un controllo. Lo stesso scope la toglie dalle tendine
+     * dell'assegnatario, dai destinatari del digest notturno e dai candidati
+     * all'impersonazione.
+     *
+     * ⛔ Il rovescio, e va conosciuto: lo storico **deve** continuare a
+     * nominarla. Le cinque relazioni di attribuzione (`Intervento::tecnico`,
+     * `Documento::caricato_da`, `Strumento::forced_by`,
+     * `SpostamentoStrumento::eseguito_da`, `Errore::risolto_da`) e le due
+     * letture del registro di audit leggono `withTrashed()`: senza,
+     * cestinare una persona riscriverebbe il passato in «—».
+     */
+    use HasFactory, HasRoles, Impersonate, Notifiable, SoftDeletes, TwoFactorAuthenticatable;
 
     /**
      * Ruolo soggetto al secondo filtro (sotto-albero) del Global Scope (ADR-006).

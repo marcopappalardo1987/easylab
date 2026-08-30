@@ -106,6 +106,10 @@ Risorse derivate dall'ERD §3–§9. Questo è l'elenco canonico che il seeder S
 
 ---
 
+🔗 **ADR-038 usa il catalogo esistente.** `/utenti` richiede `utenti.view` alla rotta e riautorizza `utenti.create`, `.update` o `.delete` in ogni azione. Conferisce solo Admin, Responsabile Reparto, Tenant e Tecnico interno; Admin impone il 2FA. `/piattaforma/tecnici` usa invece **`tenants.view_all`**, mai `utenti.view`, perché crea tecnici EasyLab e scrive un portafoglio cross-cliente. Developer e Superadmin non sono amministrabili da `/utenti`.
+
+**Nessun permesso nuovo:** il catalogo resta a **54**, il set bloccato a **7**, quindi ADR-038 non richiede alcun riseeding.
+
 ## 5. Matrice ruolo × permesso
 
 ✅ = il ruolo possiede il permesso · ❌ = non lo possiede · 🔒 = permesso **bloccato** (non modificabile dalla UI Superadmin, vedi §7). Per i ruoli con scope ristretto il permesso resta **limitato dallo scope** (sotto-albero/portafoglio/proprietà): vedi nota e ERD §10.
@@ -185,6 +189,8 @@ Questi vincoli non si esauriscono in un permesso sì/no e vanno implementati in 
 
 ---
 
+🔗 **Persone e portafoglio (ADR-038).** La matrice dice *quale gesto* è ammesso; il perimetro resta nel codice: persone del solo Ente corrente su `/utenti`, tecnici `tenant_id IS NULL` con ruolo Tecnico su `/piattaforma/tecnici`, sole sedi consegnate dalla porta cross-cliente nel portafoglio. La whitelist dell'assegnatario è persone vive della sede ∪ tecnici EasyLab nel portafoglio di quella sede. Ogni azione mutante riautorizza e rilegge l'id nel proprio perimetro.
+
 ## 7. Gestione runtime dei permessi (UI Superadmin) — 🔗 ADR-016
 
 I permessi della matrice §5 sono dei **default**, non una configurazione fissa: `spatie/laravel-permission` salva la relazione ruolo→permesso a DB (`role_has_permissions`), quindi EasyLab può aggiustarla nel tempo **senza rilascio di codice**.
@@ -248,3 +254,4 @@ Indicazioni operative per il task S1 "definire ruoli/permessi base da S0" — il
 | **ADR-027** Tracciabilità | `garanzie.ricambio.*` al Tecnico; il set bloccato torna a significare "mai al Tenant". Ogni scrittura di dominio tracciata su `audit`. |
 | **ADR-023** Fornitore 1-N | `fornitori.*` scopati per tenant; `fornitori.view` **concesso al Tenant** in lettura (nota ⁵, approvato 3 Ago 2026) — cambia un default del seeder S1. |
 | **ADR-024** Tab Panoramica | Nessun permesso nuovo: **ogni blocco resta gated dal permesso della propria area**. La vista di sintesi non deve diventare la scorciatoia che aggira i `@can` degli altri tab — vale come regola di §6. |
+| **ADR-038** Persone e portafoglio | Riusa i quattro `utenti.*` per `/utenti` e `tenants.view_all` per `/piattaforma/tecnici`. Ruoli cliente conferibili: Admin, Responsabile Reparto, Tenant, Tecnico; 2FA obbligatorio per Admin. Catalogo 54 / bloccati 7 invariati, nessun seeding. |

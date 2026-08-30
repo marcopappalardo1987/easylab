@@ -189,6 +189,8 @@ Primo tab e **landing di default** della scheda. Risponde a una domanda sola: *p
 
 ---
 
+🔗 **Whitelist dell'assegnatario aggiornata da ADR-038.** Il select offre le persone vive della sede della macchina, qualunque sia il ruolo, più i tecnici EasyLab che hanno **quella sede** nel portafoglio. Non offre più tutti i tecnici di piattaforma a tutti i clienti; form e validazione consumano la stessa query.
+
 ## 3. Vista Mobile Tecnico
 
 Interfaccia sul campo, mobile-first: scansiona QR → vedi storico → chiudi intervento. 🔗 ADR-003/007.
@@ -291,6 +293,8 @@ Numeri globali, clienti, impersonazione, le leve amministrative. 🔗 ADR-001, A
 >
 > La **sub-nav di piattaforma è a cinque voci**: Clienti · Registro di audit · Ruoli e permessi · **Piani** · Errori. *(⚠️ Aggiornato il 29 Ago 2026: sono **sei**, con «Parco clienti» inserito fra Piani ed Errori — §8. La regola di presentazione regge invariata e per la stessa ragione: l'ultima voce resta quella del solo Developer, e la fila che il Superadmin vede continua a finire dove finisce il suo insieme di permessi. La voce nuova non porta un permesso nuovo: è `tenants.view_all`, lo stesso di «Clienti».)* Ogni voce si filtra sul proprio permesso, e sono quattro permessi diversi per cinque voci. «Piani» sta **in mezzo e non in fondo**, ed è una decisione di presentazione con una ragione: l'ultima resta così quella del solo Developer (`system.logs.view`), e la fila che il Superadmin vede finisce dove finisce il suo insieme di permessi invece di avere un buco in mezzo.
 
+> **Aggiornamento ADR-038 (30 Ago): la sub-nav è ora a sette voci** — Clienti · Registro di audit · Ruoli e permessi · Piani · Parco clienti · **Tecnici** · Errori. «Tecnici» usa `tenants.view_all`, non `utenti.view`; Errori resta l'ultima voce e la sola riservata al Developer.
+
 ### 4.1 Editor Permessi Ruolo ‹sub-vista, `roles.manage`› — 🔗 ADR-016
 
 Matrice ruolo×permesso editabile a runtime; le righe 🔒 sono in sola lettura.
@@ -359,6 +363,8 @@ Hub di navigazione: albero Ente→Dipartimento→Sottolaboratorio a sinistra, st
 | §7.1 Listino dei piani — `/piattaforma/piani` | Superadmin, Developer (`billing.manage_global`) | **S7 — 28 Ago 2026** (🔗 ADR-035) |
 | §7.2 Registrazione pubblica — `/registrati` | **nessuno**: chi la apre non esiste ancora | **S7 — 28 Ago 2026** (🔗 ADR-012, ADR-032) |
 | §8 Parco clienti — `/piattaforma/parco` (+ `/scadenzario`, `/ricambi`) | Superadmin, Developer (`tenants.view_all`), **in sola lettura** | **29 Ago 2026** (🔗 ADR-037) |
+| §9.1 Persone dell'Ente — `/utenti` | Admin e chi riceve i quattro `utenti.*`; solo Ente corrente | **30 Ago 2026** (🔗 ADR-038) |
+| §9.2 Tecnici EasyLab — `/piattaforma/tecnici` | Superadmin, Developer (`tenants.view_all`) | **30 Ago 2026** (🔗 ADR-038) |
 | Archivio documentale d'Ente — `/documenti` | tutti con `documenti.view`; l'indice PDF vuole **anche** `documenti.export_pdf` | **S7** (🔗 ADR-026/031) |
 | Scadenzario — `/scadenzario` | tutti con `interventi.view` | **S7** (🔗 ADR-005/030) |
 | Abbonamento — `/abbonamento` | chi può `manage` l'Account, **anche in lockout** | **S7** (🔗 ADR-013/032) |
@@ -555,6 +561,38 @@ Tre rotte e tre componenti — **Strumenti**, **Scadenzario**, **Ricambi** — c
 **Ciò che questo disegno NON contiene**, per scelta e non per dimenticanza: nessuna cella modificabile e nessuna azione di massa (ADR-037, alternativa scartata (a) — un filtro che silenziosamente vale «tutti» trasformerebbe una correzione in un'operazione su ogni cliente della piattaforma); nessun `[CSV]`/`[PDF]` come quelli di §4; nessuna scheda per `RicambioUtilizzo`, tenuto **fuori dalla porta** insieme alla domanda di privacy che porta con sé.
 
 🔴 **Due limiti dichiarati, che il disegno da solo non mostra.** **(a)** La regola con cui si compone l'etichetta della colonna «Prossima scadenza» è **duplicata** fra `RigheParcoStrumenti` e l'elenco per-Ente di §5: non è stata estratta, è tenuta allineata da un **test di accoppiamento** che calcola l'etichetta di qui e la cerca nella pagina per-Ente. Un'estrazione resta il rimedio vero, e finché non c'è la rete è quel test. **(b)** Il modo «per piano» offre i soli codici a **catalogo** (`Piani::codici()`): i clienti fermi su un piano dismesso — quelli che la cabina segnala col badge `fuori catalogo` e ripara da §7.1 — **non sono esprimibili** da questa tendina. Si raggiungono da «Tutti i clienti» o segnandoli fra i preferiti. È l'asimmetria fra le due schermate, e va tolta riparando il dato in §7.1, non allargando la tendina.
+
+## 9. Persone e tecnici — ADR-038 (30 Ago 2026)
+
+### 9.1 Persone dell'Ente — `/utenti`
+
+```text
+┌ Persone dell'Ente ─────────────────────────────── [+ Invita una persona] ┐
+│ Persona        Ruolo          Stato                         Azioni        │
+│ G. Verdi       Admin          Attivo                        Ruolo · Cestina│
+│ L. Bianchi     Tecnico        Invitato, mai entrato         Reinvita      │
+│ A. Neri        —              Senza ruolo                   Ruolo         │
+│ M. Rossi       Tenant         Cestinato                     Ripristina    │
+└───────────────────────────────────────────────────────────────────────────┘
+ Invito: nome · email · [Admin | Responsabile Reparto | Tenant | Tecnico]
+ ⚠ Admin richiede il secondo fattore al primo accesso.
+```
+
+Invito, reinvito, cambio ruolo, cestino e ripristino sono gesti distinti e riautorizzati. Developer e Superadmin non sono amministrabili qui; l'ultimo Admin non si declassa e non si cestina.
+
+### 9.2 Tecnici EasyLab — `/piattaforma/tecnici`
+
+```text
+┌ I miei tecnici ─────────────────────────────────── [+ Invita un tecnico] ┐
+│ Persona        Stato                   Sedi in portafoglio      Azioni   │
+│ G. Verdi       Attivo                  3 sedi                    Accessi  │
+│ L. Bianchi     Invitato                Nessuna                   Cestina  │
+└───────────────────────────────────────────────────────────────────────────┘
+ Invito: nome · email · ruolo fisso Tecnico · nessun Ente
+ Portafoglio: [✓] Cliente A / Sede 1   [ ] Cliente A / Sede 2
+```
+
+Il portafoglio è **per sede**, non per contratto. L'avviso accanto alle checkbox dice che la spunta apre tutte le macchine della sede e rende il tecnico assegnabile. Migration sul DB di sviluppo e verifica manuale restano pendenti.
 
 ---
 

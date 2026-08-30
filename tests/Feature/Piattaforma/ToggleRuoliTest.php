@@ -8,6 +8,7 @@ use App\Support\AuditLog;
 use App\Support\Rbac;
 use App\Support\Tenancy\VistaPiattaforma;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Spatie\Activitylog\Models\Activity;
@@ -566,7 +567,21 @@ it('does not ask the platform door for the users', function () {
         ->and(codiceSenzaCommenti(app_path('Livewire/Piattaforma/EditorRuoli.php')))
         ->not->toContain('VistaPiattaforma::');
 
-    // La rete che tiene onesto il primo assert: la ragione è che `User` non ha
-    // scope da togliere, e se ne guadagnasse uno questa scelta andrebbe rivista.
-    expect(array_keys((new User)->getGlobalScopes()))->toBe([]);
+    // La rete che tiene onesto il primo assert: la ragione per cui questa pagina
+    // non passa da una porta è che su `User` non c'è **nulla di tenancy** da
+    // togliere. La rete ha fatto il suo mestiere il 29 Ago 2026, diventando
+    // rossa quando 🔗 ADR-038 ha aggiunto il cestino: la scelta è stata rivista
+    // e confermata, e l'elenco qui sotto è la revisione.
+    //
+    // ⛔ `SoftDeletingScope` **non si toglie**, e non è un candidato a un
+    // bypass: non risponde a «di chi sono queste righe» ma a «questa persona
+    // c'è ancora». Una porta che lo togliesse rimetterebbe in circolo gli
+    // utenti cestinati proprio dove si conferiscono permessi — cioè
+    // trasformerebbe il cestino, che ADR-038 ha scelto **perché si applica da
+    // sé**, in un filtro da ricordare.
+    //
+    // Se un giorno comparisse un terzo scope, questo assert tornerà rosso e la
+    // domanda «quale scope toglie questa pagina, e perché?» dovrà avere una
+    // risposta nuova.
+    expect(array_keys((new User)->getGlobalScopes()))->toBe([SoftDeletingScope::class]);
 });

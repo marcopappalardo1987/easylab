@@ -15,6 +15,8 @@ Questa è la vista di massimo livello tecnico, dove tu come sviluppatore control
 >
 > ⚠️ **In uso quotidiano il canale non è la pagina, è l'email.** Nessuno apre `/piattaforma/errori` a caso: ci si arriva perché è arrivato un alert. Quell'email va a una **casella** (`ERRORI_ALERT_EMAIL`), che non ha né permesso né registro di audit, e per questo contiene solo classe, punto d'origine, conteggio e il link — mai il dettaglio (🔗 Privacy §T8).
 
+🔗 **ADR-038:** il Developer accede a `/piattaforma/tecnici` tramite `tenants.view_all`: invita i tecnici EasyLab, assegna loro portafogli per sede e può cestinarli/ripristinarli. Anche quando impersona un cliente, la tendina degli interventi offre i tecnici EasyLab del portafoglio di quella sede oltre alle persone dell'Ente. Developer e Superadmin non sono modificabili da `/utenti`.
+
 **2. Dashboard Superadmin (EasyLab)**
 
 Questa è la cabina di regia commerciale e operativa del proprietario originario della piattaforma (EasyLab).
@@ -65,6 +67,8 @@ Questa è la cabina di regia commerciale e operativa del proprietario originario
 
 
 
+🔗 **ADR-038:** il Superadmin condivide col Developer la pagina `/piattaforma/tecnici` e la regola del portafoglio per sede; il gate è `tenants.view_all`, non `utenti.view`. Non può conferire da UI i ruoli Superadmin/Developer né modificarli dalla pagina persone dell'Ente.
+
 **3. Dashboard Admin (Proprietari che si abbonano)**
 
 Questi sono i clienti che acquistano il SaaS per operare in autonomia sui propri laboratori o per gestire i propri clienti terzi. Agiscono come un "piccolo EasyLab" limitato al proprio recinto.
@@ -95,6 +99,8 @@ Questi sono i clienti che acquistano il SaaS per operare in autonomia sui propri
 >
 >    ⚠️ **La unique dell'idempotenza ha dovuto accogliere `tenant_id`** (migration del 27 Ago). Al trasferimento di una macchina fra Enti (🔗 ADR-015) la riga del vecchio proprietario e quella del nuovo condividono morph, riferimento, transizione e data — la data è l'installazione nuda — quindi senza il tenant nella chiave il comando notturno **abortiva in silenzio**, e ogni Ente successivo a quello restava senza avviso, tutti i giorni. La riga del vecchio Ente resta poi in tabella fino alla potatura a 24 mesi: distinguere «non è più mia» da «non ho il diritto di vederla» vorrebbe una lettura senza scope, cioè il bypass che ADR-018 vieta, ed è un prezzo dichiarato invece che una svista. *(aggiornato il 29 Ago 2026: 🔗 **ADR-037** ha aperto una lettura senza scope di tenancy, ma **non qui** — è la superficie di piattaforma di §2, gate da `tenants.view_all`, e questo avviso è dell'**Admin**, che quel permesso non ce l'ha. Il prezzo resta suo.)*
 > 2. *«Registrazione dei trasferimenti fisici tra laboratori»* — esiste, ma **solo dentro un Ente**: `TipoSpostamento` prevede anche `Uscita` e `CrossTenant` (🔗 ADR-015) e nessuna delle due è mai stata scritta. E `spostamenti.view` ha **un solo consumatore**, il tab della scheda: non c'è nessuna vista «dov'è stata questa macchina» che attraversi il parco. ⚠️ *E dal 29 Ago 2026 «parco» in questa riga va letto nel senso vecchio — il parco **macchine** di un Ente: il **Parco clienti** di §2 mostra strumenti, scadenze e ricambi di tutti i clienti, e gli **spostamenti** non li mostra nemmeno lui.* *(aggiornato il 28 Ago 2026: la voce di roadmap che teneva insieme «interventi e spostamenti cross-macchina» si è dimezzata — gli interventi hanno `/scadenzario`, vedi §4; gli **spostamenti** restano dove erano.)*
+
+🔗 **ADR-038 — persone dell'Ente:** l'Admin usa `/utenti` per invitare Admin, Responsabile Reparto, Tenant e Tecnico interno; può reinvitare, cambiare ruolo, cestinare e ripristinare. Un nuovo Admin deve configurare il 2FA e viene aggiunto ad `account_user`. L'ultimo Admin non può essere declassato o cestinato. La tendina «Assegnatario» contiene le persone vive dell'Ente più i tecnici EasyLab messi da EasyLab nel portafoglio della sede.
 
 **4. Dashboard Tenant (I Laboratori / Enti Finali)**
 
@@ -127,6 +133,8 @@ Questa è l'interfaccia usata dai dipartimenti o laboratori fisici. Vedono solo 
 > ✅ **E «Tracciamento Interventi» ha una vista propria dallo stesso giorno**: `/scadenzario` (`interventi.view`, che il Tenant ha) elenca gli interventi **aperti** di tutte le macchine che l'utente vede, **scaduti compresi** — nasconderli direbbe «non c'è niente da fare» proprio sulla macchina che sta accendendo l'arancione (🔗 ADR-005), e contraddirebbe `/campo` e il digest. Le partizioni sono le stesse due soglie del digest (🔗 ADR-011), non una terza regola inventata, e i contatori passano dalla **stessa** query delle righe: un `count()` fuori dagli scope tornerebbe il numero di un altro cliente senza mostrarne una riga, ed è la superficie che di solito si dimentica.
 
 **5. Interfaccia Manutentori / Tecnici**
+
+🔗 **ADR-038 distingue le due forme senza duplicare l'accesso:** il **Tecnico interno** è una persona dell'Ente (`tenant_id` valorizzato), creata da `/utenti`; il **Tecnico EasyLab esterno** non appartiene ad alcun Ente (`tenant_id = NULL`), nasce da `/piattaforma/tecnici` e riceve sedi nel portafoglio. Entrambi operano sul perimetro portafoglio ∪ macchine con interventi assegnati; solo l'esterno compare presso un cliente quando EasyLab gli ha conferito proprio quella sede.
 
 L'ambiente operativo dedicato esclusivamente al personale sul campo.
 
