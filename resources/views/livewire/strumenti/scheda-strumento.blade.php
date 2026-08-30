@@ -253,14 +253,11 @@
                         <label for="interventoTecnico" class="block text-sm font-medium text-ink">Assegnatario</label>
                         <select id="interventoTecnico" wire:model="interventoForm.tecnico_id"
                             class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
-                            {{-- `disabled`: un intervento è sempre assegnato, quindi
-                                 il segnaposto si vede ma non si può scegliere. Serve
-                                 comunque, perché aprendo una delle righe storiche
-                                 senza assegnatario il select deve poter mostrare
-                                 "non ancora scelto" invece del primo tecnico
-                                 dell'elenco — che sarebbe un'assegnazione fatta di
-                                 fatto da un default. --}}
-                            <option value="" disabled>— Scegli un assegnatario —</option>
+                            {{-- Il segnaposto resta selezionabile: con `disabled` il
+                                 browser mostrava il primo tecnico mentre Livewire
+                                 conservava `null`, quindi il salvataggio rispondeva
+                                 «assegnatario obbligatorio» su un valore solo apparente. --}}
+                            <option value="">— Scegli un assegnatario —</option>
                             @foreach ($assegnatari as $tecnico)
                                 <option value="{{ $tecnico->id }}">{{ $tecnico->name }}</option>
                             @endforeach

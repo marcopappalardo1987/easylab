@@ -289,6 +289,7 @@ it('ignores tecnico_id from a user with create but without assign', function () 
 
 it('assigns a tecnico of the same ente', function () {
     $tecnico = User::factory()->create(['tenant_id' => $this->ente->id, 'name' => 'Luca Bianchi']);
+    $tecnico->assignRole('Tecnico');
 
     scheda($this->admin, $this->strumento)
         ->call('openNuovoIntervento')
@@ -384,6 +385,7 @@ it('keeps an already assigned intervento after the portafoglio is revoked (ADR-0
 it('rejects a tecnico belonging to another ente', function () {
     $enteB = UnitaOrganizzativa::factory()->ente()->create(['nome' => 'Ente B']);
     $estraneo = User::factory()->create(['tenant_id' => $enteB->id]);
+    $estraneo->assignRole('Tecnico');
 
     scheda($this->admin, $this->strumento)
         ->call('openNuovoIntervento')
@@ -411,13 +413,17 @@ it('rejects a user with no tenant and no Tecnico role', function () {
         ->assertHasErrors('interventoForm.tecnico_id');
 });
 
-it('lists tenant users and only the portafoglio Tecnici in the assegnatari select (ADR-038)', function () {
+it('lists only same-ente and portafoglio Tecnici in the assegnatari select', function () {
     // 🔴 Riscritto il 29 Ago 2026: prima bastava «essere Tecnico senza tenant».
     // Ora la tendina è la STESSA query della validazione (Assegnabili), quindi
     // i due tecnici esterni si separano proprio qui: `$inPortafoglio` c'è,
     // `$fuoriPortafoglio` no — ed è il gesto che impedisce a un Admin cliente
     // di leggere l'organigramma di EasyLab.
-    $collega = User::factory()->create(['tenant_id' => $this->ente->id, 'name' => 'Collega A']);
+    $nonTecnico = User::factory()->create(['tenant_id' => $this->ente->id, 'name' => 'Prova SMTP']);
+    $nonTecnico->assignRole('Tenant');
+
+    $interno = User::factory()->create(['tenant_id' => $this->ente->id, 'name' => 'Tecnico Interno']);
+    $interno->assignRole('Tecnico');
 
     $inPortafoglio = User::factory()->create(['tenant_id' => null, 'name' => 'Tecnico Nostro']);
     $inPortafoglio->assignRole('Tecnico');
@@ -433,17 +439,30 @@ it('lists tenant users and only the portafoglio Tecnici in the assegnatari selec
     $suUnAltroCliente->portafoglioClienti()->attach($enteB->id);
 
     $estraneo = User::factory()->create(['tenant_id' => $enteB->id, 'name' => 'Estraneo B']);
+    $estraneo->assignRole('Tecnico');
 
     $assegnatari = scheda($this->admin, $this->strumento)
         ->call('openNuovoIntervento')
         ->viewData('assegnatari');
 
     $ids = $assegnatari->pluck('id')->all();
-    expect($ids)->toContain($collega->id)
+    expect($ids)->toContain($interno->id)
         ->toContain($inPortafoglio->id);
+    expect($ids)->not->toContain($nonTecnico->id);
     expect($ids)->not->toContain($fuoriPortafoglio->id);
     expect($ids)->not->toContain($suUnAltroCliente->id);
     expect($ids)->not->toContain($estraneo->id);
+});
+
+it('shows the empty assignee placeholder until a tecnico is chosen', function () {
+    $pagina = scheda($this->admin, $this->strumento)
+        ->call('openNuovoIntervento')
+        ->assertSet('interventoForm.tecnico_id', null);
+
+    preg_match('/<option value=""([^>]*)>— Scegli un assegnatario —<\/option>/', $pagina->html(), $opzione);
+
+    expect($opzione)->not->toBeEmpty();
+    expect($opzione[1])->not->toContain('disabled');
 });
 
 it('rejects a user with no tenant and no Tecnico role even with a portafoglio row (ADR-038)', function () {
@@ -516,6 +535,7 @@ it('never lets the editing exception widen into a new assignment (ADR-038)', fun
     $uscito->delete();
 
     $altroCestinato = User::factory()->create(['tenant_id' => $this->ente->id, 'name' => 'Altro Uscito']);
+    $altroCestinato->assignRole('Tecnico');
     $altroCestinato->delete();
 
     scheda($this->admin, $this->strumento)
@@ -537,6 +557,7 @@ it('never proposes a trashed person, not even one of the same Ente (ADR-038)', f
     // di SoftDeletes su `User`, ed è precisamente il punto di aver scelto il
     // cestino invece di un flag `is_active`.
     $uscito = User::factory()->create(['tenant_id' => $this->ente->id, 'name' => 'Ex Dipendente']);
+    $uscito->assignRole('Tecnico');
     $uscito->delete();
 
     $assegnatari = scheda($this->admin, $this->strumento)

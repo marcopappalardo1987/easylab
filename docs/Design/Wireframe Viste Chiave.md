@@ -171,7 +171,7 @@ Primo tab e **landing di default** della scheda. Risponde a una domanda sola: *p
 
 *Precisazioni dall'attuazione (9 Ago 2026), tutte emerse dalla prima prova a mano:*
 
-- **Il campo Tecnico è obbligatorio** (🔗 ADR-028): un intervento è sempre di qualcuno. Nel select il segnaposto «— Scegli un assegnatario —» è `disabled` — serve solo perché, aprendo uno dei 4178 interventi storici senza assegnatario, il campo possa mostrare «non ancora scelto» invece del primo tecnico dell'elenco, che sarebbe un'assegnazione fatta da un default.
+- **Il campo Tecnico è obbligatorio** (🔗 ADR-028): un intervento è sempre di qualcuno. Nel select il segnaposto «— Scegli un assegnatario —» resta selezionabile: con `disabled` il browser mostrava il primo tecnico pur lasciando `tecnico_id = null`, e il salvataggio segnalava correttamente il campo obbligatorio su una scelta soltanto apparente.
 - **La Descrizione diventa facoltativa quando ci sono ricambi** e vale «Sostituzione ricambio»: registrare un pezzo non deve costare anche una frase. Senza ricambi resta obbligatoria — un intervento qualunque descritto come una sostituzione sarebbe falso in tabella e in Panoramica.
 - **Riaprendo un intervento che ha già ricambi la checkbox è accesa.** Resta stato di UI e non un campo persistito, ma il suo valore iniziale deve *riflettere* l'esistenza delle righe: spenta, le nascondeva, e chi guardava concludeva che i suoi dati fossero spariti.
 - **«Scad. garanzia» accetta anche date passate** su un inserimento storico: il confine è la data di *montaggio*, non oggi.
@@ -189,7 +189,7 @@ Primo tab e **landing di default** della scheda. Risponde a una domanda sola: *p
 
 ---
 
-🔗 **Whitelist dell'assegnatario aggiornata da ADR-038.** Il select offre le persone vive della sede della macchina, qualunque sia il ruolo, più i tecnici EasyLab che hanno **quella sede** nel portafoglio. Non offre più tutti i tecnici di piattaforma a tutti i clienti; form e validazione consumano la stessa query.
+🔗 **Whitelist dell'assegnatario aggiornata da ADR-038.** Il select offre soltanto utenti col ruolo `Tecnico`: quelli interni della sede della macchina, più i tecnici EasyLab che hanno **quella sede** nel portafoglio. Non offre Admin, Tenant né tecnici di piattaforma estranei al cliente; form e validazione consumano la stessa query.
 
 ## 3. Vista Mobile Tecnico
 

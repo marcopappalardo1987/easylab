@@ -16,8 +16,8 @@ use Illuminate\Support\Facades\DB;
  * nasce in una schermata diversa.
  *
  * ```
- * persone con tenant_id = strumenti.tenant_id          (l'Ente della macchina)
- *   ∪  tecnici EasyLab (tenant_id IS NULL, ruolo Tecnico)
+ * tecnici interni con tenant_id = strumenti.tenant_id  (l'Ente della macchina)
+ *   ∪  tecnici EasyLab con tenant_id IS NULL
  *      CHE SONO nel portafoglio `tecnico_cliente` di QUELLA sede
  * ```
  *
@@ -37,13 +37,9 @@ use Illuminate\Support\Facades\DB;
  * *Resta vero — e voluto — che l'assegnazione **puntuale** apra comunque quella
  * singola macchina: è il secondo canale di ADR-030, e non passa di qui.*
  *
- * ## Il primo ramo non filtra per ruolo, e non è una dimenticanza
- *
- * Chiunque stia nell'Ente della macchina è assegnabile, Tenant compreso: chi
- * assegna ha `interventi.assign` e sta decidendo **chi se ne occupa**, non chi
- * ha quali poteri. Restringere ai soli «tecnici» renderebbe inesprimibile il
- * caso più comune dei laboratori piccoli, dove la manutenzione la segue la
- * stessa persona che amministra.
+ * Entrambi i rami richiedono il ruolo `Tecnico`: appartenere all'Ente non rende
+ * una persona assegnabile. Admin, Tenant e ruoli di piattaforma non devono
+ * comparire in una tendina operativa destinata ai tecnici.
  *
  * ## ⛔ `User` non ha global scope: la whitelist è l'unica barriera
  *
@@ -82,11 +78,12 @@ final class Assegnabili
             return User::query()->whereRaw('1 = 0');
         }
 
-        return User::query()->where(fn (Builder $q) => $q
-            ->where('tenant_id', $sedeId)
-            ->orWhere(fn (Builder $q) => $q
-                ->whereNull('tenant_id')
-                ->whereHas('roles', fn ($q) => $q->where('name', User::TECNICO_ROLE))
+        return User::query()
+            ->whereHas('roles', fn ($q) => $q->where('name', User::TECNICO_ROLE))
+            ->where(fn (Builder $q) => $q
+                ->where('tenant_id', $sedeId)
+                ->orWhere(fn (Builder $q) => $q
+                    ->whereNull('tenant_id')
                 // 🔴 La riga che restringe: il tecnico di EasyLab è assegnabile
                 // qui **solo se lavora qui**.
                 //
@@ -99,8 +96,8 @@ final class Assegnabili
                 // tendina perderebbe **tutti** i tecnici EasyLab, in silenzio e
                 // solo per quel ruolo. È la stessa ragione, e la stessa forma,
                 // di `AccessoTecnico::portafoglio()`.
-                ->whereIn('users.id', DB::table('tecnico_cliente')
-                    ->select('tecnico_cliente.tecnico_id')
-                    ->where('tecnico_cliente.ente_id', $sedeId))));
+                    ->whereIn('users.id', DB::table('tecnico_cliente')
+                        ->select('tecnico_cliente.tecnico_id')
+                        ->where('tecnico_cliente.ente_id', $sedeId))));
     }
 }

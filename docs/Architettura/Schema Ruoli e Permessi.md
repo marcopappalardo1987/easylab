@@ -189,7 +189,7 @@ Questi vincoli non si esauriscono in un permesso sì/no e vanno implementati in 
 
 ---
 
-🔗 **Persone e portafoglio (ADR-038).** La matrice dice *quale gesto* è ammesso; il perimetro resta nel codice: persone del solo Ente corrente su `/utenti`, tecnici `tenant_id IS NULL` con ruolo Tecnico su `/piattaforma/tecnici`, sole sedi consegnate dalla porta cross-cliente nel portafoglio. La whitelist dell'assegnatario è persone vive della sede ∪ tecnici EasyLab nel portafoglio di quella sede. Ogni azione mutante riautorizza e rilegge l'id nel proprio perimetro.
+🔗 **Persone e portafoglio (ADR-038).** La matrice dice *quale gesto* è ammesso; il perimetro resta nel codice: persone del solo Ente corrente su `/utenti`, tecnici `tenant_id IS NULL` con ruolo Tecnico su `/piattaforma/tecnici`, sole sedi consegnate dalla porta cross-cliente nel portafoglio. La whitelist dell'assegnatario contiene soltanto utenti col ruolo Tecnico: tecnici interni della sede ∪ tecnici EasyLab nel portafoglio di quella sede. Ogni azione mutante riautorizza e rilegge l'id nel proprio perimetro.
 
 ## 7. Gestione runtime dei permessi (UI Superadmin) — 🔗 ADR-016
 

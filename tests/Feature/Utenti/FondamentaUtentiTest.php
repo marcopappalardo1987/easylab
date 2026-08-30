@@ -31,7 +31,8 @@ use Tests\Support\BancoRegistrazione;
  *   2. **l'email unique contro il cestino** — `users.email` è unique *senza
  *      condizione*, quindi una riga cestinata occupa l'indirizzo: senza cura
  *      diventa un 500 sulla registrazione pubblica, che non è autenticata;
- *   3. **la tendina dell'assegnatario**, che da oggi passa dal portafoglio.
+ *   3. **la tendina dell'assegnatario**, che passa dal ruolo Tecnico e dal
+ *      portafoglio per il personale EasyLab.
  *
  * I negativi contano più dei positivi: ognuna di queste tre è una porta, e una
  * porta si prova provando a passarci attraverso.
@@ -302,7 +303,7 @@ it('warns about the second factor exactly for the roles that impose it', functio
         ->and(RuoliAssegnabili::imponeSecondoFattore('Tecnico'))->toBeFalse();
 });
 
-// ─── 5. La tendina: il portafoglio è la regola nuova ─────────────────────────
+// ─── 5. La tendina: ruolo Tecnico e portafoglio ─────────────────────────────
 
 it('offers an EasyLab tecnico only on the clients they actually work on', function () {
     // 🔴 Il cambio del 29 Ago 2026. Prima: ogni tecnico di piattaforma era
@@ -322,10 +323,13 @@ it('offers an EasyLab tecnico only on the clients they actually work on', functi
         ->and(Assegnabili::perSede($altraSede->id)->pluck('id')->all())->not->toContain($tecnico->id);
 });
 
-it('keeps everyone of the Ente assignable, whatever their role', function () {
-    // Il primo ramo non filtra per ruolo, e non è una dimenticanza: nei
-    // laboratori piccoli la manutenzione la segue chi amministra.
-    expect(Assegnabili::perSede($this->sede->id)->pluck('id')->all())->toContain($this->admin->id);
+it('offers only Tecnici inside the Ente too', function () {
+    $tecnico = User::factory()->create(['tenant_id' => $this->sede->id]);
+    $tecnico->assignRole('Tecnico');
+
+    expect(Assegnabili::perSede($this->sede->id)->pluck('id')->all())
+        ->toContain($tecnico->id)
+        ->not->toContain($this->admin->id);
 });
 
 it('never lets a tenant-less user without the Tecnico role in through the portfolio', function () {

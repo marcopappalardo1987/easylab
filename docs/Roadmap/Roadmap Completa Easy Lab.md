@@ -997,7 +997,7 @@ gantt
 > - [x] Fondamenta: invito riusabile, ruoli conferibili, soft delete su `users`, attribuzioni storiche `withTrashed()`, email unique gestita anche nel cestino, audit esplicito e guardrail sulle scritture RBAC.
 > - [x] `/utenti`: invito/reinvito, cambio ruolo, stati attivo-invitato-cestinato-senza ruolo, cestino/ripristino, protezione ultimo Admin e Developer/Superadmin; Admin collegato ad `account_user`.
 > - [x] `/piattaforma/tecnici`: ruolo fisso Tecnico senza Ente, portafoglio per sede, conteggio sedi, cestino/ripristino; gate `tenants.view_all`.
-> - [x] Tendina interventi: persone vive della sede ∪ tecnici EasyLab nel portafoglio della sede, stessa whitelist in UI e validazione.
+> - [x] Tendina interventi: soli utenti col ruolo Tecnico, interni della sede ∪ tecnici EasyLab nel portafoglio della sede; stessa whitelist in UI e validazione.
 > - [x] Documentazione canonica e ADR-038 allineate.
 > - [ ] Applicare la migration additiva `users.deleted_at` al **DB di sviluppo** con `php artisan migrate`.
 > - [ ] Verifica manuale nel browser: invitare una persona da `/utenti`; creare un tecnico EasyLab, assegnargli una sede e verificare la tendina «Assegnatario» su una macchina di quella sede; controllare entrambi i temi e le larghezze previste.
