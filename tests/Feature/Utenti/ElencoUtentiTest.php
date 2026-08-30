@@ -120,6 +120,24 @@ it('shuts the page to anyone without utenti.view', function () {
     $this->actingAs($this->admin)->get(route('utenti.index'))->assertOk();
 });
 
+it('does not show a platform user a link to the tenant-bound people page', function () {
+    $developer = User::factory()->create([
+        'tenant_id' => null,
+        'two_factor_confirmed_at' => now(),
+    ]);
+    $developer->assignRole('Developer');
+
+    $html = $this->actingAs($developer)->get(route('dashboard'))->assertOk()->getContent();
+
+    preg_match('/<nav class="flex-1 space-y-1[^"]*">.*?<\/nav>/s', $html, $blocco);
+
+    expect($blocco)->not->toBeEmpty();
+    expect($blocco[0])->toContain(route('piattaforma.index'))
+        ->not->toContain(route('utenti.index'));
+
+    $this->get(route('utenti.index'))->assertForbidden();
+});
+
 it('refuses the invite to someone who may only look, even with the fields already forged', function () {
     // 🔴 Il `can:` di rotta non è la guardia dell'azione: `utenti.view` e
     // `utenti.create` sono due permessi, e l'editor dei ruoli può darne uno
