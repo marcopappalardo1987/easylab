@@ -3,6 +3,7 @@
 namespace Tests\Fakes;
 
 use App\Models\Piano;
+use App\Support\Listino\Stripe\PaymentLinkRemoto;
 use App\Support\Listino\Stripe\PortaListinoStripe;
 use App\Support\Listino\Stripe\PrezzoRemoto;
 use RuntimeException;
@@ -101,6 +102,20 @@ final class PortaListinoStripeFinta implements PortaListinoStripe
         return $id;
     }
 
+    /**
+     * I Payment Link mintati, per id. `disattivaPaymentLink()` li riscrive con
+     * `attivo = false` invece di toglierli: un plink spento **esiste ancora**, e
+     * una sessione completata su di esso deve restare risolvibile.
+     *
+     * @var array<string, PaymentLinkRemoto>
+     */
+    public array $link = [];
+
+    /** @var array<string, PaymentLinkRemoto> */
+    private array $replicheLink = [];
+
+    private int $progressivoLink = 0;
+
     public function creaPrezzo(Piano $piano, int $importoCent, string $valuta, string $chiaveIdempotenza): PrezzoRemoto
     {
         $this->registra('creaPrezzo');
@@ -151,6 +166,47 @@ final class PortaListinoStripeFinta implements PortaListinoStripe
         $this->registra('leggiPrezzo');
 
         return $this->prezzi[$priceId] ?? null;
+    }
+
+    public function creaPaymentLink(Piano $piano, string $priceId, string $chiaveIdempotenza): PaymentLinkRemoto
+    {
+        $this->registra('creaPaymentLink');
+
+        // La replica per chiave, come `creaPrezzo`: la risposta di allora, non
+        // uno stato nuovo. È il primo dei due livelli di idempotenza, e una
+        // finta che ne mintasse uno diverso a ogni chiamata renderebbe
+        // non verificabile il doppio invio.
+        if (isset($this->replicheLink[$chiaveIdempotenza])) {
+            return $this->replicheLink[$chiaveIdempotenza];
+        }
+
+        $link = new PaymentLinkRemoto(
+            id: 'plink_'.$piano->codice.'_'.(++$this->progressivoLink),
+            url: 'https://buy.stripe.test/'.$piano->codice.'_'.$this->progressivoLink,
+        );
+
+        $this->link[$link->id] = $link;
+        $this->replicheLink[$chiaveIdempotenza] = $link;
+
+        return $link;
+    }
+
+    public function disattivaPaymentLink(string $plinkId): void
+    {
+        $this->registra('disattivaPaymentLink');
+
+        if (isset($this->link[$plinkId])) {
+            $vecchio = $this->link[$plinkId];
+
+            $this->link[$plinkId] = new PaymentLinkRemoto($vecchio->id, $vecchio->url, false);
+        }
+    }
+
+    public function leggiPaymentLink(string $plinkId): ?PaymentLinkRemoto
+    {
+        $this->registra('leggiPaymentLink');
+
+        return $this->link[$plinkId] ?? null;
     }
 
     /** Quante volte è stato chiamato un metodo — o quante chiamate in tutto. */

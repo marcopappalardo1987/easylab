@@ -82,6 +82,61 @@ final class PortaListinoStripeReale implements PortaListinoStripe
         return self::inPrezzoRemoto($prezzo);
     }
 
+    public function creaPaymentLink(Piano $piano, string $priceId, string $chiaveIdempotenza): PaymentLinkRemoto
+    {
+        $link = Cashier::stripe()->paymentLinks->create([
+            'line_items' => [['price' => $priceId, 'quantity' => 1]],
+
+            // 🔴 **I due campi che rendono attuabile tutto il resto.** Il
+            // provisioning esige una ragione sociale e un nome referente, e
+            // Stripe li raccoglie da sé: senza, servirebbero i `custom_fields`,
+            // che sono modificabili dalla dashboard e quindi una superficie di
+            // input in più su una strada che porta denaro.
+            //
+            // ⚠️ Nessun `optional`: il default è `false`, cioè obbligatori — ed
+            // è il default giusto, perché un account non può nascere senza.
+            'name_collection' => [
+                'business' => ['enabled' => true],
+                'individual' => ['enabled' => true],
+            ],
+
+            // Chi ha appena pagato torna **da noi**. `{CHECKOUT_SESSION_ID}` lo
+            // sostituisce Stripe: è ciò che permette alla pagina di conferma di
+            // dire qualcosa di vero invece di un ringraziamento generico.
+            'after_completion' => [
+                'type' => 'redirect',
+                'redirect' => ['url' => route('pagamento.ricevuto').'?sessione={CHECKOUT_SESSION_ID}'],
+            ],
+
+            // ⚠️ **Etichetta per la dashboard, e nient'altro.** Il codice non la
+            // legge mai: il piano si risolve dal plink id sulla nostra
+            // `prezzi_piano`, perché i metadata si riscrivono dalla dashboard e
+            // un piano che arriva dal payload è un piano che si può regalare.
+            'metadata' => ['easylab_piano' => $piano->codice],
+        ], ['idempotency_key' => $chiaveIdempotenza]);
+
+        return self::inPaymentLinkRemoto($link);
+    }
+
+    public function disattivaPaymentLink(string $plinkId): void
+    {
+        Cashier::stripe()->paymentLinks->update($plinkId, ['active' => false]);
+    }
+
+    public function leggiPaymentLink(string $plinkId): ?PaymentLinkRemoto
+    {
+        return self::inPaymentLinkRemoto(Cashier::stripe()->paymentLinks->retrieve($plinkId));
+    }
+
+    private static function inPaymentLinkRemoto(mixed $link): PaymentLinkRemoto
+    {
+        return new PaymentLinkRemoto(
+            id: $link->id,
+            url: (string) $link->url,
+            attivo: (bool) $link->active,
+        );
+    }
+
     /**
      * La risposta di Stripe → il nostro dato.
      *

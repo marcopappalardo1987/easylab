@@ -128,7 +128,7 @@ final class CompletaRegistrazione
         }
 
         try {
-            [$account, $appenaCompletata] = $this->nasci($registrazione, $esito);
+            [$account, $appenaCompletata, $avevaPassword] = $this->nasci($registrazione, $esito);
         } catch (RegistrazioneRifiutata $e) {
             // ⛔ **Fuori dalla transazione, o non resterebbe niente**: la
             // scrittura della traccia gira dopo il rollback, altrimenti verrebbe
@@ -138,7 +138,13 @@ final class CompletaRegistrazione
             throw $e;
         }
 
-        if ($appenaCompletata && $account !== null) {
+        // ⚠️ **Il benvenuto solo a chi una password ce l'ha** (ADR-039). Chi
+        // arriva da un Payment Link non l'ha scelta: riceve l'**invito**, che è
+        // la sola strada con cui entra. Mandargli anche questo messaggio
+        // significherebbe due email che si contraddicono — e quella che dice
+        // «accedi con la password che hai scelto» sarebbe la più ufficiale delle
+        // due, e falsa.
+        if ($appenaCompletata && $account !== null && $avevaPassword) {
             $this->dailBenvenuto($registrazione->fresh() ?? $registrazione);
         }
 
@@ -148,7 +154,12 @@ final class CompletaRegistrazione
     /**
      * La transazione vera e propria: rilettura sotto lock, guardie, nascita.
      *
-     * @return array{0: Account|null, 1: bool}
+     * ⚠️ Il terzo elemento è «la riga aveva una password», letto **sotto lock e
+     * prima** di azzerarla: dopo il completamento `password_hash` è `null` per
+     * entrambe le strade, quindi il chiamante non potrebbe più distinguerle — ed
+     * è ciò che decide se mandare il benvenuto o lasciar parlare l'invito.
+     *
+     * @return array{0: Account|null, 1: bool, 2: bool}
      */
     private function nasci(Registrazione $registrazione, EsitoCheckout $esito): array
     {
@@ -159,13 +170,13 @@ final class CompletaRegistrazione
             $riga = Registrazione::query()->whereKey($registrazione->getKey())->lockForUpdate()->first();
 
             if ($riga === null) {
-                return [null, false];
+                return [null, false, false];
             }
 
             // L'idempotenza vera: il gesto è già avvenuto, e ripeterlo
             // produrrebbe un secondo Account per un solo pagamento.
             if ($riga->completata()) {
-                return [$riga->account, false];
+                return [$riga->account, false, false];
             }
 
             // 🔴 **La verifica della casella, ricontrollata anche qui.** In
@@ -179,7 +190,30 @@ final class CompletaRegistrazione
             // ⚠️ **DENTRO la transazione e sulla riga RILETTA**, non su quella
             // arrivata dal chiamante: fra il caricamento e questo istante può
             // essere passato l'altro chiamante.
-            if (! $riga->emailVerificata()) {
+            //
+            // 🔴 **`password_hash !== null` è la guardia, non un'aggiunta** — e
+            // dal 5 Set 2026 (ADR-039) è la sua forma esatta invece che una
+            // conseguenza. Ciò che questa riga difende è: *una password già
+            // scelta non si onora su una casella mai confermata*, perché nel
+            // modulo la password si sceglie **prima** della verifica e un terzo
+            // che riscrive una riga pendente si sostituirebbe al legittimo.
+            //
+            // Nel Payment Link (ADR-039) una password non c'è: l'Admin nasce
+            // **invitato**, e l'unica via dentro è il link firmato spedito a
+            // quella casella — accettarlo *è* la verifica. Chiedere lì una
+            // verifica che non è ancora avvenuta rifiuterebbe un pagamento già
+            // incassato, cioè il guasto che tutto questo file esiste per evitare.
+            //
+            // ⛔ **Fail-closed dove serve**: ogni riga del modulo ha un
+            // `password_hash` fino al completamento (dove viene azzerato, ma da
+            // lì in poi `completata()` ha già corto-circuitato sopra). E una
+            // colonna «origine» sarebbe stata peggio: legherebbe la guardia a
+            // *chi dice* di aver creato la riga invece che a *cosa andrebbe
+            // storto*, e la spegnerebbe per chiunque sappia scrivere quel
+            // valore.
+            $avevaPassword = $riga->password_hash !== null;
+
+            if ($avevaPassword && ! $riga->emailVerificata()) {
                 throw new RegistrazioneRifiutata(
                     "La registrazione {$riga->getKey()} non ha mai confermato la propria casella: ".
                     'nessun account può nascere da essa.',
@@ -264,7 +298,7 @@ final class CompletaRegistrazione
                 ])
                 ->log(self::DESCRIZIONE_AUDIT);
 
-            return [$account, true];
+            return [$account, true, $avevaPassword];
         });
     }
 

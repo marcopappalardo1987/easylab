@@ -7,12 +7,14 @@ use App\Models\Registrazione;
 use App\Support\Piani;
 use App\Support\Registrazione\CompletaRegistrazione;
 use App\Support\Registrazione\EsitoCheckout;
+use App\Support\Registrazione\RegistrazioneDaPaymentLink;
 use App\Support\Registrazione\RegistrazioneRifiutata;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Laravel\Cashier\Http\Controllers\WebhookController as CashierWebhookController;
 use Stripe\Subscription as StripeSubscription;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 /**
  * L'innesco automatico del lockout per insoluto (🔗 ADR-013, ADR-032).
@@ -180,7 +182,16 @@ class StripeWebhookController extends CashierWebhookController
         $registrazioneId = $sessione['metadata']['registrazione_id'] ?? null;
 
         if (! is_numeric($registrazioneId)) {
-            return $this->successMethod();
+            // 🔴 **La seconda strada: il Payment Link** (ADR-039). Non ha e non
+            // può avere `registrazione_id` — la riga non esiste ancora quando
+            // qualcuno apre il link — quindi la si sintetizza dai dati che
+            // Stripe ha raccolto, e da lì il percorso è identico.
+            //
+            // ⚠️ Dopo il ramo dei metadata e non prima: una sessione che porta
+            // un `registrazione_id` viene dal modulo, e quella riga ha una
+            // password scelta e una casella già verificata. Invertire l'ordine
+            // ne creerebbe una seconda per lo stesso pagamento.
+            return $this->completaDaPaymentLink($sessione, $payload);
         }
 
         $registrazione = Registrazione::query()->find((int) $registrazioneId);
@@ -213,6 +224,83 @@ class StripeWebhookController extends CashierWebhookController
                 [
                     'registrazione_id' => $registrazione->getKey(),
                     'codice' => $e->codice,
+                    'motivo' => $e->getMessage(),
+                    'evento' => $payload['id'] ?? null,
+                ]
+            );
+        }
+
+        return $this->successMethod();
+    }
+
+    /**
+     * Un pagamento arrivato da un **Payment Link**: si sintetizza la riga e la
+     * si consegna alla stessa azione di sempre (🔗 ADR-039).
+     *
+     * ## ⛔ Perché `catch (Throwable)` qui e non solo `RegistrazioneRifiutata`
+     *
+     * Perché questo ramo **scrive**, e scrive da testo raccolto su un dominio di
+     * terzi: una violazione di lunghezza su Postgres, una collisione sull'unique
+     * di `stripe_session_id` sotto doppia consegna simultanea, un guasto
+     * qualunque. Ognuna di esse, non catturata, è un **500** — e un 500 qui non
+     * è un test rosso: Stripe ritenta per giorni e poi **disabilita
+     * l'endpoint**, portandosi via anche `customer.subscription.updated`, cioè i
+     * lockout per insoluto. La dottrina di tutto questo controller è che
+     * l'endpoint sopravviva; questo ramo la eredita.
+     *
+     * ⚠️ **Ma non è un `catch` muto**: `report()` porta il caso nel tracker
+     * interno, che è l'unico posto da cui una persona può accorgersi di un
+     * incasso che non è diventato un account. Il 200 dice a Stripe «ricevuto»,
+     * non «andato bene».
+     */
+    protected function completaDaPaymentLink(array $sessione, array $payload): Response
+    {
+        try {
+            $registrazione = app(RegistrazioneDaPaymentLink::class)->sintetizza($sessione);
+
+            // Il plink non è nostro: qualcuno l'ha creato a mano dalla
+            // dashboard. Caso legittimo, stessa risposta del `registrazione_id`
+            // assente — un checkout che non ci riguarda.
+            if ($registrazione === null) {
+                return $this->successMethod();
+            }
+
+            app(CompletaRegistrazione::class)->esegui(
+                $registrazione,
+                EsitoCheckout::daSessioneStripe($sessione),
+            );
+        } catch (RegistrazioneRifiutata $e) {
+            // ⛔ **`report()` anche qui, e non è un doppione.** Per i rifiuti che
+            // nascono dentro `CompletaRegistrazione` la traccia durevole c'è
+            // già; ma `DATI_INSUFFICIENTI` viene sollevato **prima che una riga
+            // esista**, quindi `registraIlRifiuto()` non lo vede mai — e senza
+            // questa riga un incasso senza account resterebbe nel solo
+            // `laravel.log`, che è disco effimero e per-replica. Il tracker
+            // raggruppa per impronta, quindi il caso già tracciato diventa
+            // un'occorrenza in più della stessa issue, non una seconda.
+            report($e);
+
+            // Il messaggio per esteso, che nel registro di audit non entra per
+            // privacy.
+            Log::channel(config('cashier.logger'))->error(
+                'Pagamento da Payment Link rifiutato al completamento.',
+                [
+                    'sessione' => $sessione['id'] ?? null,
+                    'codice' => $e->codice,
+                    'motivo' => $e->getMessage(),
+                    'evento' => $payload['id'] ?? null,
+                ]
+            );
+        } catch (Throwable $e) {
+            // ⛔ L'incasso c'è e l'account no: è il caso che **richiede una
+            // persona**, quindi va nel tracker e non solo nel log, che è disco
+            // effimero e per-replica.
+            report($e);
+
+            Log::channel(config('cashier.logger'))->error(
+                'Pagamento da Payment Link non completato per un guasto.',
+                [
+                    'sessione' => $sessione['id'] ?? null,
                     'motivo' => $e->getMessage(),
                     'evento' => $payload['id'] ?? null,
                 ]

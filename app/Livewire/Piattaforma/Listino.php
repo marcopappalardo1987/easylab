@@ -452,10 +452,10 @@ class Listino extends Component
             // Il link **al modulo pubblico** col piano già scelto, non un
             // Payment Link di Stripe: il perché sta in `LinkDiPagamento`, e non
             // è una preferenza — un plink incassa senza far nascere l'account.
+            // 🔴 Il **Payment Link di Stripe**, preso da `prezzi_piano` senza
+            // nessuna chiamata di rete: vedi `LinkDiPagamento`, dove sta anche
+            // il perché un plink oggi crea davvero l'account.
             'linkDiPagamento' => LinkDiPagamento::perPiano(),
-            // Il link c'è comunque; questo dice se oggi porta da qualche parte.
-            // Le due cose sono separate apposta: vedi `LinkDiPagamento`.
-            'ingressoAperto' => LinkDiPagamento::ingressoAperto(),
         ]);
     }
 

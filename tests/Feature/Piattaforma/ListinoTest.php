@@ -86,78 +86,60 @@ it('counts the customers sitting on each plan, archived ones included', function
 
 // ─── Il link per pagare ──────────────────────────────────────────────────────
 
-it('offers the public payment link only for the plans the form would actually sell', function () {
-    // Il link è `/registrati?piano=...`, **non** un Payment Link di Stripe: chi
-    // lo apre paga e ottiene l'account, perché passa dal percorso provato. Un
-    // plink incasserebbe senza che nessun webhook sappia quale registrazione
-    // completare. (🔗 `Listino::linkDiPagamento()`, `PortaleCheckoutStripe`)
+it('shows the Stripe payment link of the current price, and never one for the free plan', function () {
+    // 🔴 Il link è il **Payment Link di Stripe** (ADR-039), preso dalla riga
+    // corrente di `prezzi_piano`. Chi lo apre paga E ottiene l'account: Stripe
+    // raccoglie ragione sociale e referente con `name_collection`, e il webhook
+    // li usa per provisionare (🔗 `RegistrazioneDaPaymentLink`).
     BancoRegistrazione::apri();
+    PrezzoPiano::query()->where('corrente', true)->update([
+        'stripe_payment_link_id' => 'plink_saas',
+        'stripe_payment_link_url' => 'https://buy.stripe.test/saas',
+    ]);
+    BancoRegistrazione::dimentica();
 
     $html = ($this->pagina)()->html();
 
     expect($html)->toContain('data-link-pagamento="saas"')
-        ->and($html)->toContain(route('registrazione.mostra', ['piano' => 'saas']))
-        // ⛔ Il **negativo che conta**: il Free non ha checkout da superare, e un
-        // link che lo vendesse sarebbe l'unica porta del progetto da cui ci si
-        // crea un Ente e un ruolo Admin senza pagare (🔗 `PianiRegistrabili`).
+        ->and($html)->toContain('https://buy.stripe.test/saas')
+        // ⛔ Il **negativo che conta**: il Free non ha né customer né
+        // subscription (ADR-002), e un link che lo vendesse sarebbe l'unica
+        // porta del progetto da cui ci si crea un Ente e un ruolo Admin senza
+        // pagare — la frase che `PianiRegistrabili` porta scritta come propria
+        // ragione d'essere.
         ->and($html)->not->toContain('data-link-pagamento="free"');
 });
 
-it('drops the payment link from an archived plan, which is still on the page for its customers', function () {
-    // ⚠️ Il negativo **archiviato** e non quello gratuito, benché la regola
-    // escluda entrambi: il Free non ha nemmeno la cella Stripe, quindi la sua
-    // assenza dal link è già garantita dal markup e proverebbe la guardia
-    // sbagliata. Un piano ritirato ma a pagamento la cella ce l'ha — resta in
-    // pagina per i clienti che ci stanno sopra — quindi qui a decidere è solo
-    // `linkDiPagamento()`. Provato rompendola: senza, questo test è l'unico che
-    // diventa rosso.
+it('says a paid plan has no link yet instead of showing an empty cell', function () {
+    // 🔴 La lezione del primo rilascio, riportata su questa versione: una cella
+    // vuota significherebbe tre cose diverse — link mai creato, Stripe
+    // irraggiungibile durante la sincronizzazione, difetto del codice — e per
+    // distinguerle bisognerebbe guardare altrove. Il messaggio nomina anche il
+    // gesto che risolve, perché dire che c'è un problema senza dire dove si
+    // risolve è metà informazione.
     BancoRegistrazione::apri();
-    BancoRegistrazione::pianoDiProva();
-    BancoRegistrazione::archivia('pro');
 
     $html = ($this->pagina)()->html();
 
-    expect($html)->toContain('data-link-pagamento="saas"')
-        ->and($html)->not->toContain('data-link-pagamento="pro"');
+    expect($html)->toContain('data-senza-link')
+        ->and($html)->toContain('Sincronizza')
+        ->and($html)->not->toContain('data-link-pagamento');
 });
 
-it('keeps the link when the public form is closed, and says so instead of hiding it', function () {
-    // 🔴 La correzione del 5 Set 2026, il giorno stesso del rilascio: a
-    // interruttore spento la cella non mostrava **niente**, cioè la stessa
-    // faccia di un price mancante e di un difetto del codice. Tre cause e una
-    // sola assenza, con la risposta solo nel `.env`. Ora il link resta e porta
-    // accanto la ragione per cui oggi risponde 404.
+it('never asks to sync a free plan, which has nothing on Stripe by definition', function () {
+    // Il gemello del test sopra: senza, un avviso stampato per ogni piano privo
+    // di link comparirebbe anche sul Free, chiedendo di sincronizzare ciò che
+    // per definizione non esiste (ADR-002). La condizione è sul **prezzo** e non
+    // sul flag `gratuito`, perché `GovernoListino::crea()` ammette un piano a
+    // pagamento a 0 € — una promozione — e quello un link non deve averlo.
     BancoRegistrazione::apri();
-    config(['easylab.registrazione.aperta' => false]);
 
     $html = ($this->pagina)()->html();
 
-    expect($html)->toContain('data-link-pagamento="saas"')
-        ->and($html)->toContain('data-modulo-chiuso')
-        // Il nome della variabile d'ambiente, non un generico «chiuso»: è la
-        // riga che si va a scrivere, e senza di essa il messaggio dice che c'è
-        // un problema ma non dove si risolve.
-        ->and($html)->toContain('REGISTRAZIONE_APERTA');
-});
-
-it('never marks the form as closed when it is open', function () {
-    // Il gemello del test sopra: senza, un marcatore stampato sempre sarebbe
-    // verde di là e non direbbe niente qui.
-    BancoRegistrazione::apri();
-
-    expect(($this->pagina)()->html())->not->toContain('data-modulo-chiuso');
-});
-
-it('has no payment link at all for a plan without a Stripe price', function () {
-    // Un piano a pagamento senza price è un **guasto di deploy**, non un piano
-    // gratuito (🔗 `PianiRegistrabili`): il modulo non lo venderebbe, quindi il
-    // link non c'è — e qui l'assenza è l'unica risposta giusta, perché non
-    // esiste nessun URL da mostrare.
-    BancoRegistrazione::apri();
-    PrezzoPiano::query()->delete();
-    BancoRegistrazione::dimentica();
-
-    expect(($this->pagina)()->html())->not->toContain('data-link-pagamento');
+    // Il Free è in pagina, e la sua cella Stripe dice la propria frase.
+    expect($html)->toContain('niente, per definizione')
+        // Un solo avviso in tutta la tabella: quello del SaaS.
+        ->and(substr_count($html, 'data-senza-link'))->toBe(1);
 });
 
 // ─── Creare un piano ─────────────────────────────────────────────────────────
@@ -186,8 +168,10 @@ it('creates a plan and the Stripe product in the same gesture', function () {
         ->and($piano->gratuito)->toBeFalse()
         // Stripe è stato toccato, e nell'ordine giusto: prima il prodotto, poi
         // il price. Il contrario non esiste — un Price su Stripe appartiene a un
-        // Product.
-        ->and($this->porta->chiamate)->toBe(['creaProdotto', 'creaPrezzo'])
+        // Product. Il Payment Link viene per ultimo perché ha bisogno del price
+        // (ADR-039), e la sequenza intera è un'asserzione: un ordine diverso
+        // sarebbe una chiamata fatta su un oggetto che non esiste ancora.
+        ->and($this->porta->chiamate)->toBe(['creaProdotto', 'creaPrezzo', 'creaPaymentLink'])
         ->and($piano->stripe_product_id)->not->toBeNull()
         ->and($piano->stripe_sincronizzato_at)->not->toBeNull()
         ->and($piano->prezzi()->where('corrente', true)->count())->toBe(1);

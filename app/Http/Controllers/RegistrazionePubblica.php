@@ -426,6 +426,14 @@ class RegistrazionePubblica extends Controller
             ->where('email', $email)
             ->whereNull('completata_at')
             ->whereNull('email_verificata_at')
+            // ⛔ **Una riga che è già stata a Stripe non è una bozza** (ADR-039).
+            // Dal Payment Link nasce una riga sintetizzata che porta un session
+            // id vero e può restare pendente (un rifiuto dopo l'incasso).
+            // Riusarla qui la riscriverebbe azzerando `stripe_session_id`, cioè
+            // cancellando l'unico legame fra un pagamento incassato e la sua
+            // traccia — e lasciando l'audit di quel rifiuto a puntare a un id
+            // che non esiste più.
+            ->whereNull('stripe_session_id')
             ->orderByDesc('id')
             ->first();
     }

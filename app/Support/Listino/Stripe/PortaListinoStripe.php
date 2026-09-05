@@ -54,4 +54,32 @@ interface PortaListinoStripe
 
     /** Il Price come Stripe lo vede, o `null` se non esiste. */
     public function leggiPrezzo(string $priceId): ?PrezzoRemoto;
+
+    /**
+     * Il **Payment Link** che vende quel price: il link pubblico da mandare a un
+     * prospect, che paga e ottiene l'account (🔗 ADR-039).
+     *
+     * 🔴 Raccoglie ragione sociale e nome referente con `name_collection`, che è
+     * ciò che rende attuabile l'intera decisione: sono i due campi che il
+     * provisioning esige, e Stripe li chiede **da sé**. Senza, servirebbero i
+     * `custom_fields` — modificabili dalla dashboard, quindi una superficie di
+     * input in più su una strada che porta denaro.
+     *
+     * ⚠️ Un plink è legato a un price e basta: i suoi `line_items` **non si
+     * possono ripuntare**. Cambiare prezzo significa disattivare questo e
+     * crearne un altro, mai aggiornarlo.
+     */
+    public function creaPaymentLink(Piano $piano, string $priceId, string $chiaveIdempotenza): PaymentLinkRemoto;
+
+    /**
+     * Spegne un Payment Link (`active = false`).
+     *
+     * ⛔ È il **solo** modo di smettere di vendere da un link già mandato a
+     * qualcuno: l'URL è pubblico e permanente, quindi toglierlo dalla cabina non
+     * lo chiude — continuerebbe a incassare da chi ce l'ha nella posta.
+     */
+    public function disattivaPaymentLink(string $plinkId): void;
+
+    /** Il Payment Link come Stripe lo vede, o `null` se non esiste più. */
+    public function leggiPaymentLink(string $plinkId): ?PaymentLinkRemoto;
 }

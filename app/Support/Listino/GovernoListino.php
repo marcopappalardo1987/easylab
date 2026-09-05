@@ -329,8 +329,26 @@ final class GovernoListino
                 // di troppo — molto meno grave di uno storico perso.
                 if ($corrente !== null) {
                     $porta->archiviaPrezzo($corrente->stripe_price_id);
+
+                    // ⛔ E si spegne anche il suo **Payment Link**, che non muore
+                    // insieme al price: un plink è pubblico e permanente, quindi
+                    // uno lasciato attivo su un price archiviato continua a
+                    // vendere la cifra vecchia a chi ce l'ha nella posta.
+                    if (filled($corrente->stripe_payment_link_id)) {
+                        $porta->disattivaPaymentLink($corrente->stripe_payment_link_id);
+                    }
                 }
             }
+
+            // 🔴 **Fuori da `if ($daCreare)`, ed è la ragione per cui è un passo
+            // a sé.** Dentro, un fallimento di rete lo renderebbe
+            // irrecuperabile: al secondo «Sincronizza» importo e valuta sono
+            // invariati, `$daCreare` è falso, e il plink non nascerebbe **mai
+            // più** — con la pagina che dice «da sincronizzare» per un price
+            // perfettamente sincronizzato e il solo gesto disponibile che non fa
+            // niente. Qui invece la domanda è un'altra e si rifà ogni volta: «la
+            // riga corrente ha un link?».
+            self::assicuraIlPaymentLink($piano, $porta);
 
             $piano->forceFill([
                 'stripe_sincronizzato_at' => now(),
@@ -346,6 +364,51 @@ final class GovernoListino
         app(CatalogoPiani::class)->dimentica();
 
         return $piano->refresh();
+    }
+
+    /**
+     * Il price corrente ha un Payment Link? Se no, glielo si dà (🔗 ADR-039).
+     *
+     * ⚠️ **Idempotente per conto proprio**, e la guardia è `IS NULL` sulla riga
+     * corrente: non «l'abbiamo appena creato», che sarebbe la domanda di
+     * `sincronizza()` e non la nostra. Così il passo si ripete finché non
+     * riesce, e copre anche `agganciaPrezzo()` — che scrive una riga corrente
+     * senza passare da `creaPrezzo`, e che senza questo lascerebbe un piano
+     * sincronizzato e invendibile per sempre.
+     *
+     * ⛔ **Nessun link a prezzo zero, e la condizione è sul PREZZO, non sul flag
+     * `gratuito`.** `crea()` ammette per iscritto un piano a pagamento a 0 € —
+     * «una promozione: ha una subscription vera» — quindi guardare il flag
+     * lascerebbe scoperto proprio quel caso. Un plink a 0 € sarebbe la porta
+     * pubblica da cui chiunque, senza pagare e senza che nessuno lo autorizzi,
+     * si crea un Ente e un ruolo `Admin`: è la frase che `PianiRegistrabili`
+     * porta scritta come ragione della propria esistenza.
+     */
+    private static function assicuraIlPaymentLink(Piano $piano, PortaListinoStripe $porta): void
+    {
+        if ((int) $piano->prezzo_mensile_cent === 0) {
+            return;
+        }
+
+        $corrente = $piano->prezzi()->where('corrente', true)->first();
+
+        if ($corrente === null || filled($corrente->stripe_payment_link_id)) {
+            return;
+        }
+
+        $link = $porta->creaPaymentLink(
+            $piano,
+            $corrente->stripe_price_id,
+            // La chiave porta il **price**, che è già unico per gesto: un plink
+            // sta a un price, quindi due chiamate per lo stesso price sono lo
+            // stesso link e non due gemelli.
+            'easylab_plink_'.sha1($corrente->stripe_price_id),
+        );
+
+        $corrente->forceFill([
+            'stripe_payment_link_id' => $link->id,
+            'stripe_payment_link_url' => $link->url,
+        ])->save();
     }
 
     /**
@@ -694,6 +757,21 @@ final class GovernoListino
                 'stripe_ultimo_errore' => null,
             ])->save();
         });
+
+        // ⚠️ **Anche l'aggancio vuole il suo Payment Link.** La riga corrente
+        // appena scritta non ne ha uno, e senza questa chiamata resterebbe senza
+        // per sempre: il piano sarebbe sincronizzato, in vetrina, e invendibile
+        // dalla cabina. Fuori dalla transazione, come ogni chiamata di rete.
+        //
+        // Non lancia: `assicuraIlPaymentLink()` è idempotente, quindi se Stripe
+        // è giù il prossimo «Sincronizza» rifà il tentativo. Ma nemmeno tace del
+        // tutto — l'errore finisce su `stripe_ultimo_errore`, che è dove la
+        // cabina lo legge già.
+        try {
+            self::assicuraIlPaymentLink($piano->refresh(), app(PortaListinoStripe::class));
+        } catch (Throwable $e) {
+            $piano->forceFill(['stripe_ultimo_errore' => $e->getMessage()])->save();
+        }
 
         app(CatalogoPiani::class)->dimentica();
 

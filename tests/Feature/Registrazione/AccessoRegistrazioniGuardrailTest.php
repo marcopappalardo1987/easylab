@@ -59,6 +59,7 @@ const CUSTODI_DELLE_REGISTRAZIONI = [
     'app/Support/Registrazione/PianiRegistrabili.php' => 'i piani che il modulo pubblico può vendere',
     'app/Support/Registrazione/PortaleCheckout.php' => 'la porta verso Stripe',
     'app/Support/Registrazione/PortaleCheckoutStripe.php' => 'la porta vera',
+    'app/Support/Registrazione/RegistrazioneDaPaymentLink.php' => 'la riga sintetizzata da un pagamento su Payment Link: scrive, non espone',
     'app/Support/Registrazione/RegistrazioneRifiutata.php' => 'il rifiuto, col suo codice',
     'app/Support/Registrazione/SessioneCheckout.php' => 'id e URL della sessione appena aperta',
     'app/Support/Retention.php' => 'la potatura a trenta giorni, che è metà della ragione dell\'esenzione',

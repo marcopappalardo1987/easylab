@@ -45,6 +45,18 @@ class RegistrazioneRifiutata extends RuntimeException
      */
     public const PROVISIONING_RIFIUTATO = 'provisioning_rifiutato';
 
+    /**
+     * I dati raccolti dal Payment Link non bastano a far nascere un account
+     * (🔗 ADR-039): ragione sociale, referente o email mancanti o inutilizzabili.
+     *
+     * ⚠️ **È un rifiuto e non un errore di programma**, e la differenza è dove
+     * finisce: qui la traccia è quella di ogni rifiuto — issue nel tracker e
+     * riga di audit — mentre lasciarlo diventare un'eccezione qualunque nel
+     * webhook significherebbe un 500, cioè Stripe che ritenta per giorni e poi
+     * **disabilita l'endpoint**, portandosi via anche i lockout per insoluto.
+     */
+    public const DATI_INSUFFICIENTI = 'dati_insufficienti';
+
     public function __construct(string $messaggio, public readonly string $codice)
     {
         parent::__construct($messaggio);

@@ -35,6 +35,8 @@ class PrezzoPiano extends Model
         'importo_cent',
         'valuta',
         'corrente',
+        'stripe_payment_link_id',
+        'stripe_payment_link_url',
     ];
 
     protected $attributes = [

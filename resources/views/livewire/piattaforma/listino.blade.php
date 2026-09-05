@@ -239,12 +239,12 @@
                                     @endif
 
                                     @if (isset($linkDiPagamento[$codice]))
-                                        {{-- Il link **al modulo pubblico** col
-                                             piano già scelto, non un Payment
-                                             Link di Stripe: vedi
-                                             `LinkDiPagamento`. Chi lo apre paga
-                                             E ottiene l'account, perché passa
-                                             dal percorso provato. --}}
+                                        {{-- 🔴 Il **Payment Link di Stripe**:
+                                             chi lo apre paga E ottiene
+                                             l'account, perché Stripe raccoglie
+                                             ragione sociale e referente e il
+                                             webhook li usa per provisionare.
+                                             Vedi `LinkDiPagamento`. --}}
                                         <span class="mt-2 flex items-center gap-1.5"
                                               x-data="{ copiato: false }">
                                             <a href="{{ $linkDiPagamento[$codice] }}" target="_blank" rel="noopener"
@@ -260,22 +260,20 @@
                                                 <span x-show="copiato" x-cloak>copiato</span>
                                             </button>
                                         </span>
-
-                                        @unless ($ingressoAperto)
-                                            {{-- 🔴 **Detto, non taciuto.** Il
-                                                 link a modulo chiuso risponde
-                                                 404, ma nasconderlo darebbe alla
-                                                 cella la stessa faccia di un
-                                                 price mancante e di un difetto
-                                                 del codice: tre cause, una sola
-                                                 assenza, e la risposta solo nel
-                                                 `.env`. È costato mezz'ora il
-                                                 giorno del rilascio. --}}
-                                            <span class="mt-0.5 block text-xs text-bad-soft-ink" data-modulo-chiuso>
-                                                Oggi risponde 404: il modulo pubblico è chiuso
-                                                (<span class="font-mono">REGISTRAZIONE_APERTA</span>).
-                                            </span>
-                                        @endunless
+                                    @elseif ($piano->prezzo_mensile_cent > 0)
+                                        {{-- 🔴 **Detta, non taciuta.** Una cella
+                                             vuota qui avrebbe significato tre
+                                             cose diverse — link mai creato,
+                                             Stripe irraggiungibile al momento
+                                             della sincronizzazione, difetto del
+                                             codice — con la risposta da cercare
+                                             altrove. È costato mezz'ora il
+                                             giorno del primo rilascio, e la
+                                             lezione vale anche per questa
+                                             versione. --}}
+                                        <span class="mt-2 block text-xs text-warn-soft-ink" data-senza-link>
+                                            Nessun link di pagamento: premere «Sincronizza».
+                                        </span>
                                     @endif
 
                                     @foreach ($divergenze as $divergenza)

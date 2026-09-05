@@ -2,20 +2,31 @@
 
 namespace App\Support\Listino;
 
-use App\Support\Registrazione\PianiRegistrabili;
-
 /**
- * Il link da mandare a un cliente perché paghi un piano: il **modulo pubblico**
- * con la radio già scelta (🔗 ADR-012 il self-signup, ADR-035 il listino).
+ * Il **Payment Link di Stripe** di ogni piano: il link da mandare a un prospect
+ * perché paghi (🔗 ADR-039, ADR-012 il provisioning, ADR-035 il listino).
  *
- * ## 🔴 Perché NON un Payment Link di Stripe
+ * ## 🔴 Perché ora un Payment Link, dopo aver scritto qui che non si poteva
  *
- * Un `plink_...` incassa e basta: la sessione che apre non porta nei metadata la
- * riga `registrazioni`, quindi `checkout.session.completed` non ha niente da
- * completare e `CompletaRegistrazione` non fa nascere nessun Account (vedi
- * `PortaleCheckoutStripe`). Sarebbe un pagamento senza consegna, cioè il guasto
- * peggiore che questa area possa produrre. Passando da `/registrati?piano=` il
- * percorso resta quello provato: verifica email → Checkout → provisioning.
+ * Fino al 5 Set 2026 questo file conteneva l'argomento opposto, ed era giusto
+ * allora: un plink incassa e la sessione non porta nei metadata la riga
+ * `registrazioni`, quindi `checkout.session.completed` non ha niente da
+ * completare e nessun Account nasce. **Un pagamento senza consegna.**
+ *
+ * Tre cose hanno chiuso quel buco, e vanno lette insieme perché nessuna basta
+ * da sola:
+ *
+ * 1. **`name_collection`**: Stripe raccoglie da sé ragione sociale e nome
+ *    referente, cioè i due dati che il provisioning esige. Non servono
+ *    `custom_fields` — che sarebbero modificabili dalla dashboard, cioè una
+ *    superficie di input in più su una strada che porta denaro.
+ * 2. **Il piano si risolve dal NOSTRO database**, da `session.payment_link` su
+ *    `prezzi_piano` (`RegistrazioneDaPaymentLink`), mai dai metadata: quelli si
+ *    riscrivono dalla dashboard, e un piano che arriva dal payload è un piano
+ *    che si può regalare.
+ * 3. **La password non serve**: l'Admin nasce **invitato**, e accettare il link
+ *    firmato *è* la verifica della casella. È ciò che permette di non spegnere
+ *    nessuna guardia — vedi il commento in `CompletaRegistrazione::nasci()`.
  *
  * ## Perché una classe e non un metodo del componente
  *
@@ -23,23 +34,23 @@ use App\Support\Registrazione\PianiRegistrabili;
  * nominare una `Registrazione`: le schermate sono autenticate, e `registrazioni`
  * è la tabella senza scope che l'esenzione di ADR-012 ha reso possibile. La
  * regola di vendibilità vive quindi qui, e la cabina chiama un nome che non
- * appartiene a quel namespace. Duplicarla nel componente sarebbe l'alternativa
- * peggiore: due definizioni di «cosa si vende» che divergono al primo piano
- * archiviato.
+ * appartiene a quel namespace.
  */
 final class LinkDiPagamento
 {
     /**
-     * I link per i piani che il modulo pubblico venderebbe davvero, per codice.
+     * I link di pagamento, per codice di piano — presi dalla riga **corrente**
+     * di `prezzi_piano`, che è l'unica che vende oggi.
      *
-     * ⚠️ **L'ingresso chiuso non toglie il link: lo marca.** Fino al 5 Set 2026
-     * a interruttore spento l'elenco usciva vuoto, e la cella non mostrava
-     * niente — cioè la stessa faccia che ha un price non configurato, un piano
-     * archiviato e un difetto di questa classe. Un'assenza che significa quattro
-     * cose diverse non è una difesa, è una domanda a cui bisogna rispondere
-     * andando a leggere il `.env`: è successo il giorno stesso del rilascio.
-     * Il link resta, con accanto la ragione per cui oggi risponde 404, che è
-     * l'unica forma in cui la pagina può dirlo prima del cliente.
+     * ⚠️ **Nessuna chiamata di rete**: l'URL è a database apposta, perché questa
+     * pagina deve restare leggibile con Stripe irraggiungibile — la stessa
+     * disciplina che tiene il confronto con Stripe dietro un bottone.
+     *
+     * ⛔ **`registrazione.aperta` non entra qui**, e non è una dimenticanza: quel
+     * flag chiude `/registrati`, che è un'altra porta. Un plink è pubblico e
+     * permanente, e l'unico modo di smettere di vendere da un link già spedito è
+     * `active: false` su Stripe — spegnerlo in questa pagina non lo chiuderebbe,
+     * darebbe solo l'impressione di averlo fatto.
      *
      * @return array<string, string>
      */
@@ -47,23 +58,14 @@ final class LinkDiPagamento
     {
         $link = [];
 
-        foreach (PianiRegistrabili::codici() as $codice) {
-            $link[$codice] = route('registrazione.mostra', ['piano' => $codice]);
+        foreach (app(CatalogoPiani::class)->tutti() as $codice => $piano) {
+            $corrente = $piano->prezzi->firstWhere('corrente', true);
+
+            if ($corrente !== null && filled($corrente->stripe_payment_link_url)) {
+                $link[$codice] = $corrente->stripe_payment_link_url;
+            }
         }
 
         return $link;
-    }
-
-    /**
-     * Se oggi quel link porta davvero da qualche parte.
-     *
-     * `registrazione.aperta` spegne il **solo** ingresso: `/registrati` risponde
-     * 404, mentre i passi successivi restano aperti perché chi ha già pagato
-     * deve poter completare (vedi `RegistrazionePubblica`). Da qui la cabina
-     * distingue «il link non c'è» da «il link c'è ma la porta è chiusa».
-     */
-    public static function ingressoAperto(): bool
-    {
-        return (bool) config('easylab.registrazione.aperta', false);
     }
 }

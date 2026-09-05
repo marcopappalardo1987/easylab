@@ -7,6 +7,7 @@ use App\Http\Controllers\EsportaStoricoPdf;
 use App\Http\Controllers\FugaDaLockout;
 use App\Http\Controllers\ImpersonaVersoStrumento;
 use App\Http\Controllers\ImpostaPasswordInvito;
+use App\Http\Controllers\PagamentoRicevuto;
 use App\Http\Controllers\PaginaBloccato;
 use App\Http\Controllers\RegistrazionePubblica;
 use App\Http\Controllers\ScaricaDocumento;
@@ -415,6 +416,16 @@ Route::middleware(['signed', 'guest'])->group(function () {
 Route::get('/registrazione/{registrazione}/completata', [RegistrazionePubblica::class, 'completata'])
     ->middleware(['signed', 'throttle:30,1'])
     ->whereNumber('registrazione')->name('registrazione.completata');
+
+// ⚠️ **Pubblica e senza firma, ed è deliberato.** Ci arriva chi ha pagato su un
+// Payment Link (ADR-039), e il redirect lo compone **Stripe** sostituendo
+// `{CHECKOUT_SESSION_ID}`: una firma nostra non potrebbe esserci. Non è un buco
+// perché la pagina non prova niente e non fa niente — non legge la sessione, non
+// mostra dati, non provisiona. È un cartello. Chi fa nascere l'account è il
+// webhook, che è firmato da Stripe e resta l'unica strada.
+Route::get('/pagamento/ricevuto', PagamentoRicevuto::class)
+    ->middleware('throttle:30,1')
+    ->name('pagamento.ricevuto');
 
 // Niente `account.lockout` qui, e non è un buco: questa rotta traduce solo
 // token → id e REINDIRIZZA a `strumenti.show`, che sta nel gruppo protetto —
