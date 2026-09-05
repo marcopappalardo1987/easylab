@@ -185,7 +185,10 @@ it('ignores interventi already done', function () {
 
 it('ignores a ricambio that is not mounted yet', function () {
     $ricambio = Ricambio::factory()->forTenant($this->ente)->create();
-    $intervento = Intervento::factory()->forStrumento($this->strumento)->create();
+    // `->pianificato()` e non la scadenza di default: quella è `addMonth()`,
+    // che in un mese da 30 giorni cade ESATTAMENTE sulla soglia e fa partire
+    // un digest per l'intervento — 5 mesi l'anno il caso misurava altro.
+    $intervento = Intervento::factory()->forStrumento($this->strumento)->pianificato()->create();
     $utilizzo = RicambioUtilizzo::factory()
         ->forStrumento($this->strumento)->forRicambio($ricambio)->forIntervento($intervento)
         ->nonMontato()->create();

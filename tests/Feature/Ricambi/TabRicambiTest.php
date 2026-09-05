@@ -34,7 +34,10 @@ beforeEach(function () {
     $this->strumento = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Autoclave']);
 
     $this->ricambio = Ricambio::factory()->forTenant($this->ente)->create(['nome' => 'Guarnizione O-Ring']);
-    $this->intervento = Intervento::factory()->forStrumento($this->strumento)->create();
+    // `->pianificato()` e non la scadenza di default: quella è `addMonth()`,
+    // che in un mese da 30 giorni cade ESATTAMENTE sulla soglia e tiene acceso
+    // l'arancione anche dopo che il pezzo è stato cestinato.
+    $this->intervento = Intervento::factory()->forStrumento($this->strumento)->pianificato()->create();
 
     $this->utilizzo = RicambioUtilizzo::factory()
         ->forStrumento($this->strumento)
@@ -125,24 +128,34 @@ it('moves the warranty start with the mounting date, but never past its expiry',
     // spostare l'inizio oltre la scadenza farebbe fallire il salvataggio per un
     // refuso, e un dato informativo incoerente è meno grave di un gesto
     // impossibile da completare.
-    $this->garanzia->fissaScadenzaDichiarata('2026-06-30')->save();
+    // ⚠️ **Relative a `now()`, non assolute.** Con `'2026-06-30'` scritto a mano
+    // il test sarebbe **errato** (non fallito) dal 1° Gen 2027: il `beforeEach`
+    // dà alla garanzia una scadenza a `today()->addYear()`, e da quella data una
+    // scadenza dichiarata nel 2026 cadrebbe prima di `data_inizio`, che
+    // l'invariante di ADR-022 rifiuta. Ciò che il caso misura è un **ordine fra
+    // tre date**, non tre date.
+    $scadenza = today()->addMonths(6);
+    $dentro = $scadenza->copy()->subMonths(3);
+    $oltre = $scadenza->copy()->addMonth();
+
+    $this->garanzia->fissaScadenzaDichiarata($scadenza->toDateString())->save();
 
     ($this->scheda)($this->admin)
         ->call('openCorreggiRicambio', $this->utilizzo->id)
-        ->set('ricambioForm.data', '2026-01-15')
+        ->set('ricambioForm.data', $dentro->toDateString())
         ->call('salvaRicambio');
 
-    expect($this->garanzia->fresh()->data_inizio->toDateString())->toBe('2026-01-15');
+    expect($this->garanzia->fresh()->data_inizio->toDateString())->toBe($dentro->toDateString());
 
     // Oltre la scadenza: la garanzia resta com'è, il salvataggio riesce.
     ($this->scheda)($this->admin)
         ->call('openCorreggiRicambio', $this->utilizzo->id)
-        ->set('ricambioForm.data', '2027-01-15')
+        ->set('ricambioForm.data', $oltre->toDateString())
         ->call('salvaRicambio')
         ->assertHasNoErrors();
 
-    expect($this->garanzia->fresh()->data_inizio->toDateString())->toBe('2026-01-15')
-        ->and($this->utilizzo->fresh()->data->toDateString())->toBe('2027-01-15');
+    expect($this->garanzia->fresh()->data_inizio->toDateString())->toBe($dentro->toDateString())
+        ->and($this->utilizzo->fresh()->data->toDateString())->toBe($oltre->toDateString());
 });
 
 // --- La cancellazione, e il semaforo ---
