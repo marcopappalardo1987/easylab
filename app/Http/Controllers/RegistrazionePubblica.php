@@ -116,7 +116,17 @@ class RegistrazionePubblica extends Controller
     {
         $this->esigiIngressoAperto();
 
-        return $this->paginaDelModulo();
+        // `?piano=` preseleziona la radio: è ciò che rende condivisibile il link
+        // di pagamento della cabina. Passa da `accetta()` — la stessa domanda
+        // del POST — quindi un codice archiviato, gratuito o inventato viene
+        // ignorato in silenzio invece di mettere in vetrina un piano che il
+        // passo successivo rifiuterebbe.
+        $preselezionato = $request->query('piano');
+        $preselezionato = is_string($preselezionato) && PianiRegistrabili::accetta($preselezionato)
+            ? $preselezionato
+            : null;
+
+        return $this->paginaDelModulo($preselezionato);
     }
 
     public function avvia(Request $request)
@@ -454,11 +464,12 @@ class RegistrazionePubblica extends Controller
         return URL::temporarySignedRoute($rotta, now()->addHours($ore), ['registrazione' => $registrazione->getKey()]);
     }
 
-    private function paginaDelModulo()
+    private function paginaDelModulo(?string $preselezionato = null)
     {
         return view('auth.registrati', [
             'piani' => PianiRegistrabili::modelli(),
             'campoTrappola' => self::CAMPO_TRAPPOLA,
+            'pianoPreselezionato' => $preselezionato,
         ]);
     }
 

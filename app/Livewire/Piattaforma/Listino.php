@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\Piano;
 use App\Support\Listino\CatalogoPiani;
 use App\Support\Listino\GovernoListino;
+use App\Support\Listino\LinkDiPagamento;
 use App\Support\Piani;
 use App\Support\Tenancy\VistaPiattaforma;
 use Illuminate\Contracts\View\View;
@@ -448,6 +449,10 @@ class Listino extends Component
             // può provare.
             'divergenzePerPiano' => collect($this->divergenze)->groupBy('codice')->all(),
             'quanteDivergenze' => count($this->divergenze),
+            // Il link **al modulo pubblico** col piano già scelto, non un
+            // Payment Link di Stripe: il perché sta in `LinkDiPagamento`, e non
+            // è una preferenza — un plink incassa senza far nascere l'account.
+            'linkDiPagamento' => LinkDiPagamento::perPiano(),
         ]);
     }
 

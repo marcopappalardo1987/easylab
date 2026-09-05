@@ -238,6 +238,30 @@
                                         </span>
                                     @endif
 
+                                    @if (isset($linkDiPagamento[$codice]))
+                                        {{-- Il link **al modulo pubblico** col
+                                             piano già scelto, non un Payment
+                                             Link di Stripe: vedi
+                                             `Listino::linkDiPagamento()`. Chi lo
+                                             apre paga E ottiene l'account,
+                                             perché passa dal percorso provato. --}}
+                                        <span class="mt-2 flex items-center gap-1.5"
+                                              x-data="{ copiato: false }">
+                                            <a href="{{ $linkDiPagamento[$codice] }}" target="_blank" rel="noopener"
+                                               class="truncate text-xs text-brand underline underline-offset-2"
+                                               data-link-pagamento="{{ $codice }}"
+                                               title="{{ $linkDiPagamento[$codice] }}">
+                                                link per pagare
+                                            </a>
+                                            <button type="button"
+                                                    class="shrink-0 rounded px-1.5 py-0.5 text-xs text-ink-3 hover:bg-surface-sunken hover:text-ink-2"
+                                                    x-on:click="navigator.clipboard.writeText(@js($linkDiPagamento[$codice])); copiato = true; setTimeout(() => copiato = false, 1500)">
+                                                <span x-show="! copiato">copia</span>
+                                                <span x-show="copiato" x-cloak>copiato</span>
+                                            </button>
+                                        </span>
+                                    @endif
+
                                     @foreach ($divergenze as $divergenza)
                                         {{-- 🔴 **I due valori affiancati**, non
                                              il solo fatto che divergano: vedi il

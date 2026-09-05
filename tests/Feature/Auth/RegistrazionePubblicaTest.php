@@ -253,3 +253,43 @@ it('shows the sellable plans on the form, and never the free one', function () {
         ->assertSee('SaaS')
         ->assertDontSee('value="free"', false);
 });
+
+// ─── `?piano=`: il link di pagamento della cabina ────────────────────────────
+
+it('preselects the plan named in the query string', function () {
+    BancoRegistrazione::pianoDiProva();
+
+    $risposta = $this->get(route('registrazione.mostra', ['piano' => 'pro']))->assertOk();
+
+    // Il valore che conta è **quale** radio è marcata, non che una lo sia: con
+    // due piani in vetrina il default cadrebbe su `saas`, quindi questa è la
+    // sola forma in cui il test può diventare rosso se la preselezione sparisce.
+    expect(radioMarcata($risposta->getContent()))->toBe('pro');
+});
+
+it('ignores a query plan that the public form would not sell', function () {
+    BancoRegistrazione::pianoDiProva();
+    BancoRegistrazione::archivia('pro');
+
+    // Archiviato, gratuito, inesistente: tre modi di non essere in vetrina, e la
+    // pagina non deve mostrarne nessuno come «scelto» — il POST lo rifiuterebbe
+    // dopo che l'utente ha già compilato tutto.
+    foreach (['pro', 'free', 'inventato'] as $codice) {
+        expect(radioMarcata($this->get(route('registrazione.mostra', ['piano' => $codice]))->getContent()))
+            ->toBe('saas');
+    }
+});
+
+/** Il codice della sola radio `piano` che porta `checked`. */
+function radioMarcata(string $html): ?string
+{
+    preg_match_all('/name="piano" value="([^"]+)"[^>]*?(checked)?>/s', $html, $trovate, PREG_SET_ORDER);
+
+    foreach ($trovate as $radio) {
+        if (($radio[2] ?? '') === 'checked') {
+            return $radio[1];
+        }
+    }
+
+    return null;
+}

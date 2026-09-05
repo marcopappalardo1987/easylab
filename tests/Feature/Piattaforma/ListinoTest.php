@@ -4,6 +4,7 @@ use App\Livewire\Piattaforma\Cabina;
 use App\Livewire\Piattaforma\Listino;
 use App\Models\Account;
 use App\Models\Piano;
+use App\Models\PrezzoPiano;
 use App\Models\UnitaOrganizzativa;
 use App\Support\Listino\CatalogoPiani;
 use App\Support\Listino\Stripe\PortaListinoStripe;
@@ -12,6 +13,7 @@ use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\Fakes\PortaListinoStripeFinta;
+use Tests\Support\BancoRegistrazione;
 
 /**
  * 🔴 La schermata del listino: cosa mostra, e cosa scrive quando la si preme
@@ -80,6 +82,59 @@ it('counts the customers sitting on each plan, archived ones included', function
 
     expect($html)->toContain('data-clienti="3"')
         ->and($html)->toContain('data-clienti="1"');
+});
+
+// ─── Il link per pagare ──────────────────────────────────────────────────────
+
+it('offers the public payment link only for the plans the form would actually sell', function () {
+    // Il link è `/registrati?piano=...`, **non** un Payment Link di Stripe: chi
+    // lo apre paga e ottiene l'account, perché passa dal percorso provato. Un
+    // plink incasserebbe senza che nessun webhook sappia quale registrazione
+    // completare. (🔗 `Listino::linkDiPagamento()`, `PortaleCheckoutStripe`)
+    BancoRegistrazione::apri();
+
+    $html = ($this->pagina)()->html();
+
+    expect($html)->toContain('data-link-pagamento="saas"')
+        ->and($html)->toContain(route('registrazione.mostra', ['piano' => 'saas']))
+        // ⛔ Il **negativo che conta**: il Free non ha checkout da superare, e un
+        // link che lo vendesse sarebbe l'unica porta del progetto da cui ci si
+        // crea un Ente e un ruolo Admin senza pagare (🔗 `PianiRegistrabili`).
+        ->and($html)->not->toContain('data-link-pagamento="free"');
+});
+
+it('drops the payment link from an archived plan, which is still on the page for its customers', function () {
+    // ⚠️ Il negativo **archiviato** e non quello gratuito, benché la regola
+    // escluda entrambi: il Free non ha nemmeno la cella Stripe, quindi la sua
+    // assenza dal link è già garantita dal markup e proverebbe la guardia
+    // sbagliata. Un piano ritirato ma a pagamento la cella ce l'ha — resta in
+    // pagina per i clienti che ci stanno sopra — quindi qui a decidere è solo
+    // `linkDiPagamento()`. Provato rompendola: senza, questo test è l'unico che
+    // diventa rosso.
+    BancoRegistrazione::apri();
+    BancoRegistrazione::pianoDiProva();
+    BancoRegistrazione::archivia('pro');
+
+    $html = ($this->pagina)()->html();
+
+    expect($html)->toContain('data-link-pagamento="saas"')
+        ->and($html)->not->toContain('data-link-pagamento="pro"');
+});
+
+it('hides the payment link when the public form is closed or the plan has no Stripe price', function () {
+    // Due guasti diversi, stesso rimedio: mostrare un link che risponde 404 —
+    // o che porta a un modulo che rifiuterebbe quel piano — è peggio che non
+    // mostrarne nessuno, perché lo si scopre dal lato del cliente.
+    BancoRegistrazione::apri();
+    config(['easylab.registrazione.aperta' => false]);
+
+    expect(($this->pagina)()->html())->not->toContain('data-link-pagamento');
+
+    config(['easylab.registrazione.aperta' => true]);
+    PrezzoPiano::query()->delete();
+    BancoRegistrazione::dimentica();
+
+    expect(($this->pagina)()->html())->not->toContain('data-link-pagamento');
 });
 
 // ─── Creare un piano ─────────────────────────────────────────────────────────

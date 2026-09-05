@@ -53,6 +53,7 @@ const CUSTODI_DELLE_REGISTRAZIONI = [
     'app/Notifications/VerificaEmailRegistrazione.php' => 'il link firmato di verifica',
     'app/Providers/AppServiceProvider.php' => 'il limiter nominato del modulo pubblico',
     'app/Support/Audit/SoggettiAudit.php' => 'l\'etichetta del soggetto nel registro di audit',
+    'app/Support/Listino/LinkDiPagamento.php' => 'il link `/registrati?piano=` della cabina: sa QUALI piani il modulo vende, mai una riga',
     'app/Support/Registrazione/CompletaRegistrazione.php' => 'la nascita dell\'account, e il rifiuto dopo l\'incasso',
     'app/Support/Registrazione/EsitoCheckout.php' => 'il valore letto da Stripe',
     'app/Support/Registrazione/PianiRegistrabili.php' => 'i piani che il modulo pubblico può vendere',

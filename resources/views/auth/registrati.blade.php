@@ -94,7 +94,7 @@
                                     <label class="flex cursor-pointer items-start gap-3 rounded-md border border-border-strong bg-surface p-3 hover:bg-surface-sunken">
                                         <input type="radio" name="piano" value="{{ $unPiano->codice }}"
                                                class="mt-1 h-4 w-4 border border-border text-brand focus:ring-ring"
-                                               @checked(old('piano', $piani[0]->codice) === $unPiano->codice)>
+                                               @checked(old('piano', $pianoPreselezionato ?? $piani[0]->codice) === $unPiano->codice)>
                                         <span class="min-w-0">
                                             <span class="block font-medium text-ink">{{ $unPiano->etichetta }}</span>
                                             <span class="block text-sm text-ink-2">
