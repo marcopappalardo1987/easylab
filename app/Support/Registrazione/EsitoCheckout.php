@@ -32,6 +32,16 @@ final readonly class EsitoCheckout
         public ?string $customerId = null,
         public ?string $subscriptionId = null,
         public ?string $piano = null,
+        /**
+         * La partita IVA raccolta in checkout (`tax_id_collection`), se il
+         * cliente ne ha dichiarata una.
+         *
+         * ⚠️ **`null` è un esito legittimo e frequente**, non un guasto: la
+         * raccolta è facoltativa apposta, perché imporla bloccherebbe una
+         * vendita già decisa per un dato che si può chiedere dopo (🔗 ADR-039).
+         * Chi la consuma la tratta come mancante, non come errore.
+         */
+        public ?string $partitaIva = null,
     ) {}
 
     /**
@@ -54,7 +64,38 @@ final readonly class EsitoCheckout
             customerId: self::id($sessione['customer'] ?? null),
             subscriptionId: self::id($sessione['subscription'] ?? null),
             piano: is_string($sessione['metadata']['piano'] ?? null) ? $sessione['metadata']['piano'] : null,
+            partitaIva: self::partitaIva($sessione),
         );
+    }
+
+    /**
+     * La partita IVA dichiarata in checkout.
+     *
+     * ⚠️ **`customer_details.tax_ids` è una LISTA**, e ne arriva una sola voce
+     * in pratica — ma la forma è quella, quindi si legge la prima invece di
+     * assumere una chiave che non esiste. Un `value` vuoto significa che il
+     * campo è stato mostrato e lasciato in bianco: è un «non dichiarata», non
+     * una stringa vuota da scrivere a database.
+     *
+     * @param  array<string, mixed>  $sessione
+     */
+    private static function partitaIva(array $sessione): ?string
+    {
+        $taxIds = $sessione['customer_details']['tax_ids'] ?? null;
+
+        if (! is_array($taxIds)) {
+            return null;
+        }
+
+        foreach ($taxIds as $taxId) {
+            $valore = is_array($taxId) ? ($taxId['value'] ?? null) : null;
+
+            if (is_string($valore) && trim($valore) !== '') {
+                return mb_substr(trim($valore), 0, 20);
+            }
+        }
+
+        return null;
     }
 
     /** L'id di Stripe, che sia arrivato nudo o dentro un oggetto espanso. */

@@ -8,6 +8,8 @@ use App\Models\User;
 use App\Notifications\BenvenutoRegistrazione;
 use App\Notifications\InvitoUtente;
 use App\Support\Piani;
+use App\Support\Registrazione\CompletaRegistrazione;
+use App\Support\Registrazione\EsitoCheckout;
 use App\Support\Registrazione\RegistrazioneDaPaymentLink;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Notification;
@@ -83,6 +85,9 @@ function sessioneDaLink(array $sovrascritture = [], array $dettagli = [], array 
                 'individual_name' => 'Marta Bianchi',
                 'name' => 'Laboratorio Aurora',
                 'email' => 'marta@laboratorio-aurora.it',
+                // ⚠️ Una **lista**, che è la forma vera: `tax_ids` è plurale
+                // anche quando ne arriva una sola.
+                'tax_ids' => [['type' => 'eu_vat', 'value' => 'IT01234567890']],
             ], $dettagli),
         ], $sovrascritture)],
     ];
@@ -175,6 +180,34 @@ it('never fails the endpoint when the collected fields are unusable', function (
     }
 
     expect(Account::query()->count())->toBe(0);
+});
+
+// ─── I dati fiscali ──────────────────────────────────────────────────────────
+
+it('writes the VAT number declared at checkout onto the account', function () {
+    // Il percorso da console (`easylab:provision-tenant`) i dati fiscali li fa
+    // inserire a chi crea il tenant. Qui non c'è nessuno che li inserisca: se
+    // non si prendono da Stripe, un cliente self-service nasce senza — e nessuno
+    // glieli chiederà mai più.
+    consegnaDaLink(sessioneDaLink())->assertOk();
+
+    expect(Account::query()->firstOrFail()->partita_iva)->toBe('IT01234567890');
+});
+
+it('still births the account for a customer who declares no VAT number', function () {
+    // 🔴 **Il negativo che conta**, ed è il motivo per cui la raccolta è
+    // facoltativa: un privato o un ente senza partita IVA deve poter comprare.
+    // Imporla bloccherebbe una vendita già decisa per un dato che si può
+    // chiedere dopo — e questo modulo incassa **prima** di consegnare, quindi un
+    // rifiuto qui è denaro non preso, non un errore da correggere.
+    consegnaDaLink(sessioneDaLink(dettagli: ['tax_ids' => []]))->assertOk();
+
+    $account = Account::query()->firstOrFail();
+
+    expect($account->ragione_sociale)->toBe('Laboratorio Aurora')
+        // `null`, non stringa vuota: «non dichiarata» e «dichiarata vuota» sono
+        // la stessa cosa, e a database si scrive in un modo solo.
+        ->and($account->partita_iva)->toBeNull();
 });
 
 // ─── Da dove si leggono i nomi ───────────────────────────────────────────────

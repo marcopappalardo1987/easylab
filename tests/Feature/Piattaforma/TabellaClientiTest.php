@@ -45,6 +45,20 @@ function inPagina(Testable $t): array
     return $t->viewData('clienti')->pluck('ragione_sociale')->all();
 }
 
+it('flags the customers who never declared a VAT number', function () {
+    // ⚠️ La partita IVA si raccoglie in checkout, ma **facoltativa** (ADR-039):
+    // imporla bloccherebbe una vendita già decisa. Il prezzo è che «non ce l'ha»
+    // e «non gliel'ha chiesta nessuno» avrebbero la stessa faccia — un dato che
+    // serve per fatturare, e di cui non si sa che manca finché non serve.
+    $html = Livewire::test(Cabina::class)->html();
+
+    expect($html)->toContain('01234567890')
+        ->and($html)->toContain('data-senza-piva')
+        // Un solo marcatore: quello di Bianchi SRL. Se comparisse anche su chi
+        // la partita IVA ce l'ha, l'avviso non direbbe più niente.
+        ->and(substr_count($html, 'data-senza-piva'))->toBe(1);
+});
+
 // --- Negativi: chi NON deve comparire, e cosa NON deve raggiungere ---
 
 it('never lists EasyLab among the customers', function () {

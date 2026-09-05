@@ -1365,4 +1365,12 @@ Da qui due correzioni, e la seconda è una **decisione di prodotto**:
 
 ⚠️ **Resta da fare su Stripe**, ed è il rimedio vero: portare l'endpoint webhook a una versione API `≥ 2025-09-30.clover`, ricreandolo con `php artisan cashier:webhook --url=…` (che registra alla versione di default dell'account e ai soli eventi di `config/cashier.php`) o alzandola dalla dashboard. Senza, gli account nascono lo stesso ma col referente uguale alla ragione sociale.
 
+**I dati fiscali, aggiunti il 5 Set 2026 subito dopo.** Il primo giro ha lasciato scoperto un buco che il percorso da console non ha: `easylab:provision-tenant` i dati fiscali li fa inserire a chi crea il tenant, mentre da un Payment Link **non c'è nessuno che li inserisca** — e un cliente self-service sarebbe nato senza partita IVA, senza che nessuno glielo chiedesse mai più. Le colonne su `accounts` esistono dal primo giorno (`partita_iva`, `codice_fiscale`, `pec`, `codice_destinatario_sdi`, ADR-010) e restavano vuote.
+
+Il plink attiva quindi `tax_id_collection`, e il webhook scrive la partita IVA sull'Account.
+
+⛔ **Facoltativa, non obbligatoria**, ed è la decisione: `required` non è passato. Un privato o un ente senza partita IVA deve poter comprare, e questo modulo **incassa prima di consegnare** — un rifiuto in checkout è denaro non preso, non un errore da correggere. Il prezzo di questa scelta è che «non ce l'ha» e «non gliel'ha chiesta nessuno» avrebbero la stessa faccia, quindi la cabina marca i clienti senza («P.IVA non dichiarata»): un dato che serve per fatturare non deve scoprirsi mancante il giorno in cui serve.
+
+⚠️ Solo la partita IVA, non gli altri tre campi: `codice_fiscale`, `pec` e `codice_destinatario_sdi` restano da compilare a mano dalla cabina. Stripe non li raccoglie, e in V1 il software non fa e-invoicing (ADR-010) — quindi valgono la richiesta a voce, non tre campi in più fra il cliente e il pagamento.
+
 **Verifica residua.** Rifare il pagamento su staging dopo aver alzato la versione dell'endpoint, e controllare che l'Ente nasca con referente e ragione sociale **distinti**, e che arrivi **un solo** messaggio (l'invito). La porta reale (`PortaListinoStripeReale`) resta senza test di suite, per la scelta già dichiarata al suo interno: è il motivo per cui questi due difetti li ha trovati un pagamento e non la suite.

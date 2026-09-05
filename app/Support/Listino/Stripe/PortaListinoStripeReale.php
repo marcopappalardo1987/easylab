@@ -100,6 +100,15 @@ final class PortaListinoStripeReale implements PortaListinoStripe
                 'individual' => ['enabled' => true],
             ],
 
+            // ⚠️ **Chiesta ma non imposta** (`required` non è passato, quindi
+            // vale il default «auto»): chi ha una partita IVA la mette e finisce
+            // sull'Account, chi non ce l'ha — un privato, un ente — paga lo
+            // stesso. Imporla bloccherebbe una vendita già decisa per un dato
+            // che si può chiedere dopo, e questo modulo incassa **prima** di
+            // consegnare: un rifiuto qui è denaro non preso, non un errore da
+            // correggere.
+            'tax_id_collection' => ['enabled' => true],
+
             // Chi ha appena pagato torna **da noi**. `{CHECKOUT_SESSION_ID}` lo
             // sostituisce Stripe: è ciò che permette alla pagina di conferma di
             // dire qualcosa di vero invece di un ringraziamento generico.

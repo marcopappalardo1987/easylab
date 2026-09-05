@@ -516,6 +516,32 @@
                                     </button>
                                     @if ($cliente->partita_iva)
                                         <p class="mt-0.5 text-xs text-ink-3">P.IVA {{ $cliente->partita_iva }}</p>
+                                    @else
+                                        {{-- ⚠️ **Detto, non taciuto** (ADR-039).
+                                             Un cliente arrivato da un Payment
+                                             Link può non aver dichiarato la
+                                             partita IVA: la raccolta in checkout
+                                             è facoltativa apposta, perché
+                                             imporla bloccherebbe una vendita
+                                             già decisa. Ma senza questa riga
+                                             «non ce l'ha» e «non gliel'ha
+                                             chiesta nessuno» hanno la stessa
+                                             faccia — cioè un dato che serve per
+                                             fatturare non si sa che manca
+                                             finché non serve.
+
+                                             ⚠️ Nessun `di_piattaforma` nella
+                                             condizione: l'account di EasyLab da
+                                             questo elenco è **già escluso dalla
+                                             query**, e ripetere qui quella
+                                             regola darebbe una guardia che
+                                             nessun test può rendere rossa —
+                                             cioè una rassicurazione, non una
+                                             difesa (provato: la mutazione
+                                             restava verde). --}}
+                                        <p class="mt-0.5 text-xs text-warn-soft-ink" data-senza-piva>
+                                            P.IVA non dichiarata
+                                        </p>
                                     @endif
                                 </div>
                             </td>

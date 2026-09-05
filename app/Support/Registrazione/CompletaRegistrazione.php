@@ -260,6 +260,23 @@ final class CompletaRegistrazione
                 $account->forceFill(['stripe_id' => $esito->customerId])->save();
             }
 
+            // La partita IVA dichiarata in checkout, quando c'è (🔗 ADR-039).
+            //
+            // ⚠️ **`blank()` è difesa in profondità e OGGI NON È PROVABILE**, e
+            // va detto invece di lasciar credere il contrario: `esigiAccountNuovo:
+            // true` fa nascere un account vuoto, quindi non esiste un percorso da
+            // cui questa riga possa incontrare una partita IVA già scritta. Un
+            // test che ci provasse asserirebbe su un account che il codice non
+            // tocca — cioè sarebbe verde sempre, mutazione compresa (provato).
+            //
+            // Resta perché il giorno in cui un secondo chiamante passasse un
+            // `accountId` esistente, la direzione giusta è questa: in cabina il
+            // dato fiscale l'ha scritto una persona che risponde di quel
+            // contratto, in checkout l'ha digitato chi stava pagando.
+            if ($esito->partitaIva !== null && blank($account->partita_iva)) {
+                $account->forceFill(['partita_iva' => $esito->partitaIva])->save();
+            }
+
             // ⚠️ **DOPO `esegui()` e non prima.** `verificaLimiteDiPiano()`
             // gira su un `new Account` (piano `free`, `max_enti` 1) perché
             // l'account non esiste ancora: con zero Enti passa comunque, ma
