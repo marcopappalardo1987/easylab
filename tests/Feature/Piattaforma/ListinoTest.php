@@ -121,16 +121,39 @@ it('drops the payment link from an archived plan, which is still on the page for
         ->and($html)->not->toContain('data-link-pagamento="pro"');
 });
 
-it('hides the payment link when the public form is closed or the plan has no Stripe price', function () {
-    // Due guasti diversi, stesso rimedio: mostrare un link che risponde 404 —
-    // o che porta a un modulo che rifiuterebbe quel piano — è peggio che non
-    // mostrarne nessuno, perché lo si scopre dal lato del cliente.
+it('keeps the link when the public form is closed, and says so instead of hiding it', function () {
+    // 🔴 La correzione del 5 Set 2026, il giorno stesso del rilascio: a
+    // interruttore spento la cella non mostrava **niente**, cioè la stessa
+    // faccia di un price mancante e di un difetto del codice. Tre cause e una
+    // sola assenza, con la risposta solo nel `.env`. Ora il link resta e porta
+    // accanto la ragione per cui oggi risponde 404.
     BancoRegistrazione::apri();
     config(['easylab.registrazione.aperta' => false]);
 
-    expect(($this->pagina)()->html())->not->toContain('data-link-pagamento');
+    $html = ($this->pagina)()->html();
 
-    config(['easylab.registrazione.aperta' => true]);
+    expect($html)->toContain('data-link-pagamento="saas"')
+        ->and($html)->toContain('data-modulo-chiuso')
+        // Il nome della variabile d'ambiente, non un generico «chiuso»: è la
+        // riga che si va a scrivere, e senza di essa il messaggio dice che c'è
+        // un problema ma non dove si risolve.
+        ->and($html)->toContain('REGISTRAZIONE_APERTA');
+});
+
+it('never marks the form as closed when it is open', function () {
+    // Il gemello del test sopra: senza, un marcatore stampato sempre sarebbe
+    // verde di là e non direbbe niente qui.
+    BancoRegistrazione::apri();
+
+    expect(($this->pagina)()->html())->not->toContain('data-modulo-chiuso');
+});
+
+it('has no payment link at all for a plan without a Stripe price', function () {
+    // Un piano a pagamento senza price è un **guasto di deploy**, non un piano
+    // gratuito (🔗 `PianiRegistrabili`): il modulo non lo venderebbe, quindi il
+    // link non c'è — e qui l'assenza è l'unica risposta giusta, perché non
+    // esiste nessun URL da mostrare.
+    BancoRegistrazione::apri();
     PrezzoPiano::query()->delete();
     BancoRegistrazione::dimentica();
 

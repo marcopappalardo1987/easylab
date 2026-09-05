@@ -242,9 +242,9 @@
                                         {{-- Il link **al modulo pubblico** col
                                              piano già scelto, non un Payment
                                              Link di Stripe: vedi
-                                             `Listino::linkDiPagamento()`. Chi lo
-                                             apre paga E ottiene l'account,
-                                             perché passa dal percorso provato. --}}
+                                             `LinkDiPagamento`. Chi lo apre paga
+                                             E ottiene l'account, perché passa
+                                             dal percorso provato. --}}
                                         <span class="mt-2 flex items-center gap-1.5"
                                               x-data="{ copiato: false }">
                                             <a href="{{ $linkDiPagamento[$codice] }}" target="_blank" rel="noopener"
@@ -260,6 +260,22 @@
                                                 <span x-show="copiato" x-cloak>copiato</span>
                                             </button>
                                         </span>
+
+                                        @unless ($ingressoAperto)
+                                            {{-- 🔴 **Detto, non taciuto.** Il
+                                                 link a modulo chiuso risponde
+                                                 404, ma nasconderlo darebbe alla
+                                                 cella la stessa faccia di un
+                                                 price mancante e di un difetto
+                                                 del codice: tre cause, una sola
+                                                 assenza, e la risposta solo nel
+                                                 `.env`. È costato mezz'ora il
+                                                 giorno del rilascio. --}}
+                                            <span class="mt-0.5 block text-xs text-bad-soft-ink" data-modulo-chiuso>
+                                                Oggi risponde 404: il modulo pubblico è chiuso
+                                                (<span class="font-mono">REGISTRAZIONE_APERTA</span>).
+                                            </span>
+                                        @endunless
                                     @endif
 
                                     @foreach ($divergenze as $divergenza)

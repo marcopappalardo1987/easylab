@@ -32,18 +32,19 @@ final class LinkDiPagamento
     /**
      * I link per i piani che il modulo pubblico venderebbe davvero, per codice.
      *
-     * A ingresso chiuso l'elenco è **vuoto**: `/registrati` risponde 404, e
-     * mostrare un link che porta a una pagina inesistente è peggio che non
-     * mostrarne nessuno, perché lo si scopre dal lato del cliente.
+     * ⚠️ **L'ingresso chiuso non toglie il link: lo marca.** Fino al 5 Set 2026
+     * a interruttore spento l'elenco usciva vuoto, e la cella non mostrava
+     * niente — cioè la stessa faccia che ha un price non configurato, un piano
+     * archiviato e un difetto di questa classe. Un'assenza che significa quattro
+     * cose diverse non è una difesa, è una domanda a cui bisogna rispondere
+     * andando a leggere il `.env`: è successo il giorno stesso del rilascio.
+     * Il link resta, con accanto la ragione per cui oggi risponde 404, che è
+     * l'unica forma in cui la pagina può dirlo prima del cliente.
      *
      * @return array<string, string>
      */
     public static function perPiano(): array
     {
-        if (! config('easylab.registrazione.aperta', false)) {
-            return [];
-        }
-
         $link = [];
 
         foreach (PianiRegistrabili::codici() as $codice) {
@@ -51,5 +52,18 @@ final class LinkDiPagamento
         }
 
         return $link;
+    }
+
+    /**
+     * Se oggi quel link porta davvero da qualche parte.
+     *
+     * `registrazione.aperta` spegne il **solo** ingresso: `/registrati` risponde
+     * 404, mentre i passi successivi restano aperti perché chi ha già pagato
+     * deve poter completare (vedi `RegistrazionePubblica`). Da qui la cabina
+     * distingue «il link non c'è» da «il link c'è ma la porta è chiusa».
+     */
+    public static function ingressoAperto(): bool
+    {
+        return (bool) config('easylab.registrazione.aperta', false);
     }
 }
