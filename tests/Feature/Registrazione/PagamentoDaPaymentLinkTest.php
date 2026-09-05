@@ -55,7 +55,7 @@ beforeEach(function () {
  * ⚠️ **Nessun `metadata.registrazione_id`**, ed è il punto: la riga non esiste
  * ancora quando qualcuno apre il link.
  */
-function sessioneDaLink(array $sovrascritture = [], array $dettagli = []): array
+function sessioneDaLink(array $sovrascritture = [], array $dettagli = [], array $raccolti = []): array
 {
     return [
         'id' => 'evt_'.fake()->numerify('##########'),
@@ -68,9 +68,20 @@ function sessioneDaLink(array $sovrascritture = [], array $dettagli = []): array
             'subscription' => 'sub_plink',
             'payment_link' => PLINK,
             'metadata' => [],
+            // ⚠️ **La forma vera del payload**, non una comoda: Stripe manda i
+            // due nomi in `collected_information` **e** in `customer_details`, e
+            // valorizza `customer_details.name` con la **ragione sociale**
+            // quando la raccolta business è attiva. Una fixture che mettesse il
+            // referente in `name` proverebbe un payload che Stripe non manda —
+            // ed è esattamente l'errore che ha fatto nascere il difetto.
+            'collected_information' => array_merge([
+                'business_name' => 'Laboratorio Aurora',
+                'individual_name' => 'Marta Bianchi',
+            ], $raccolti),
             'customer_details' => array_merge([
                 'business_name' => 'Laboratorio Aurora',
-                'name' => 'Marta Bianchi',
+                'individual_name' => 'Marta Bianchi',
+                'name' => 'Laboratorio Aurora',
                 'email' => 'marta@laboratorio-aurora.it',
             ], $dettagli),
         ], $sovrascritture)],
@@ -137,32 +148,100 @@ it('never fails the endpoint when the collected fields are unusable', function (
     // incassato che non può diventare un account, e per ognuna la risposta deve
     // essere 200: un 500 farebbe ritentare Stripe per giorni e poi disabilitare
     // l'endpoint, perdendo anche i lockout per insoluto.
+    // ⚠️ Ogni caso svuota il campo in **entrambi** i posti in cui Stripe lo
+    // manda: lasciarne uno pieno non proverebbe niente, perché il codice legge
+    // l'uno in mancanza dell'altro apposta.
     $casi = [
-        'ragione sociale assente' => ['business_name' => null],
-        'ragione sociale vuota' => ['business_name' => '   '],
-        'referente assente' => ['name' => null],
-        'email assente' => ['email' => null],
+        // ⚠️ Azzerati **tutti e tre** i posti da cui la ragione sociale può
+        // arrivare, `name` compreso: lasciarne uno pieno proverebbe il fallback
+        // invece dell'assenza.
+        'ragione sociale assente' => [['business_name' => null, 'name' => null], ['business_name' => null]],
+        'ragione sociale vuota' => [['business_name' => '   ', 'name' => '  '], ['business_name' => '   ']],
+        'email assente' => [['email' => null], []],
         // ⚠️ **La divergenza fra i due motori**: `registrazioni.email` è
         // `varchar(255)` e Stripe accetta indirizzi fino a 512. Senza il tetto
         // nostro, SQLite tacerebbe e Postgres esploderebbe — cioè verde in
         // locale e 500 in produzione.
-        'email più lunga della colonna' => ['email' => str_repeat('a', 250).'@esempio.it'],
-        'campi di tipo sbagliato' => ['business_name' => ['non', 'una', 'stringa']],
+        'email più lunga della colonna' => [['email' => str_repeat('a', 250).'@esempio.it'], []],
+        'campi di tipo sbagliato' => [
+            ['business_name' => ['non', 'una', 'stringa'], 'name' => ['nemmeno', 'questa']],
+            ['business_name' => ['non', 'una', 'stringa']],
+        ],
     ];
 
-    foreach ($casi as $caso => $dettagli) {
-        consegnaDaLink(sessioneDaLink(['id' => 'cs_'.md5($caso)], $dettagli))
+    foreach ($casi as $caso => [$dettagli, $raccolti]) {
+        consegnaDaLink(sessioneDaLink(['id' => 'cs_'.md5($caso)], $dettagli, $raccolti))
             ->assertOk();
     }
 
     expect(Account::query()->count())->toBe(0);
 });
 
+// ─── Da dove si leggono i nomi ───────────────────────────────────────────────
+
+it('never mistakes the business name for the referente, which is what Stripe puts in name', function () {
+    // 🔴 **Il difetto del 5 Set 2026, colto sul fatto.** Con la raccolta
+    // business attiva Stripe valorizza `customer_details.name` con la **ragione
+    // sociale** («set to the `business_name` or `individual_name`, in that
+    // order»), non col nome della persona. Leggendo `name` come referente
+    // sarebbe nato un tenant col referente chiamato come l'ente — sbagliato in
+    // silenzio, cioè nel modo peggiore. Il referente sta in `individual_name`.
+    consegnaDaLink(sessioneDaLink())->assertOk();
+
+    $riga = Registrazione::query()->firstOrFail();
+
+    expect($riga->nome_ente)->toBe('Laboratorio Aurora')
+        ->and($riga->nome_referente)->toBe('Marta Bianchi');
+});
+
+it('births the account even without a referente, which is a label and not an identity', function () {
+    // 🔴 **Il referente non è indispensabile, e pretenderlo sarebbe rifiutare
+    // dopo aver incassato.** Per creare un account servono un intestatario e una
+    // casella a cui mandare l'invito; il nome della persona è un'etichetta, che
+    // l'Admin corregge dall'anagrafica al primo accesso. Su un payload di
+    // versione API vecchia `individual_name` non esiste nemmeno, quindi questo
+    // sarebbe stato il caso **normale**, non un'eccezione.
+    consegnaDaLink(sessioneDaLink(
+        dettagli: ['individual_name' => null],
+        raccolti: ['individual_name' => null],
+    ))->assertOk();
+
+    $riga = Registrazione::query()->firstOrFail();
+
+    expect(Account::query()->count())->toBe(1)
+        // Ripiega sulla ragione sociale: un'etichetta onesta, non una stringa
+        // vuota né un «—» che finirebbe stampato in ogni email.
+        ->and($riga->nome_referente)->toBe('Laboratorio Aurora');
+});
+
+it('still works when the webhook endpoint is pinned to an older Stripe API version', function () {
+    // ⚠️ **Ogni endpoint webhook porta la propria versione API**, fissata quando
+    // lo si è creato e indipendente da quella che il nostro SDK usa in uscita.
+    // `business_name` e `individual_name` esistono solo da `2025-09-30.clover`:
+    // un endpoint più vecchio consegna un payload che ha il solo `name`. Rifiutare
+    // lì significherebbe **rifiutare dopo aver incassato**, per una ragione che
+    // il cliente non può né vedere né correggere.
+    consegnaDaLink(sessioneDaLink(
+        dettagli: ['business_name' => null, 'individual_name' => null, 'name' => 'Laboratorio Aurora'],
+        raccolti: ['business_name' => null, 'individual_name' => null],
+    ))->assertOk();
+
+    $account = Account::query()->firstOrFail();
+
+    // L'account nasce, e il referente vale quanto il payload sa dire: un nome
+    // approssimativo è meno grave di un pagamento senza consegna, e si corregge
+    // dall'anagrafica.
+    expect($account->ragione_sociale)->toBe('Laboratorio Aurora');
+});
+
 it('leaves a trace in the tracker when money came in and no account could be born', function () {
     // ⛔ Un 200 muto su un incasso che non è diventato un account sarebbe un
     // cliente perduto in silenzio: serve una persona, quindi serve una traccia
     // **durevole** — non `laravel.log`, che è disco effimero e per-replica.
-    consegnaDaLink(sessioneDaLink(dettagli: ['business_name' => null]))->assertOk();
+    consegnaDaLink(sessioneDaLink(
+        dettagli: ['business_name' => null, 'name' => null],
+        raccolti: ['business_name' => null],
+    ))->assertOk();
 
     expect(Errore::query()->count())->toBeGreaterThan(0);
 });

@@ -134,11 +134,22 @@
             <table class="w-full text-sm">
                 <thead class="border-b border-border bg-surface-sunken text-left text-xs uppercase tracking-wide text-ink-3">
                     <tr>
+                        {{-- ⚠️ **Il tetto di Enti non ha più una colonna sua**, e
+                             non è stato tolto: sta sotto il prezzo, che è la
+                             riga che descrive *cosa si compra*. Da solo era un
+                             numero senza unità in mezzo alla tabella — «5»
+                             accanto a «6» della colonna Clienti, due cifre
+                             adiacenti che si leggono come una coppia e non lo
+                             sono. Sotto il prezzo si legge «fino a 5 sedi», che
+                             è la frase che un listino dice davvero. --}}
                         <th scope="col" class="py-3 pl-4 pr-3">Piano</th>
-                        <th scope="col" class="px-3 py-3">Prezzo di listino</th>
-                        <th scope="col" class="px-3 py-3">Enti</th>
+                        <th scope="col" class="px-3 py-3">Prezzo</th>
                         <th scope="col" class="px-3 py-3">Clienti</th>
                         <th scope="col" class="px-3 py-3">Stripe</th>
+                        {{-- Il link ha una colonna sua perché è un **gesto**, non
+                             uno stato: è ciò che si copia e si manda, mentre
+                             tutto il resto della colonna Stripe è diagnostica. --}}
+                        <th scope="col" class="px-3 py-3">Link di pagamento</th>
                         <th scope="col" class="px-3 py-3 text-right">Azioni</th>
                     </tr>
                 </thead>
@@ -179,16 +190,24 @@
                                 </span>
                             </td>
 
-                            <td class="px-3 py-3 text-ink-2 tabular-nums">
-                                {{ number_format($piano->prezzo_mensile_cent / 100, 2, ',', '.') }}
-                                {{ mb_strtoupper($piano->valuta) }}
+                            <td class="px-3 py-3 text-ink-2">
+                                <span class="tabular-nums">
+                                    {{ number_format($piano->prezzo_mensile_cent / 100, 2, ',', '.') }}
+                                    {{ mb_strtoupper($piano->valuta) }}
+                                </span>
                                 <span class="mt-0.5 block text-xs text-ink-3">al mese</span>
-                            </td>
 
-                            <td class="px-3 py-3 text-ink-2 tabular-nums">
                                 {{-- `null` = **illimitato**, non «non lo so»: è la
-                                     forma che un piano Enterprise avrebbe. --}}
-                                {{ $piano->max_enti === null ? 'illimitati' : $piano->max_enti }}
+                                     forma che un piano Enterprise avrebbe, e la
+                                     sola ragione per cui la frase non si può
+                                     scrivere sempre allo stesso modo. --}}
+                                <span class="mt-1 block text-xs text-ink-3" data-tetto-enti>
+                                    @if ($piano->max_enti === null)
+                                        sedi illimitate
+                                    @else
+                                        fino a {{ $piano->max_enti }} {{ $piano->max_enti === 1 ? 'sede' : 'sedi' }}
+                                    @endif
+                                </span>
                             </td>
 
                             <td class="px-3 py-3 text-ink-2 tabular-nums" data-clienti="{{ $clientiPerPiano[$codice] ?? 0 }}">
@@ -203,29 +222,52 @@
                                          non c'è niente e non ci deve essere. --}}
                                     <span class="text-xs text-ink-3">niente, per definizione</span>
                                 @else
-                                    @if ($piano->stripe_sincronizzato_at)
-                                        <x-ui.badge variant="success">sincronizzato</x-ui.badge>
-                                        <span class="mt-0.5 block text-xs text-ink-3">
-                                            {{ $piano->stripe_sincronizzato_at->format('d/m/Y H:i') }}
-                                        </span>
-                                    @else
-                                        <x-ui.badge variant="warning">da sincronizzare</x-ui.badge>
-                                    @endif
-
-                                    <span class="mt-1 block font-mono text-xs text-ink-3">
-                                        {{ $corrente?->stripe_price_id ?? 'nessun price' }}
+                                    {{-- Stato e data **sulla stessa riga**: sono
+                                         una cosa sola («sincronizzato quando»), e
+                                         separarle faceva crescere la cella di una
+                                         riga per dire mezza informazione. --}}
+                                    <span class="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                                        @if ($piano->stripe_sincronizzato_at)
+                                            <x-ui.badge variant="success">sincronizzato</x-ui.badge>
+                                            <span class="text-xs text-ink-3">
+                                                {{ $piano->stripe_sincronizzato_at->format('d/m/Y H:i') }}
+                                            </span>
+                                        @else
+                                            <x-ui.badge variant="warning">da sincronizzare</x-ui.badge>
+                                        @endif
                                     </span>
 
-                                    @if ($storici > 0)
-                                        {{-- Lo storico non è spazzatura: è ciò su
-                                             cui i clienti già abbonati continuano
-                                             a fatturare, e la sola strada con cui
-                                             il webhook riconosce ancora il loro
-                                             piano (`Piani::perPrice()`). --}}
-                                        <span class="mt-0.5 block text-xs text-ink-3">
-                                            + {{ $storici }} {{ $storici === 1 ? 'price storico' : 'price storici' }}
-                                        </span>
-                                    @endif
+                                    {{-- ⚠️ **Abbreviato in pagina, intero nel
+                                         `title` e nel DOM.** Un price id sta in
+                                         28 caratteri di cui solo gli ultimi
+                                         distinguono, e per intero occupava la
+                                         riga più larga della tabella per un dato
+                                         che si guarda una volta al mese. Chi lo
+                                         cerca lo trova col mouse sopra, e chi lo
+                                         cerca col `Cmd+F` lo trova comunque,
+                                         perché il valore pieno resta nel markup. --}}
+                                    <span class="mt-1 flex flex-wrap items-baseline gap-x-1.5 font-mono text-xs text-ink-3">
+                                        @if ($corrente?->stripe_price_id)
+                                            <span title="{{ $corrente->stripe_price_id }}" data-price-id="{{ $corrente->stripe_price_id }}">
+                                                …{{ mb_substr($corrente->stripe_price_id, -8) }}
+                                            </span>
+                                        @else
+                                            <span>nessun price</span>
+                                        @endif
+
+                                        @if ($storici > 0)
+                                            {{-- Lo storico non è spazzatura: è ciò
+                                                 su cui i clienti già abbonati
+                                                 continuano a fatturare, e la sola
+                                                 strada con cui il webhook
+                                                 riconosce ancora il loro piano
+                                                 (`Piani::perPrice()`). --}}
+                                            <span class="font-sans"
+                                                  title="{{ $storici }} {{ $storici === 1 ? 'price storico' : 'price storici' }}: i clienti già abbonati continuano a fatturarci sopra">
+                                                + {{ $storici }} {{ $storici === 1 ? 'storico' : 'storici' }}
+                                            </span>
+                                        @endif
+                                    </span>
 
                                     @if ($piano->stripe_ultimo_errore)
                                         {{-- Per esteso, e non «errore»: il
@@ -235,44 +277,6 @@
                                              Stripe a dire cosa fare. --}}
                                         <span class="mt-1 block text-xs text-bad-soft-ink" data-errore-stripe>
                                             {{ $piano->stripe_ultimo_errore }}
-                                        </span>
-                                    @endif
-
-                                    @if (isset($linkDiPagamento[$codice]))
-                                        {{-- 🔴 Il **Payment Link di Stripe**:
-                                             chi lo apre paga E ottiene
-                                             l'account, perché Stripe raccoglie
-                                             ragione sociale e referente e il
-                                             webhook li usa per provisionare.
-                                             Vedi `LinkDiPagamento`. --}}
-                                        <span class="mt-2 flex items-center gap-1.5"
-                                              x-data="{ copiato: false }">
-                                            <a href="{{ $linkDiPagamento[$codice] }}" target="_blank" rel="noopener"
-                                               class="truncate text-xs text-brand underline underline-offset-2"
-                                               data-link-pagamento="{{ $codice }}"
-                                               title="{{ $linkDiPagamento[$codice] }}">
-                                                link per pagare
-                                            </a>
-                                            <button type="button"
-                                                    class="shrink-0 rounded px-1.5 py-0.5 text-xs text-ink-3 hover:bg-surface-sunken hover:text-ink-2"
-                                                    x-on:click="navigator.clipboard.writeText(@js($linkDiPagamento[$codice])); copiato = true; setTimeout(() => copiato = false, 1500)">
-                                                <span x-show="! copiato">copia</span>
-                                                <span x-show="copiato" x-cloak>copiato</span>
-                                            </button>
-                                        </span>
-                                    @elseif ($piano->prezzo_mensile_cent > 0)
-                                        {{-- 🔴 **Detta, non taciuta.** Una cella
-                                             vuota qui avrebbe significato tre
-                                             cose diverse — link mai creato,
-                                             Stripe irraggiungibile al momento
-                                             della sincronizzazione, difetto del
-                                             codice — con la risposta da cercare
-                                             altrove. È costato mezz'ora il
-                                             giorno del primo rilascio, e la
-                                             lezione vale anche per questa
-                                             versione. --}}
-                                        <span class="mt-2 block text-xs text-warn-soft-ink" data-senza-link>
-                                            Nessun link di pagamento: premere «Sincronizza».
                                         </span>
                                     @endif
 
@@ -288,6 +292,62 @@
                                             Stripe {{ $divergenza['remoto'] }}
                                         </span>
                                     @endforeach
+                                @endif
+                            </td>
+
+                            {{-- ─── Il link di pagamento, colonna sua ───────
+                                 🔴 Separato dalla diagnostica di Stripe perché è
+                                 l'unica cosa in questa riga che si **usa**: si
+                                 copia e si manda a un cliente. Insieme a badge,
+                                 date e price id era l'ultima delle sei cose in
+                                 una cella, cioè la meno visibile proprio mentre
+                                 è la ragione per cui questa pagina si apre. --}}
+                            <td class="px-3 py-3 text-ink-2">
+                                @if (isset($linkDiPagamento[$codice]))
+                                    {{-- 🔴 Il **Payment Link di Stripe**: chi lo
+                                         apre paga E ottiene l'account, perché
+                                         Stripe raccoglie ragione sociale e
+                                         referente e il webhook li usa per
+                                         provisionare. Vedi `LinkDiPagamento`. --}}
+                                    <span class="flex items-center gap-2" x-data="{ copiato: false }">
+                                        <a href="{{ $linkDiPagamento[$codice] }}" target="_blank" rel="noopener"
+                                           class="text-xs font-medium text-brand underline underline-offset-2"
+                                           data-link-pagamento="{{ $codice }}"
+                                           title="{{ $linkDiPagamento[$codice] }}">
+                                            paga
+                                        </a>
+                                        <button type="button"
+                                                class="shrink-0 rounded px-1.5 py-0.5 text-xs text-ink-3 hover:bg-surface-sunken hover:text-ink-2"
+                                                x-on:click="navigator.clipboard.writeText(@js($linkDiPagamento[$codice])); copiato = true; setTimeout(() => copiato = false, 1500)">
+                                            <span x-show="! copiato">copia</span>
+                                            <span x-show="copiato" x-cloak>copiato</span>
+                                        </button>
+                                    </span>
+                                @elseif ($piano->gratuito)
+                                    {{-- Il Free non ha checkout da superare
+                                         (ADR-002): qui non manca niente. --}}
+                                    <span class="text-xs text-ink-3">&mdash;</span>
+                                @elseif ($piano->prezzo_mensile_cent > 0)
+                                    {{-- 🔴 **Detta, non taciuta.** Una cella vuota
+                                         avrebbe significato tre cose diverse —
+                                         link mai creato, Stripe irraggiungibile
+                                         durante la sincronizzazione, difetto del
+                                         codice — con la risposta da cercare
+                                         altrove. È costato mezz'ora il giorno del
+                                         primo rilascio. --}}
+                                    <span class="text-xs text-warn-soft-ink" data-senza-link>
+                                        nessuno: premere «Sincronizza»
+                                    </span>
+                                @else
+                                    {{-- Un piano a pagamento a **0 €** — una
+                                         promozione (`GovernoListino::crea()`) — non
+                                         ha e non deve avere un link: sarebbe la
+                                         porta da cui ci si fa un Ente e un ruolo
+                                         Admin senza pagare. Detto, perché è una
+                                         regola e non un guasto. --}}
+                                    <span class="text-xs text-ink-3" title="Un piano a 0 € non si vende da un link pubblico: sarebbe un account gratuito per chiunque">
+                                        nessuno: è a 0 €
+                                    </span>
                                 @endif
                             </td>
 

@@ -110,6 +110,45 @@ it('shows the Stripe payment link of the current price, and never one for the fr
         ->and($html)->not->toContain('data-link-pagamento="free"');
 });
 
+it('states the Enti cap as a sentence under the price, not as a bare number', function () {
+    // ⚠️ Il tetto aveva una colonna sua, e da solo era **un numero senza
+    // unità**: «5» accanto al «6» della colonna Clienti, due cifre adiacenti che
+    // si leggono come una coppia e non lo sono. Sotto il prezzo diventa la frase
+    // che un listino dice davvero.
+    // Il piano senza tetto va creato: i due piani di bootstrap ce l'hanno
+    // entrambi, e asserire su «illimitato» senza un piano illimitato proverebbe
+    // solo che la stringa non compare mai.
+    ($this->pagina)()
+        ->call('apriCreazione')
+        ->set('nuovo.codice', 'enterprise')
+        ->set('nuovo.etichetta', 'Enterprise')
+        ->set('nuovo.max_enti', '')
+        ->set('nuovo.prezzo_mensile_cent', '19900')
+        ->call('crea')
+        ->assertHasNoErrors()
+        // ⚠️ Il singolare non si indovina: il Free ha **una** sede, e «fino a 1
+        // sedi» è la riga che fa sembrare improvvisato un listino.
+        ->assertSee('fino a 1 sede')
+        ->assertSee('fino a 5 sedi')
+        // `null` = illimitato, e non ha una forma numerica: dirlo «0» o «—»
+        // sarebbe il contrario di ciò che significa.
+        ->assertSee('sedi illimitate');
+});
+
+it('keeps the full price id reachable even though the cell shows it shortened', function () {
+    // ⛔ **Abbreviato in pagina, intero nel DOM.** Il price id è la stringa che
+    // si cerca quando qualcosa non torna: accorciarlo per far respirare la
+    // tabella non deve renderlo irrecuperabile. Chi lo cerca col `Cmd+F` — o un
+    // test come questo — lo trova comunque.
+    BancoRegistrazione::apri();
+
+    $html = ($this->pagina)()->html();
+
+    expect($html)->toContain(BancoRegistrazione::PRICE_SAAS)
+        // E in pagina si legge la sola coda, che è la parte che distingue.
+        ->and($html)->toContain('…'.mb_substr(BancoRegistrazione::PRICE_SAAS, -8));
+});
+
 it('says a paid plan has no link yet instead of showing an empty cell', function () {
     // 🔴 La lezione del primo rilascio, riportata su questa versione: una cella
     // vuota significherebbe tre cose diverse — link mai creato, Stripe

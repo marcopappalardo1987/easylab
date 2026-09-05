@@ -92,16 +92,56 @@ final class RegistrazioneDaPaymentLink
 
         $dettagli = is_array($sessione['customer_details'] ?? null) ? $sessione['customer_details'] : [];
 
-        $ragioneSociale = self::testo($dettagli['business_name'] ?? null);
-        $referente = self::testo($dettagli['name'] ?? null);
+        // ⚠️ **Due posti per gli stessi due campi**, e si leggono entrambi:
+        // Stripe li mette sia in `collected_information` sia in
+        // `customer_details` (doc «Collect customer names»). Non è ridondanza
+        // difensiva a caso — quei campi esistono solo dalla versione API
+        // `2025-09-30.clover`, e **ogni endpoint webhook ha la propria versione,
+        // fissata quando lo si è creato**: un endpoint più vecchio consegna un
+        // payload che non li ha in nessuno dei due posti.
+        $raccolti = is_array($sessione['collected_information'] ?? null) ? $sessione['collected_information'] : [];
+
+        // ⚠️ `name` in coda anche qui, e non è una svista: su un payload di
+        // versione vecchia i due campi nuovi non ci sono, e Stripe valorizza
+        // comunque `name` con la ragione sociale (imposta `Customer.name` =
+        // `business_name`). È l'unico posto in cui quel dato sopravvive.
+        $ragioneSociale = self::testo($raccolti['business_name'] ?? null)
+            ?? self::testo($dettagli['business_name'] ?? null)
+            ?? self::testo($dettagli['name'] ?? null);
+
+        // ⛔ **`customer_details.name` NON è il referente**, e leggerlo come tale
+        // è stato il difetto del 5 Set 2026: con la raccolta business attiva
+        // Stripe lo valorizza con la **ragione sociale** («set to the
+        // `business_name` or `individual_name`, in that order»). Un tenant
+        // sarebbe nato col referente chiamato come l'ente — sbagliato in modo
+        // silenzioso, cioè il modo peggiore.
+        //
+        // Resta come ultima scelta perché su un payload di versione vecchia è
+        // l'unico nome che arriva, e un referente approssimativo è meno grave di
+        // un pagamento rifiutato dopo l'incasso.
+        // ⛔ E **`name` non entra qui**: sarebbe la ragione sociale un'altra
+        // volta, cioè un tenant col referente chiamato come l'ente.
+        $referente = self::testo($raccolti['individual_name'] ?? null)
+            ?? self::testo($dettagli['individual_name'] ?? null);
+
         $email = self::testo($dettagli['email'] ?? null);
 
         // ⚠️ Un solo messaggio per tutti e tre: dice **cosa** manca senza
         // ripetere i valori raccolti, che sono dati personali e finirebbero nel
         // registro di audit. Il testo per esteso resta nel log.
+        // 🔴 **Solo due campi sono indispensabili**, e il referente non è fra
+        // loro. Un account ha bisogno di un intestatario (la ragione sociale) e
+        // di una casella a cui mandare l'invito: senza quelli non c'è niente da
+        // creare e nessuno da avvisare. Il nome della persona è un'**etichetta**,
+        // che l'Admin corregge dall'anagrafica al primo accesso.
+        //
+        // ⚠️ La distinzione conta perché il rifiuto avviene **dopo l'incasso**:
+        // esigere un campo che si può ricavare significherebbe tenere i soldi e
+        // non consegnare, per una ragione che il cliente non può né vedere né
+        // correggere. Su un payload di versione API vecchia `individual_name`
+        // non esiste affatto, e sarebbe stato il caso normale.
         $mancanti = array_keys(array_filter([
             'ragione sociale' => $ragioneSociale === null,
-            'nome del referente' => $referente === null,
             'email' => $email === null,
         ]));
 
@@ -117,6 +157,11 @@ final class RegistrazioneDaPaymentLink
         // In transazione con l'unique su `stripe_session_id` a fare da rete: due
         // consegne simultanee arrivano entrambe qui dopo un `first()` a vuoto, e
         // la seconda perde sull'indice.
+        // Il referente mancante vale la ragione sociale: è il nome che compare
+        // sull'utente Admin, e «Laboratorio Aurora» è un'etichetta onesta finché
+        // la persona non scrive la propria.
+        $referente ??= $ragioneSociale;
+
         return DB::transaction(function () use ($sessionId, $piano, $ragioneSociale, $referente, $email) {
             $riga = new Registrazione;
 
