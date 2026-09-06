@@ -17,12 +17,16 @@ Artisan::command('inspire', function () {
  * scheduler e worker di coda come parte della piattaforma — va solo attivato
  * nell'ambiente.
  *
- * **06:00 sul fuso di Roma** e non «all'alba UTC»: il digest parla di giorni
- * (scaduto ieri, scade fra trenta giorni) e l'applicazione calcola `today()` in
- * UTC. Alle 06:00 italiane le due date coincidono sempre, in ora solare come
- * legale, mentre un orario a cavallo della mezzanotte le farebbe divergere per
- * un'ora l'anno — cioè un giorno in cui il confine «scade oggi» direbbe una cosa
- * all'email e un'altra alla schermata.
+ * **06:00 sul fuso di Roma**, dichiarato qui anche se dal 6 Set 2026 è già
+ * quello dell'applicazione (🔗 ADR-041): un orario esplicito continua a valere
+ * più di un default ereditato, e regge se un domani la config cambiasse.
+ *
+ * ⚠️ La ragione **storica** di questa riga era un'altra, e non vale più: il
+ * digest parla di giorni (scaduto ieri, scade fra trenta) mentre `today()` era
+ * calcolato in UTC, e le 06:00 italiane erano l'ora in cui le due date
+ * coincidevano comunque. Era una toppa attorno a un disallineamento, non una
+ * scelta di consegna. Ora app e scheduler stanno sullo stesso fuso e il confine
+ * «scade oggi» dice la stessa cosa all'email e alla schermata a qualunque ora.
  *
  * `withoutOverlapping` e `onOneServer` sono cinture doppie e volute: se un
  * giorno l'esecuzione durasse più di ventiquattr'ore, o se Laravel Cloud
@@ -47,8 +51,7 @@ Schedule::command('easylab:notifica-scadenze')
  * stesso secondo (il lock è per comando, non per tabella).
  *
  * Il fuso `Europe/Rome` ha la stessa ragione scritta sopra la riga del digest:
- * `today()` è calcolato in UTC, e alle sei italiane le due date coincidono
- * sempre — in ora solare come legale.
+ * esplicito anche dove ormai coincide con quello dell'app (🔗 ADR-041).
  */
 Schedule::command('easylab:notifica-obsolescenza')
     ->dailyAt('06:15')

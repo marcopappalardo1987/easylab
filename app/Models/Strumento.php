@@ -6,6 +6,7 @@ use App\Enums\StatoIntervento;
 use App\Enums\StatoSemaforo;
 use App\Models\Concerns\BelongsToOrgNode;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\SerializzaGiorniCivili;
 use App\Models\Contracts\ReachesStrumento;
 use App\Models\Scopes\DepartmentScope;
 use App\Models\Scopes\TenantScope;
@@ -36,7 +37,7 @@ use InvalidArgumentException;
 class Strumento extends Model implements ReachesStrumento
 {
     /** @use HasFactory<StrumentoFactory> */
-    use BelongsToOrgNode, BelongsToTenant, HasFactory, SoftDeletes;
+    use BelongsToOrgNode, BelongsToTenant, HasFactory, SerializzaGiorniCivili, SoftDeletes;
 
     protected $table = 'strumenti';
 

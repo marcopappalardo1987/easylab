@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\TransizioneAvviso;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\SerializzaGiorniCivili;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Prunable;
@@ -46,7 +47,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  */
 class AvvisoScadenza extends Model
 {
-    use BelongsToTenant, Prunable;
+    use BelongsToTenant, Prunable, SerializzaGiorniCivili;
 
     protected $table = 'avvisi_scadenza';
 

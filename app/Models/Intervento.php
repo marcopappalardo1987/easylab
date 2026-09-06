@@ -7,6 +7,7 @@ use App\Enums\TipoIntervento;
 use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Concerns\BelongsToOrgNodeThroughStrumento;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\SerializzaGiorniCivili;
 use App\Models\Contracts\ReachesStrumento;
 use App\Support\Semaforo;
 use Carbon\CarbonInterface;
@@ -64,7 +65,7 @@ class Intervento extends Model implements ReachesStrumento
      * dei campi cambiati dice già tutto, e una riga esplicita in più
      * significherebbe due righe per un gesto solo.
      */
-    use AuditsDomainWrites, BelongsToOrgNodeThroughStrumento, BelongsToTenant, HasFactory, SoftDeletes;
+    use AuditsDomainWrites, BelongsToOrgNodeThroughStrumento, BelongsToTenant, HasFactory, SerializzaGiorniCivili, SoftDeletes;
 
     protected $table = 'interventi';
 

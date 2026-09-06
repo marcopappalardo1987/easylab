@@ -7,6 +7,7 @@ use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Carbon;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 
@@ -673,4 +674,52 @@ it('returns 404 when the id belongs to another strumento of the same tenant', fu
 
     expect(fn () => scheda($this->admin, $this->strumento)->call('riapri', $interventoAltro->id))
         ->toThrow(ModelNotFoundException::class);
+});
+
+// --- Il confine di mezzanotte (🔗 ADR-041) ---
+
+it('lets a technician close an intervento at 01:30, when UTC is still yesterday', function () {
+    // 🔴 Il difetto che ha motivato il cambio di fuso, e vive due ore al giorno.
+    // All'01:30 italiana del 15 giugno a Greenwich è ancora il 14: con l'app a
+    // UTC `today()` valeva il 14, quindi `before_or_equal:today` **rifiutava**
+    // un intervento eseguito oggi e il campo si apriva preselezionato su ieri.
+    // Un tecnico che chiude il lavoro a tarda sera non poteva registrarlo.
+    //
+    // ⚠️ L'istante si scrive in `Europe/Rome` esplicito e non con `create()`
+    // nudo: quest'ultimo userebbe il fuso dell'app, quindi il caso resterebbe
+    // verde qualunque cosa dica la config — cioè misurerebbe sé stesso.
+    Carbon::setTestNow(Carbon::create(2026, 6, 15, 1, 30, 0, 'Europe/Rome'));
+
+    $intervento = Intervento::factory()->forStrumento($this->strumento)->scaduto()->create();
+
+    scheda($this->admin, $this->strumento)
+        ->call('openCompleta', $intervento->id)
+        // Il campo propone il giorno che il tecnico ha sull'orologio.
+        ->assertSet('dataEsecuzione', '2026-06-15')
+        ->call('completa')
+        ->assertHasNoErrors();
+
+    expect($intervento->fresh()->data_esecuzione->toDateString())->toBe('2026-06-15');
+
+    Carbon::setTestNow();
+});
+
+it('still refuses tomorrow at 01:30, so the boundary moved without opening', function () {
+    // La metà opposta, e serve: spostare il confine di un giorno in avanti
+    // renderebbe verde il test qui sopra **e** accetterebbe il futuro, che
+    // `before_or_equal:today` esiste per rifiutare. Senza questo caso la
+    // correzione non sarebbe distinguibile dalla rimozione della regola.
+    Carbon::setTestNow(Carbon::create(2026, 6, 15, 1, 30, 0, 'Europe/Rome'));
+
+    $intervento = Intervento::factory()->forStrumento($this->strumento)->create();
+
+    scheda($this->admin, $this->strumento)
+        ->call('openCompleta', $intervento->id)
+        ->set('dataEsecuzione', '2026-06-16')
+        ->call('completa')
+        ->assertHasErrors('dataEsecuzione');
+
+    expect($intervento->fresh()->stato)->toBe(StatoIntervento::NonFatto);
+
+    Carbon::setTestNow();
 });

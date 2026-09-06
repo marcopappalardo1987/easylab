@@ -1413,3 +1413,49 @@ Il problema stava un passo più in là: **dalla UI non c'era modo di togliere di
 - 🔴 **Il registro dei trattamenti va aggiornato**: questa è la **prima cancellazione vera** del progetto, e la voce «Cancellazione / limitazione» era rinviata a S7. Il DPA Backblaze resta non firmato, e ora c'è un gesto che cancella davvero da quel bucket.
 
 **Verifica residua.** Su staging: eliminare «Prova Invito Reale», poi rifare il resend dell'evento Stripe già pagato — che a quel punto **deve** creare l'account, chiudendo il giro da cui questa decisione è nata.
+
+---
+
+**ADR-041 — L'applicazione vive sul fuso italiano, e lo storico è stato riallineato una volta sola**
+
+*Stato: Accettata e attuata il 6 Set 2026, su richiesta di Marco («l'app sarà utilizzata in Italia e quindi il fuso orario deve essere come standard»). Non tocca 🔗 ADR-005 (il semaforo), 🔗 ADR-011 (il digest) né 🔗 ADR-014 (l'obsolescenza) nelle loro regole: ne cambia il **giorno di riferimento**, che era di Greenwich e diventa quello civile italiano.*
+
+**Contesto.** `config/app.php` dichiarava `'timezone' => 'UTC'` — il default di Laravel, mai argomentato, unico blocco di quel file lasciato senza un commento del progetto mentre `locale` ne aveva uno. L'app è usata **solo in Italia**, quindi ogni orario automatico era sfasato di due ore in estate e una in inverno: registro di audit, scheda errore, lockout, listino, e il piede dei PDF che finiscono in mano al cliente.
+
+**La domanda vera non era l'orario mostrato.** Presentare in ora italiana lasciando l'archiviazione a UTC è la risposta di manuale, ed è quella con cui questa analisi era cominciata. È stata scartata perché **tre difetti erano funzionali, non di presentazione**:
+
+1. 🔴 **Il form rifiutava un intervento eseguito oggi.** `SchedaStrumento::completa()` valida con `before_or_equal:today` e precompila il campo con `today()`. Fra mezzanotte e le 02:00 italiane `today()` in UTC è ancora ieri: un tecnico che chiude il lavoro a tarda sera **non poteva registrarlo con la data di oggi**, e il modulo gli proponeva ieri. Due ore su ventiquattro, tutti i giorni.
+2. 🔴 **Sette timestamp resi come solo giorno** (`$documento->created_at->format('d/m/Y')`): un file caricato all'01:30 italiane risultava caricato **il giorno prima**. Silenzioso — non c'è un'ora accanto che contraddica la data.
+3. 🔴 **I filtri Dal/Al** di `RegistroAudit` e `FiltroDocumenti` costruiscono una mezzanotte sul fuso dell'app e la confrontano con una colonna timestamp: chi filtrava «dal 18/08» prendeva dalle 02:00 del 18 alle 02:00 del 19, ora italiana. Con la sola presentazione convertita, la riga si sarebbe vista etichettata «18/08» **ed esclusa** dal filtro «dal 18/08»: due comportamenti entrambi plausibili sulla stessa schermata.
+
+**Il progetto era già mezzo su questa strada, e lo diceva.** Tutte e quattro le voci di `routes/console.php` erano ancorate a `->timezone('Europe/Rome')`, e il commento sopra il digest lo ammetteva: «`today()` è calcolato in UTC, e alle sei italiane le due date coincidono sempre». L'orario delle 06:00 era stato scelto **perché il disallineamento non si manifestasse**. Era una toppa attorno al difetto, non una scelta di consegna.
+
+**Decisione.** `config/app.php` dichiara `env('APP_TIMEZONE', 'Europe/Rome')`, col default nel file e non solo in `.env` — stessa disciplina di `locale`, per la stessa ragione: una dimenticanza al deploy non deve riportare l'app due ore indietro.
+
+**Il backfill, e perché era obbligatorio.** Le colonne Postgres sono `timestamp without time zone` e **non portano il fuso**: cambiare la config non sposta i dati, cambia come vengono letti. Senza correzione ogni riga anteriore sarebbe stata riletta come se fosse già ora italiana, cioè mostrata due ore avanti — su `activity_log`, che 🔗 ADR-027 dichiara non riscrivibile, una falsificazione retroattiva silenziosa. La migration `2026_09_06_120000_riallinea_timestamp_a_europe_rome` corregge **83 colonne su 30 tabelle** con `(colonna at time zone 'UTC') at time zone 'Europe/Rome'`, che applica l'ora legale storica riga per riga (verificato: una riga di gennaio si sposta di un'ora, una di luglio di due — per questo non si somma un intervallo fisso).
+
+- L'elenco delle colonne **si deriva da `information_schema`**, non si scrive a mano: 83 nomi copiati sarebbero 83 occasioni di dimenticarne uno, con un difetto invisibile.
+- Le **nove colonne `date`** restano fuori per costruzione (`date` è un tipo diverso da `timestamp` in `information_schema`, non una variante): sono giorni civili, e una mezzanotte convertita a ritroso diventa le 22:00 del giorno prima, cioè una scadenza che slitta.
+- Le tabelle effimere (`sessions`, `cache`, `jobs`, `failed_jobs`, …) restano fuori: portano scadenze relative che si rigenerano, e correggerle allungherebbe la vita a una sessione o rimanderebbe un job.
+- ⛔ Il `down()` **non è una simmetria vera**: riporta indietro anche le righe scritte dopo la migration, che erano già in ora italiana. È scritto nel docblock, perché questo progetto ha già avuto un `down()` distruttivo dichiarato chiuso e non lo era (🔗 ADR-019).
+
+**La finestra era adesso.** «Deploy in produzione» è ancora una casella aperta: non ci sono dati di clienti reali da correggere. Dopo il go-live la stessa decisione sarebbe costata una manutenzione programmata.
+
+🔴 **Il difetto che la suite ha trovato e che nessuno aveva previsto: la serializzazione dei giorni civili.** `serializeDate()` di Eloquent chiama `toJSON()`, che converte a UTC. Finché l'app stava su UTC la conversione era l'identità; da `Europe/Rome` una mezzanotte italiana torna indietro di due ore e **cambia giorno**. Il valore in tabella resta giusto — a sbagliare è ogni rappresentazione che passi da `toArray()`, e la prima è il **registro di audit**: `AuditInterventiTest` ha visto una data di esecuzione registrata al giorno *prima* di quello in cui il lavoro era stato chiuso, su una tabella che nessuno può correggere.
+
+Rimedio: il trait `App\Models\Concerns\SerializzaGiorniCivili` sui sei modelli con colonne `date`. Copre **entrambi** i percorsi — `attributesToArray()` per ogni `toArray()`/`toJson()`, e `serializeDate()` perché l'activity log di spatie lo chiama direttamente (`LogsActivity::formatAttributeValue()`); correggerne uno solo avrebbe lasciato il difetto proprio nell'audit.
+
+- ⛔ **La prima strada tentata era un cast `date:Y-m-d`, e rompeva la scrittura.** Per Eloquent quello è un `custom_datetime`, non un `date` (`getCastType()`), quindi `isDateAttribute()` diventa falso e `fromDateTime()` non normalizza più il valore verso il formato del driver. Su SQLite `avvisi_scadenza.data_scadenza` continuava a scriversi `'Y-m-d 00:00:00'` mentre `interventi.data_scadenza` passava a `'Y-m-d'`: le due forme non sono uguali per il `whereColumn` dell'idempotenza, quindi **il digest non riconosceva più i propri avvisi e avrebbe rimandato tutto ogni giorno**. È la trappola già descritta in `NotificaScadenze`, ripresentata da un'altra porta — e l'ha colta la suite, non una rilettura.
+- ⚠️ In `serializeDate()` il nome della colonna **non arriva**: si riconosce il giorno confrontando l'istante con quelli delle colonne dichiarate `date`. ⛔ Non con l'euristica «è mezzanotte», che scambierebbe per un giorno un `created_at` scritto alle 00:00:00 esatte.
+
+**Il guardrail.** `FusoOrarioGuardrailTest` tiene due regole che falliscono in modi opposti: che `config('app.timezone')` sia `Europe/Rome` **e** che `today()` all'01:30 italiana dia il giorno italiano (rumoroso, ma due ore su ventiquattro); e che nessun `setTimezone()` entri in `app/Models`, `Semaforo` o `ScadenzarioParco` — lì una colonna `date` si sposterebbe di un giorno, silenziosamente e per sempre. L'insieme dei file sorvegliati **si deriva**, e un test verifica che la derivazione non sia vuota: altrimenti il guardrail resterebbe verde avendo smesso di guardare. Entrambe le metà provate per mutazione.
+
+**Conseguenze.**
+
+- ⚠️ **Le quattro `->timezone('Europe/Rome')` dello scheduler restano**, benché ora ridondanti: un orario esplicito vale più di un default ereditato. I loro commenti sono stati riscritti, perché la ragione che davano non è più vera.
+- **`AndamentiPiattaforma` guadagna una coerenza che aveva dichiarato di non poter avere**: i bucket del grafico erano confini UTC, e un cliente creato all'01:30 del 1° settembre finiva in agosto mentre la tabella accanto lo datava al 1° settembre — «un grafico che chiude sotto il KPI della tile che gli sta a due centimetri», cioè il difetto che quel file esiste per impedire. Accettato allora perché «non si cambia il fuso dell'applicazione per un grafico»; il fuso è cambiato per ragioni più grosse, e l'incoerenza è sparita di conseguenza.
+- **`avvisi_scadenza` non è toccata**: la chiave di idempotenza è una data di **dominio** (la scadenza), non l'istante del run, quindi il comando può girare due volte o saltare un giorno senza duplicare.
+- ⚠️ **Su Laravel Cloud `APP_TIMEZONE` va impostata per ambiente**, e la migration applicata a staging **prima del go-live**: senza, i timestamp di staging resteranno UTC letti come italiani.
+- **Nessun fuso per-utente.** Il precedente esiste (`users.tema`, 🔗 ADR-034), ma l'app è italiana e un secondo asse di configurazione andrebbe difeso senza avere un caso d'uso. Il giorno in cui servisse, il guardrail va rivisto.
+
+**Verifica.** Suite verde su **entrambi i driver** (2452 test su SQLite; le aree sensibili alle date rigirate su Postgres, dove i confronti fra date hanno semantica diversa). Due test nuovi coprono i difetti 1 e 2 e sono stati **provati sotto UTC**, dove diventano rossi mostrando il giorno sbagliato. La migration è stata verificata sul Postgres di sviluppo: `activity_log.created_at` salito di due ore, `strumenti.data_installazione` e `interventi.data_scadenza` **immutate**.

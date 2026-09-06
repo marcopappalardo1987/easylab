@@ -9,6 +9,7 @@ use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
@@ -535,4 +536,39 @@ it('hands the export the very filters on screen', function () {
         'dal' => '2026-08-01',
         'cerca' => 'manu',
     ]);
+});
+
+// --- Il giorno mostrato è quello italiano (🔗 ADR-041) ---
+
+it('dates an upload by the Italian day, not by the UTC one', function () {
+    // 🔴 Il difetto silenzioso che il cambio di fuso chiude. La colonna
+    // «Caricato» rende un TIMESTAMP come solo giorno
+    // (`created_at->format('d/m/Y')`): con l'app a UTC un file caricato
+    // all'01:30 italiana risultava caricato **il giorno prima**, e nessuno se ne
+    // accorgeva — non c'è un'ora accanto che contraddica la data.
+    //
+    // ⚠️ **L'istante si scrive in UTC esplicito e si lascia convertire al cast**,
+    // non come stringa nuda: una stringa viene interpretata nel fuso dell'app,
+    // quindi `'2026-06-14 23:30:00'` significherebbe già le 23:30 italiane e il
+    // caso misurerebbe sé stesso invece del fuso. Le 23:30 UTC del 14 giugno
+    // sono l'01:30 del 15 a Roma, ed è quel giorno che l'utente deve leggere.
+    // L'helper prende una stringa, che il cast legge nel fuso dell'app: si passa
+    // quindi l'istante UTC **già convertito**, non la stringa UTC grezza.
+    $istante = Carbon::create(2026, 6, 14, 23, 30, 0, 'UTC')->setTimezone(config('app.timezone'));
+
+    $documento = ($this->documentoDel)(
+        $istante->toDateTimeString(),
+        ['nome' => 'caricato-a-notte.pdf'],
+    );
+
+    ($this->elenco)()
+        ->assertOk()
+        ->assertSee('caricato-a-notte.pdf')
+        ->assertSee('15/06/2026')
+        ->assertDontSee('14/06/2026');
+
+    // E il dato in tabella non è stato toccato: a cambiare è la lettura, non la
+    // riga. Il fuso vive nella config, non in una conversione sparsa nel model.
+    expect(DB::table('documenti')->where('id', $documento->id)->value('created_at'))
+        ->toStartWith('2026-06-15 01:30');
 });

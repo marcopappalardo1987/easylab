@@ -65,7 +65,30 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    /*
+    | 🔗 ADR-041. `Europe/Rome` e non `UTC`, con il default nel file e non solo
+    | in `.env` — stessa disciplina di `locale` qui sotto: una dimenticanza al
+    | deploy non deve riportare l'app due ore indietro.
+    |
+    | Non è una scelta di presentazione. I confini di questo dominio sono
+    | **giorni civili italiani**: `before_or_equal:today` sulla data di
+    | esecuzione di un intervento, la soglia a trenta giorni del semaforo,
+    | l'obsolescenza in anni. Con l'app a UTC, fra mezzanotte e le 02:00
+    | italiane `today()` è ancora ieri, e un tecnico che chiude un intervento a
+    | tarda sera non può registrarlo con la data di oggi.
+    |
+    | ⚠️ Le colonne Postgres sono `timestamp without time zone` e non portano il
+    | fuso: cambiare questa riga non sposta i dati, cambia come vengono letti.
+    | Lo storico è stato riallineato una volta sola dalla migration
+    | `2026_09_06_120000_riallinea_timestamp_a_europe_rome`, e chi ripristina un
+    | dump anteriore a quella data deve rieseguirla.
+    |
+    | ⛔ Il fuso NON entra mai nella logica di dominio: le nove colonne castate
+    | `date` (`data_scadenza`, `data_installazione`, …) sono giorni, non
+    | istanti, e convertirle le sposterebbe di un giorno.
+    | `FusoOrarioGuardrailTest` tiene entrambe le regole.
+    */
+    'timezone' => env('APP_TIMEZONE', 'Europe/Rome'),
 
     /*
     |--------------------------------------------------------------------------

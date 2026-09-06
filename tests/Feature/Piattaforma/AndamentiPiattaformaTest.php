@@ -21,9 +21,11 @@ use Illuminate\Support\Facades\DB;
  * chiude sotto il KPI della tile che gli sta a due centimetri, e che nessuno
  * verifica proprio perché sembra ragionevole.
  *
- * ⚠️ **Tutti i confini sono in UTC esplicito**, perché `config/app.php` dichiara
- * `'timezone' => 'UTC'`: un test scritto in ora locale misurerebbe il fuso della
- * macchina invece del codice. E i confini di mese vanno rigirati una volta su
+ * ⚠️ **Tutti i confini sono in `Europe/Rome` esplicito**, perché è ciò che
+ * `config/app.php` dichiara dal 6 Set 2026 (🔗 ADR-041): il fuso si scrive per
+ * esteso e non si lascia al default della macchina, o il test misurerebbe
+ * l'ambiente invece del codice. *Fino a quel giorno erano in UTC esplicito, per
+ * la stessa ragione e con l'altro fuso.* E i confini di mese vanno rigirati una volta su
  * Postgres (`DB_CONNECTION=pgsql DB_DATABASE=easylab_test CACHE_STORE=array`),
  * perché su SQLite il confronto è **lessicografico** sulla stringa e su Postgres
  * è un cast a timestamp.
@@ -31,7 +33,7 @@ use Illuminate\Support\Facades\DB;
 beforeEach(function () {
     // Un istante fisso: senza, ogni asserzione su un bucket dipenderebbe dal
     // giorno in cui la suite gira, e il file diventerebbe rosso a Capodanno.
-    CarbonImmutable::setTestNow(CarbonImmutable::create(2026, 8, 15, 12, 0, 0, 'UTC'));
+    CarbonImmutable::setTestNow(CarbonImmutable::create(2026, 8, 15, 12, 0, 0, 'Europe/Rome'));
 
     $this->seed(RolesAndPermissionsSeeder::class);
 
@@ -243,7 +245,7 @@ it('does not merge December 2025 into December 2026', function () {
 
     // Finestra Gen 2026 → Dic 2026: il dicembre 2025 è **prima** della finestra
     // (quindi nella base), il dicembre 2026 è l'ultimo bucket.
-    $a = AndamentiPiattaforma::ultimiDodiciMesi(CarbonImmutable::create(2026, 12, 20, 0, 0, 0, 'UTC'));
+    $a = AndamentiPiattaforma::ultimiDodiciMesi(CarbonImmutable::create(2026, 12, 20, 0, 0, 0, 'Europe/Rome'));
 
     expect($a->clientiCumulati->mesi[11])->toBe('2026-12')
         ->and($a->nuoviClienti->valori[11])->toBe(1)   // e non 2

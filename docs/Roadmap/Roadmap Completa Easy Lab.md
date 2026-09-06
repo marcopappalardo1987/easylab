@@ -992,6 +992,28 @@ gantt
 
 ---
 
+> ## 🕐 Il fuso orario diventa italiano — ADR-041, 6 Settembre 2026
+>
+> **Su richiesta di Marco**, che aveva notato gli orari automatici sfasati: «l'app sarà utilizzata in Italia e quindi il fuso orario deve essere come standard». `config/app.php` dichiarava `UTC` — il default di Laravel, mai argomentato — quindi ogni `created_at` era indietro di due ore in estate e una in inverno.
+>
+> 🔴 **Non era cosmetico, ed è la ragione per cui non è bastato convertire alla presentazione.** Fra mezzanotte e le 02:00 italiane `today()` in UTC era ancora ieri, quindi `before_or_equal:today` **rifiutava un intervento eseguito oggi** e il form proponeva ieri: un tecnico che chiudeva il lavoro a tarda sera non poteva registrarlo. Insieme, sette timestamp resi come solo giorno (un documento caricato all'01:30 risultava del giorno prima) e i filtri Dal/Al che confrontavano una mezzanotte con una colonna timestamp.
+>
+> ⚠️ **Il progetto era già mezzo su questa strada e lo diceva**: le quattro voci dello scheduler erano ancorate a `Europe/Rome`, e il commento sopra il digest ammetteva la toppa — «alle sei italiane le due date coincidono sempre». L'orario era stato scelto perché il disallineamento non emergesse.
+>
+> - [x] `config/app.php` a `Europe/Rome`, col default nel file e non solo in `.env` (stessa disciplina di `locale`).
+> - [x] Migration di riallineamento: **83 colonne su 30 tabelle**, con l'elenco **derivato da `information_schema`** e non scritto a mano. Le nove colonne `date` restano fuori per costruzione: sono giorni civili, e convertirle sposterebbe le scadenze.
+> - [x] `FusoOrarioGuardrailTest`, entrambe le metà provate per mutazione.
+> - [x] Due test nuovi sui difetti 1 e 2, **provati sotto UTC** dove diventano rossi mostrando il giorno sbagliato.
+> - [ ] ⚠️ Applicare la migration a **staging** e impostare `APP_TIMEZONE` per ambiente su Laravel Cloud, **prima del go-live**: senza, i timestamp di staging resteranno UTC letti come italiani.
+>
+> 🔴 **Un difetto trovato dalla suite, non previsto da nessuno.** `serializeDate()` converte a UTC: da `Europe/Rome` una mezzanotte italiana torna indietro di due ore e **cambia giorno**, quindi il **registro di audit** — che ADR-027 dichiara non riscrivibile — registrava la data di esecuzione al giorno *prima* di quello in cui il lavoro era stato chiuso. Rimedio nel trait `SerializzaGiorniCivili`, che copre entrambi i percorsi di serializzazione.
+>
+> ⛔ **E la prima correzione tentata era peggiore del difetto**: un cast `date:Y-m-d` diventa `custom_datetime` per Eloquent, quindi la scrittura smette di normalizzare il formato — su SQLite `avvisi_scadenza` e `interventi` scrivevano due forme diverse, il `whereColumn` dell'idempotenza falliva e **il digest avrebbe rimandato tutto ogni giorno a tutti i clienti**. L'ha colta la suite, non una rilettura.
+>
+> **La finestra era adesso**: «Deploy in produzione» è ancora aperta, quindi non c'erano dati di clienti reali da correggere. Suite verde su entrambi i driver (2452 test).
+
+---
+
 > ## 👥 Persone dell'Ente e tecnici EasyLab — ADR-038, 30 Agosto 2026
 >
 > - [x] Fondamenta: invito riusabile, ruoli conferibili, soft delete su `users`, attribuzioni storiche `withTrashed()`, email unique gestita anche nel cestino, audit esplicito e guardrail sulle scritture RBAC.

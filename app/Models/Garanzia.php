@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\SoggettoGaranzia;
 use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\SerializzaGiorniCivili;
 use App\Models\Contracts\ReachesStrumento;
 use App\Models\Scopes\GaranziaDepartmentScope;
 use App\Models\Scopes\GaranziaRicambioPrivacyScope;
@@ -63,7 +64,7 @@ class Garanzia extends Model implements ReachesStrumento
      * `ricambio_utilizzo` su quelle ricambio. Il trait generico ne conosce una
      * sola. Vedi il docblock dello scope.
      */
-    use AuditsDomainWrites, BelongsToTenant, HasFactory, SoftDeletes;
+    use AuditsDomainWrites, BelongsToTenant, HasFactory, SerializzaGiorniCivili, SoftDeletes;
 
     protected $table = 'garanzie';
 

@@ -585,7 +585,9 @@ final class CatturaErrori
      * ⚠️ **`now()` e non l'istante dell'eccezione**: la colonna dice quando
      * l'alert è **partito**, non quando l'errore è avvenuto — per quello ci
      * sono le due colonne di occorrenza. Il «giorno» del cap è quello del fuso
-     * dell'applicazione: è una strozzatura di frequenza, non un rendiconto.
+     * dell'applicazione — dal 6 Set 2026 il giorno **italiano** (🔗 ADR-041),
+     * cioè lo stesso che legge chi guarda la cabina: è una strozzatura di
+     * frequenza, non un rendiconto.
      *
      * ⚠️ **`DB::transaction()` attorno alle due query** per la ragione già
      * scritta due volte in questa classe: su Postgres una query fallita aborta

@@ -39,15 +39,20 @@ use Illuminate\Database\Eloquent\Builder;
  * diverso*. Col ramo `IS NULL` le righe senza data stanno nella base — «erano
  * già lì all'inizio della finestra» — e il cumulato torna sempre.
  *
- * ## I confini sono mezzi aperti, e sono in UTC
+ * ## I confini sono mezzi aperti, e cadono sulla mezzanotte italiana
  *
  * Ogni mese è `[inizio, fine)`: le 23:59:59 dell'ultimo giorno stanno nel mese
- * che finisce, le 00:00:00 del primo in quello che comincia. Sono confini
- * **UTC**, perché `config/app.php` dichiara `'timezone' => 'UTC'`: un cliente
- * creato all'01:30 del 1° settembre ora italiana (23:30 UTC del 31 agosto)
- * finisce nel bucket di agosto. È un'approssimazione **accettata** — non si
- * cambia il fuso dell'applicazione per un grafico — e i test la scrivono in UTC
- * esplicito, o misurerebbero il fuso della macchina invece del codice.
+ * che finisce, le 00:00:00 del primo in quello che comincia. I confini seguono
+ * `config/app.php`, che dal 6 Set 2026 dichiara `Europe/Rome` (🔗 ADR-041).
+ *
+ * ⚠️ **Fino a quel giorno erano confini UTC, e l'approssimazione era dichiarata
+ * qui**: un cliente creato all'01:30 del 1° settembre ora italiana (23:30 UTC
+ * del 31 agosto) finiva nel bucket di agosto, mentre la tabella clienti — a due
+ * centimetri sulla stessa schermata — lo datava al 1° settembre. Era il difetto
+ * che questo file dichiara di voler impedire, accettato perché «non si cambia il
+ * fuso dell'applicazione per un grafico». Il fuso è stato cambiato per ragioni
+ * più grosse, e questa incoerenza è sparita di conseguenza: grafico e tabella
+ * ora contano lo stesso cliente nello stesso giorno.
  *
  * ## Il costo, e il vincolo da non mollare
  *
