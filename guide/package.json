@@ -1,0 +1,20 @@
+{
+  "name": "easylab-guide",
+  "private": true,
+  "type": "module",
+  "description": "Studio delle guide video: Playwright cattura, Remotion monta.",
+  "scripts": {
+    "cattura": "playwright test",
+    "studio": "remotion studio remotion/src/index.ts",
+    "monta": "node bin/monta.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.240",
+    "remotion": "4.0.240",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}
