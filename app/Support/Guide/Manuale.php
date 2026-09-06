@@ -2,9 +2,10 @@
 
 namespace App\Support\Guide;
 
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -22,9 +23,14 @@ use Illuminate\Support\Str;
  * è l'unico a conoscere la durata della testata): è ciò che permette di saltare
  * nel punto giusto del video cliccando un passo scritto.
  *
- * ⚠️ **Una guida esiste solo se il suo mp4 è stato pubblicato.** Una voce in
- * `config/guide.php` senza `public/guide/<slug>/` viene ignorata in silenzio:
- * meglio un indice più corto che una riga che porta a un lettore vuoto.
+ * ⚠️ **Una guida esiste solo se il suo mp4 è stato pubblicato** sul disco
+ * (`easylab:pubblica-guide`). Una voce in `config/guide.php` senza i file viene
+ * ignorata in silenzio: meglio un indice più corto che una riga che porta a un
+ * lettore vuoto.
+ *
+ * ⚠️ I file NON stanno in `public/`: staging e produzione girano su Laravel
+ * Cloud, che costruisce l'immagine da git, e gli mp4 in git non ci vanno.
+ * Vedi `config/guide.php` per il disco.
  */
 final class Manuale
 {
@@ -112,16 +118,42 @@ final class Manuale
             ->values();
     }
 
+    /** Il disco su cui vivono i file delle guide. */
+    public static function disco(): Filesystem
+    {
+        return Storage::disk(config('guide.disco'));
+    }
+
+    /**
+     * La chiave di un pezzo di guida sul disco.
+     *
+     * `video`, `copertina` e `manifest` invece dei nomi dei file: chi serve i
+     * byte non deve sapere come si chiamano, e il giorno in cui il montaggio
+     * cambia estensione si tocca solo qui.
+     */
+    public static function percorso(string $slug, string $pezzo): string
+    {
+        $nome = match ($pezzo) {
+            'video' => "{$slug}.mp4",
+            'copertina' => 'copertina.jpg',
+            'manifest' => 'manifest.json',
+        };
+
+        return trim(config('guide.prefisso'), '/')."/{$slug}/{$nome}";
+    }
+
     /** @return array<string, mixed>|null */
     private static function manifest(string $slug): ?array
     {
-        $percorso = public_path("guide/{$slug}/manifest.json");
+        $disco = self::disco();
 
-        if (! File::exists($percorso) || ! File::exists(public_path("guide/{$slug}/{$slug}.mp4"))) {
+        // Il video è la condizione: un manifest da solo darebbe un lettore vuoto.
+        if (! $disco->exists(self::percorso($slug, 'video'))
+            || ! $disco->exists(self::percorso($slug, 'manifest'))) {
             return null;
         }
 
-        $letto = json_decode(File::get($percorso), true);
+        $letto = json_decode((string) $disco->get(self::percorso($slug, 'manifest')), true);
 
         return is_array($letto) ? $letto : null;
     }
@@ -180,12 +212,15 @@ final class Manuale
             'argomento' => $voce['argomento'],
             'argomentoTitolo' => $argomento['titolo'] ?? $voce['argomento'],
             'durata' => (int) round($manifest['durataTotale'] ?? 0),
-            'video' => "/guide/{$voce['slug']}/{$voce['slug']}.mp4",
+            // I byte passano dall'applicazione, non da una URL del bucket:
+            // ADR-026 rifiuta le URL pre-firmate, che sono di fatto un bearer
+            // token con la Policy fuori dal giro.
+            'video' => route('guida.file', ['slug' => $voce['slug'], 'pezzo' => 'video']),
             // La copertina è facoltativa: senza, il lettore mostra il fotogramma
             // zero. Un `poster` che punta a un file assente sarebbe peggio —
             // alcuni browser lasciano il riquadro bianco invece di ripiegare.
-            'copertina' => File::exists(public_path("guide/{$voce['slug']}/copertina.jpg"))
-                ? "/guide/{$voce['slug']}/copertina.jpg"
+            'copertina' => self::disco()->exists(self::percorso($voce['slug'], 'copertina'))
+                ? route('guida.file', ['slug' => $voce['slug'], 'pezzo' => 'copertina'])
                 : null,
             'capitoli' => $capitoli,
             'chiusura' => $chiusura,

@@ -11,6 +11,7 @@ use App\Http\Controllers\PagamentoRicevuto;
 use App\Http\Controllers\PaginaBloccato;
 use App\Http\Controllers\RegistrazionePubblica;
 use App\Http\Controllers\ScaricaDocumento;
+use App\Http\Controllers\ServeFileGuida;
 use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Anagrafica\MarchioEnte;
 use App\Livewire\Billing\PaginaAbbonamento;
@@ -201,6 +202,15 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     Route::get('/guida', GuidaManuale::class)
         ->middleware('can:tenants.view_all')
         ->name('guida');
+
+    // I byte di una guida. Stesso cancello della pagina, e non è pignoleria:
+    // una rotta di file lasciata aperta è il modo classico di aggirare quello
+    // della pagina che la elenca (stessa forma di ADR-026 sui documenti).
+    Route::get('/guida/{slug}/{pezzo}', ServeFileGuida::class)
+        ->middleware('can:tenants.view_all')
+        ->whereIn('pezzo', ['video', 'copertina'])
+        ->where('slug', '[a-z0-9-]+')
+        ->name('guida.file');
 
     // Il registro di audit, stessa porta e stesso permesso della cabina.
     // ⚠️ **Non** `can:audit.view`, che pure esiste a catalogo: quel permesso ce

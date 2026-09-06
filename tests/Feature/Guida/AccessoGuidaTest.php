@@ -21,6 +21,9 @@ use Livewire\Livewire;
  */
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
+    discoGuideVuoto();
+    guidaFinta('prima-guida', 'La prima guida');
+    guidaFinta('seconda-guida', 'La seconda guida');
 });
 
 // --- Negativi ---

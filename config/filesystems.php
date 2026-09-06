@@ -96,21 +96,34 @@ return [
             'report' => false,
         ],
 
-    ],
+        /*
+         * Il bucket di un ambiente Laravel Cloud, raggiunto DA FUORI.
+         *
+         * Serve solo a `easylab:pubblica-guide`, che gira sulla macchina dove
+         * stanno gli mp4 — in cloud non ci sono, perché non sono in git.
+         *
+         * ⚠️ **Non si può riusare il meccanismo di Laravel Cloud da qui.** Il
+         * framework registra i dischi iniettati solo se `laravel_cloud()` è
+         * vero, cioè con `LARAVEL_CLOUD=1` in `$_ENV`/`$_SERVER`; e accenderlo
+         * su una macchina di sviluppo attiverebbe anche code gestite, logging
+         * su socket e connessione Postgres non poolata. Le quattro credenziali
+         * si copiano a mano da `LARAVEL_CLOUD_DISK_CONFIG` del pannello.
+         *
+         * Uso: `GUIDE_DISK=guide_remoto php artisan easylab:pubblica-guide`
+         */
+        'guide_remoto' => [
+            'driver' => 's3',
+            'key' => env('GUIDE_REMOTO_KEY'),
+            'secret' => env('GUIDE_REMOTO_SECRET'),
+            'bucket' => env('GUIDE_REMOTO_BUCKET'),
+            'endpoint' => env('GUIDE_REMOTO_ENDPOINT'),
+            'region' => env('GUIDE_REMOTO_REGION', 'auto'),
+            'use_path_style_endpoint' => false,
+            'visibility' => 'private',
+            'throw' => true,
+            'report' => false,
+        ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Symbolic Links
-    |--------------------------------------------------------------------------
-    |
-    | Here you may configure the symbolic links that will be created when the
-    | `storage:link` Artisan command is executed. The array keys should be
-    | the locations of the links and the values should be their targets.
-    |
-    */
-
-    'links' => [
-        public_path('storage') => storage_path('app/public'),
     ],
 
 ];

@@ -388,3 +388,61 @@ function prefissiDiColore(): string
 {
     return '(?:border|divide)(?:-[trblxyse])?|bg|text|ring|from|to|via|fill|stroke|outline|decoration|accent|caret|placeholder|shadow';
 }
+
+/**
+ * Una guida finta sul disco delle guide, con manifest, video e copertina.
+ *
+ * ⚠️ Vive qui e non in `tests/Feature/Guida/` per la ragione già scritta sopra
+ * per `snapshotDa()`: i file di test si caricano solo se selezionati, quindi una
+ * funzione condivisa fra tre suite non può abitare in una delle tre.
+ *
+ * 🔴 **Serve a rendere i test ermetici.** Prima leggevano i file davvero
+ * pubblicati: verdi sulla macchina di chi aveva appena girato le guide, rossi
+ * ovunque altro, e in CI dipendenti da niente. Ora ogni test si costruisce il
+ * proprio disco.
+ */
+function guidaFinta(string $slug, string $titolo = 'Guida di prova', bool $conVideo = true, bool $conCopertina = true): void
+{
+    $disco = App\Support\Guide\Manuale::disco();
+
+    $disco->put(App\Support\Guide\Manuale::percorso($slug, 'manifest'), (string) json_encode([
+        'titolo' => $titolo,
+        'sottotitolo' => "Sottotitolo di {$slug}",
+        'larghezza' => 1440,
+        'altezza' => 900,
+        'durataTotale' => 40.0,
+        'passi' => [
+            ['n' => 0, 'file' => null, 'didascalia' => '', 'durata' => 3, 'fuoco' => null, 'cursore' => null,
+                'click' => false, 'capitolo' => ['occhiello' => 'Parte 1 di 1', 'titolo' => 'Il capitolo'], 'chiusura' => null, 'inizio' => 2.6],
+            ['n' => 1, 'file' => '01.png', 'didascalia' => "Primo passo di {$slug}.", 'durata' => 5, 'fuoco' => null,
+                'cursore' => null, 'click' => false, 'capitolo' => null, 'chiusura' => null, 'inizio' => 5.6],
+            ['n' => 2, 'file' => '02.png', 'didascalia' => "Secondo passo di {$slug}.", 'durata' => 5, 'fuoco' => null,
+                'cursore' => null, 'click' => false, 'capitolo' => null, 'chiusura' => null, 'inizio' => 10.6],
+            ['n' => 0, 'file' => null, 'didascalia' => '', 'durata' => 6, 'fuoco' => null, 'cursore' => null,
+                'click' => false, 'capitolo' => null, 'chiusura' => ['titolo' => 'In breve', 'punti' => ['Un punto.']], 'inizio' => 15.6],
+        ],
+    ]));
+
+    if ($conVideo) {
+        // Un mp4 finto ma di lunghezza nota: al controller dei byte serve una
+        // dimensione su cui calcolare gli intervalli, non un video vero.
+        $disco->put(App\Support\Guide\Manuale::percorso($slug, 'video'), str_repeat('V', 2048));
+    }
+
+    if ($conCopertina) {
+        $disco->put(App\Support\Guide\Manuale::percorso($slug, 'copertina'), str_repeat('C', 128));
+    }
+
+    config()->set('guide.guide', [
+        ...config('guide.guide', []),
+        ['slug' => $slug, 'argomento' => 'A', 'chiavi' => ['finta']],
+    ]);
+}
+
+/** Il disco delle guide, svuotato, e il catalogo azzerato. */
+function discoGuideVuoto(): void
+{
+    Illuminate\Support\Facades\Storage::fake(config('guide.disco'));
+    config()->set('guide.guide', []);
+    App\Support\Guide\Manuale::dimentica();
+}

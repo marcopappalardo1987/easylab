@@ -16,6 +16,33 @@
  */
 return [
 
+    /*
+     * Dove stanno video, copertine e manifest.
+     *
+     * ⚠️ **Non `public/`**: staging e produzione girano su Laravel Cloud, che
+     * costruisce l'immagine da git — ciò che non è nel repository non esiste, e
+     * 64 MB di mp4 (600 a catalogo completo) in git non ci vanno: i binari non
+     * si comprimono per differenze, e ogni rifacimento di una guida lascia la
+     * sua copia nella storia per sempre.
+     *
+     * ⚠️ **Si nomina un disco già esistente, non se ne configura uno nuovo con
+     * le chiavi.** Su Laravel Cloud le credenziali di un bucket NON arrivano
+     * come `AWS_*`: la piattaforma inietta `LARAVEL_CLOUD_DISK_CONFIG`, e
+     * `Illuminate\Foundation\Cloud::configureDisks()` al boot registra il
+     * disco col nome del bucket e imposta `FILESYSTEM_DISK`. Un disco scritto a
+     * mano con `env('AWS_ACCESS_KEY_ID')` nascerebbe quindi senza credenziali
+     * in cloud, e funzionerebbe solo in locale.
+     *
+     * Il default segue il disco dell'ambiente: `local` in sviluppo, il bucket
+     * attaccato in cloud. `GUIDE_DISK` serve solo per puntare altrove.
+     *
+     * (Un disco `scoped` sarebbe stato più elegante, ma vuole
+     * `league/flysystem-path-prefixing`: una dipendenza di produzione in più
+     * per risparmiare una concatenazione non vale il suo peso.)
+     */
+    'disco' => env('GUIDE_DISK', env('FILESYSTEM_DISK', 'local')),
+    'prefisso' => env('GUIDE_DISK_PREFISSO', 'guide'),
+
     // Le lettere sono quelle di `guide/CATALOGO.md`: restano allineate perché
     // chi produce una guida legge quel file e ritrova qui lo stesso argomento.
     'argomenti' => [

@@ -3,7 +3,6 @@
 use App\Livewire\Guida\Manuale;
 use App\Support\Guide\Manuale as Libreria;
 use Database\Seeders\RolesAndPermissionsSeeder;
-use Illuminate\Support\Facades\File;
 use Livewire\Livewire;
 
 /**
@@ -16,11 +15,16 @@ use Livewire\Livewire;
  */
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
+    discoGuideVuoto();
+    guidaFinta('accesso-finto', 'Il primo accesso');
+    guidaFinta('sedi-finte', 'Passare da una sede all\'altra');
+    guidaFinta('intervento-finto', 'Registrare un intervento');
     $this->pagina = fn () => Livewire::actingAs(utenteConRuolo('Superadmin'))->test(Manuale::class);
 });
 
-it('reads at least one published guide', function () {
-    expect(Libreria::tutte())->not->toBeEmpty();
+it('reads every published guide', function () {
+    expect(Libreria::tutte()->pluck('slug')->all())
+        ->toBe(['accesso-finto', 'sedi-finte', 'intervento-finto']);
 });
 
 it('ignores a guide whose video has not been published', function () {
@@ -31,26 +35,10 @@ it('ignores a guide whose video has not been published', function () {
     // aggiungeva uno slug che non aveva né manifest né video, quindi restava
     // verde anche togliendo del tutto il controllo sull'mp4: misurava la
     // condizione sbagliata. Provato mutando `Manuale::manifest()`.
-    $cartella = public_path('guide/guida-senza-video');
-    File::ensureDirectoryExists($cartella);
-    File::put("{$cartella}/manifest.json", json_encode([
-        'titolo' => 'Guida senza video',
-        'sottotitolo' => 'Manifest pubblicato, mp4 no',
-        'durataTotale' => 30,
-        'passi' => [['n' => 1, 'file' => '01.png', 'didascalia' => 'Un passo.', 'durata' => 3, 'inizio' => 2.6, 'capitolo' => null, 'chiusura' => null]],
-    ]));
+    guidaFinta('senza-video', 'Guida senza video', conVideo: false);
 
-    config()->set('guide.guide', [
-        ...config('guide.guide'),
-        ['slug' => 'guida-senza-video', 'argomento' => 'A', 'chiavi' => []],
-    ]);
-
-    try {
-        expect(File::exists("{$cartella}/manifest.json"))->toBeTrue();
-        expect(Libreria::tutte()->pluck('slug'))->not->toContain('guida-senza-video');
-    } finally {
-        File::deleteDirectory($cartella);
-    }
+    expect(Libreria::disco()->exists(Libreria::percorso('senza-video', 'manifest')))->toBeTrue();
+    expect(Libreria::tutte()->pluck('slug'))->not->toContain('senza-video');
 });
 
 it('narrows the index to the search text', function () {

@@ -25,97 +25,47 @@ Remotion anima quel manifest. Ritoccare un testo costa un re-render.
 L'mp4 esce in `out/<slug>/<slug>.mp4`. Per portarlo dentro l'applicazione:
 
 ```
-./bin/pubblica.sh         # copia mp4 + manifest in public/guide/
+./bin/pubblica.sh          # disco locale (sviluppo)
+./bin/pubblica.sh remoto   # bucket di un ambiente Laravel Cloud
 ```
 
 e la guida compare in `/guida` **se** il suo slug è in `config/guide.php`.
 
-## La pagina Guida
+## Dove stanno i file (deciso il 6 Set 2026, rifatto il 7)
 
-Voce di sidebar, indice a sinistra raggruppato per argomento, filtro testuale,
-video e testo nella stessa pagina. Cliccando un passo scritto il video salta lì.
+**Su un disco, non in `public/`.** La prima versione teneva una copia locale in
+`public/guide/`, ignorata da git — e non poteva funzionare: staging e produzione
+girano su **Laravel Cloud**, che costruisce l'immagine da git. Ciò che non è
+versionato non esiste lì, e 64 MB di mp4 (600 a catalogo completo) in git non ci
+vanno: i binari non si comprimono per differenze, e ogni rifacimento di una
+guida lascia la sua copia nella storia per sempre.
 
-⚠️ **Video e testo non sono due contenuti**: la guida scritta è generata dallo
-stesso `manifest.json` che monta il video, quindi le didascalie *sono* i passi.
-Redigere il testo a parte lo farebbe divergere dal video al primo ritocco, e
-nessuno se ne accorgerebbe. L'istante d'inizio di ogni passo lo scrive `monta.mjs`
-nel manifest, perché è l'unico a sapere quanto dura la testata.
+Ora vive sul disco nominato da `config('guide.disco')`, sotto il prefisso
+`guide/`. Il default segue il disco dell'ambiente: `local` in sviluppo, il
+bucket attaccato in cloud — dove Laravel Cloud imposta `FILESYSTEM_DISK`
+al nome che registra lui. **In cloud non serve configurare niente.**
 
-Oggi la pagina è gatata su `can:tenants.view_all`: è un **cancello di rilascio**,
-non una regola di sicurezza — cinque guide su quarantasei non sono un manuale.
-Quando si apre, si toglie il middleware dalla rotta e il `@can` dalla sidebar;
-non serve nessun permesso nuovo.
+⚠️ **Per caricare da qui verso un ambiente remoto** servono le quattro
+`GUIDE_REMOTO_*` nel proprio `.env`, copiate a mano da
+`LARAVEL_CLOUD_DISK_CONFIG` del pannello. Non è pigrizia: il framework registra
+i dischi iniettati da Cloud solo se `LARAVEL_CLOUD=1`, e accendere quel flag su
+una macchina di sviluppo porta con sé code gestite, logging su socket e
+connessione Postgres non poolata.
 
-## Testi e musica
+## Come si servono i byte
 
-Oltre alla didascalia per passo ci sono due cartelli, dichiarati nel copione:
+Attraverso l'applicazione (`ServeFileGuida`), **non** con una URL pre-firmata
+del bucket: ADR-026 ha già deciso questo per i documenti — una URL firmata è di
+fatto un bearer token, con l'autorizzazione fuori dal giro e il prodotto legato
+al provider. Le guide non contengono dati di nessuno e l'eccezione era tentante;
+non si fa, perché varrebbe come precedente e la prossima volta il file sarebbe
+un documento.
 
-```ts
-g.capitolo('Parte 2 di 3', 'Trovare la macchina giusta');
-g.chiusura('In tre mosse', ['…', '…', '…']);
-```
-
-Si stampano sopra l'ultimo fotogramma sfocato — la schermata resta lì a dire
-dov'eravamo — e non entrano nella numerazione «3/18»: un cartello non è un passo
-da eseguire.
-
-I testi entrano **parola per parola** (`Parole` in `remotion/src/Testo.tsx`), con
-una molla e un passo di ~60 ms: a blocco intero un testo «appare», sfalsato si
-**legge**, perché l'occhio viene portato da sinistra a destra alla velocità con
-cui lo leggerebbe da sé. Sopra i 100 ms diventa un'insegna a scorrimento.
-
-Due trappole trovate montando, entrambe di leggibilità e nessuna delle due
-visibile su un fotogramma fermo:
-
-- ⛔ **La barra delle didascalie esce SCORRENDO, non dissolvendo.** È il fondo
-  scuro a rendere leggibile il testo bianco: appena quello schiarisce, quel che
-  ci sta sopra si legge slavato su una tabella chiara. Non è questione di curve
-  — provate lineare, radice e opacità separate fra pannello e contenuto: il
-  difetto resta. Se ne vanno insieme dal bordo basso, opachi.
-- ⚠️ **Sui cartelli il velo sale prima del testo** (0,22 s contro 0,3 s). Con la
-  stessa rampa, le prime due parole del titolo cadono su una schermata ancora
-  chiara e non si leggono.
-
-## Marchio
-
-Il montaggio copia il logo da `public/brand/` a ogni render: se lì cambia, il
-video successivo lo prende. Si usa la variante per **fondo scuro** — quella
-normale ha il blu profondo che su `#111C2E` fa 1,9:1 e sparisce (ADR-033/034) —
-e il fondo dei cartelli è proprio `#111C2E`, la base scura del Design System.
-
-`Marchio` sceglie da sé fra lockup e lettering: sotto i 200px di larghezza il
-payoff «GESTIONE STRUMENTAZIONE E MANUTENZIONE» diventa una riga grigia
-illeggibile, quindi passa al compatto. Sta in testa, sui cartelli, in chiusura e
-nella barra delle didascalie.
-
-## Musica
-
-La **sintetizza** `bin/musica.mjs` (`out/audio/tema.wav`, anello di 19,2s che
-Remotion ripete): 100 BPM, F · C/E · Dm7 · Bb, basso e arpeggio in ottavi,
-charleston sui levare, riverbero corto. Sta a -35 dB nel mix, con dissolvenza in
-apertura e chiusura. **È una sola per tutte le guide**: la riconoscibilità della
-serie passa anche di lì.
-
-Generata invece che scaricata: una traccia di terzi, anche «royalty free», porta
-una licenza da rispettare su un video che finisce ai clienti. Il rumore del
-charleston esce da un generatore con seme fisso, quindi il file è riproducibile
-byte per byte.
-
-⚠️ **Se la si cambia**, tre cose vanno tenute — sono la differenza fra musica e
-sintetizzatore, e le prime due versioni le hanno imparate a caro prezzo:
-
-1. il **riverbero**, senza il quale i suoni restano appiccicati all'altoparlante;
-2. armoniche che si spengono a **velocità diverse** (è ciò che distingue una
-   corda pizzicata da un fischio), con un filo di inarmonicità;
-3. un **motivo** che torna, invece di un arpeggio che sale e scende.
-
-E due vincoli meccanici:
-
-- il ripiegamento della coda sull'inizio va fatto **dopo** il riverbero, o
-  all'anello successivo l'ultimo accordo si tronca di netto (saldatura misurata:
-  208 su 32767, meno del doppio del passo medio fra due campioni);
-- **col ritmo il riverbero va accorciato** (1,5s contro i 2,6s della versione
-  lenta): la coda lunga impasta gli ottavi.
+🔴 Il controller implementa **HTTP Range** (`206 Partial Content`), e non è
+zelo di protocollo: cliccando un passo scritto il video salta a quell'istante, e
+senza Range il browser non può cercare. Il prezzo è che i byte passano dalla
+compute dell'applicazione; se un giorno le guide si aprissero a tutti i clienti,
+la strada è una CDN davanti a questa rotta, non l'URL firmata.
 
 ## Ambiente
 

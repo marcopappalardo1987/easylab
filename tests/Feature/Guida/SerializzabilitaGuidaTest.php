@@ -23,6 +23,9 @@ use Illuminate\Support\Facades\Cache;
  * ramo viene percorso per intero invece che descritto.
  */
 beforeEach(function () {
+    discoGuideVuoto();
+    guidaFinta('una-guida');
+    guidaFinta('un-altra-guida');
     Libreria::dimentica();
     Cache::store('file')->clear();
 });
