@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Notifications\InvitoUtente;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
@@ -684,4 +685,99 @@ it('keeps the query count flat from two people to twelve', function () {
     }
 
     expect($conta())->toBe($conDue);
+});
+
+// ─── 6. La paginazione, e il conteggio che deve restare fuori dalla pagina ────
+
+it('paginates instead of rendering the whole Ente in one screen', function () {
+    // Prima l'elenco chiudeva con `get()`: **tutte** le persone dell'Ente in una
+    // schermata, ricaricate a ogni update di Livewire. Con venti righe non si
+    // nota, e infatti nessun test se n'era accorto; un ospedale con qualche
+    // centinaio di persone caricava tutto ogni volta.
+    //
+    // Il `beforeEach` crea già l'Admin, quindi bastano dodici nomi per superare
+    // il tetto di dieci e avere una seconda pagina non vuota.
+    foreach (range(1, 12) as $i) {
+        personaDellEnte(sprintf('Persona %02d', $i), 'Tenant');
+    }
+
+    $componente = Livewire::actingAs($this->admin)->test(ElencoUtenti::class);
+    $persone = $componente->viewData('persone');
+
+    expect($persone)->toBeInstanceOf(LengthAwarePaginator::class)
+        ->and($persone->total())->toBe(13)
+        ->and($persone->count())->toBe(10);
+
+    // E la seconda pagina esiste e porta il resto: senza questo passo il test
+    // sarebbe soddisfatto anche da un `limit(10)` che perde le altre righe.
+    $seconda = Livewire::actingAs($this->admin)
+        ->test(ElencoUtenti::class)
+        ->call('gotoPage', 2)
+        ->viewData('persone');
+
+    expect($seconda->count())->toBe(3);
+
+    // ⛔ Nessun id compare in entrambe le pagine. È la trappola di questo
+    // progetto: a parità di nome l'ordine fra due query è una proprietà del
+    // motore, e senza tie-break sull'id Postgres può riordinare i pari fra la
+    // pagina 1 e la 2 — una riga esce da entrambe, un'altra da nessuna.
+    $prima = $persone->pluck('id')->all();
+
+    expect(array_intersect($prima, $seconda->pluck('id')->all()))->toBeEmpty()
+        ->and(count(array_unique([...$prima, ...$seconda->pluck('id')->all()])))->toBe(13);
+});
+
+it('counts the active Admins across the Ente, not just the page on screen', function () {
+    // 🔴 Il difetto che la paginazione avrebbe introdotto se il conteggio fosse
+    // rimasto sulla collezione caricata. `$adminAttivi` governa il marcatore
+    // «ultimo Admin», cioè quali comandi la tabella mostra: contato sulla sola
+    // pagina, un Admin che si trovi da solo nella pagina che sta guardando
+    // sembrerebbe l'ultimo, e i suoi comandi sparirebbero — mentre l'Ente ne ha
+    // altri due altrove.
+    //
+    // I nomi sono scelti per **separarli**: l'ordinamento è alfabetico, quindi
+    // «Anna Rossi» (l'Admin del beforeEach) sta in prima pagina e gli altri due
+    // Admin, chiamati «Zeta …», finiscono in fondo.
+    foreach (range(1, 12) as $i) {
+        personaDellEnte(sprintf('Persona %02d', $i), 'Tenant');
+    }
+
+    personaDellEnte('Zeta Uno', 'Admin');
+    personaDellEnte('Zeta Due', 'Admin');
+
+    $prima = Livewire::actingAs($this->admin)->test(ElencoUtenti::class);
+
+    // In pagina 1 c'è un solo Admin, ma l'Ente ne ha tre.
+    $adminInPagina = $prima->viewData('persone')
+        ->filter(fn (User $u) => $u->hasRole('Admin'))
+        ->count();
+
+    expect($adminInPagina)->toBe(1)
+        ->and($prima->viewData('adminAttivi'))->toBe(3);
+
+    // E il marcatore segue il conteggio vero: l'Admin **in pagina** non è
+    // marcato come ultimo, quindi il suo comando resta offerto. Confronto
+    // differenziale sull'id, o «c'è il bottone» sarebbe soddisfatto da
+    // qualunque altra riga della tabella.
+    expect($prima->html())->toContain('wire:click="apriRuolo('.$this->admin->id.')"');
+
+    // 🔴 La prova che il conteggio per pagina sarebbe stato un difetto: con un
+    // solo Admin in pagina, contare la collezione avrebbe dato 1, il marcatore
+    // sarebbe scattato e questo comando sarebbe sparito. Il caso resta rosso se
+    // qualcuno riporta il conteggio sulla collezione caricata.
+    expect($prima->viewData('adminAttivi'))->toBeGreaterThan($adminInPagina);
+});
+
+it('ignores trashed people when it counts the Admins', function () {
+    // Il cestino toglie le chiavi di casa: un Admin cestinato non amministra
+    // più niente, quindi non deve tenere in vita il conteggio che decide se
+    // l'ultimo Admin attivo può essere rimosso. Senza il `whereNull`, due Admin
+    // di cui uno cestinato passerebbero per due.
+    $secondo = personaDellEnte('Zeta Uno', 'Admin');
+
+    expect(Livewire::actingAs($this->admin)->test(ElencoUtenti::class)->viewData('adminAttivi'))->toBe(2);
+
+    $secondo->delete();
+
+    expect(Livewire::actingAs($this->admin)->test(ElencoUtenti::class)->viewData('adminAttivi'))->toBe(1);
 });

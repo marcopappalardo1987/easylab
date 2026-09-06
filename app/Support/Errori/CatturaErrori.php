@@ -1051,16 +1051,28 @@ final class CatturaErrori
     }
 
     /**
-     * Il codice di stato dell'occorrenza.
+     * Il codice di stato dell'occorrenza, **quando l'eccezione lo porta con sé**.
      *
-     * `500` di default perché un'eccezione **riportata** è, per la lista ereditata
-     * da `shouldntReport()`, ciò che non è una `HttpException`. L'`instanceof`
-     * resta per le eccezioni riportate a mano da un `try/catch` applicativo, che
-     * possono benissimo portare un codice proprio.
+     * 🔴 Prima il default era `500`, e affermava un fatto che il tracker non
+     * può conoscere: quel numero non è la risposta inviata, è un'ipotesi su
+     * come l'applicazione reagirà — e cade appena qualcuno cattura l'eccezione
+     * e risponde altro. `StripeWebhookController` fa esattamente questo:
+     * `report($e)` e poi un **200**, perché un webhook che ritenta non ripara
+     * un incasso già rifiutato. La scheda mostrava «HTTP 500» su una richiesta
+     * andata a buon fine, nella pagina in cui si diagnosticano i pagamenti.
+     *
+     * Nel caso comune quel `500` non aggiungeva niente: un'eccezione non
+     * gestita è sempre 500, e la riga lo dice già essendo lì. Era **ridondante
+     * quando era vero e falso quando non lo era**, che è il peggior rapporto
+     * possibile per un dato di diagnosi.
+     *
+     * ⚠️ `null` non significa «nessun codice»: significa «non lo sappiamo», ed è
+     * l'unica cosa onesta da dire da qui. La scheda omette la colonna quando è
+     * nullo, come fa già per le occorrenze fuori da HTTP.
      */
-    private static function codice(Throwable $e): int
+    private static function codice(Throwable $e): ?int
     {
-        return $e instanceof HttpExceptionInterface ? $e->getStatusCode() : 500;
+        return $e instanceof HttpExceptionInterface ? $e->getStatusCode() : null;
     }
 
     /**

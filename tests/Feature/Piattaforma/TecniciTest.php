@@ -237,6 +237,47 @@ it('writes and revokes tecnico_cliente, and the customer dropdown follows immedi
         ->and(Assegnabili::perSede($this->bergamo->id)->pluck('id')->all())->toContain($tecnico->id);
 });
 
+it('agrees the plural, because one sede is not «1 sedi»', function () {
+    // Il messaggio diceva «1 sedi aperte, 0 chiuse» a chi ne spuntava una sola,
+    // cioè nel caso più comune e nel gesto che apre a una persona tutte le
+    // macchine di un cliente. Nessun test lo copriva: era invisibile.
+    $tecnico = tecnicoDiEasyLab('Luca Ferri');
+
+    // Si guarda l'HTML e non la sessione: il messaggio è un flash che la vista
+    // rende nella stessa risposta, ed è quello che l'utente legge.
+    $una = Livewire::test(Tecnici::class)
+        ->call('apriPortafoglio', $tecnico->id)
+        ->set('portafoglioSedi', [$this->sanMarco->id])
+        ->call('salvaPortafoglio')
+        ->html();
+
+    // ⚠️ Un ago per asserzione: `toContain()` è variadico, e un secondo
+    // argomento sarebbe un secondo ago e non un messaggio.
+    expect($una)->toContain('1 sede in più');
+    expect($una)->not->toContain('1 sedi');
+
+    // Il plurale vero, o un test sul solo singolare resterebbe verde anche
+    // scrivendo «sede» sempre — cioè proverebbe metà regola.
+    $due = Livewire::test(Tecnici::class)
+        ->call('apriPortafoglio', $tecnico->id)
+        ->set('portafoglioSedi', [$this->sanMarco->id, $this->bergamo->id])
+        ->call('salvaPortafoglio')
+        ->html();
+
+    expect($due)->toContain('1 sede in più');
+
+    // E la revoca parla di ciò che toglie, senza far leggere uno zero per
+    // sapere che dall'altro lato non è successo niente.
+    $revoca = Livewire::test(Tecnici::class)
+        ->call('apriPortafoglio', $tecnico->id)
+        ->set('portafoglioSedi', [])
+        ->call('salvaPortafoglio')
+        ->html();
+
+    expect($revoca)->toContain('2 sedi in meno');
+    expect($revoca)->not->toContain('in più');
+});
+
 it('reads the current portfolio from the pivot, not through a scoped relation', function () {
     // ⛔ `portafoglioClienti()` è Eloquent su `UnitaOrganizzativa` e ne applica i
     // global scope: per chi apre questa pagina — che un `tenant_id` proprio ce

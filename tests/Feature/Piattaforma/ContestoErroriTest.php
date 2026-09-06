@@ -360,6 +360,50 @@ it('attributes an occurrence to the impersonated user, and the impersonator apar
         ->and($occorrenza->impersonato_da)->toBe($developer->id);
 });
 
+it('never claims a status code the response did not send', function () {
+    // 🔴 Il default era `500`, e affermava un fatto che il tracker non può
+    // conoscere: quel numero non è la risposta inviata, è un'ipotesi su come
+    // l'applicazione reagirà. `StripeWebhookController` la smentisce per
+    // mestiere — `report($e)` e poi un **200**, perché un webhook che ritenta
+    // non ripara un incasso già rifiutato — e la scheda mostrava «HTTP 500»
+    // su una richiesta andata a buon fine, nella pagina in cui si diagnosticano
+    // i pagamenti.
+    Route::middleware('web')->get('/prova/catturata', function () {
+        report(new RuntimeException('riportata a mano, la richiesta prosegue'));
+
+        return response('tutto bene', 200);
+    });
+
+    $this->get('/prova/catturata')->assertOk();
+
+    $occorrenza = OccorrenzaErrore::sole();
+
+    // Il contesto HTTP resta — la richiesta c'era davvero — ma il codice no:
+    // `null` dice «non lo sappiamo», che è l'unica cosa onesta da qui.
+    expect($occorrenza->contesto)->toBe('http')
+        ->and($occorrenza->percorso)->toBe('prova/catturata')
+        ->and($occorrenza->codice_http)->toBeNull();
+});
+
+it('records no HTTP code at all, because the ones that carry it never arrive', function () {
+    // ⚠️ **La colonna oggi è sempre nulla su HTTP, ed è giusto sapere perché.**
+    // Il ramo `instanceof HttpExceptionInterface` di `codice()` è, di fatto,
+    // codice morto: `HttpException` sta nella lista `internalDontReport` del
+    // framework, quindi non raggiunge il tracker nemmeno riportata a mano —
+    // verificato, e la prima stesura di questo test cercava un'occorrenza che
+    // non è mai nata.
+    //
+    // Il ramo resta perché un'eccezione applicativa **può** implementare
+    // l'interfaccia senza essere una `HttpException`, e allora quel codice
+    // sarebbe un fatto. Questo caso congela il comportamento di oggi, così il
+    // giorno in cui una di quelle arrivasse il cambiamento si vedrebbe.
+    Route::middleware('web')->get('/prova/non-trovata', fn () => abort(404));
+
+    $this->get('/prova/non-trovata')->assertNotFound();
+
+    expect(OccorrenzaErrore::count())->toBe(0);
+});
+
 it('never invents an HTTP context for an error born in console', function () {
     // ⚠️ **Fuori da HTTP `request()` non è assente: è FABBRICATA da `$_SERVER`**,
     // e dice `GET`, percorso `/`, ip `127.0.0.1`, user agent `Symfony`.

@@ -992,6 +992,19 @@ gantt
 
 ---
 
+> ## 🧹 Tre difetti trovati guardando le pagine — 6 Settembre 2026
+>
+> Emersi dalla verifica manuale di ADR-038 e ADR-039, non da un test: nessuno dei tre era coperto, ed è il motivo per cui erano lì. Ciascuno chiuso col proprio caso e con la sua prova di mutazione.
+>
+> - [x] **`/utenti` non paginava.** Chiudeva con `get()`: **tutte** le persone dell'Ente in una schermata, ricaricate a ogni update di Livewire. 🔴 E la paginazione da sola sarebbe stata un difetto nuovo: `adminAttivi` era contato sulla collezione caricata e governa il marcatore «ultimo Admin», quindi un Admin da solo nella pagina che stai guardando sarebbe sembrato l'ultimo e i suoi comandi sarebbero spariti — mentre l'Ente ne ha altri due nella pagina dopo. Ora si conta in SQL. Dieci per pagina, come la sorella `Piattaforma\Tecnici`.
+> - [x] **«1 sedi aperte, 0 chiuse».** Il plurale non si accordava, nel caso più comune e nel gesto che apre a una persona **tutte le macchine di un cliente**. I rami sono ora separati per direzione: «1 sede in più» / «2 sedi in meno», invece di far leggere uno zero per sapere che da quel lato non è successo niente.
+> - [x] **Il tracker dichiarava `HTTP 500` su risposte che erano 200.** Il default di `CatturaErrori::codice()` non era la risposta inviata: era un'ipotesi su come l'app avrebbe reagito, e `StripeWebhookController` la smentisce per mestiere — `report($e)` e poi un 200, perché un webhook che ritenta non ripara un incasso già rifiutato. Si leggeva «HTTP 500» su una richiesta riuscita, **nella pagina in cui si diagnosticano i pagamenti**. Ora è `null`: «non lo sappiamo» è l'unica cosa onesta da lì.
+>   - ⚠️ Scoperto scrivendo il test: il ramo `instanceof HttpExceptionInterface` è **codice morto**, perché `HttpException` sta in `internalDontReport` del framework e non raggiunge il tracker nemmeno riportata a mano. Un caso lo congela, così il giorno in cui un'eccezione applicativa portasse davvero un codice il cambiamento si vedrebbe.
+>
+> Suite da 2452 a **2478**.
+
+---
+
 > ## 🕐 Il fuso orario diventa italiano — ADR-041, 6 Settembre 2026
 >
 > **Su richiesta di Marco**, che aveva notato gli orari automatici sfasati: «l'app sarà utilizzata in Italia e quindi il fuso orario deve essere come standard». `config/app.php` dichiarava `UTC` — il default di Laravel, mai argomentato — quindi ogni `created_at` era indietro di due ore in estate e una in inverno.

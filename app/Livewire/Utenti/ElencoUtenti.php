@@ -15,12 +15,13 @@ use App\Support\Utenti\InvitoRifiutato;
 use App\Support\Utenti\RuoliAssegnabili;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
+use Livewire\WithPagination;
 use RuntimeException;
 use Throwable;
 
@@ -75,6 +76,17 @@ use Throwable;
 #[Layout('components.layouts.app')]
 class ElencoUtenti extends Component
 {
+    use WithPagination;
+
+    /**
+     * Dieci per pagina, come `Piattaforma\Tecnici`, che è la schermata sorella.
+     *
+     * ⚠️ Prima non paginava affatto: un `get()` rendeva **tutte** le persone
+     * dell'Ente in una schermata sola. Con venti righe non si nota; un ospedale
+     * con qualche centinaio di persone caricava tutto a ogni update di Livewire.
+     */
+    private const PER_PAGE = 10;
+
     /**
      * `utenti.view`, che esiste a catalogo dal primo giorno ed è già dell'Admin:
      * nessun permesso nuovo, quindi **nessun riseeding** di `config/rbac.php` —
@@ -756,9 +768,9 @@ class ElencoUtenti extends Component
     }
 
     /**
-     * @return Collection<int, User>
+     * @return LengthAwarePaginator<int, User>
      */
-    private function persone(): Collection
+    private function persone(): LengthAwarePaginator
     {
         // `with('roles')`: due query in tutto, qualunque sia il numero di
         // persone. Il ruolo è una colonna dell'elenco, e senza l'eager load
@@ -772,24 +784,37 @@ class ElencoUtenti extends Component
             ->with('roles')
             ->orderBy('name')
             ->orderBy('id')
-            ->get();
+            ->paginate(self::PER_PAGE);
+    }
+
+    /**
+     * Quanti Admin **attivi** ha l'Ente, contati dal database.
+     *
+     * 🔴 **Contarli sulla pagina sarebbe un difetto, non un'ottimizzazione.**
+     * Il numero governa il marcatore «ultimo Admin», cioè quali comandi la
+     * tabella mostra: su una pagina che ne contiene uno solo, ogni Admin
+     * sembrerebbe l'ultimo e i suoi comandi sparirebbero — mentre l'Ente ne ha
+     * altri due nella pagina dopo. Prima della paginazione la collezione era
+     * l'elenco intero e la distinzione non esisteva.
+     *
+     * ⚠️ Resta comunque **solo cosa mostrare**: la guardia vera è
+     * `ultimoAdmin()`, che rilegge dal database dentro l'azione.
+     */
+    private function adminAttivi(): int
+    {
+        return $this->personeDellEnte()
+            ->whereNull('deleted_at')
+            ->whereHas('roles', fn (Builder $q) => $q->where('name', 'Admin'))
+            ->count();
     }
 
     public function render(): View
     {
         $persone = $this->persone();
 
-        // Conteggio in memoria, sulla collezione già caricata: serve solo a
-        // **nascondere** i comandi che l'azione rifiuterebbe comunque. La
-        // guardia vera è `ultimoAdmin()`, che rilegge dal database.
-        $adminAttivi = $persone
-            ->reject(fn (User $u) => $u->trashed())
-            ->filter(fn (User $u) => $u->hasRole('Admin'))
-            ->count();
-
         return view('livewire.utenti.elenco-utenti', [
             'persone' => $persone,
-            'adminAttivi' => $adminAttivi,
+            'adminAttivi' => $this->adminAttivi(),
             // Calcolati server-side e indicizzati per id: i due helper restano
             // privati. Se fossero pubblici, Livewire li esporrebbe come azioni
             // e il model binding su `User` (che non e tenant-scoped) potrebbe

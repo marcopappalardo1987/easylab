@@ -336,10 +336,25 @@ trait GestisceTecnici
 
         $this->chiudiPortafoglio();
 
+        // ⚠️ Il plurale si accorda: «1 sedi aperte» era ciò che leggeva chi
+        // spuntava una sola sede, cioè il caso più comune, nel gesto che apre a
+        // una persona tutte le macchine di un cliente.
+        //
+        // I due rami separati non sono ridondanza: un portafoglio si tocca quasi
+        // sempre in una direzione sola, e «2 sedi aperte, 0 chiuse» costringe a
+        // leggere uno zero per sapere che non è successo niente da quel lato.
         $this->annuncia(match (true) {
             $conferiti->isEmpty() && $revocati->isEmpty() => "Il portafoglio di {$tecnico->name} non è cambiato.",
-            default => "Portafoglio di {$tecnico->name} aggiornato: {$conferiti->count()} sedi aperte, {$revocati->count()} chiuse. Ha effetto subito.",
+            $revocati->isEmpty() => "Portafoglio di {$tecnico->name} aggiornato: ".self::sedi($conferiti->count()).' in più. Ha effetto subito.',
+            $conferiti->isEmpty() => "Portafoglio di {$tecnico->name} aggiornato: ".self::sedi($revocati->count()).' in meno. Ha effetto subito.',
+            default => "Portafoglio di {$tecnico->name} aggiornato: ".self::sedi($conferiti->count()).' in più e '.self::sedi($revocati->count()).' in meno. Ha effetto subito.',
         });
+    }
+
+    /** «1 sede» / «3 sedi»: l'accordo del plurale, in un punto solo. */
+    private static function sedi(int $quante): string
+    {
+        return $quante.($quante === 1 ? ' sede' : ' sedi');
     }
 
     // ─── Cestino ─────────────────────────────────────────────────────────────

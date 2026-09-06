@@ -205,6 +205,10 @@
         </div>
     </x-ui.card>
 
+    <div class="mt-4">
+        {{ $persone->links() }}
+    </div>
+
     <p class="mt-3 text-xs text-ink-3">
         Una persona cestinata non entra più e sparisce dalle tendine, ma lo storico continua a nominarla:
         chi ha fatto un intervento resta chi l'ha fatto.
