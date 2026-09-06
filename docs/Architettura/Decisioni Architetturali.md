@@ -1374,3 +1374,42 @@ Il plink attiva quindi `tax_id_collection`, e il webhook scrive la partita IVA s
 ⚠️ Solo la partita IVA, non gli altri tre campi: `codice_fiscale`, `pec` e `codice_destinatario_sdi` restano da compilare a mano dalla cabina. Stripe non li raccoglie, e in V1 il software non fa e-invoicing (ADR-010) — quindi valgono la richiesta a voce, non tre campi in più fra il cliente e il pagamento.
 
 **Verifica residua.** Rifare il pagamento su staging dopo aver alzato la versione dell'endpoint, e controllare che l'Ente nasca con referente e ragione sociale **distinti**, e che arrivi **un solo** messaggio (l'invito). La porta reale (`PortaListinoStripeReale`) resta senza test di suite, per la scelta già dichiarata al suo interno: è il motivo per cui questi due difetti li ha trovati un pagamento e non la suite.
+
+---
+
+**ADR-040 — Un cliente si elimina davvero: dati, file e abbonamento, senza ripristino**
+
+*Stato: Accettata e attuata nel codice il 6 Set 2026. **Rovescia una regola scritta in tre punti**: il soft delete che 🔗 ADR-038 motiva per esteso su `User`, la dichiarazione di `Documento` che «la rimozione fisica è materiale del job di retention», e il `RESTRICT` sulla FK `unita_organizzativa.account_id`, la cui migration porta scritto «un account con Enti non si cancella hard». Il rovesciamento vale per il **solo Account** e per il **solo gesto amministrativo di piattaforma**: ovunque altro il cestino resta la regola. Estende 🔗 ADR-013 (le leve della cabina) con la quarta e ultima. Non tocca 🔗 ADR-018: il gesto passa dalla stessa porta `VistaPiattaforma` di tutte le altre leve.*
+
+**Contesto.** Il 6 Set 2026 un pagamento vero su staging non ha creato l'account, e **non era un difetto**: quell'email era già Admin di «Prova Invito Reale», un tenant di prova con zero strumenti, e `ProvisionaEnte` con `esigiAccountNuovo: true` ha rifiutato — due tenant per la stessa persona sarebbero due contratti per lo stesso cliente.
+
+Il problema stava un passo più in là: **dalla UI non c'era modo di togliere di mezzo quel tenant.** La cabina sapeva bloccare, sbloccare e correggere i dati fiscali, non eliminare. Un account creato per sbaglio restava per sempre, e con lui l'email del suo Admin — che `users.email`, unique **senza condizione** (ADR-038), tiene occupata a vita. Un tenant di prova diventava così un indirizzo bruciato.
+
+**Decisione.** Un gesto «Elimina» nella cabina che porta via **tutto**: strumenti, interventi, documenti, garanzie, ricambi, spostamenti, avvisi, sedi, le persone rimaste senza contratto, i file su Backblaze; chiude l'abbonamento su Stripe **all'istante**; e avvisa per email chi aveva accesso.
+
+**Perché una cancellazione vera e non un cestino, dopo aver scelto il cestino ovunque.** Perché il cestino qui non risolverebbe il problema per cui il gesto esiste: i dati resterebbero, i file pure, e — soprattutto — resterebbe da decidere cosa fare delle persone. La richiesta era esplicita: *«tutti gli strumenti e i dati in possesso del tenant devono essere eliminati anche»*.
+
+**Le tre decisioni che reggono il gesto.**
+
+1. ⛔ **L'ordine è la correttezza.** Nessuna FK ha `cascadeOnDelete`: sono tutte RESTRICT, quindi le foglie vanno prima delle radici e sbagliare l'ordine dà un errore di integrità **a metà lavoro**, cioè un tenant mezzo cancellato. L'elenco vive in `EliminaCliente::TABELLE`, esplicito e non dedotto dallo schema: ciò che un gesto distruttivo porta via è una **decisione**, e dedurla significherebbe che aggiungere una tabella cambia in silenzio cosa viene distrutto. Gli Enti si cancellano per livelli, perché `parent_id` punta alla stessa tabella.
+
+2. 🔴 **Stripe e Backblaze stanno FUORI dalla transazione, e DOPO il delete locale.** Fuori perché un rollback non annulla ciò che un terzo ha già fatto. Dopo perché `StripeWebhookController::accountDa()` dichiara «account cestinato → nessuna scrittura e 200»: solo in quest'ordine il `customer.subscription.deleted` di ritorno è un no-op pulito, mentre al contrario riscriverebbe lockout e piano su una riga che stiamo eliminando. `cancelNow()` e non `cancel()`: l'abbonamento finisce adesso, **senza rimborso** — il periodo già pagato è una decisione commerciale, e prenderla da un click di conferma è esattamente ciò che non si vuole eliminando un moroso o un tenant di prova.
+
+3. ⚠️ **Se un servizio esterno fallisce, l'eliminazione resta fatta** e il guasto si **dice**, con l'id della subscription e il prefisso da rimuovere a mano. Annullare per un terzo che non risponde legherebbe un gesto di dominio alla sua disponibilità — e a quel punto i dati sono già andati.
+
+**La conferma.** Si riscrive la ragione sociale, che la modale **mostra** ed è selezionabile: nasconderla renderebbe il gesto una caccia al dato senza renderlo più sicuro. Ciò da cui protegge è il click sulla riga sbagliata e il doppio invio, non la disattenzione di chi ha già letto l'elenco. Confronto `trim()` + case-insensitive: pretendere la maiuscola esatta punirebbe un copia-incolla corretto senza proteggere da niente. ⚠️ Se la ragione sociale è **vuota** — succede: da un Payment Link arriva da un campo di Stripe — si chiede l'email di un membro, o quel cliente sarebbe **non eliminabile**, cioè lo stesso vicolo cieco da cui questa decisione è nata.
+
+**Il permesso: nessuno nuovo.** `billing.lockout` con una nuova ability sulla Policy. È già il permesso «gesto distruttivo di piattaforma su account altrui», già nel set 🔒, già dei soli Developer e Superadmin. ⛔ Aggiungerne uno a `config/rbac.php` obbligherebbe a **riseminare**, e da S6 quel comando cancella ogni personalizzazione fatta da `/piattaforma/ruoli`, in entrambe le direzioni: un permesso nuovo per un gesto già coperto costerebbe la matrice di runtime di tutti i clienti. ⚠️ Ability a sé e non `lockout` riusata: il giorno in cui l'eliminazione dovesse restringersi, il posto dove scriverlo deve già esistere.
+
+**Conseguenze e trappole.**
+
+- 🔴 **`avvisi_scadenza` è la trappola di questo codice.** Il suo `tenant_id` non è una FK ma un indice denormalizzato (per lo scheduler in console): dimenticarla non produce **nessun errore**, solo righe orfane che il digest continua a leggere. Il test la nomina da sola, oltre che nell'inventario.
+- ⛔ **L'inventario dei residui non legge `EliminaCliente::TABELLE`.** Scorrere la costante del codice sotto esame renderebbe il test cieco al difetto che deve cogliere: togliendo una voce da lì, l'inventario smetterebbe di controllarla e resterebbe verde. È stato scritto così, e la prova di mutazione l'ha dimostrato: due elenchi che devono coincidere sono il punto.
+- ⚠️ **Il registro di audit resta**, ed è deliberato: `activity_log` è morph e senza FK. Le righe non ci sono più e nessun backup le riporta, quindi i **conteggi** nel registro sono la sola cosa che resta a rispondere «cosa c'era». La riga la scrive l'azione e non il model: `Account` ha `AuditsDomainWrites`, e un `activity()` lì dentro renderebbe rosso `AuditCoverageGuardrailTest`.
+- ⚠️ **L'email si manda per ultima e dentro `rescue()`.** Prima sarebbe annunciare la fine di un contratto che potrebbe ancora fallire; e un SMTP giù non deve trasformare un'eliminazione riuscita in un errore. Gli indirizzi si raccolgono **prima** (dopo gli utenti non esistono più) e si notificano con `Notification::route('mail', …)`.
+- ⚠️ **`registrazioni.account_id` è `nullOnDelete`**: la riga resta, orfana, come traccia di **da dove** quel cliente era entrato. È voluto — è la sola risposta superstite alla domanda «come è arrivato».
+- ⚠️ **Chi appartiene a più clienti sopravvive.** Un tecnico EasyLab o un consulente su due contratti non deve sparire perché uno dei due è stato eliminato.
+- **Nessuna migration**, quindi niente da applicare al Postgres di sviluppo. E nessun permesso nuovo, quindi nessun riseeding.
+- 🔴 **Il registro dei trattamenti va aggiornato**: questa è la **prima cancellazione vera** del progetto, e la voce «Cancellazione / limitazione» era rinviata a S7. Il DPA Backblaze resta non firmato, e ora c'è un gesto che cancella davvero da quel bucket.
+
+**Verifica residua.** Su staging: eliminare «Prova Invito Reale», poi rifare il resend dell'evento Stripe già pagato — che a quel punto **deve** creare l'account, chiudendo il giro da cui questa decisione è nata.

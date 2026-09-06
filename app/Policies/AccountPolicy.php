@@ -79,4 +79,33 @@ class AccountPolicy
     {
         return $user->can('billing.lockout');
     }
+
+    /**
+     * 🔴 L'eliminazione **definitiva** di un cliente (🔗 ADR-040): dati, file,
+     * abbonamento, e le persone rimaste senza contratto.
+     *
+     * ## Perché `billing.lockout` e non un permesso nuovo
+     *
+     * Perché è già **esattamente** questo: il permesso «gesto distruttivo di
+     * piattaforma su account altrui», nel set 🔒 (quindi non concedibile
+     * dall'editor dei ruoli), in mano ai soli Developer e Superadmin, e con
+     * un'ability che per scelta non chiede l'appartenenza — chiudere il proprio
+     * contratto non è un caso d'uso, e qui ancora meno.
+     *
+     * ⛔ E perché aggiungere una voce a `config/rbac.php` obbligherebbe a
+     * **riseminare**, e da S6 quel comando `syncPermissions()` cancella ogni
+     * personalizzazione fatta da `/piattaforma/ruoli` — in entrambe le
+     * direzioni. Un permesso nuovo per un gesto già coperto costerebbe la
+     * matrice di runtime di tutti i clienti.
+     *
+     * ⚠️ **Un'ability a sé e non `lockout` riusata**, benché la condizione sia
+     * la stessa: il giorno in cui l'eliminazione dovesse restringersi al solo
+     * Developer, o chiedere una condizione in più, il posto dove scriverlo deve
+     * già esistere. Un `@can('lockout')` sul pulsante «Elimina» direbbe la cosa
+     * giusta oggi e la cosa sbagliata al primo cambiamento.
+     */
+    public function elimina(User $user, Account $account): bool
+    {
+        return $user->can('billing.lockout');
+    }
 }

@@ -3,6 +3,7 @@
 namespace App\Livewire\Piattaforma\Concerns;
 
 use App\Models\Account;
+use App\Support\Piattaforma\EliminaCliente;
 use App\Support\Tenancy\VistaPiattaforma;
 use Illuminate\Support\Facades\Gate;
 
@@ -29,10 +30,30 @@ trait AmministraAccount
     /** L'account su cui è aperto un pannello, o `null`. */
     public ?int $accountInLavorazione = null;
 
-    /** Quale pannello: `lockout` o `fiscali`. Vuoto = nessuno. */
+    /** Quale pannello: `lockout`, `fiscali` o `eliminazione`. Vuoto = nessuno. */
     public string $pannello = '';
 
     public string $motivoLockout = '';
+
+    /**
+     * Ciò che si deve riscrivere per abilitare l'eliminazione (🔗 ADR-040).
+     *
+     * ⚠️ **Non è teatro.** Protegge dal click sulla riga sbagliata e dal doppio
+     * invio, che è il modo in cui questi incidenti accadono davvero — non da un
+     * amministratore che non ha capito. Per questo la modale il nome lo
+     * **mostra**: nascondere il dato renderebbe il gesto una caccia al tesoro
+     * senza renderlo più sicuro.
+     */
+    public string $confermaEliminazione = '';
+
+    /**
+     * Il guasto di un servizio esterno che **non** ha impedito l'eliminazione.
+     *
+     * ⚠️ Fuori dalla modale, che a quel punto è chiusa: se restasse dentro
+     * sparirebbe insieme a lei, e con lui la sola riga che dice quale
+     * subscription resta aperta su Stripe.
+     */
+    public ?string $erroreEliminazione = null;
 
     /**
      * I campi fiscali, **nominati una volta sola**.
@@ -197,6 +218,81 @@ trait AmministraAccount
         $this->chiudiPannello();
     }
 
+    /**
+     * 🔴 Apre la conferma dell'eliminazione **definitiva** (🔗 ADR-040).
+     *
+     * Non elimina niente: qui si contano le conseguenze e si mostra cosa
+     * sparirebbe. Il gesto vero è `eliminaAccount()`, dietro la riscrittura del
+     * nome.
+     */
+    public function apriEliminazione(int $accountId): void
+    {
+        $account = $this->accountAmministrabile($accountId, 'elimina');
+
+        $this->confermaEliminazione = '';
+        $this->resetValidation();
+        $this->chiudiOgniModale();
+        $this->accountInLavorazione = $account->id;
+        $this->pannello = 'eliminazione';
+    }
+
+    /**
+     * ⛔ **Elimina tutto, e non c'è ripristino.**
+     *
+     * Le guardie sono tre e in quest'ordine: l'autorizzazione (che rilegge
+     * dalla porta, quindi esclude l'account di piattaforma e i cestinati), la
+     * riscrittura del nome, e solo allora l'azione.
+     *
+     * ⚠️ **Il confronto è `trim()` + case-insensitive**: pretendere la maiuscola
+     * esatta punirebbe un copia-incolla corretto senza proteggere da niente, e
+     * la protezione qui è «hai guardato quale riga stai eliminando», non «sai
+     * scrivere».
+     *
+     * ⚠️ E la ragione sociale può essere **vuota** — un account nato da un
+     * Payment Link la prende da un campo di Stripe — quindi in quel caso si
+     * chiede l'email di un membro. La regola resta una: si riscrive qualcosa
+     * che identifica *questo* cliente e nessun altro.
+     */
+    public function eliminaAccount(): void
+    {
+        $account = $this->accountAmministrabile($this->accountInLavorazione, 'elimina');
+
+        $atteso = self::parolaDiConferma($account);
+
+        if (mb_strtolower(trim($this->confermaEliminazione)) !== mb_strtolower($atteso)) {
+            $this->addError('confermaEliminazione', "Per procedere riscrivi «{$atteso}».");
+
+            return;
+        }
+
+        $guasti = app(EliminaCliente::class)->esegui($account, auth()->user());
+
+        $this->chiudiPannello();
+
+        // ⚠️ I guasti dei servizi esterni **non** hanno impedito l'eliminazione:
+        // vanno detti, o resterebbero una subscription aperta su Stripe e dei
+        // file su Backblaze che nessuno sa di dover chiudere a mano.
+        $this->erroreEliminazione = $guasti === [] ? null : implode(' ', $guasti);
+    }
+
+    /**
+     * Cosa si deve riscrivere: la ragione sociale, o l'email di un membro se
+     * quella manca.
+     *
+     * ⚠️ Statica e pubblica perché la usa **anche il Blade**, che deve mostrare
+     * esattamente la stringa che l'azione confronterà. Due modi di calcolarla
+     * divergerebbero al primo account senza ragione sociale — cioè proprio nel
+     * caso raro, dove nessuno se ne accorgerebbe prima di trovarsi bloccato.
+     */
+    public static function parolaDiConferma(Account $account): string
+    {
+        $ragioneSociale = trim((string) $account->ragione_sociale);
+
+        return $ragioneSociale !== ''
+            ? $ragioneSociale
+            : (string) $account->membri()->value('email');
+    }
+
     /** L'account su cui è aperto un pannello, per la vista. */
     public function accountAperto(): ?Account
     {
@@ -223,6 +319,7 @@ trait AmministraAccount
         $ability = match ($this->pannello) {
             'lockout' => 'lockout',
             'fiscali' => 'manage',
+            'eliminazione' => 'elimina',
             default => null,
         };
 

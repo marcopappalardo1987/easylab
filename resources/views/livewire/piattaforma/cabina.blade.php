@@ -662,6 +662,21 @@
                                         <span aria-hidden="true">🧾</span> Dati
                                     </button>
                                 @endcan
+
+                                {{-- ⚠️ **Ultimo e distinto dagli altri** (🔗 ADR-040):
+                                     è il solo gesto di questa riga da cui non si
+                                     torna indietro, e metterlo in mezzo agli altri
+                                     con lo stesso aspetto lo renderebbe raggiungibile
+                                     per errore quanto «Dati». Il colore è l'unica
+                                     differenza che si nota prima del click. --}}
+                                @can('elimina', $cliente)
+                                    <button type="button" wire:click="apriEliminazione({{ $cliente->id }})"
+                                            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-bad-soft-ink hover:bg-bad-soft"
+                                            data-apri-eliminazione="{{ $cliente->id }}"
+                                            title="Elimina definitivamente questo cliente e tutti i suoi dati">
+                                        <span aria-hidden="true">🗑</span> Elimina
+                                    </button>
+                                @endcan
                             </td>
                         </tr>
 
@@ -931,6 +946,111 @@
                         class="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-brand-ink hover:bg-brand-hover">Salva</button>
             </div>
         </x-ui.modal>
+    @endif
+
+    {{-- ─── L'eliminazione definitiva (🔗 ADR-040) ────────────────────────── --}}
+    @if ($inLavorazione && $pannello === 'eliminazione')
+        @php
+            $conseguenze = \App\Support\Piattaforma\EliminaCliente::conseguenze($inLavorazione);
+            $parola = \App\Livewire\Piattaforma\Concerns\AmministraAccount::parolaDiConferma($inLavorazione);
+        @endphp
+
+        <x-ui.modal :title="'Eliminare '.($inLavorazione->ragione_sociale ?: 'questo cliente').'?'" close="chiudiPannello">
+            {{-- 🔴 **Cosa sparisce, contato — non «i dati».** È il pattern che
+                 `easylab:lockout` porta già in console: stampare la portata del
+                 gesto prima di compierlo. Qui vale il doppio, perché di qui non
+                 si torna indietro. --}}
+            <div class="rounded-md border border-border bg-bad-soft p-3">
+                <p class="text-sm font-medium text-bad-soft-ink">Questa operazione non è reversibile.</p>
+
+                {{-- ⚠️ Le voci a **zero non si stampano**: un elenco che dice
+                     «0 strumenti, 0 interventi» su un tenant di prova allarma
+                     per uno storico che non esiste, e chi legge smette di
+                     leggere davvero l'elenco la volta in cui conta. --}}
+                @php
+                    $voci = collect([
+                        [$conseguenze->sedi, 'sede', 'sedi'],
+                        [$conseguenze->strumenti, 'strumento', 'strumenti'],
+                        [$conseguenze->interventi, 'intervento', 'interventi'],
+                        [$conseguenze->documenti, 'documento', 'documenti'],
+                    ])->filter(fn ($v) => $v[0] > 0)
+                      ->map(fn ($v) => number_format($v[0], 0, ',', '.').' '.($v[0] === 1 ? $v[1] : $v[2]));
+                @endphp
+
+                <p class="mt-2 text-sm text-ink-2">
+                    @if ($voci->isEmpty())
+                        Questo cliente non ha ancora nessun dato: non si perde niente.
+                    @else
+                        Vengono eliminati definitivamente
+                        <strong>{{ $voci->join(', ', ' e ') }}</strong>{{ $conseguenze->documenti > 0 ? ', insieme ai file caricati' : '' }}.
+                    @endif
+                </p>
+
+                @if ($conseguenze->personeSenzaAltriContratti > 0)
+                    <p class="mt-2 text-sm text-ink-2">
+                        <strong>{{ $conseguenze->personeSenzaAltriContratti }}</strong>
+                        {{ $conseguenze->personeSenzaAltriContratti === 1 ? 'persona resta' : 'persone restano' }}
+                        senza contratto e {{ $conseguenze->personeSenzaAltriContratti === 1 ? 'viene eliminata' : 'vengono eliminate' }} insieme al cliente.
+                        {{-- ⚠️ Detto, perché è la ragione per cui l'indirizzo
+                             torna libero: `users.email` è unique senza
+                             condizione, quindi una persona viva senza contratto
+                             bloccherebbe per sempre ogni nuova registrazione con
+                             quella casella. --}}
+                        @if ($conseguenze->membri > $conseguenze->personeSenzaAltriContratti)
+                            Chi appartiene anche ad altri clienti resta.
+                        @endif
+                    </p>
+                @endif
+
+                @if ($conseguenze->abbonamentoAttivo)
+                    <p class="mt-2 text-sm text-ink-2">
+                        L'abbonamento su Stripe viene <strong>chiuso subito</strong>, senza rimborso del periodo in corso.
+                    </p>
+                @endif
+
+                <p class="mt-2 text-xs text-ink-3">
+                    Chi aveva accesso riceve un'email di avviso. La riga nel registro di audit resta.
+                </p>
+            </div>
+
+            {{-- ⚠️ Il nome si **mostra** ed è selezionabile: nasconderlo
+                 renderebbe il gesto una caccia al dato senza renderlo più
+                 sicuro. Ciò da cui la riscrittura protegge è il click sulla riga
+                 sbagliata e il doppio invio, non la disattenzione di chi ha già
+                 letto l'elenco qui sopra. --}}
+            <label for="conferma-eliminazione" class="mt-4 block text-sm font-medium text-ink">
+                Per confermare, riscrivi <span class="select-all font-mono text-ink">{{ $parola }}</span>
+            </label>
+
+            <input id="conferma-eliminazione" type="text" wire:model="confermaEliminazione"
+                   autocomplete="off" spellcheck="false"
+                   class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+
+            @error('confermaEliminazione')
+                <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
+            @enderror
+
+            <div class="mt-4 flex justify-end gap-2">
+                <button type="button" wire:click="chiudiPannello"
+                        class="rounded-md px-3 py-1.5 text-sm font-medium text-ink-2 hover:bg-surface-sunken hover:text-ink">Annulla</button>
+                <button type="button" wire:click="eliminaAccount" data-elimina
+                        class="rounded-md bg-bad-dot px-3 py-1.5 text-sm font-medium text-ink-inverse hover:brightness-90">
+                    Elimina definitivamente
+                </button>
+            </div>
+        </x-ui.modal>
+    @endif
+
+    {{-- ⚠️ **Fuori dalla modale**, che a questo punto è chiusa: Stripe o
+         Backblaze possono aver fallito senza impedire l'eliminazione, e questa è
+         la sola riga che dice cosa resta da chiudere a mano. --}}
+    @if ($erroreEliminazione)
+        <div class="mt-4 rounded-md border border-border bg-warn-soft p-3" data-errore-eliminazione>
+            <p class="text-sm text-warn-soft-ink">
+                Il cliente è stato eliminato, ma qualcosa fuori da Easy Lab non ha risposto:
+                {{ $erroreEliminazione }}
+            </p>
+        </div>
     @endif
 
     <div class="mt-4 flex flex-wrap items-center justify-between gap-2">
