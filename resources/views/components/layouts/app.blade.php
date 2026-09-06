@@ -214,6 +214,20 @@
                             </x-app.nav-link>
                         @endcan
 
+                        {{-- La Guida. Stesso permesso della cabina, e per una ragione
+                             diversa: qui non c'è nulla da proteggere, è un cancello di
+                             rilascio finché il manuale è a cinque guide su quarantasei
+                             (vedi il commento sulla rotta, e `guide/CATALOGO.md`).
+                             Quando si apre, sparisce il `@can` e resta la voce. --}}
+                        @can('tenants.view_all')
+                            <x-app.nav-link :href="route('guida')" :active="request()->routeIs('guida')">
+                                <svg class="size-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
+                                </svg>
+                                Guida
+                            </x-app.nav-link>
+                        @endcan
+
                         {{-- La sezione «Prossimamente» con la voce «Interventi»
                              disabilitata è stata tolta il 25 Ago 2026, ed è la stessa
                              bugia della card rimossa dalla dashboard il 21 Ago, in un

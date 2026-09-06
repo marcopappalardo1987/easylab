@@ -18,6 +18,7 @@ use App\Livewire\Campo\Home as CampoHome;
 use App\Livewire\Dashboard\Home as DashboardHome;
 use App\Livewire\Documenti\ElencoDocumenti;
 use App\Livewire\Fornitori\ElencoFornitori;
+use App\Livewire\Guida\Manuale as GuidaManuale;
 use App\Livewire\Interventi\Scadenzario;
 use App\Livewire\Piattaforma\Cabina;
 use App\Livewire\Piattaforma\EditorRuoli;
@@ -177,6 +178,29 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     Route::get('/piattaforma', Cabina::class)
         ->middleware('can:tenants.view_all')
         ->name('piattaforma.index');
+
+    // La Guida (manuale in applicazione).
+    //
+    // ⚠️ `can:tenants.view_all` **non è una regola di sicurezza**: una guida non
+    // è il dato di nessuno, e il giorno in cui il manuale è completo questa
+    // rotta si apre a chiunque sia autenticato. È un CANCELLO DI RILASCIO —
+    // cinque guide su quarantasei non sono un manuale, e una voce di menù che
+    // porta a un indice quasi vuoto costa più fiducia di quanta ne dia.
+    //
+    // Fra i permessi che oggi separano la piattaforma dai clienti si è scelto
+    // questo perché è nel **set bloccato** di `config/rbac.php`: l'editor ruoli
+    // non può concederlo, quindi nessuno può aprire il manuale a un cliente per
+    // sbaglio prima che sia pronto. Un permesso ridistribuibile qui sarebbe la
+    // stessa forma di svista già evitata sul registro di audit.
+    //
+    // 🔜 Quando si aprirà, la strada NON è aggiungere `guida.view` a
+    // `config/rbac.php` senza pensarci: quel file è solo il bootstrap, e
+    // riseminare cancella la matrice di runtime in entrambe le direzioni
+    // (CLAUDE.md). Si toglie il middleware e basta: nessun permesso serve per
+    // leggere un manuale.
+    Route::get('/guida', GuidaManuale::class)
+        ->middleware('can:tenants.view_all')
+        ->name('guida');
 
     // Il registro di audit, stessa porta e stesso permesso della cabina.
     // ⚠️ **Non** `can:audit.view`, che pure esiste a catalogo: quel permesso ce
