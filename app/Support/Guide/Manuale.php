@@ -28,7 +28,12 @@ use Illuminate\Support\Str;
  */
 final class Manuale
 {
-    private const CHIAVE = 'guide.manuale';
+    /**
+     * ⚠️ La chiave porta una versione perché il suo CONTENUTO ha cambiato forma
+     * (v1 metteva in cache una Collection, vedi sotto): senza, le voci avvelenate
+     * già scritte sarebbero rimaste a far cadere la pagina fino alla scadenza.
+     */
+    private const CHIAVE = 'guide.manuale.v2';
 
     /** @return Collection<int, array<string, mixed>> */
     public static function tutte(): Collection
@@ -37,11 +42,23 @@ final class Manuale
         // Nei test nemmeno, e non è una comodità: un test che sposta
         // `config('guide.guide')` leggerebbe l'elenco messo in cache dal test
         // precedente, cioè misurerebbe la cache invece della regola.
-        $carica = fn () => self::leggi();
+        //
+        // ⛔ **In cache va un array puro, mai la Collection.**
+        // `config/cache.php` porta `'serializable_classes' => false`, cioè il
+        // framework si RIFIUTA di deserializzare qualunque classe letta dalla
+        // cache — è la difesa dai gadget chain se `APP_KEY` trapela. Un oggetto
+        // messo lì dentro torna come `__PHP_Incomplete_Class`, e il tipo di
+        // ritorno di questo metodo esplode in un TypeError.
+        //
+        // Non è un'ipotesi: la prima versione metteva in cache la Collection e
+        // staging è andato in 500 appena deployato, mentre in locale e nei test
+        // tutto era verde — perché lì il ramo con la cache non viene mai
+        // eseguito. `SerializzabilitaGuidaTest` ora percorre quel ramo davvero.
+        $voci = app()->environment(['local', 'testing'])
+            ? self::leggi()->all()
+            : Cache::remember(self::CHIAVE, now()->addHour(), fn () => self::leggi()->all());
 
-        return app()->environment(['local', 'testing'])
-            ? $carica()
-            : Cache::remember(self::CHIAVE, now()->addHour(), $carica);
+        return collect($voci);
     }
 
     public static function dimentica(): void
