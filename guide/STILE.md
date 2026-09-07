@@ -248,13 +248,28 @@ DB fa negare tutto a tutti nell'app di sviluppo). Non aggirarli.
 
 ## 8. Flussi che richiedono un altro ruolo
 
-`config/rbac.php` impone la 2FA a **Developer, Superadmin e Admin**. Le guide di
-amministrazione e di piattaforma quindi non si possono girare con l'utente
-dimostrativo attuale, e servono due passaggi in più:
+`config/rbac.php` impone la 2FA a **Developer, Superadmin e Admin**, quindi per
+un po' le guide di amministrazione e di piattaforma non si sono potute girare.
+✅ **Sbloccato il 7 Set 2026**, in due pezzi:
 
-1. piantare nel DB demo un segreto TOTP noto e confermato;
-2. far generare a Playwright il codice a sei cifre al momento del login.
+1. `bin/pianta-2fa.sh` mette nel **seme** del DB dimostrativo un segreto TOTP
+   noto e confermato, sull'Admin `maria.conti@aurora.test`. Va nel seme e non nel
+   DB corrente, perché `azzera.sh` gira prima di ogni copione e lo ricreerebbe
+   senza.
+2. `lib/totp.ts` calcola il codice a sei cifre (RFC 6238, venti righe di crypto
+   standard invece di una dipendenza in più); `lib/accesso.ts` lo usa.
 
-Questo abilita anche una guida a sé — «Attivare la verifica in due passaggi» —
-che al momento non esiste. Finché non è fatto, `CATALOGO.md` segna quelle guide
-come **bloccate**.
+```ts
+import { accedi } from '../lib/accesso';
+
+await accedi(page, 'maria.conti@aurora.test');   // supera la challenge da sé
+```
+
+Chi **filma** il login fa da sé i propri passi e poi chiama `superaIl2FA(page)`.
+
+⚠️ Il codice si calcola **dopo** il submit e non prima: la finestra dura trenta
+secondi, e calcolarlo in anticipo dà un copione che fallisce una volta ogni
+tanto, cioè la specie peggiore.
+
+Il segreto è in chiaro in `lib/totp.ts` ed è un **dato di scena**: vive solo in
+`easylab_demo`, che nessun ambiente vero raggiunge.

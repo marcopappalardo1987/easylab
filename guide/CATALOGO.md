@@ -51,7 +51,7 @@ per permesso, come ogni altra: chi non ha `tenants.view_all` non vede l'argoment
 |---|---|
 | ✅ | fatta |
 | ▫️ | da fare, nessun ostacolo |
-| ⛔ | **bloccata**: serve il login a due fattori nel DB dimostrativo (vedi `STILE.md` §8) |
+| ⛔ | ~~bloccata dal login a due fattori~~ — **sbloccate tutte il 7 Set 2026** (`STILE.md` §8) |
 
 I ruoli sono quelli di `config/rbac.php`: Developer, Superadmin, Admin,
 Responsabile Reparto, Tenant, Tecnico.
@@ -69,7 +69,7 @@ altre guide: a un Responsabile lo switcher **non compare affatto**. Vedi
 | ✅ | `primo-accesso` | l'invito via email, la password, il primo ingresso | `invito.mostra`, `invito.imposta` | tutti |
 | ✅ | `orientarsi` | dashboard, menù di sinistra, campanella delle notifiche, profilo | `dashboard` | tutti |
 | ✅ | `tema-e-notifiche` | tema chiaro/scuro/di sistema, quali avvisi ricevere | `settings.notifiche` | tutti |
-| ⛔ | `due-fattori` | attivare la verifica in due passaggi, i codici di recupero | `settings.security` | Admin+ |
+| ▫️ | `due-fattori` | attivare la verifica in due passaggi, i codici di recupero | `settings.security` | Admin+ |
 | ✅ | `cambiare-sede` | lo switcher fra le sedi di uno stesso account | (top bar) | Tenant ⚠️ |
 
 ## B. Anagrafica — 3 guide
@@ -164,16 +164,16 @@ Non compaiono nella Guida dei clienti.
 
 | | slug | contenuto | rotte |
 |---|---|---|---|
-| ⛔ | `cabina-di-regia` | la home di piattaforma: clienti, preferiti, provisioning | `piattaforma.index` |
-| ⛔ | `parco-clienti` | il parco macchine di tutti i clienti, in sola lettura | `piattaforma.parco` |
-| ⛔ | `parco-scadenzario` | che cosa scade su tutto il parco | `piattaforma.parco.scadenzario` |
-| ⛔ | `parco-ricambi` | i ricambi su tutto il parco | `piattaforma.parco.ricambi` |
-| ⛔ | `impersonazione` | entrare come un cliente, e i limiti | `piattaforma.parco.impersona` |
-| ⛔ | `tecnici-easylab` | i tecnici e i clienti su cui lavorano | `piattaforma.tecnici` |
-| ⛔ | `editor-ruoli` | la matrice ruolo→permesso, le celle «personalizzato», le orfane | `piattaforma.ruoli` |
-| ⛔ | `registro-audit` | chi ha fatto che cosa | `piattaforma.audit` |
-| ⛔ | `errori` | l'error tracker interno | `piattaforma.errori`, `piattaforma.errori.mostra` |
-| ⛔ | `listino` | i piani commerciali e i loro tetti | `piattaforma.piani` |
+| ▫️ | `cabina-di-regia` | la home di piattaforma: clienti, preferiti, provisioning | `piattaforma.index` |
+| ▫️ | `parco-clienti` | il parco macchine di tutti i clienti, in sola lettura | `piattaforma.parco` |
+| ▫️ | `parco-scadenzario` | che cosa scade su tutto il parco | `piattaforma.parco.scadenzario` |
+| ▫️ | `parco-ricambi` | i ricambi su tutto il parco | `piattaforma.parco.ricambi` |
+| ▫️ | `impersonazione` | entrare come un cliente, e i limiti | `piattaforma.parco.impersona` |
+| ▫️ | `tecnici-easylab` | i tecnici e i clienti su cui lavorano | `piattaforma.tecnici` |
+| ▫️ | `editor-ruoli` | la matrice ruolo→permesso, le celle «personalizzato», le orfane | `piattaforma.ruoli` |
+| ▫️ | `registro-audit` | chi ha fatto che cosa | `piattaforma.audit` |
+| ▫️ | `errori` | l'error tracker interno | `piattaforma.errori`, `piattaforma.errori.mostra` |
+| ▫️ | `listino` | i piani commerciali e i loro tetti | `piattaforma.piani` |
 
 ---
 
@@ -182,13 +182,19 @@ Non compaiono nella Guida dei clienti.
 | stato | guide |
 |---|---|
 | ✅ fatte | **5** |
-| ▫️ da fare, nessun ostacolo | **30** |
-| ⛔ bloccate dal 2FA | **11** |
+| ▫️ da fare | **41** |
 | **totale** | **46** |
 
-A 1–2 ore l'una una volta rodata l'impalcatura, sono **circa 35–70 ore** di
-lavoro. Sbloccare il 2FA (mezza giornata) libera un quarto del catalogo e
-aggiunge la guida `due-fattori`, che al momento non esiste in nessuna forma.
+✅ **Il 2FA non blocca più niente** (7 Set 2026): il seme porta un segreto TOTP
+noto e `lib/accesso.ts` supera la challenge da sé, quindi le 11 guide che erano
+⛔ e la `due-fattori` sono girabili come le altre.
+
+⚠️ **E ne sbloccava più di undici.** Il catalogo segnava ▫️ anche `creare-nodi`
+e `marchio-ente`, ma `unita_organizzativa.update` è di **Admin, Superadmin e
+Developer** soltanto: al Responsabile quelle schermate non compaiono, quindi
+erano bloccate anche loro senza che nessuno l'avesse scritto. Prima di dare per
+girabile una guida conviene guardare **chi ha il permesso**, non chi è elencato
+nella colonna «ruoli».
 
 ---
 
@@ -199,7 +205,8 @@ aggiunge la guida `due-fattori`, che al momento non esiste in nessuna forma.
 2. **D + E + F + G** — il ciclo di vita della macchina, cioè il valore del
    prodotto. `intervento` è già qui.
 3. **H + I + J + K + L** — il contorno: fornitori, persone, telefono, soldi.
-4. **Sbloccare il 2FA**, poi **M** e `due-fattori`.
+4. ~~Sbloccare il 2FA~~ **fatto il 7 Set 2026**, quindi **M** e `due-fattori`
+   non aspettano più niente.
 
 ⚠️ Il resto di C (import CSV, QR, storico PDF) può slittare: sono passaggi che si
 fanno una volta sola in fase di avvio, e chi li fa di solito è affiancato.
