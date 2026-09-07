@@ -361,6 +361,14 @@ class DemoSeeder extends Seeder
                     'nome' => $nome,
                     'modello' => $modello,
                     'matricola' => $sigla.'-'.str_pad((string) random_int(1, 999999), 6, '0', STR_PAD_LEFT),
+                    // 🔴 Lo genera il hook `creating` del model, che con
+                    // `insert()` NON scatta: senza questa riga ogni strumento
+                    // seminato nasce senza token, e `/strumenti/{id}/qr` va in
+                    // 500 — `URL::signedRoute` non accetta un parametro nullo.
+                    // Trovato il 7 Set 2026 girando la guida dell'etichetta QR:
+                    // 7559 strumenti su 7559 ne erano privi, nel DB dimostrativo
+                    // e in quello di sviluppo.
+                    'qr_token' => Strumento::nuovoQrToken(),
                     'parametri_tecnici' => json_encode([
                         'Alimentazione' => random_int(0, 1) ? '230 V — 50 Hz' : '400 V — 50 Hz',
                         'Potenza' => random_int(200, 4000).' W',
@@ -789,7 +797,17 @@ class DemoSeeder extends Seeder
             );
         }
 
-        $this->command?->info('Invarianti verificati: stato/data_esecuzione, tenant allineati, ricambi montati coerenti, account agganciati.');
+        // 🔴 Il token del QR: lo assegna un hook `creating` che con `insert()`
+        // non scatta, quindi è esattamente il tipo di invariante che questo
+        // seeder deve garantire da sé. Senza, `/strumenti/{id}/qr` va in 500 —
+        // ed è così che è stato scoperto, girando una guida e non con un test.
+        $senzaQr = Strumento::withoutGlobalScopes()->whereNull('qr_token')->count();
+
+        if ($senzaQr) {
+            throw new \RuntimeException("Invariante violato — strumenti senza qr_token: {$senzaQr}");
+        }
+
+        $this->command?->info('Invarianti verificati: stato/data_esecuzione, tenant allineati, ricambi montati coerenti, account agganciati, token QR presenti.');
     }
 
     /**

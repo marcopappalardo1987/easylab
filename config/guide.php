@@ -85,6 +85,8 @@ return [
         ['slug' => 'scheda-strumento', 'argomento' => 'C', 'chiavi' => ['scheda', 'panoramica', 'linguette', 'tab', 'macchina', 'dettaglio', 'statistiche']],
         ['slug' => 'spostare-strumento', 'argomento' => 'C', 'chiavi' => ['spostare', 'trasloco', 'ubicazione', 'destinazione', 'storico', 'reparto']],
         ['slug' => 'semaforo-forzato', 'argomento' => 'C', 'chiavi' => ['forzare', 'semaforo', 'stato', 'motivazione', 'rosso', 'guasto', 'fermo']],
+        ['slug' => 'per-modello', 'argomento' => 'C', 'chiavi' => ['modello', 'quante', 'unita', 'distribuzione', 'acquisto', 'richiamo', 'fornitore']],
+        ['slug' => 'etichetta-qr', 'argomento' => 'C', 'chiavi' => ['qr', 'etichetta', 'adesivo', 'stampa', 'telefono', 'codice', 'inquadrare']],
         ['slug' => 'cambiare-sede', 'argomento' => 'A', 'chiavi' => ['sede', 'sedi', 'switcher', 'multi-sede', 'contratto', 'account']],
         ['slug' => 'intervento', 'argomento' => 'D', 'chiavi' => ['intervento', 'manutenzione', 'taratura', 'scadenza', 'assegnatario', 'tecnico']],
     ],

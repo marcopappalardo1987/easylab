@@ -90,8 +90,8 @@ altre guide: a un Responsabile lo switcher **non compare affatto**. Vedi
 | ▫️ | `modificare-strumento` | i campi della scheda, il fornitore, la data di installazione | `strumenti.show` | Admin, Responsabile |
 | ✅ | `spostare-strumento` | spostamento fra laboratori e storico degli spostamenti | `strumenti.show` | Admin, Responsabile |
 | ✅ | `semaforo-forzato` | forzare lo stato e perché serve una motivazione | `strumenti.show` | Admin, Responsabile |
-| ▫️ | `per-modello` | dato un modello, dove sono installate le sue unità e quante | `strumenti.modelli` | tutti |
-| ▫️ | `etichetta-qr` | generare, stampare e applicare l'adesivo | `strumenti.qr` | Admin, Responsabile |
+| ✅ | `per-modello` | dato un modello, dove sono installate le sue unità e quante | `strumenti.modelli` | tutti |
+| ✅ | `etichetta-qr` | generare, stampare e applicare l'adesivo | `strumenti.qr` | Admin, Responsabile |
 | ▫️ | `import-csv` | carica → anteprima con errori riga per riga → importa le valide | `strumenti.import` | Admin |
 | ▫️ | `storico-pdf` | il PDF con tutta la vita della macchina | `strumenti.storico-pdf` | tutti |
 
@@ -181,8 +181,8 @@ Non compaiono nella Guida dei clienti.
 
 | stato | guide |
 |---|---|
-| ✅ fatte | **13** |
-| ▫️ da fare | **33** |
+| ✅ fatte | **15** |
+| ▫️ da fare | **31** |
 | **totale** | **46** |
 
 ✅ **Il 2FA non blocca più niente** (7 Set 2026): il seme porta un segreto TOTP

@@ -51,3 +51,40 @@ difetto resta, e riguarda ogni Responsabile di un cliente multi-sede.
 (cioè se `AccessibleNodes` debba includere gli antenati dei nodi assegnati), o
 se basti leggere l'etichetta con `withoutGlobalScope(DepartmentScope::class)`.
 La prima cambia il comportamento di ogni elenco; la seconda tocca solo la barra.
+
+---
+
+## 2. Gli strumenti seminati nascono senza token QR, e la pagina va in 500
+
+**Trovato**: 7 Set 2026, girando `etichetta-qr`.
+**Dove**: `database/seeders/DemoSeeder.php`, blocco degli strumenti.
+**Effetto**: `/strumenti/{id}/qr` risponde **500** —
+`UrlGenerationException: Missing required parameter for [Route: qr.strumento]
+[Missing parameter: token]` — su **ogni** strumento seminato. Erano 7559 su 7559
+nel DB dimostrativo, e lo stesso vale per il DB di sviluppo.
+
+**Perché**: il token lo assegna un hook `creating` sul model:
+
+```php
+static::creating(function (Strumento $strumento): void {
+    $strumento->qr_token ??= self::nuovoQrToken();
+```
+
+ma il seeder usa `Strumento::insert()` a blocchi, e con `insert()` gli eventi
+Eloquent **non scattano**. Il docblock del seeder dichiara di costruire ogni riga
+«già conforme agli invarianti del dominio»: `qr_token` era uno di quelli, e
+mancava.
+
+**✅ Corretto** — a differenza del difetto n. 1, questo non tocca aree rosse: è
+un campo che il seeder doveva riempire e non riempiva. Il seeder ora lo genera,
+e `verificaInvarianti()` fallisce rumorosamente se un solo strumento resta senza.
+
+⚠️ **Resta da fare sul DB di sviluppo**: le righe già seminate lì hanno ancora
+`qr_token` nullo, quindi la pagina QR è rotta anche in locale. Il DB
+dimostrativo è stato riempito e riseminato; quello di sviluppo è di Marco e non
+è stato toccato. Si sistema con una UPDATE mirata sulle sole righe nulle.
+
+⚠️ **E la lezione generale vale oltre questo campo**: ogni `insert()` di massa
+salta i hook del model, quindi ogni invariante che vive in un hook va
+riprodotto a mano nel seeder — e verificato alla fine, o non se ne accorge
+nessuno finché qualcuno non apre la pagina.
