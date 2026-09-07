@@ -109,6 +109,59 @@ class AppServiceProvider extends ServiceProvider
         $this->timbraLImpersonazioneSullAudit();
 
         $this->limitaLeRegistrazioniPubbliche();
+
+        $this->ereditaIlDiscoDocumentiDallAmbiente();
+    }
+
+    /**
+     * 🔴 Il disco `documenti` prende le credenziali dal disco dell'ambiente, e
+     * si tiene il proprio `throw` (🔗 ADR-042).
+     *
+     * ## Perché non bastano le `AWS_*`
+     *
+     * Su Laravel Cloud le credenziali di un bucket **non arrivano come
+     * variabili `AWS_*`**: la piattaforma inietta `LARAVEL_CLOUD_DISK_CONFIG` e
+     * `Illuminate\Foundation\Cloud::configureDisks()` registra al boot un disco
+     * col nome del bucket, impostandolo come default. Un disco scritto a mano
+     * con `env('AWS_ACCESS_KEY_ID')` nascerebbe quindi senza credenziali, e
+     * funzionerebbe **solo in locale** — è la trappola già documentata in
+     * `config/guide.php`, che lì si evita nominando il disco invece di
+     * configurarlo.
+     *
+     * ## Perché qui nominarlo non basta, e serve una copia
+     *
+     * Perché `documenti` esiste separato **per una ragione sola**: `throw =>
+     * true` (il perché sta in `config/filesystems.php`, e vale un 200 troncato
+     * in download). La configurazione che inietta la piattaforma porta `'throw'
+     * => false` **fisso**, non esposto dal pannello: chiamare il bucket
+     * `documenti` la farebbe sovrascrivere silenziosamente, e con essa la
+     * guardia. Si copia quindi la sua configurazione — chiavi, endpoint, bucket
+     * — e ci si rimette sopra il solo flag che ci appartiene.
+     *
+     * ⚠️ **`config()` e non `env()`**: con la configurazione in cache `env()`
+     * fuori da `config/` torna `null`, cioè in produzione questo metodo non
+     * farebbe nulla. Il nome della sorgente si legge da
+     * `filesystems.documenti_sorgente`.
+     *
+     * ⚠️ Gira in `boot()` e non in `register()`: `configureDisks()` è un
+     * bootstrapper, e il disco che stiamo leggendo non esisterebbe ancora.
+     *
+     * Il caso «bucket puntato a mano con le `AWS_*`» resta intatto: se la
+     * sorgente non è un disco `s3` non si tocca nulla, e `documenti` vale quel
+     * che dice `config/filesystems.php`.
+     */
+    private function ereditaIlDiscoDocumentiDallAmbiente(): void
+    {
+        $sorgente = config('filesystems.documenti_sorgente');
+
+        if ($sorgente === 'documenti' || config("filesystems.disks.{$sorgente}.driver") !== 's3') {
+            return;
+        }
+
+        config(['filesystems.disks.documenti' => array_merge(
+            config("filesystems.disks.{$sorgente}"),
+            ['visibility' => 'private', 'throw' => true, 'report' => false],
+        )]);
     }
 
     /**

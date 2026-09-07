@@ -1,6 +1,6 @@
 🏗️ Setup Repository, Ambienti & CI — Easy Lab
 
-*Convenzioni di repository, strategia di branch/commit, definizione degli ambienti (locale/staging/produzione) e impostazione CI. Copre i task S0.5 (repo + branch + commit), S0.6 (ambienti + provisioning) e S0.7 (CI scheletro) della roadmap. La parte di **provisioning effettivo** (repo privato, ambienti Laravel Cloud, bucket Backblaze B2) richiede i tuoi account e va eseguita a parte: qui resta la **specifica** da seguire.*
+*Convenzioni di repository, strategia di branch/commit, definizione degli ambienti (locale/staging/produzione) e impostazione CI. Copre i task S0.5 (repo + branch + commit), S0.6 (ambienti + provisioning) e S0.7 (CI scheletro) della roadmap. La parte di **provisioning effettivo** (repo privato, ambienti Laravel Cloud, bucket dei documenti) richiede i tuoi account e va eseguita a parte: qui resta la **specifica** da seguire.*
 
 > **Stato:** bozza di Sprint 0 (task S0.5–S0.7). Convenzioni e scheletro CI pronti; provisioning da eseguire.
 
@@ -61,10 +61,12 @@ CACHE_STORE=redis
 QUEUE_CONNECTION=redis      # ⚠️ SOLO in locale. Su Cloud con una managed queue NON va impostata: vedi §2.1.1
 MAIL_MAILER=smtp MAIL_HOST= MAIL_PORT= MAIL_USERNAME= MAIL_PASSWORD=   # ADR-011 — server di posta INTERNO
 MAIL_FROM_ADDRESS= MAIL_FROM_NAME="Easy Lab"                          # dominio EasyLab, allineato a SPF/DKIM
-FILESYSTEM_DISK=s3                                                    # 🔗 ADR-025 (Backblaze B2)
-AWS_ACCESS_KEY_ID= AWS_SECRET_ACCESS_KEY=       # Application Key B2 limitata AL SINGOLO bucket
-AWS_DEFAULT_REGION=eu-central-003               # Amsterdam — regione UE (GDPR)
-AWS_BUCKET= AWS_ENDPOINT=https://s3.eu-central-003.backblazeb2.com
+# ⛔ Storage documenti: in cloud NON si scrive nessuna AWS_*. Si collega il
+# bucket all'ambiente dal pannello e la piattaforma inietta da sé
+# FILESYSTEM_DISK e LARAVEL_CLOUD_DISK_CONFIG; il disco `documenti` eredita da
+# lì (🔗 ADR-042). Una AWS_* lasciata a mano VINCE su quella iniettata, quindi
+# si continuerebbe a scrivere sul bucket vecchio credendo di aver migrato.
+# Le AWS_* servono solo a puntare un bucket a mano, che è ciò che fa lo sviluppo.
 STRIPE_KEY= STRIPE_SECRET= STRIPE_WEBHOOK_SECRET=                     # S5, Cashier
 ```
 #### 2.1.1 ⚠️ `QUEUE_CONNECTION` su Cloud: **non impostarla a mano**
@@ -91,9 +93,9 @@ Regola pratica:
 
 Il sintomo di aver sbagliato è muto: il digest non arriva a nessuno e la dashboard delle code resta vuota. Il primo controllo, in quel caso, è proprio l'elenco delle variabili dell'ambiente.
 
-**Segreti:** mai nel repo. In locale `.env`; su Laravel Cloud → variabili d'ambiente dell'ambiente. Stripe in **modalità test** su staging, **live** solo in produzione; **bucket B2 separati** per staging e produzione, così un test non tocca mai i documenti dei clienti.
+**Segreti:** mai nel repo. In locale `.env`; su Laravel Cloud → variabili d'ambiente dell'ambiente. Stripe in **modalità test** su staging, **live** solo in produzione; **bucket separati** per staging e produzione, così un test non tocca mai i documenti dei clienti.
 
-> Le chiavi B2 usano i nomi `AWS_*` perché è il driver S3 standard di Laravel puntato a un endpoint diverso: non c'è nulla di Amazon coinvolto.
+> Dove si scrivono a mano, le chiavi di un bucket usano i nomi `AWS_*` perché è il driver S3 standard di Laravel puntato a un endpoint diverso: non c'è nulla di Amazon coinvolto. In cloud non si scrivono affatto (🔗 ADR-042).
 
 > **Posta in uscita — server interno** (🔗 ADR-011, deciso il 18 Ago 2026). Niente servizio transazionale: le email partono dal mailserver di EasyLab via SMTP autenticato. In locale resta `MAIL_MAILER=log` e le email finiscono in `storage/logs/laravel.log`.
 >
@@ -103,9 +105,17 @@ Il sintomo di aver sbagliato è muto: il digest non arriva a nessuno e la dashbo
 
 ### 2.2 Provisioning base (da eseguire con i tuoi account)
 - **Laravel Cloud:** collega GitHub, crea gli ambienti staging e produzione in **regione UE**, provisiona Postgres e Redis gestiti, configura worker di coda e scheduler. Deploy da Git, niente server da amministrare.
-- **Backblaze B2:** bucket **privato** in `eu-central-003` (Amsterdam), uno per ambiente; **Application Key limitata al singolo bucket**, mai la master key (🔗 ADR-025).
-- **DPA firmati con entrambi i fornitori prima che arrivino dati reali** — sono sub-responsabili ex art. 28 (🔗 `Privacy GDPR e Registro Trattamenti.md`).
+- **Object storage:** il bucket **incluso in Laravel Cloud**, uno per ambiente, **privato** e con **EU jurisdiction** attiva; «Allowed origins» resta vuoto, perché i file li serve l'applicazione da una rotta firmata e mai il browser (🔗 ADR-042/026). *(Fino al 7 Set 2026 era un bucket Backblaze B2 con Application Key limitata al singolo bucket, 🔗 ADR-025.)*
+- **DPA firmato col fornitore prima che arrivino dati reali** — è un sub-responsabile ex art. 28 (🔗 `Privacy GDPR e Registro Trattamenti.md`). Con lo storage incluso il fornitore è **uno solo**: Cloudflare resta sub-responsabile di Laravel.
 - SSL e dominio gestiti dalla piattaforma.
+
+**Nota operativa — bucket di staging collegato il 7 Set 2026.** Creato dal pannello come `easylab_staging`, **Private**, **EU jurisdiction: Yes**, «Allowed origins» **vuoto**. Tre cose emerse collegandolo, tutte verificate sul posto:
+
+1. **Il disco si chiama `private`, non come il bucket.** Laravel Cloud inietta `LARAVEL_CLOUD_DISK_CONFIG` (che contiene chiavi, bucket ed endpoint) e imposta `FILESYSTEM_DISK=private`; l'identificativo `fls-…` del bucket non compare mai nel codice. Un disco si **nomina**, non si configura: vedi 🔗 ADR-042 per il perché scriverne uno con `env('AWS_*')` produce, in cloud, un disco senza credenziali.
+2. ⚠️ **Il pannello avvisa che `FILESYSTEM_DISK` verrà sovrascritto.** Nel nostro caso è innocuo, ed è stato verificato prima di confermare: **nessuna chiamata dell'applicazione usa il disco di default** — ogni `Storage::disk(…)` nomina il proprio (`documenti`, il marchio email, le guide). Chi collegherà il bucket di **produzione** rifaccia quel controllo invece di fidarsi di questa riga.
+3. ⛔ **«Allowed origins» resta vuoto** e non è una svista: è CORS, e serve solo se è JavaScript a leggere il file (`fetch`, un `<video crossorigin>`, un canvas). I nostri file li serve l'applicazione, e un `<video>` carica i byte come **media**, che cross-origin non richiede CORS — anche seguendo un redirect.
+
+**Caricare file su un ambiente dalla propria macchina.** Il meccanismo di Laravel Cloud **non è riusabile da fuori**: `Illuminate\Foundation\Cloud` registra i dischi iniettati solo se `laravel_cloud()` è vero, cioè con `LARAVEL_CLOUD=1`, e accendere quel flag su una macchina di sviluppo tira dentro code gestite, logging su socket e connessione Postgres non poolata. Si copiano quindi a mano le quattro credenziali da `LARAVEL_CLOUD_DISK_CONFIG` nel proprio `.env` (`GUIDE_REMOTO_*`, vedi `.env.example`) e si usa il disco `guide_remoto`. È la via con cui i video delle guide sono stati caricati, e vale per qualunque file che nasca fuori dal repository.
 
 ---
 
@@ -121,7 +131,7 @@ Il sintomo di aver sbagliato è muto: il digest non arriva a nessuno e la dashbo
 - Mai un commit diretto su `main`: ciò che è in produzione è passato da staging, e questo è l'unico modo per poterlo affermare.
 - La CI (`.github/workflows/ci.yml`) gira su **entrambi** i rami — aggiungerlo è stata la prima conseguenza pratica del ramo nuovo: senza, le PR verso staging sarebbero passate senza rete.
 - Migrazioni in deploy con `--force` su tutti e due gli ambienti.
-- ⚠️ **Staging deve avere risorse SUE**: database, Redis, **bucket B2 separato** e Stripe in modalità test. Un ambiente di prova che scrive sui dati veri non è un ambiente di prova — ed è la stessa lezione dell'incidente del 18 Ago, quando Redis condiviso fra `easylab` ed `easylab_test` ha avvelenato la cache dei permessi del database di sviluppo.
+- ⚠️ **Staging deve avere risorse SUE**: database, Redis, **bucket separato** e Stripe in modalità test. Un ambiente di prova che scrive sui dati veri non è un ambiente di prova — ed è la stessa lezione dell'incidente del 18 Ago, quando Redis condiviso fra `easylab` ed `easylab_test` ha avvelenato la cache dei permessi del database di sviluppo.
 - ⚠️ **Migration distruttive:** il progetto ne ha già in storia (drop di colonne e tabelle popolate, 🔗 ADR-019). Su un deploy automatico girano senza che nessuno guardi: **backup del database verificato prima di promuovere in produzione**, e revisione umana della migration secondo la Policy di Code Review (area rossa).
 
 ### 3.1 Prima attivazione dello scheduler scadenze (S5 — 🔗 ADR-011)
@@ -177,7 +187,7 @@ php artisan migrate --force
 | `queue:restart` | I worker sono **riavviati automaticamente a ogni deploy**. Su un VPS con Supervisor sarebbe indispensabile — qui è rumore. |
 | `horizon:terminate` | Idem, gestito dalla piattaforma. |
 | `optimize:clear` | Svuota le cache a runtime e «può causare comportamenti inattesi, specie legati alle code». |
-| `storage:link` | Il symlink non sopravvive: le modifiche dei deploy commands non persistono. E a noi non serve — i documenti stanno su B2 (🔗 ADR-025). |
+| `storage:link` | Il symlink non sopravvive: le modifiche dei deploy commands non persistono. E a noi non serve — i documenti stanno sull'object storage, non sul filesystem dell'istanza (🔗 ADR-042; fino al 7 Set 2026 era B2, 🔗 ADR-025). |
 
 ### 3.3 Comandi una-tantum, alla nascita di un ambiente
 
@@ -247,7 +257,7 @@ Scheletro reale in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
 | Task | Specifica | Esecuzione |
 |---|---|---|
 | S0.5 Repo + branch + commit | ✅ definita qui | ⬜ creare repo privato su GitHub |
-| S0.6 Ambienti + provisioning | ✅ definita qui (.env, ambienti) | ⬜ provisioning Laravel Cloud (regione UE) + bucket B2 privati + DPA |
+| S0.6 Ambienti + provisioning | ✅ definita qui (.env, ambienti) | ⬜ provisioning Laravel Cloud (regione UE) + bucket privati per ambiente |
 | S0.7 CI scheletro | ✅ `.github/workflows/ci.yml` | ⬜ si attiva con l'app in S1 |
 
 **Definition of Done S0** (parte infra): "repo + CI + ambiente staging raggiungibili" → richiede l'esecuzione del provisioning sopra.

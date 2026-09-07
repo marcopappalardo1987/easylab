@@ -17,6 +17,27 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Da quale disco eredita il disco `documenti`
+    |--------------------------------------------------------------------------
+    |
+    | ⚠️ **Su Laravel Cloud le credenziali di un bucket NON arrivano come
+    | `AWS_*`** (🔗 ADR-042, e la stessa nota in `config/guide.php`): la
+    | piattaforma inietta `LARAVEL_CLOUD_DISK_CONFIG` e
+    | `Illuminate\Foundation\Cloud::configureDisks()` registra al boot un disco
+    | col nome del bucket. Un disco scritto a mano con `env('AWS_ACCESS_KEY_ID')`
+    | nascerebbe quindi **senza credenziali** in cloud.
+    |
+    | Qui si nomina quel disco, e `AppServiceProvider` ne copia la
+    | configurazione dentro `documenti` rimettendoci `throw => true`. Il default
+    | segue il disco dell'ambiente: `local` in sviluppo, il bucket attaccato in
+    | cloud. `DOCUMENTI_DISK` serve solo per puntare altrove.
+    |
+    */
+
+    'documenti_sorgente' => env('DOCUMENTI_DISK', env('FILESYSTEM_DISK', 'local')),
+
+    /*
+    |--------------------------------------------------------------------------
     | Filesystem Disks
     |--------------------------------------------------------------------------
     |
@@ -80,6 +101,13 @@ return [
          *
          * `root` distinto perché in locale (`FILESYSTEM_DISK=local`) i
          * documenti non finiscano mescolati al resto di `storage/app/private`.
+         *
+         * ⚠️ **In cloud questa definizione viene sostituita** da
+         * `AppServiceProvider::ereditaIlDiscoDocumentiDallAmbiente()`, che copia
+         * qui la configurazione del disco iniettato da Laravel Cloud e ci
+         * rimette `throw => true` — che la piattaforma impone a `false`. Le
+         * chiavi `AWS_*` qui sotto servono quindi al solo caso in cui si punti
+         * un bucket **a mano** (🔗 ADR-042).
          */
         'documenti' => [
             'driver' => env('DOCUMENTI_DISK_DRIVER', 'local'),

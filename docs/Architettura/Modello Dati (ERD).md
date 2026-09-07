@@ -523,7 +523,7 @@ Anagrafica dei fornitori **di ciascun Ente**: tabella di business a tutti gli ef
 ## 8. Documenti (ADR-009)
 
 ### 8.1 `documenti`
-Allegato **polimorfico** a Strumento o Intervento. Upload su **Backblaze B2** (bucket privato, regione UE — 🔗 ADR-025), accesso solo autenticato.
+Allegato **polimorfico** a Strumento o Intervento. Upload sull'**object storage incluso in Laravel Cloud** (bucket privato, giurisdizione UE — 🔗 ADR-042; fino al 7 Set 2026 Backblaze B2, 🔗 ADR-025), accesso solo autenticato.
 
 > **Come si servono i file è ancora da decidere** (S4). ADR-009 dice "URL firmate" senza specificare quale: una URL **pre-firmata S3** è di fatto un bearer token — chi ce l'ha legge il file fino alla scadenza, con la Policy fuori dal giro — mentre una **rotta firmata Laravel che fa da tramite** ricontrolla l'autorizzazione a ogni richiesta ed è indipendente dal provider. La seconda è più coerente con ADR-003 e ADR-018 (🔗 ADR-025).
 
@@ -632,7 +632,7 @@ Legenda: ✅ pieno · ⚠️ ristretto (per sotto-albero/portafoglio/proprietà)
 | **ADR-022** Ricambi dall'intervento | `ricambi.nome`/`nome_normalizzato` (+ `codice` nullable); `ricambio_utilizzo.intervento_id` valorizzato; garanzia `soggetto = ricambio` obbligatoria per riga. |
 | **ADR-023** Fornitore 1-N | `strumenti.fornitore_id` (+ indice); `fornitori` con `tenant_id`; pivot `fornitore_strumento` **non creato**. |
 | **ADR-024** Tab Panoramica | Nessuna tabella: il campo derivato `diagnosi_semaforo` (§5.1) sostituisce il solo stato. |
-| **ADR-025** Documenti su B2 | Nessuna colonna: `documenti.path` (§8.1) punta a un bucket privato invece che al disco locale — il provider è un dettaglio di `.env`. |
+| **ADR-025 → ADR-042** Documenti su object storage | Nessuna colonna: `documenti.path` (§8.1) punta a un bucket privato invece che al disco locale — il provider è un dettaglio di `.env`. |
 | **ADR-026** Download mediati dall'app | Nessuna colonna: rotta firmata + Policy sul model `Documento`. |
 | **ADR-027** Tracciabilità delle scritture | Nessuna tabella nuova: `activity_log` (§9) sul canale `audit`, via il trait `AuditsDomainWrites`. Il permesso `garanzie.ricambio.*` passa al Tecnico (§10). |
 | **ADR-028** Intervento sempre assegnato | Nessuna modifica di schema: `interventi.tecnico_id` **resta nullable** (§5.2) e l'obbligo vive nel form, come per `strumenti.fornitore_id`. |

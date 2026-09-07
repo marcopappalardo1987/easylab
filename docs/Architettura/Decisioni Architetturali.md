@@ -761,6 +761,8 @@ Il volume gioca a favore: il digest è **una email al giorno per destinatario e 
 
 *Stato: Accettata (5 Ago 2026) — **supera l'assunzione tecnica "Forge + DigitalOcean"** della roadmap §0 e del Tech Stack §6, che era un default proposto e mai eseguito.*
 
+> ⛔ **La sola parte STORAGE è superata da 🔗 ADR-042 (7 Set 2026): i documenti stanno sul bucket incluso in Laravel Cloud, non su Backblaze B2.** Tutto il resto di questa decisione — Laravel Cloud per applicazione, Postgres e Redis, regione UE, bucket privato, credenziali limitate — resta in vigore. Il marcatore sta qui in cima perché senza si leggeva questa pagina dall'alto e si implementava B2: la nota operativa dell'8 Ago 2026 più sotto descrive un fornitore che non è più il nostro, e va letta come storia.
+
 **Contesto.** Roadmap e Tech Stack davano per scontati **Laravel Forge su droplet DigitalOcean** per hosting e **DigitalOcean Spaces** per i documenti. Erano assunzioni del giorno 1, dichiarate "default proposti — modificabili", e il provisioning non è mai stato fatto: nessuna riga di codice usa `Storage`, `FILESYSTEM_DISK` è ancora `local` e il driver S3 non è installato. Quando è arrivato il momento di scegliere davvero, la decisione è cambiata.
 
 **Decisione.**
@@ -1393,7 +1395,7 @@ Il problema stava un passo più in là: **dalla UI non c'era modo di togliere di
 
 1. ⛔ **L'ordine è la correttezza.** Nessuna FK ha `cascadeOnDelete`: sono tutte RESTRICT, quindi le foglie vanno prima delle radici e sbagliare l'ordine dà un errore di integrità **a metà lavoro**, cioè un tenant mezzo cancellato. L'elenco vive in `EliminaCliente::TABELLE`, esplicito e non dedotto dallo schema: ciò che un gesto distruttivo porta via è una **decisione**, e dedurla significherebbe che aggiungere una tabella cambia in silenzio cosa viene distrutto. Gli Enti si cancellano per livelli, perché `parent_id` punta alla stessa tabella.
 
-2. 🔴 **Stripe e Backblaze stanno FUORI dalla transazione, e DOPO il delete locale.** Fuori perché un rollback non annulla ciò che un terzo ha già fatto. Dopo perché `StripeWebhookController::accountDa()` dichiara «account cestinato → nessuna scrittura e 200»: solo in quest'ordine il `customer.subscription.deleted` di ritorno è un no-op pulito, mentre al contrario riscriverebbe lockout e piano su una riga che stiamo eliminando. `cancelNow()` e non `cancel()`: l'abbonamento finisce adesso, **senza rimborso** — il periodo già pagato è una decisione commerciale, e prenderla da un click di conferma è esattamente ciò che non si vuole eliminando un moroso o un tenant di prova.
+2. 🔴 **Stripe e l'object storage stanno FUORI dalla transazione, e DOPO il delete locale.** *(All'epoca lo storage era Backblaze; dal 7 Set 2026 è il bucket di Laravel Cloud — 🔗 ADR-042 — e il ragionamento non cambia di una virgola: resta un terzo che un rollback non raggiunge.)* Fuori perché un rollback non annulla ciò che un terzo ha già fatto. Dopo perché `StripeWebhookController::accountDa()` dichiara «account cestinato → nessuna scrittura e 200»: solo in quest'ordine il `customer.subscription.deleted` di ritorno è un no-op pulito, mentre al contrario riscriverebbe lockout e piano su una riga che stiamo eliminando. `cancelNow()` e non `cancel()`: l'abbonamento finisce adesso, **senza rimborso** — il periodo già pagato è una decisione commerciale, e prenderla da un click di conferma è esattamente ciò che non si vuole eliminando un moroso o un tenant di prova.
 
 3. ⚠️ **Se un servizio esterno fallisce, l'eliminazione resta fatta** e il guasto si **dice**, con l'id della subscription e il prefisso da rimuovere a mano. Annullare per un terzo che non risponde legherebbe un gesto di dominio alla sua disponibilità — e a quel punto i dati sono già andati.
 
@@ -1410,7 +1412,7 @@ Il problema stava un passo più in là: **dalla UI non c'era modo di togliere di
 - ⚠️ **`registrazioni.account_id` è `nullOnDelete`**: la riga resta, orfana, come traccia di **da dove** quel cliente era entrato. È voluto — è la sola risposta superstite alla domanda «come è arrivato».
 - ⚠️ **Chi appartiene a più clienti sopravvive.** Un tecnico EasyLab o un consulente su due contratti non deve sparire perché uno dei due è stato eliminato.
 - **Nessuna migration**, quindi niente da applicare al Postgres di sviluppo. E nessun permesso nuovo, quindi nessun riseeding.
-- 🔴 **Il registro dei trattamenti va aggiornato**: questa è la **prima cancellazione vera** del progetto, e la voce «Cancellazione / limitazione» era rinviata a S7. Il DPA Backblaze resta non firmato, e ora c'è un gesto che cancella davvero da quel bucket.
+- 🔴 **Il registro dei trattamenti va aggiornato**: questa è la **prima cancellazione vera** del progetto, e la voce «Cancellazione / limitazione» era rinviata a S7. *(Il DPA Backblaze, che questa riga segnalava come non firmato, è decaduto il 7 Set 2026 col cambio di fornitore — 🔗 ADR-042. Il gesto che cancella dal bucket resta, e ora punta a quello di Laravel Cloud.)*
 
 **Verifica residua.** Su staging: eliminare «Prova Invito Reale», poi rifare il resend dell'evento Stripe già pagato — che a quel punto **deve** creare l'account, chiudendo il giro da cui questa decisione è nata.
 
@@ -1459,3 +1461,32 @@ Rimedio: il trait `App\Models\Concerns\SerializzaGiorniCivili` sui sei modelli c
 - **Nessun fuso per-utente.** Il precedente esiste (`users.tema`, 🔗 ADR-034), ma l'app è italiana e un secondo asse di configurazione andrebbe difeso senza avere un caso d'uso. Il giorno in cui servisse, il guardrail va rivisto.
 
 **Verifica.** Suite verde su **entrambi i driver** (2452 test su SQLite; le aree sensibili alle date rigirate su Postgres, dove i confronti fra date hanno semantica diversa). Due test nuovi coprono i difetti 1 e 2 e sono stati **provati sotto UTC**, dove diventano rossi mostrando il giorno sbagliato. La migration è stata verificata sul Postgres di sviluppo: `activity_log.created_at` salito di due ore, `strumenti.data_installazione` e `interventi.data_scadenza` **immutate**.
+
+---
+
+**ADR-042 — I documenti tornano dentro Laravel Cloud: si paga il ricarico e si chiude un sub-responsabile**
+
+*Stato: Accettata (7 Set 2026) — **supera la sola parte storage di ADR-025**, che resta valido su tutto il resto (Laravel Cloud per applicazione, database e Redis; bucket privato; credenziali limitate).*
+
+**Contesto.** ADR-025 aveva scelto **Backblaze B2** al posto dell'object storage incluso in Laravel Cloud, mettendo il prezzo davanti alla semplicità contrattuale: ~$0,006 contro $0,02 per GB-mese, cioè circa 3×. Era una decisione presa a occhi aperti, e il suo prezzo era dichiarato nell'ADR stesso: **un sub-responsabile in più**, con DPA da firmare *prima* che i documenti dei clienti entrino nel bucket.
+
+Quel DPA non è mai stato firmato. Nel frattempo lo **storage documenti di staging è collegato dal 27 Ago 2026**, e dal 28 nello stesso bucket entra anche il **logo del marchio** di un Ente (🔗 Privacy, precisazione a T3): la precondizione scatta prima di quanto §3 lasciasse intendere. La finestra fra «il bucket c'è» e «il DPA c'è» è aperta da tre settimane, ed è l'unico ordine sbagliato fra i due gesti.
+
+Rifatto il conto sui volumi veri: la differenza è **$0,014 per GB-mese**, cioè ~2 $/anno a 10 GB e ~17 $/anno a 100 GB. Diventa una cifra che si nota solo sopra il terabyte, e certificati di taratura in PDF non ci arrivano.
+
+**Decisione.** I documenti passano al **bucket incluso in Laravel Cloud** (Cloudflare R2 sotto il cofano), **giurisdizione UE**, collegato all'ambiente. Backblaze esce dall'architettura e dal registro dei trattamenti.
+
+**Perché adesso e non fra un mese.** Perché il bucket di produzione **non esiste ancora** e nessun file di un cliente vero è entrato. La stessa mossa, dopo il go-live, comporta una migrazione di dati personali; oggi comporta buttare via il contenuto di prova di staging. È la finestra più economica che questa decisione avrà.
+
+**Alternative scartate.**
+- *Firmare il DPA e restare su B2.* È un adempimento di minuti, e sarebbe bastato. Ma lascia in piedi un fornitore, una coppia di chiavi per ambiente e una riga nell'elenco dei sub-processor **per due euro l'anno**: si paga un costo permanente per un risparmio che non si vede in bilancio.
+- *Aspettare il go-live.* Vedi sopra: sposta la stessa decisione dentro una finestra in cui costa una migrazione.
+
+**Conseguenze.**
+- 🔴 **Le credenziali NON arrivano come `AWS_*`, e questo cambia il codice.** Laravel Cloud inietta `LARAVEL_CLOUD_DISK_CONFIG` e `Illuminate\Foundation\Cloud::configureDisks()` registra al boot un disco **col nome del bucket**, impostandolo come default. Un disco scritto a mano con `env('AWS_ACCESS_KEY_ID')` nasce **senza credenziali** in cloud e funziona solo in locale — la trappola era già documentata in `config/guide.php` per le guide video, che infatti *nominano* un disco esistente invece di configurarne uno.
+- 🔴 **Ma per i documenti nominarlo non basta**, ed è la parte non ovvia. Il disco `documenti` esiste separato dagli altri **per una ragione sola**: `throw => true` (🔗 ADR-026 e il commento in `config/filesystems.php`). Con `false` un upload fallito torna `false` in silenzio, e un download di un file mancante produce un **200 troncato**, perché `readStream()` gira dentro la closure dello StreamedResponse, ad header già inviati. La configurazione iniettata dalla piattaforma porta `'throw' => false` **fisso**, non esposto dal pannello: chiamare il bucket `documenti` la farebbe sovrascrivere, e con essa la guardia. `AppServiceProvider::ereditaIlDiscoDocumentiDallAmbiente()` copia quindi la configurazione della piattaforma e ci rimette sopra il solo flag che ci appartiene. `DiscoDocumentiGuardrailTest` tiene ferme entrambe le metà, **compresa la chiamata dentro `boot()`**: senza quel quarto test, cancellare la riga da `boot()` lascerebbe tutto verde.
+- ⚠️ **`config()` e non `env()`** dentro il provider: con la configurazione in cache `env()` fuori da `config/` torna `null`, cioè in produzione — e solo lì — il metodo non farebbe nulla. Il nome della sorgente si legge da `filesystems.documenti_sorgente`.
+- **Il registro dei trattamenti si accorcia**: Backblaze esce dai sub-responsabili e la casella DPA che era aperta si chiude *senza firmare niente*, perché Cloudflare resta sub-responsabile **di Laravel** e coperto dal loro DPA.
+- ⚠️ **La cifratura a riposo va riverificata sul bucket nuovo.** Su B2 era SSE-B2 attivata a mano, ed è una proprietà **per bucket** che non si eredita (🔗 Privacy §Cifratura). Va accertato cosa offre lo storage di Laravel Cloud e riscritta quella riga: è una misura ex art. 32, non un dettaglio operativo.
+- **I file già su B2 in staging si buttano**, non si migrano: è un ambiente di prova, e `rclone` costerebbe più del contenuto. Il bucket B2 va tenuto qualche settimana e poi smontato **chiave prima, bucket poi**.
+- **L'egress**: B2 lo dava gratuito fino a 3× lo storage medio; Laravel fattura le richieste («plus request usage»). Su PDF serviti a utenti autenticati non sposta nulla, ma è la voce da guardare se un giorno i download crescessero. E si torna indietro cambiando `.env`, che è esattamente ciò che ADR-026 aveva comprato scegliendo la rotta firmata al posto della URL pre-firmata.
