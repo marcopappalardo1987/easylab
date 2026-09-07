@@ -19,17 +19,23 @@
     </source>
     <php>
         <!--
-            ⚠️ 512M e non il default di 128M: la suite intera non ci sta più.
+            ⚠️ 1G, e non il default di 128M: la suite intera non ci sta più.
+            (Era 512M; alzato il 7 Set 2026, quando i test di S7 hanno passato
+            anche quel tetto. Misurato: la suite muore su
+            `ParcoDemoSeederTest`, che semina due volte il parco dimostrativo,
+            ma è solo l'ultima goccia — non è quel test a essere sbagliato.)
             Il sintomo non è un test rosso ma un `Fatal error: Allowed memory
             size exhausted` **dentro il renderer di Collision**, cioè con zero
             fallimenti elencati — l'esecuzione muore mentre stampa, e chi guarda
             l'output non vede né verde né rosso. Sta qui e non in un flag da
-            ricordarsi (`php -d memory_limit=512M`) perché «suite verde in
+            ricordarsi (`php -d memory_limit=1G`, che per giunta **non**
+            funzionerebbe: PHPUnit applica l'ini di questo file dopo, e il
+            flag da riga di comando viene sovrascritto) perché «suite verde in
             locale prima di pushare» è l'unica rete che il progetto ha: ogni
             push su `staging` deploya, e la CI gira dopo. Una rete che dipende
             dal ricordarsi un flag non è una rete.
         -->
-        <ini name="memory_limit" value="512M"/>
+        <ini name="memory_limit" value="1G"/>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
