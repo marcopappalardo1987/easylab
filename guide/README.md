@@ -6,6 +6,11 @@ Video di istruzioni per l'uso della piattaforma: **Playwright cattura**, **Remot
   scriverne una: regole di ritmo, zoom, didascalie, e le trappole già pagate.
 - **[CATALOGO.md](CATALOGO.md)** — tutte le funzionalità e le 46 guide da
   produrre, con stato, rotte e ordine consigliato.
+- **[testi/](testi/)** — la **prosa della guida scritta**, un file per guida:
+  l'apertura, i capitoli, l'approfondimento di ogni passo. Non sono le
+  didascalie del video, che durano quattro secondi e hanno l'immagine accanto.
+  Si cambiano senza rigirare niente — non passano dal manifest — e un deploy li
+  porta in pagina.
 
 ## Perché non il video di Playwright
 

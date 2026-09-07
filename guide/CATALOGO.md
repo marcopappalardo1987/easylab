@@ -22,9 +22,20 @@ Voce di sidebar **«Guida»**, una pagina sola con:
   legge e chi ha fretta guarda.
 
 Ne segue che ogni guida è **due prodotti dallo stesso copione**: l'mp4 e un testo.
-Le didascalie del manifest sono già i passi scritti, quindi la versione testuale
-si genera da `manifest.json` e non si redige a parte — altrimenti le due
-divergono al primo ritocco.
+Dal copione vengono la **sequenza** dei passi, la loro numerazione e i loro
+secondi — quelli restano una fonte sola, ed è ciò che permette di cliccare un
+passo scritto e saltare al suo istante nel video.
+
+⚠️ **La prosa no, e dal 7 Set 2026 non si genera più dalle didascalie**
+(🔗 ADR-043). Una didascalia sta sotto un fotogramma per quattro secondi mentre
+chi guarda vede già il gesto; un passo scritto viene letto **senza l'immagine
+accanto**, spesso da chi cerca una risposta e non ha voglia di guardare due
+minuti di video. La stessa riga non può fare bene tutte e due le cose, e in
+pagina convivono: la didascalia fa da riga breve e cliccabile, l'approfondimento
+sta sotto. Nello stesso file stanno anche l'**apertura della guida** e quella di
+ogni **capitolo**, che il video non ha perché lì le fanno la testata e i
+cartelli. Tutto in `testi/<slug>.md`, uno per guida, numerato come i passi e i
+cartelli del copione.
 
 Per il filtro servono, per ogni guida: `slug`, `titolo`, `argomento`, `ruoli`,
 `parole_chiave[]`, `durata`, `rotte[]`. Sono i campi delle tabelle qui sotto.

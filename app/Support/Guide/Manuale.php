@@ -14,10 +14,14 @@ use Illuminate\Support\Str;
  * 🔗 `config/guide.php` per il raggruppamento, `guide/CATALOGO.md` per la
  * roadmap, `guide/STILE.md` per come si produce una guida.
  *
- * **Una sola sorgente per due prodotti.** Il `manifest.json` che Remotion usa
- * per montare il video è lo stesso che qui diventa la guida scritta: le
- * didascalie *sono* i passi. Redigere il testo a parte lo farebbe divergere dal
- * video al primo ritocco, e nessuno se ne accorgerebbe.
+ * **Una sola sorgente per la sequenza, due testi per due mezzi.** Il
+ * `manifest.json` che Remotion usa per montare il video detta i passi, la loro
+ * numerazione e i loro secondi, e dà la **riga breve** (`testo`) su cui si
+ * clicca per saltare nel video. L'**approfondimento** (`dettaglio`) no: quello
+ * si legge da `guide/testi/{slug}.md` (🔗 `TestiScritti`), perché una didascalia
+ * che sta sotto un fotogramma per quattro secondi e un passo che si legge senza
+ * l'immagine accanto non sono la stessa cosa. Manca? Resta la sola riga breve,
+ * e il guardrail lo segnala.
  *
  * Il manifest porta già `inizio` per ogni passo (glielo scrive il montaggio, che
  * è l'unico a conoscere la durata della testata): è ciò che permette di saltare
@@ -173,6 +177,12 @@ final class Manuale
     {
         $capitoli = [];
         $chiusura = null;
+        $testi = TestiScritti::per($voce['slug']);
+
+        // ⚠️ Contatore suo e non `count($capitoli)`: la sezione senza titolo
+        // creata più sotto occuperebbe il numero 1, e `## capitolo 1` nei testi
+        // finirebbe sul primo capitolo VERO scalato di uno.
+        $nCapitolo = 0;
 
         foreach ($manifest['passi'] ?? [] as $passo) {
             if (($passo['chiusura'] ?? null) !== null) {
@@ -185,6 +195,9 @@ final class Manuale
                 $capitoli[] = [
                     'occhiello' => $passo['capitolo']['occhiello'],
                     'titolo' => $passo['capitolo']['titolo'],
+                    // Apertura del capitolo: esiste solo nella guida scritta,
+                    // e si numera nell'ordine in cui i cartelli compaiono.
+                    'premessa' => $testi['capitoli'][++$nCapitolo] ?? null,
                     'inizio' => $passo['inizio'] ?? 0,
                     'passi' => [],
                 ];
@@ -195,12 +208,17 @@ final class Manuale
             // Uno scatto prima di qualunque cartello finisce in una sezione
             // senza titolo: il manifest non obbliga a un capitolo iniziale.
             if ($capitoli === []) {
-                $capitoli[] = ['occhiello' => null, 'titolo' => null, 'inizio' => 0, 'passi' => []];
+                $capitoli[] = ['occhiello' => null, 'titolo' => null, 'premessa' => null, 'inizio' => 0, 'passi' => []];
             }
 
             $capitoli[array_key_last($capitoli)]['passi'][] = [
                 'n' => $passo['n'],
+                // La riga breve resta la didascalia del video: è il titolo del
+                // passo, ed è ciò su cui si clicca per saltare al suo istante.
                 'testo' => $passo['didascalia'],
+                // L'approfondimento è ciò che la guida scritta ha in più, e può
+                // mancare: la pagina in quel caso mostra la sola riga breve.
+                'dettaglio' => $testi['passi'][$passo['n']] ?? null,
                 'inizio' => $passo['inizio'] ?? 0,
             ];
         }
@@ -209,6 +227,7 @@ final class Manuale
             'slug' => $voce['slug'],
             'titolo' => $manifest['titolo'] ?? $voce['slug'],
             'sottotitolo' => $manifest['sottotitolo'] ?? '',
+            'premessa' => $testi['premessa'],
             'argomento' => $voce['argomento'],
             'argomentoTitolo' => $argomento['titolo'] ?? $voce['argomento'],
             'durata' => (int) round($manifest['durataTotale'] ?? 0),
@@ -232,7 +251,15 @@ final class Manuale
             $guida['sottotitolo'],
             $guida['argomentoTitolo'],
             implode(' ', $voce['chiavi'] ?? []),
-            collect($capitoli)->map(fn (array $c) => $c['titolo'].' '.collect($c['passi'])->pluck('testo')->implode(' '))->implode(' '),
+            (string) $testi['premessa'],
+            collect($capitoli)->map(fn (array $c) => implode(' ', [
+                (string) $c['titolo'],
+                (string) $c['premessa'],
+                collect($c['passi'])->pluck('testo')->implode(' '),
+                // ⚠️ Anche l'approfondimento, o cercare una parola che sta SOLO
+                // nel testo scritto non troverebbe la guida che la spiega.
+                collect($c['passi'])->pluck('dettaglio')->implode(' '),
+            ]))->implode(' '),
             implode(' ', $chiusura['punti'] ?? []),
         ]));
 

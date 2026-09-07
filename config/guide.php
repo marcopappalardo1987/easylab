@@ -3,12 +3,13 @@
 /**
  * Il manuale in applicazione: quali guide esistono e come sono raggruppate.
  *
- * ⚠️ **Qui non stanno i testi.** Titolo, sottotitolo, passi e durata si leggono
- * dal `manifest.json` che lo studio delle guide (`guide/`) produce insieme al
- * video: le didascalie del video **sono** i passi scritti, e tenerne due copie
- * significa vederle divergere al primo ritocco. Questo file aggiunge solo ciò
- * che il manifest non sa: a quale argomento appartiene una guida, e con quali
- * parole la si cerca.
+ * ⚠️ **Qui non stanno i testi.** Titolo, sottotitolo, sequenza dei passi e
+ * durata si leggono dal `manifest.json` che lo studio delle guide (`guide/`)
+ * produce insieme al video; la **prosa** dei passi scritti sta in
+ * `guide/testi/{slug}.md` (🔗 `App\Support\Guide\TestiScritti`, che spiega
+ * perché sono due testi e non uno). Questo file aggiunge solo ciò che né l'uno
+ * né l'altro sanno: a quale argomento appartiene una guida, e con quali parole
+ * la si cerca.
  *
  * L'elenco completo delle guide previste — comprese quelle non ancora girate —
  * sta in `guide/CATALOGO.md`. Una guida compare qui **quando il suo mp4 esiste**

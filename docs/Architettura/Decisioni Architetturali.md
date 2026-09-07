@@ -1490,3 +1490,30 @@ Rifatto il conto sui volumi veri: la differenza è **$0,014 per GB-mese**, cioè
 - ⚠️ **La cifratura a riposo va riverificata sul bucket nuovo.** Su B2 era SSE-B2 attivata a mano, ed è una proprietà **per bucket** che non si eredita (🔗 Privacy §Cifratura). Va accertato cosa offre lo storage di Laravel Cloud e riscritta quella riga: è una misura ex art. 32, non un dettaglio operativo.
 - **I file già su B2 in staging si buttano**, non si migrano: è un ambiente di prova, e `rclone` costerebbe più del contenuto. Il bucket B2 va tenuto qualche settimana e poi smontato **chiave prima, bucket poi**.
 - **L'egress**: B2 lo dava gratuito fino a 3× lo storage medio; Laravel fattura le richieste («plus request usage»). Su PDF serviti a utenti autenticati non sposta nulla, ma è la voce da guardare se un giorno i download crescessero. E si torna indietro cambiando `.env`, che è esattamente ciò che ADR-026 aveva comprato scegliendo la rotta firmata al posto della URL pre-firmata.
+
+---
+
+**ADR-043 — La guida scritta non è la trascrizione del video: due testi, una sola sequenza**
+
+*Stato: Accettata (7 Set 2026) — **supera** la regola «le didascalie del manifest sono già i passi scritti» di `guide/CATALOGO.md`, scritta quando il manuale in applicazione è stato progettato (S7) e mai messa alla prova su una guida vera.*
+
+**Contesto.** Il manuale in applicazione mette video e testo nella stessa pagina, e la prima stesura li faceva nascere dallo stesso `manifest.json`: le didascalie del filmato **erano** i passi scritti. L'argomento era buono e resta valido per ciò a cui si applica — due copie dello stesso testo divergono al primo ritocco, e nessuno se ne accorge.
+
+Guardando le prime cinque guide pubblicate, però, la regola produceva una guida scritta **povera**, e per una ragione strutturale, non di stesura. Una didascalia sta sotto un fotogramma per quattro secondi mentre chi guarda **vede già il gesto**: è breve per necessità e si appoggia all'immagine. «Si salva.» funziona benissimo sopra uno screenshot del pulsante, e non dice niente a chi legge l'elenco dei passi senza il video. Chi arriva al manuale, poi, spesso arriva da una ricerca e cerca una risposta: è la persona che il video *non* vuole guardare.
+
+**Decisione.** Due testi per lo stesso passo, **entrambi in pagina**.
+- Dal copione (`guide/flussi/*.spec.ts` → `manifest.json`) vengono **sequenza, numerazione e secondi**, e la **riga breve**: la didascalia fa da titolo del passo ed è ciò su cui si clicca per saltare al suo istante nel video.
+- Tutto ciò che esiste **solo** nella guida scritta sta in `guide/testi/{slug}.md`: l'**approfondimento** di ogni passo, che si legge sotto la riga breve; l'**apertura della guida**, che dice a chi serve e che cosa ci si porta a casa; l'**apertura di ogni capitolo**. Le ultime due il video non le ha, perché lì le fanno la testata e i cartelli — che durano due secondi e mezzo e hanno spazio per un titolo, non per un perché.
+- ⚠️ **La regola è che nel copione non si scrive nulla che serva alla sola pagina**, e vale la pena tenerla intera: la prima stesura metteva l'approfondimento in `g.passo()` e l'apertura in `g.capitolo()`, e bastava quello a riportare la prosa dentro il ciclo «rigira e rimonta».
+- Chi scorre l'indice legge solo le righe brevi e trova il passo che cerca; chi si ferma su un passo trova il resto. La ricerca guarda tutti e due, o una parola che sta solo nel testo scritto non troverebbe la guida che la spiega.
+- ⚠️ Il paragrafo sta **fuori dal bottone**: dentro, diventerebbe un bersaglio di click grande quanto sé stesso, e il video partirebbe mentre si legge.
+
+**Perché un file a parte e non un campo del copione.** Perché il manifest lo produce **Playwright girando il browser**: un secondo campo in `g.passo()` vorrebbe dire rigirare la guida e rimontare il video per cambiare una parola di prosa — e rigirare tutte quelle già fatte solo per aggiungere del testo. Coi file separati la prosa si riscrive e si ridispiega con un deploy, senza toccare gli mp4. È anche il motivo per cui i testi stanno nel **repository** e non sul bucket delle guide: correggere un refuso non deve passare da `easylab:pubblica-guide`.
+
+**Conseguenze.**
+- ⚠️ **Due file possono sfasarsi**, ed è il costo che questa decisione accetta: un `g.passo()` aggiunto e non scritto qui resta la sola riga breve, uno tolto lascia un testo orfano che nessuno vedrà. `TestiScrittiGuardrailTest` copre entrambe le direzioni, per i passi e per i cartelli.
+- ⚠️ **`## capitolo 1` e `## 1` sono due blocchi diversi con lo stesso numero.** Un parser che leggesse la sola cifra li farebbe collidere, e in pagina comparirebbe l'apertura del capitolo al posto del primo passo. Ha un test suo.
+- 🔴 **Il guardrail legge i copioni, non i manifest.** I manifest vivono sul disco delle guide insieme agli mp4, cioè su un bucket, e **in CI non ci sono**: un test che li leggesse sarebbe verde per assenza di dati, che è la forma di test peggiore perché sembra una rete. I copioni sono versionati, e sono la vera fonte della numerazione (`Regista::passo()` incrementa un contatore).
+- **Un testo mancante non rompe la pagina**: resta la sola riga breve e il paragrafo non viene stampato. La degradazione è voluta, e proprio perché è **muta** il guardrail gira in CI. Una soglia di lunghezza impedisce che, aggiungendo una guida di fretta, i due testi tornino a coincidere senza che nessuno lo noti.
+- **Costo ricorrente dichiarato**: ogni guida nuova vuole ora anche la sua prosa. Sono 46 guide a catalogo e cinque girate, quindi il conto è quasi tutto davanti. È scritto nella lista di controllo di `guide/STILE.md`, accanto a `g.passo()`.
+- **Restano didascalie**: i **cartelli di capitolo** e la **scheda di chiusura** («Da ricordare»). Sono già scritti come sintesi e non come commento a un fotogramma, quindi non hanno il difetto che questo ADR corregge. Il giorno in cui servisse, il file dei testi si estende con un blocco dedicato.

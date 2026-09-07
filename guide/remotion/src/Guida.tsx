@@ -7,10 +7,10 @@ import { Didascalia } from './Didascalia';
 import { Capitolo, Chiusura } from './Cartello';
 import { Marchio } from './Marchio';
 import { Parole, molla } from './Testo';
+import { INTRO } from '../../lib/tempi';
 
 /** Secondi di spostamento della camera all'ingresso di ogni passo. */
 const MOVIMENTO = 0.75;
-const INTRO = 2.6;
 const VOLUME = 0.36;
 
 export type ProprietaGuida = { slug: string; manifest: Manifest };

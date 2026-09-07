@@ -62,6 +62,14 @@
                     <h2 class="text-xl font-bold tracking-tight text-ink">{{ $guida['titolo'] }}</h2>
                     <p class="mt-1 text-sm text-ink-2">{{ $guida['sottotitolo'] }}</p>
 
+                    {{-- L'apertura della guida scritta: a chi serve e che cosa
+                         si porta a casa. Sta SOPRA il video perché è ciò che fa
+                         decidere se guardarlo. Nel filmato non c'è — lì la
+                         stessa cosa la fa la testata. --}}
+                    @if ($guida['premessa'])
+                        <p class="mt-4 max-w-prose text-sm leading-relaxed text-ink-2">{{ $guida['premessa'] }}</p>
+                    @endif
+
                     {{-- `wire:key` sul video, altrimenti cambiando guida Livewire
                          riusa l'elemento e il lettore resta sul filmato di prima.
                          `preload=metadata`: la durata serve subito, i 12 MB no. --}}
@@ -85,22 +93,42 @@
                                     </div>
                                 @endif
 
+                                {{-- Nel video il cartello dice solo il titolo, e
+                                     per due secondi e mezzo. Qui c'è lo spazio
+                                     per dire perché questa parte esiste. --}}
+                                @if ($capitolo['premessa'])
+                                    <p class="mt-2 max-w-prose text-sm leading-relaxed text-ink-2">{{ $capitolo['premessa'] }}</p>
+                                @endif
+
                                 <ol class="mt-3 space-y-2">
                                     @foreach ($capitolo['passi'] as $passo)
                                         <li>
                                             {{-- Ogni passo scritto salta al proprio istante nel
-                                                 video: sono la stessa cosa detta due volte, e
-                                                 poterci passare da una all'altra è metà del
-                                                 motivo per cui stanno nella stessa pagina. --}}
+                                                 video: sono lo stesso passo raccontato in due modi,
+                                                 e poterci passare da uno all'altro è metà del
+                                                 motivo per cui stanno nella stessa pagina.
+                                                 ⚠️ `items-start` e non `items-baseline`: il testo
+                                                 scritto è un paragrafo, e col baseline numero e
+                                                 minutaggio si allineerebbero all'ULTIMA riga. --}}
                                             <button type="button"
                                                     x-on:click="$refs.lettore.currentTime = {{ $passo['inizio'] }}; $refs.lettore.play()"
-                                                    class="flex w-full items-baseline gap-3 rounded-md px-3 py-2 text-left transition hover:bg-surface-sunken">
-                                                <span class="w-6 shrink-0 text-sm font-semibold text-ink-3 tabular-nums">{{ $passo['n'] }}</span>
-                                                <span class="text-sm text-ink-2">{{ $passo['testo'] }}</span>
-                                                <span class="ml-auto shrink-0 text-xs text-ink-3 tabular-nums">
+                                                    class="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left transition hover:bg-surface-sunken">
+                                                <span class="w-6 shrink-0 text-sm font-semibold leading-relaxed text-ink-3 tabular-nums">{{ $passo['n'] }}</span>
+                                                <span class="text-sm leading-relaxed font-medium text-ink">{{ $passo['testo'] }}</span>
+                                                <span class="ml-auto shrink-0 text-xs leading-relaxed text-ink-3 tabular-nums">
                                                     {{ floor($passo['inizio'] / 60) }}:{{ str_pad(floor($passo['inizio']) % 60, 2, '0', STR_PAD_LEFT) }}
                                                 </span>
                                             </button>
+
+                                            {{-- L'approfondimento sta FUORI dal bottone: dentro,
+                                                 un paragrafo diventerebbe un bersaglio di click
+                                                 grande quanto sé stesso, e il video partirebbe
+                                                 mentre si legge. È ciò che la guida scritta ha in
+                                                 più del video, e la ragione per cui non è una
+                                                 trascrizione dei sottotitoli. --}}
+                                            @if ($passo['dettaglio'])
+                                                <p class="pr-3 pb-3 pl-12 text-sm leading-relaxed text-ink-2">{{ $passo['dettaglio'] }}</p>
+                                            @endif
                                         </li>
                                     @endforeach
                                 </ol>

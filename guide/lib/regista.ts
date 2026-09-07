@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
+import { INTRO } from './tempi';
 
 export type Fuoco = { x: number; y: number; w: number; h: number };
 
@@ -16,6 +17,8 @@ export type Passo = {
   cursore: { x: number; y: number } | null;
   /** Il passo si chiude con un click sul punto del cursore. */
   click: boolean;
+  /** Istante in cui il passo comincia nel video, testata compresa. */
+  inizio: number;
   /** Cartello di sezione. */
   capitolo: { titolo: string; occhiello: string } | null;
   /** Scheda di chiusura. */
@@ -25,6 +28,7 @@ export type Passo = {
 export type Manifest = {
   titolo: string;
   sottotitolo: string;
+  durataTotale: number;
   larghezza: number;
   altezza: number;
   passi: Passo[];
@@ -100,6 +104,7 @@ export class Regista {
       fuoco,
       cursore,
       click: opzioni.click ?? false,
+      inizio: 0,
       capitolo: null,
       chiusura: null,
     });
@@ -123,6 +128,7 @@ export class Regista {
       fuoco: null,
       cursore: null,
       click: false,
+      inizio: 0,
       capitolo: { titolo, occhiello },
       chiusura: null,
     });
@@ -138,6 +144,7 @@ export class Regista {
       fuoco: null,
       cursore: null,
       click: false,
+      inizio: 0,
       capitolo: null,
       chiusura: { titolo, punti },
     });
@@ -177,9 +184,20 @@ export class Regista {
 
   scrivi(): void {
     const vp = this.page.viewportSize()!;
+
+    // Gli istanti si calcolano QUI e non nel montaggio: un ritocco ai testi
+    // costerebbe altrimenti un re-render di 90 secondi per riscrivere un
+    // manifest che il browser ha appena prodotto.
+    let cursore = INTRO;
+    for (const passo of this.passi) {
+      passo.inizio = Number(cursore.toFixed(2));
+      cursore += passo.durata;
+    }
+
     const manifest: Manifest = {
       titolo: this.titolo,
       sottotitolo: this.sottotitolo,
+      durataTotale: Number(cursore.toFixed(2)),
       larghezza: vp.width,
       altezza: vp.height,
       passi: this.passi,

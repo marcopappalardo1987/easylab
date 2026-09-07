@@ -10,6 +10,7 @@ export type Passo = {
   cursore: { x: number; y: number } | null;
   click: boolean;
   /** Cartello di sezione: sospende il racconto e annuncia che cosa viene ora. */
+  inizio: number;
   capitolo: { titolo: string; occhiello: string } | null;
   /** Scheda di chiusura: il riepilogo con cui si esce. */
   chiusura: { titolo: string; punti: string[] } | null;
@@ -18,6 +19,7 @@ export type Passo = {
 export type Manifest = {
   titolo: string;
   sottotitolo: string;
+  durataTotale: number;
   larghezza: number;
   altezza: number;
   passi: Passo[];

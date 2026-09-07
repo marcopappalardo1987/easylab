@@ -18,19 +18,6 @@ for (const [origine, destinazione] of [
   fs.copyFileSync(path.join('..', 'public', 'brand', origine), path.join('out', 'brand', destinazione));
 }
 
-// L'istante d'inizio di ogni passo lo sa SOLO il montaggio, perché dipende
-// dalla durata della testata. Si scrive nel manifest invece di ricalcolarlo
-// altrove: la pagina della Guida ci aggancia i salti nel video, e due formule
-// in due linguaggi diversi divergerebbero al primo ritocco della testata.
-const INTRO = 2.6;
-let cursore = INTRO;
-for (const passo of manifest.passi) {
-  passo.inizio = Number(cursore.toFixed(2));
-  cursore += passo.durata;
-}
-manifest.durataTotale = Number(cursore.toFixed(2));
-fs.writeFileSync(path.join('out', slug, 'manifest.json'), JSON.stringify(manifest, null, 2));
-
 const props = path.join('out', slug, '.props.json');
 fs.writeFileSync(props, JSON.stringify({ slug, manifest }));
 

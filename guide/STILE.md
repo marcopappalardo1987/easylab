@@ -81,6 +81,15 @@ test('nome del flusso', async ({ page }) => {
 | `click` | il clic scatta **dopo** lo scatto: il video mostra il puntatore che arriva sul bottone, e il passo successivo il risultato. |
 | `durata` | secondi. Omessa, la calcola sulla lunghezza del testo (~15 caratteri al secondo, minimo 2,5 s, massimo 9). |
 
+> ⚠️ **Nel copione non si scrive nulla che serva alla sola pagina.** La
+> didascalia è per il video: corta, come se chi legge stesse già guardando il
+> gesto, perché è così. Tutto ciò che esiste solo nella guida scritta —
+> l'apertura della guida, l'apertura di ogni capitolo, l'approfondimento di ogni
+> passo — sta in `testi/<slug>.md`, numerato come i passi e i cartelli del
+> copione: aggiungendo o togliendo un `g.passo()` o un `g.capitolo()` va
+> aggiornato anche quel file, o `TestiScrittiGuardrailTest` diventa rosso.
+> Il perché di due testi è in `app/Support/Guide/TestiScritti.php`.
+
 ### `g.capitolo(occhiello, titolo)` e `g.chiusura(titolo, punti[])`
 
 Cartelli. Si stampano sopra l'ultimo fotogramma sfocato e **non entrano nella
@@ -217,6 +226,8 @@ DB fa negare tutto a tutti nell'app di sviluppo). Non aggirarli.
 - [ ] Guardati almeno cinque fotogrammi: testa, un capitolo a +0,25 s, un passo
       con lo zoom stretto, un'uscita di didascalia, la chiusura.
 - [ ] Nessuna didascalia va a capo (nel dubbio, il fotogramma).
+- [ ] `testi/<slug>.md` ha `## premessa`, un `## capitolo N` per ogni cartello e
+      un blocco per ogni `g.passo()`, e nessuno in più.
 - [ ] Il flusso finisce in uno stato **vero**: se il copione salva qualcosa,
       l'ultimo scatto lo mostra salvato.
 

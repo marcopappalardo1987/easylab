@@ -2,6 +2,7 @@
 
 use App\Livewire\Guida\Manuale;
 use App\Support\Guide\Manuale as Libreria;
+use App\Support\Guide\TestiScritti;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Livewire\Livewire;
 
@@ -39,6 +40,52 @@ it('ignores a guide whose video has not been published', function () {
 
     expect(Libreria::disco()->exists(Libreria::percorso('senza-video', 'manifest')))->toBeTrue();
     expect(Libreria::tutte()->pluck('slug'))->not->toContain('senza-video');
+});
+
+it('puts the written prose next to the caption, not in its place', function () {
+    // ⚠️ Slug **vero** con manifest **finto**: è l'unico modo di provare
+    // l'innesto senza dipendere da un mp4 pubblicato. `guide/testi/intervento.md`
+    // è quello di produzione, il manifest lo scrive la fixture.
+    guidaFinta('intervento', 'Registrare un intervento');
+
+    $passo = collect(Libreria::trova('intervento')['capitoli'])
+        ->flatMap(fn (array $c) => $c['passi'])
+        ->first();
+
+    expect($passo['dettaglio'])->toBe(TestiScritti::per('intervento')['passi'][1])
+        // La riga che regge il test: senza, un approfondimento rimasto uguale
+        // alla didascalia passerebbe la prima asserzione il giorno in cui i due
+        // tornassero a coincidere.
+        ->and($passo['dettaglio'])->not->toBe('Primo passo di intervento.')
+        // La riga breve, su cui si clicca, resta quella del video.
+        ->and($passo['testo'])->toBe('Primo passo di intervento.');
+});
+
+it('opens the guide and each chapter with the written premises', function () {
+    // ⚠️ Il numero del capitolo non sta nel manifest: lo conta `componi()`
+    // sull'ordine dei cartelli. Un contatore sfasato di uno non rompe nulla —
+    // mostra l'apertura sbagliata, o nessuna — quindi va provato qui.
+    guidaFinta('intervento', 'Registrare un intervento');
+
+    $guida = Libreria::trova('intervento');
+    $testi = TestiScritti::per('intervento');
+
+    expect($testi['premessa'])->not->toBeNull()
+        ->and($guida['premessa'])->toBe($testi['premessa'])
+        ->and($guida['capitoli'][0]['premessa'])->toBe($testi['capitoli'][1]);
+});
+
+it('shows the bare caption when a guide has no written text', function () {
+    // La degradazione voluta: senza approfondimento resta la riga breve, e la
+    // pagina non stampa un paragrafo vuoto (`@if ($passo['dettaglio'])`).
+    // `TestiScrittiGuardrailTest` è ciò che impedisce che diventi la normalità.
+    $passo = collect(Libreria::trova('accesso-finto')['capitoli'])
+        ->flatMap(fn (array $c) => $c['passi'])
+        ->first();
+
+    expect(TestiScritti::per('accesso-finto')['passi'])->toBe([])
+        ->and($passo['dettaglio'])->toBeNull()
+        ->and($passo['testo'])->toBe('Primo passo di accesso-finto.');
 });
 
 it('narrows the index to the search text', function () {
