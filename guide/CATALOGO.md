@@ -62,14 +62,14 @@ altre guide: a un Responsabile lo switcher **non compare affatto**. Vedi
 
 ---
 
-## A. Primi passi — 5 guide
+## A. Primi passi — 5 guide ✅ **complete**
 
 | | slug | contenuto | rotte | ruoli |
 |---|---|---|---|---|
 | ✅ | `primo-accesso` | l'invito via email, la password, il primo ingresso | `invito.mostra`, `invito.imposta` | tutti |
 | ✅ | `orientarsi` | dashboard, menù di sinistra, campanella delle notifiche, profilo | `dashboard` | tutti |
 | ✅ | `tema-e-notifiche` | tema chiaro/scuro/di sistema, quali avvisi ricevere | `settings.notifiche` | tutti |
-| ▫️ | `due-fattori` | attivare la verifica in due passaggi, i codici di recupero | `settings.security` | Admin+ |
+| ✅ | `due-fattori` | attivare la verifica in due passaggi, i codici di recupero | `settings.security` | tutti ⚠️ |
 | ✅ | `cambiare-sede` | lo switcher fra le sedi di uno stesso account | (top bar) | Tenant ⚠️ |
 
 ## B. Anagrafica — 3 guide
@@ -158,7 +158,7 @@ altre guide: a un Responsabile lo switcher **non compare affatto**. Vedi
 |---|---|---|---|---|
 | ▫️ | `registrarsi` | dal Payment Link alla propria sede attiva | `registrazione.*`, `pagamento.ricevuto` | pubblico |
 
-## M. Piattaforma (interna EasyLab) — 10 guide, **tutte bloccate**
+## M. Piattaforma (interna EasyLab) — 10 guide
 
 Non compaiono nella Guida dei clienti.
 
@@ -181,8 +181,8 @@ Non compaiono nella Guida dei clienti.
 
 | stato | guide |
 |---|---|
-| ✅ fatte | **5** |
-| ▫️ da fare | **41** |
+| ✅ fatte | **6** |
+| ▫️ da fare | **40** |
 | **totale** | **46** |
 
 ✅ **Il 2FA non blocca più niente** (7 Set 2026): il seme porta un segreto TOTP
