@@ -72,13 +72,13 @@ altre guide: a un Responsabile lo switcher **non compare affatto**. Vedi
 | ✅ | `due-fattori` | attivare la verifica in due passaggi, i codici di recupero | `settings.security` | tutti ⚠️ |
 | ✅ | `cambiare-sede` | lo switcher fra le sedi di uno stesso account | (top bar) | Tenant ⚠️ |
 
-## B. Anagrafica — 3 guide
+## B. Anagrafica — 3 guide ✅ **complete**
 
 | | slug | contenuto | rotte | ruoli |
 |---|---|---|---|---|
-| ▫️ | `albero-anagrafica` | navigare Ente → dipartimento → laboratorio, briciole di pane | `anagrafica.index` | tutti |
-| ▫️ | `creare-nodi` | aggiungere e rinominare dipartimenti e laboratori | `anagrafica.index` | Admin, Responsabile |
-| ▫️ | `marchio-ente` | logo e colore con cui escono digest, avvisi e inviti | `anagrafica.marchio` | Admin |
+| ✅ | `albero-anagrafica` | navigare Ente → dipartimento → laboratorio, briciole di pane | `anagrafica.index` | tutti |
+| ✅ | `creare-nodi` | aggiungere e rinominare dipartimenti e laboratori | `anagrafica.index` | Admin ⚠️ |
+| ✅ | `marchio-ente` | logo e colore con cui escono digest, avvisi e inviti | `anagrafica.marchio` | Admin |
 
 ## C. Strumenti — 10 guide
 
@@ -181,8 +181,8 @@ Non compaiono nella Guida dei clienti.
 
 | stato | guide |
 |---|---|
-| ✅ fatte | **6** |
-| ▫️ da fare | **40** |
+| ✅ fatte | **9** |
+| ▫️ da fare | **37** |
 | **totale** | **46** |
 
 ✅ **Il 2FA non blocca più niente** (7 Set 2026): il seme porta un segreto TOTP

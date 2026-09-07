@@ -51,6 +51,10 @@ return [
             'titolo' => 'Primi passi',
             'sommario' => 'Entrare, orientarsi, e sistemare le proprie preferenze.',
         ],
+        'B' => [
+            'titolo' => 'Anagrafica',
+            'sommario' => 'La struttura della sede, e il marchio con cui escono le email.',
+        ],
         'D' => [
             'titolo' => 'Interventi',
             'sommario' => 'Annotare la manutenzione e tenere sotto controllo le scadenze.',
@@ -70,6 +74,9 @@ return [
         ['slug' => 'orientarsi', 'argomento' => 'A', 'chiavi' => ['dashboard', 'menù', 'semaforo', 'stati', 'obsoleti', 'campanella', 'notifiche']],
         ['slug' => 'tema-e-notifiche', 'argomento' => 'A', 'chiavi' => ['tema', 'scuro', 'chiaro', 'buio', 'preferenze', 'email', 'digest', 'avvisi']],
         ['slug' => 'due-fattori', 'argomento' => 'A', 'chiavi' => ['2fa', 'due fattori', 'sicurezza', 'codice', 'autenticazione', 'recupero', 'telefono', 'password']],
+        ['slug' => 'albero-anagrafica', 'argomento' => 'B', 'chiavi' => ['albero', 'struttura', 'dipartimento', 'laboratorio', 'sede', 'briciole', 'dove', 'reparto']],
+        ['slug' => 'creare-nodi', 'argomento' => 'B', 'chiavi' => ['creare', 'aggiungere', 'rinominare', 'dipartimento', 'laboratorio', 'reparto', 'eliminare', 'struttura']],
+        ['slug' => 'marchio-ente', 'argomento' => 'B', 'chiavi' => ['marchio', 'logo', 'colore', 'email', 'testata', 'brand', 'personalizzare']],
         ['slug' => 'cambiare-sede', 'argomento' => 'A', 'chiavi' => ['sede', 'sedi', 'switcher', 'multi-sede', 'contratto', 'account']],
         ['slug' => 'intervento', 'argomento' => 'D', 'chiavi' => ['intervento', 'manutenzione', 'taratura', 'scadenza', 'assegnatario', 'tecnico']],
     ],
