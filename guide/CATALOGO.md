@@ -84,7 +84,7 @@ altre guide: a un Responsabile lo switcher **non compare affatto**. Vedi
 
 | | slug | contenuto | rotte | ruoli |
 |---|---|---|---|---|
-| ▫️ | `elenco-strumenti` | ricerca, filtro per ubicazione, ordinamento, righe per pagina, «solo obsoleti» | `strumenti.index` | tutti |
+| ✅ | `elenco-strumenti` | ricerca, filtro per ubicazione, ordinamento, righe per pagina, «solo obsoleti» | `strumenti.index` | tutti |
 | ▫️ | `scheda-strumento` | panoramica e le sei linguette | `strumenti.show` | tutti |
 | ▫️ | `nuovo-strumento` | crearlo dal laboratorio giusto | `anagrafica.index` | Admin, Responsabile |
 | ▫️ | `modificare-strumento` | i campi della scheda, il fornitore, la data di installazione | `strumenti.show` | Admin, Responsabile |
@@ -181,8 +181,8 @@ Non compaiono nella Guida dei clienti.
 
 | stato | guide |
 |---|---|
-| ✅ fatte | **9** |
-| ▫️ da fare | **37** |
+| ✅ fatte | **10** |
+| ▫️ da fare | **36** |
 | **totale** | **46** |
 
 ✅ **Il 2FA non blocca più niente** (7 Set 2026): il seme porta un segreto TOTP

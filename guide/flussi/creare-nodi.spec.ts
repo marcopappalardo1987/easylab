@@ -9,8 +9,13 @@ import { accedi } from '../lib/accesso';
  * Developer, quindi a un Responsabile questi pulsanti non compaiono affatto.
  * Il catalogo diceva «Admin, Responsabile» e sbagliava.
  *
+ * ⚠️ Il nome del dipartimento nuovo va scelto fra quelli che NON esistono: il
+ * seme ne ha già dodici, Microbiologia compresa, e la prima stesura di questo
+ * copione ne creava un doppione — che è esattamente il gesto che la guida
+ * insegnerebbe a fare.
+ *
  * ⚠️ Il copione SCRIVE (crea un dipartimento): `azzera.sh` gira prima di ogni
- * giratura, o alla seconda passata l'albero avrebbe due «Microbiologia».
+ * giratura, o alla seconda passata l'albero avrebbe due «Microscopia».
  */
 test('creare nodi', async ({ page }) => {
   const g = new Regista(page, 'creare-nodi', 'Aggiungere e rinominare i reparti', "Tenere l'anagrafica uguale al laboratorio vero");
@@ -37,7 +42,7 @@ test('creare nodi', async ({ page }) => {
     durata: 6,
   });
 
-  await page.fill('#nome', 'Microbiologia');
+  await page.fill('#nome', 'Microscopia');
 
   await g.passo('Conviene scrivere il nome che il reparto ha davvero, non una sigla interna.', {
     su: page.getByLabel('Nome'),
@@ -61,12 +66,12 @@ test('creare nodi', async ({ page }) => {
   g.capitolo('Parte 2 di 3', 'Dentro il nuovo reparto');
 
   await g.passo("Il dipartimento è nell'elenco, vuoto: nessun laboratorio e nessuna macchina.", {
-    su: page.getByText('Microbiologia').first(),
+    su: page.getByText('Microscopia').first(),
     zoom: 2.2,
     durata: 6,
   });
 
-  await page.getByText('Microbiologia').first().click();
+  await page.getByText('Microscopia').first().click();
   await page.waitForLoadState('networkidle');
 
   await g.passo("Entrandoci, lo stesso pulsante ora propone un sotto-laboratorio: cambia con il livello in cui sei.", {
@@ -97,7 +102,7 @@ test('creare nodi', async ({ page }) => {
   });
 
   await page.waitForLoadState('networkidle');
-  await page.fill('#nome', 'Microbiologia clinica');
+  await page.fill('#nome', 'Microscopia elettronica');
 
   await g.passo('Si corregge e si salva: il nome nuovo compare ovunque, briciole comprese.', {
     su: page.getByLabel('Nome'),

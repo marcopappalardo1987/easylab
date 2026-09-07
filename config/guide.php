@@ -55,6 +55,10 @@ return [
             'titolo' => 'Anagrafica',
             'sommario' => 'La struttura della sede, e il marchio con cui escono le email.',
         ],
+        'C' => [
+            'titolo' => 'Strumenti',
+            'sommario' => 'Trovare una macchina, leggerne la scheda, tenerla aggiornata.',
+        ],
         'D' => [
             'titolo' => 'Interventi',
             'sommario' => 'Annotare la manutenzione e tenere sotto controllo le scadenze.',
@@ -77,6 +81,7 @@ return [
         ['slug' => 'albero-anagrafica', 'argomento' => 'B', 'chiavi' => ['albero', 'struttura', 'dipartimento', 'laboratorio', 'sede', 'briciole', 'dove', 'reparto']],
         ['slug' => 'creare-nodi', 'argomento' => 'B', 'chiavi' => ['creare', 'aggiungere', 'rinominare', 'dipartimento', 'laboratorio', 'reparto', 'eliminare', 'struttura']],
         ['slug' => 'marchio-ente', 'argomento' => 'B', 'chiavi' => ['marchio', 'logo', 'colore', 'email', 'testata', 'brand', 'personalizzare']],
+        ['slug' => 'elenco-strumenti', 'argomento' => 'C', 'chiavi' => ['elenco', 'cercare', 'ricerca', 'filtro', 'ordinare', 'matricola', 'modello', 'obsoleti', 'stato']],
         ['slug' => 'cambiare-sede', 'argomento' => 'A', 'chiavi' => ['sede', 'sedi', 'switcher', 'multi-sede', 'contratto', 'account']],
         ['slug' => 'intervento', 'argomento' => 'D', 'chiavi' => ['intervento', 'manutenzione', 'taratura', 'scadenza', 'assegnatario', 'tecnico']],
     ],
