@@ -39,11 +39,23 @@ use Illuminate\Support\Str;
 final class Manuale
 {
     /**
-     * ⚠️ La chiave porta una versione perché il suo CONTENUTO ha cambiato forma
-     * (v1 metteva in cache una Collection, vedi sotto): senza, le voci avvelenate
-     * già scritte sarebbero rimaste a far cadere la pagina fino alla scadenza.
+     * ⚠️ **La versione nella chiave si alza a ogni cambio di FORMA del dato**,
+     * non solo del tipo: senza, le voci già scritte restano a far cadere la
+     * pagina fino alla scadenza, che è un'ora.
+     *
+     * - **v2** — v1 metteva in cache una `Collection`, che torna
+     *   `__PHP_Incomplete_Class` (vedi sotto).
+     * - **v3** — i passi hanno guadagnato `dettaglio`, le guide e i capitoli
+     *   `premessa` (🔗 ADR-043). 🔴 **La v3 è arrivata dopo il 500**: il deploy
+     *   del 7 Set 2026 è uscito con la chiave ferma a v2, quindi staging ha
+     *   riletto le voci della forma vecchia e la vista è morta su
+     *   `Undefined array key "premessa"` — con la suite verde, perché in
+     *   `testing` questo ramo non gira mai. Alzarla è **metà** del rimedio: la
+     *   vista ora legge le tre chiavi nuove col `??`, così il prossimo cambio
+     *   di forma costa un paragrafo mancante per un'ora e non il manuale
+     *   intero.
      */
-    private const CHIAVE = 'guide.manuale.v2';
+    private const CHIAVE = 'guide.manuale.v3';
 
     /** @return Collection<int, array<string, mixed>> */
     public static function tutte(): Collection

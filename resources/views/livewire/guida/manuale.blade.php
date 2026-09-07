@@ -66,8 +66,8 @@
                          si porta a casa. Sta SOPRA il video perché è ciò che fa
                          decidere se guardarlo. Nel filmato non c'è — lì la
                          stessa cosa la fa la testata. --}}
-                    @if ($guida['premessa'])
-                        <p class="mt-4 max-w-prose text-sm leading-relaxed text-ink-2">{{ $guida['premessa'] }}</p>
+                    @if ($guida['premessa'] ?? null)
+                        <p class="mt-4 max-w-prose text-sm leading-relaxed text-ink-2">{{ $guida['premessa'] ?? '' }}</p>
                     @endif
 
                     {{-- `wire:key` sul video, altrimenti cambiando guida Livewire
@@ -96,8 +96,8 @@
                                 {{-- Nel video il cartello dice solo il titolo, e
                                      per due secondi e mezzo. Qui c'è lo spazio
                                      per dire perché questa parte esiste. --}}
-                                @if ($capitolo['premessa'])
-                                    <p class="mt-2 max-w-prose text-sm leading-relaxed text-ink-2">{{ $capitolo['premessa'] }}</p>
+                                @if ($capitolo['premessa'] ?? null)
+                                    <p class="mt-2 max-w-prose text-sm leading-relaxed text-ink-2">{{ $capitolo['premessa'] ?? '' }}</p>
                                 @endif
 
                                 <ol class="mt-3 space-y-2">
@@ -126,8 +126,8 @@
                                                  mentre si legge. È ciò che la guida scritta ha in
                                                  più del video, e la ragione per cui non è una
                                                  trascrizione dei sottotitoli. --}}
-                                            @if ($passo['dettaglio'])
-                                                <p class="pr-3 pb-3 pl-12 text-sm leading-relaxed text-ink-2">{{ $passo['dettaglio'] }}</p>
+                                            @if ($passo['dettaglio'] ?? null)
+                                                <p class="pr-3 pb-3 pl-12 text-sm leading-relaxed text-ink-2">{{ $passo['dettaglio'] ?? '' }}</p>
                                             @endif
                                         </li>
                                     @endforeach

@@ -4,6 +4,7 @@ use App\Livewire\Guida\Manuale;
 use App\Support\Guide\Manuale as Libreria;
 use App\Support\Guide\TestiScritti;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
 
 /**
@@ -86,6 +87,44 @@ it('shows the bare caption when a guide has no written text', function () {
     expect(TestiScritti::per('accesso-finto')['passi'])->toBe([])
         ->and($passo['dettaglio'])->toBeNull()
         ->and($passo['testo'])->toBe('Primo passo di accesso-finto.');
+});
+
+it('renders even when the cache still holds the previous shape', function () {
+    // 🔴 **Il 7 Set 2026 la pagina è morta esattamente così.** Il deploy ha
+    // portato le chiavi nuove (`premessa`, `dettaglio`) con la versione della
+    // chiave di cache ferma, quindi staging ha riletto per un'ora le voci della
+    // forma precedente e la vista è esplosa su `Undefined array key`. La suite
+    // era verde perché in `testing` il ramo con la cache non gira mai.
+    //
+    // Alzare la versione è il rimedio; questo test sorveglia la cintura, cioè
+    // che la vista legga col `??` le chiavi che una voce vecchia non ha.
+    Cache::store('file')->clear();
+    config()->set('cache.default', 'file');
+    app()->detectEnvironment(fn () => 'staging');
+
+    $vecchie = Libreria::tutte()->map(function (array $guida): array {
+        unset($guida['premessa']);
+
+        $guida['capitoli'] = array_map(function (array $capitolo): array {
+            unset($capitolo['premessa']);
+
+            $capitolo['passi'] = array_map(function (array $passo): array {
+                unset($passo['dettaglio']);
+
+                return $passo;
+            }, $capitolo['passi']);
+
+            return $capitolo;
+        }, $guida['capitoli']);
+
+        return $guida;
+    })->all();
+
+    Cache::put((new ReflectionClass(Libreria::class))->getConstant('CHIAVE'), $vecchie, now()->addHour());
+
+    ($this->pagina)()->assertOk();
+
+    Cache::store('file')->clear();
 });
 
 it('narrows the index to the search text', function () {
