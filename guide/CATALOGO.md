@@ -95,13 +95,13 @@ altre guide: a un Responsabile lo switcher **non compare affatto**. Vedi
 | ✅ | `import-csv` | carica → anteprima con errori riga per riga → importa le valide | `strumenti.import` | Admin |
 | ✅ | `storico-pdf` | il PDF con tutta la vita della macchina | `strumenti.storico-pdf` | tutti |
 
-## D. Interventi — 3 guide
+## D. Interventi — 3 guide ✅ **complete**
 
 | | slug | contenuto | rotte | ruoli |
 |---|---|---|---|---|
 | ✅ | `intervento` | **il pilota**: ricerca → scheda → nuovo intervento | `strumenti.index`, `strumenti.show` | Responsabile, Tecnico |
-| ▫️ | `completare-intervento` | «Fatto», riaprire, correggere, i cinque tipi | `strumenti.show` | Responsabile, Tecnico |
-| ▫️ | `scadenzario` | tutto ciò che è aperto su tutte le macchine, in un elenco solo | `scadenzario.index` | tutti |
+| ✅ | `completare-intervento` | «Fatto», riaprire, correggere, i cinque tipi | `strumenti.show` | Responsabile, Tecnico |
+| ✅ | `scadenzario` | tutto ciò che è aperto su tutte le macchine, in un elenco solo | `scadenzario.index` | tutti |
 
 ## E. Garanzie — 2 guide
 
@@ -181,8 +181,8 @@ Non compaiono nella Guida dei clienti.
 
 | stato | guide |
 |---|---|
-| ✅ fatte | **19** |
-| ▫️ da fare | **27** |
+| ✅ fatte | **21** |
+| ▫️ da fare | **25** |
 | **totale** | **46** |
 
 ✅ **Il 2FA non blocca più niente** (7 Set 2026): il seme porta un segreto TOTP

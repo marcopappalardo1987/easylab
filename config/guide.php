@@ -91,6 +91,8 @@ return [
         ['slug' => 'modificare-strumento', 'argomento' => 'C', 'chiavi' => ['modificare', 'correggere', 'matricola', 'parametri', 'fornitore', 'installazione']],
         ['slug' => 'import-csv', 'argomento' => 'C', 'chiavi' => ['csv', 'importare', 'foglio', 'excel', 'massa', 'template', 'anteprima', 'errori']],
         ['slug' => 'storico-pdf', 'argomento' => 'C', 'chiavi' => ['pdf', 'storico', 'stampare', 'documento', 'ispezione', 'certificazione']],
+        ['slug' => 'completare-intervento', 'argomento' => 'D', 'chiavi' => ['fatto', 'completare', 'chiudere', 'eseguito', 'report', 'riapri', 'taratura']],
+        ['slug' => 'scadenzario', 'argomento' => 'D', 'chiavi' => ['scadenzario', 'scadenze', 'scaduti', 'aperti', 'lista', 'pianificare', 'miei']],
         ['slug' => 'cambiare-sede', 'argomento' => 'A', 'chiavi' => ['sede', 'sedi', 'switcher', 'multi-sede', 'contratto', 'account']],
         ['slug' => 'intervento', 'argomento' => 'D', 'chiavi' => ['intervento', 'manutenzione', 'taratura', 'scadenza', 'assegnatario', 'tecnico']],
     ],
