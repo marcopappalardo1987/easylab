@@ -135,21 +135,21 @@ altre guide: a un Responsabile lo switcher **non compare affatto**. Vedi
 
 | | slug | contenuto | rotte | ruoli |
 |---|---|---|---|---|
-| ▫️ | `persone-ente` | invitare una persona, assegnarle i reparti, toglierla | `utenti.index` | Admin |
+| ✅ | `persone-ente` | invitare una persona, assegnarle i reparti, toglierla | `utenti.index` | Admin |
 | ▫️ | `chi-vede-cosa` | i sei ruoli spiegati, senza editor: che cosa cambia in pratica | — | Admin |
 
 ## J. In laboratorio, col telefono — 2 guide
 
 | | slug | contenuto | rotte | ruoli |
 |---|---|---|---|---|
-| ▫️ | `vista-campo` | «inquadra il QR» e «i miei interventi» | `campo.index` | Tecnico, Responsabile |
+| ✅ | `vista-campo` | «inquadra il QR» e «i miei interventi» | `campo.index` | Tecnico, Responsabile |
 | ▫️ | `scansione-qr` | dall'adesivo alla scheda della macchina | `qr.strumento` | tutti con `qr.scan` |
 
 ## K. Abbonamento — 2 guide
 
 | | slug | contenuto | rotte | ruoli |
 |---|---|---|---|---|
-| ▫️ | `abbonamento` | il piano, i limiti, il portale di fatturazione | `abbonamento.index`, `abbonamento.portale` | Admin |
+| ✅ | `abbonamento` | il piano, i limiti, il portale di fatturazione | `abbonamento.index`, `abbonamento.portale` | Admin |
 | ▫️ | `account-bloccato` | che cosa si vede a insoluto e come si esce | `bloccato`, `bloccato.passa` | Admin |
 
 ## L. Registrazione — 1 guida
@@ -181,8 +181,8 @@ Non compaiono nella Guida dei clienti.
 
 | stato | guide |
 |---|---|
-| ✅ fatte | **29** |
-| ▫️ da fare | **17** |
+| ✅ fatte | **32** |
+| ▫️ da fare | **14** |
 | **totale** | **46** |
 
 ✅ **Il 2FA non blocca più niente** (7 Set 2026): il seme porta un segreto TOTP

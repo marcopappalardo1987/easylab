@@ -79,6 +79,18 @@ return [
             'titolo' => 'Fornitori',
             'sommario' => 'Chi vende e chi assiste le macchine.',
         ],
+        'I' => [
+            'titolo' => 'Persone e permessi',
+            'sommario' => 'Chi entra, che cosa vede, e come si toglie un accesso.',
+        ],
+        'J' => [
+            'titolo' => 'In laboratorio, col telefono',
+            'sommario' => 'Il QR sulla macchina e la propria lista di lavoro.',
+        ],
+        'K' => [
+            'titolo' => 'Abbonamento',
+            'sommario' => 'Il piano, i limiti e le fatture.',
+        ],
     ],
 
     /*
@@ -117,6 +129,9 @@ return [
         ['slug' => 'allegare-documenti', 'argomento' => 'G', 'chiavi' => ['documento', 'allegare', 'caricare', 'certificato', 'manuale', 'pdf', 'file']],
         ['slug' => 'archivio-documenti', 'argomento' => 'G', 'chiavi' => ['archivio', 'documenti', 'cercare', 'esportare', 'scaricare', 'certificati']],
         ['slug' => 'fornitori', 'argomento' => 'H', 'chiavi' => ['fornitore', 'assistenza', 'contatti', 'telefono', 'guasto', 'anagrafica']],
+        ['slug' => 'persone-ente', 'argomento' => 'I', 'chiavi' => ['persone', 'invitare', 'ruolo', 'permessi', 'accesso', 'cestinare', 'utenti']],
+        ['slug' => 'vista-campo', 'argomento' => 'J', 'chiavi' => ['campo', 'telefono', 'qr', 'reparto', 'miei interventi', 'mobile']],
+        ['slug' => 'abbonamento', 'argomento' => 'K', 'chiavi' => ['abbonamento', 'piano', 'fatture', 'stripe', 'portale', 'limiti', 'sedi']],
         ['slug' => 'cambiare-sede', 'argomento' => 'A', 'chiavi' => ['sede', 'sedi', 'switcher', 'multi-sede', 'contratto', 'account']],
         ['slug' => 'intervento', 'argomento' => 'D', 'chiavi' => ['intervento', 'manutenzione', 'taratura', 'scadenza', 'assegnatario', 'tecnico']],
     ],
