@@ -16,6 +16,12 @@ import { codice2FA } from './totp';
  * ogni tanto, cioè un copione che fallisce a caso.
  */
 export const accedi = async (page: Page, email: string, password = 'guida-demo'): Promise<void> => {
+  // ⚠️ Prima si chiude la sessione di chi c'era: con un utente già autenticato
+  // `/login` rimbalza sulla dashboard, il campo email non esiste e il copione
+  // aspetta un elemento che non arriverà mai. Serve alle guide che mostrano la
+  // stessa pagina vista da ruoli diversi.
+  await page.context().clearCookies();
+
   await page.goto('/login');
   await page.fill('#email', email);
   await page.fill('#password', password);

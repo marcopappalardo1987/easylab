@@ -91,6 +91,10 @@ return [
             'titolo' => 'Abbonamento',
             'sommario' => 'Il piano, i limiti e le fatture.',
         ],
+        'L' => [
+            'titolo' => 'Registrazione',
+            'sommario' => 'Aprire un account Easy Lab da zero.',
+        ],
     ],
 
     /*
@@ -132,6 +136,10 @@ return [
         ['slug' => 'persone-ente', 'argomento' => 'I', 'chiavi' => ['persone', 'invitare', 'ruolo', 'permessi', 'accesso', 'cestinare', 'utenti']],
         ['slug' => 'vista-campo', 'argomento' => 'J', 'chiavi' => ['campo', 'telefono', 'qr', 'reparto', 'miei interventi', 'mobile']],
         ['slug' => 'abbonamento', 'argomento' => 'K', 'chiavi' => ['abbonamento', 'piano', 'fatture', 'stripe', 'portale', 'limiti', 'sedi']],
+        ['slug' => 'account-bloccato', 'argomento' => 'K', 'chiavi' => ['bloccato', 'sospeso', 'insoluto', 'pagamento', 'accesso', 'riattivare']],
+        ['slug' => 'chi-vede-cosa', 'argomento' => 'I', 'chiavi' => ['ruoli', 'permessi', 'vede', 'admin', 'responsabile', 'tenant', 'menu']],
+        ['slug' => 'scansione-qr', 'argomento' => 'J', 'chiavi' => ['qr', 'inquadrare', 'scansione', 'adesivo', 'telefono', 'codice']],
+        ['slug' => 'registrarsi', 'argomento' => 'L', 'chiavi' => ['registrarsi', 'account', 'nuovo', 'piano', 'pagamento', 'stripe', 'iniziare']],
         ['slug' => 'cambiare-sede', 'argomento' => 'A', 'chiavi' => ['sede', 'sedi', 'switcher', 'multi-sede', 'contratto', 'account']],
         ['slug' => 'intervento', 'argomento' => 'D', 'chiavi' => ['intervento', 'manutenzione', 'taratura', 'scadenza', 'assegnatario', 'tecnico']],
     ],

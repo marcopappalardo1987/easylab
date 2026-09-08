@@ -131,32 +131,32 @@ altre guide: a un Responsabile lo switcher **non compare affatto**. Vedi
 |---|---|---|---|---|
 | ✅ | `fornitori` | anagrafica fornitori e come si lega alla macchina | `fornitori.index` | tutti (sola lettura per Tenant) |
 
-## I. Persone e permessi — 2 guide
+## I. Persone e permessi — 2 guide ✅ **complete**
 
 | | slug | contenuto | rotte | ruoli |
 |---|---|---|---|---|
 | ✅ | `persone-ente` | invitare una persona, assegnarle i reparti, toglierla | `utenti.index` | Admin |
-| ▫️ | `chi-vede-cosa` | i sei ruoli spiegati, senza editor: che cosa cambia in pratica | — | Admin |
+| ✅ | `chi-vede-cosa` | i sei ruoli spiegati, senza editor: che cosa cambia in pratica | — | Admin |
 
-## J. In laboratorio, col telefono — 2 guide
+## J. In laboratorio, col telefono — 2 guide ✅ **complete**
 
 | | slug | contenuto | rotte | ruoli |
 |---|---|---|---|---|
 | ✅ | `vista-campo` | «inquadra il QR» e «i miei interventi» | `campo.index` | Tecnico, Responsabile |
-| ▫️ | `scansione-qr` | dall'adesivo alla scheda della macchina | `qr.strumento` | tutti con `qr.scan` |
+| ✅ | `scansione-qr` | dall'adesivo alla scheda della macchina | `qr.strumento` | tutti con `qr.scan` |
 
-## K. Abbonamento — 2 guide
+## K. Abbonamento — 2 guide ✅ **complete**
 
 | | slug | contenuto | rotte | ruoli |
 |---|---|---|---|---|
 | ✅ | `abbonamento` | il piano, i limiti, il portale di fatturazione | `abbonamento.index`, `abbonamento.portale` | Admin |
-| ▫️ | `account-bloccato` | che cosa si vede a insoluto e come si esce | `bloccato`, `bloccato.passa` | Admin |
+| ✅ | `account-bloccato` | che cosa si vede a insoluto e come si esce | `bloccato`, `bloccato.passa` | Admin |
 
-## L. Registrazione — 1 guida
+## L. Registrazione — 1 guida ✅ **completa**
 
 | | slug | contenuto | rotte | ruoli |
 |---|---|---|---|---|
-| ▫️ | `registrarsi` | dal Payment Link alla propria sede attiva | `registrazione.*`, `pagamento.ricevuto` | pubblico |
+| ✅ | `registrarsi` | dal Payment Link alla propria sede attiva | `registrazione.*`, `pagamento.ricevuto` | pubblico |
 
 ## M. Piattaforma (interna EasyLab) — 10 guide
 
@@ -181,8 +181,8 @@ Non compaiono nella Guida dei clienti.
 
 | stato | guide |
 |---|---|
-| ✅ fatte | **32** |
-| ▫️ da fare | **14** |
+| ✅ fatte | **36** |
+| ▫️ da fare | **10** |
 | **totale** | **46** |
 
 ✅ **Il 2FA non blocca più niente** (7 Set 2026): il seme porta un segreto TOTP
