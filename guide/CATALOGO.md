@@ -118,18 +118,18 @@ altre guide: a un Responsabile lo switcher **non compare affatto**. Vedi
 | ✅ | `catalogo-ricambi` | il catalogo dei pezzi e le sue schede | `ricambi.index` | Admin, Responsabile |
 | ✅ | `dove-e-montato` | ricerca incrociata: dato un pezzo, su quali macchine sta | `ricambi.index` | tutti |
 
-## G. Documenti — 2 guide
+## G. Documenti — 2 guide ✅ **complete**
 
 | | slug | contenuto | rotte | ruoli |
 |---|---|---|---|---|
-| ▫️ | `allegare-documenti` | manuali, certificati e rapporti sulla scheda della macchina | `strumenti.show` | Admin, Responsabile, Tenant |
-| ▫️ | `archivio-documenti` | l'archivio d'Ente, la ricerca, lo scarico e l'esportazione | `documenti.index`, `documenti.download`, `documenti.export-pdf` | tutti |
+| ✅ | `allegare-documenti` | manuali, certificati e rapporti sulla scheda della macchina | `strumenti.show` | Admin, Responsabile, Tenant |
+| ✅ | `archivio-documenti` | l'archivio d'Ente, la ricerca, lo scarico e l'esportazione | `documenti.index`, `documenti.download`, `documenti.export-pdf` | tutti |
 
-## H. Fornitori — 1 guida
+## H. Fornitori — 1 guida ✅ **completa**
 
 | | slug | contenuto | rotte | ruoli |
 |---|---|---|---|---|
-| ▫️ | `fornitori` | anagrafica fornitori e come si lega alla macchina | `fornitori.index` | tutti (sola lettura per Tenant) |
+| ✅ | `fornitori` | anagrafica fornitori e come si lega alla macchina | `fornitori.index` | tutti (sola lettura per Tenant) |
 
 ## I. Persone e permessi — 2 guide
 
@@ -181,8 +181,8 @@ Non compaiono nella Guida dei clienti.
 
 | stato | guide |
 |---|---|
-| ✅ fatte | **26** |
-| ▫️ da fare | **20** |
+| ✅ fatte | **29** |
+| ▫️ da fare | **17** |
 | **totale** | **46** |
 
 ✅ **Il 2FA non blocca più niente** (7 Set 2026): il seme porta un segreto TOTP

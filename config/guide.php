@@ -71,6 +71,14 @@ return [
             'titolo' => 'Ricambi',
             'sommario' => 'I pezzi montati: annotarli, ritrovarli, sapere dove stanno.',
         ],
+        'G' => [
+            'titolo' => 'Documenti',
+            'sommario' => 'Manuali, certificati e rapporti: dove si mettono e come si ritrovano.',
+        ],
+        'H' => [
+            'titolo' => 'Fornitori',
+            'sommario' => 'Chi vende e chi assiste le macchine.',
+        ],
     ],
 
     /*
@@ -106,6 +114,9 @@ return [
         ['slug' => 'montare-ricambio', 'argomento' => 'F', 'chiavi' => ['ricambio', 'pezzo', 'montare', 'sostituire', 'guarnizione', 'intervento']],
         ['slug' => 'catalogo-ricambi', 'argomento' => 'F', 'chiavi' => ['catalogo', 'ricambi', 'pezzi', 'unisci', 'grafie', 'doppioni']],
         ['slug' => 'dove-e-montato', 'argomento' => 'F', 'chiavi' => ['dove', 'montato', 'macchine', 'lotto', 'ordine', 'scorta', 'giro']],
+        ['slug' => 'allegare-documenti', 'argomento' => 'G', 'chiavi' => ['documento', 'allegare', 'caricare', 'certificato', 'manuale', 'pdf', 'file']],
+        ['slug' => 'archivio-documenti', 'argomento' => 'G', 'chiavi' => ['archivio', 'documenti', 'cercare', 'esportare', 'scaricare', 'certificati']],
+        ['slug' => 'fornitori', 'argomento' => 'H', 'chiavi' => ['fornitore', 'assistenza', 'contatti', 'telefono', 'guasto', 'anagrafica']],
         ['slug' => 'cambiare-sede', 'argomento' => 'A', 'chiavi' => ['sede', 'sedi', 'switcher', 'multi-sede', 'contratto', 'account']],
         ['slug' => 'intervento', 'argomento' => 'D', 'chiavi' => ['intervento', 'manutenzione', 'taratura', 'scadenza', 'assegnatario', 'tecnico']],
     ],
