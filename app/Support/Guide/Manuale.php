@@ -80,7 +80,31 @@ final class Manuale
             ? self::leggi()->all()
             : Cache::remember(self::CHIAVE, now()->addHour(), fn () => self::leggi()->all());
 
-        return collect($voci);
+        // 🔴 Il filtro per permesso sta QUI, fuori dalla cache, ed è l'unico
+        // posto in cui può stare: la cache è una sola per tutta la piattaforma,
+        // e filtrare prima di scriverla significherebbe servire a ogni utente
+        // l'elenco del primo che ha riempito la voce. Comporre costa, decidere
+        // chi vede cosa no.
+        return collect($voci)->filter(fn (array $guida) => self::visibile($guida))->values();
+    }
+
+    /**
+     * Una guida con `permesso` la vedono solo quelli che ce l'hanno.
+     *
+     * ⚠️ Serve alle guide **interne** (argomento M): parlano della cabina di
+     * regia, dell'impersonazione, del registro di audit, e non hanno ragione di
+     * comparire nell'indice di un cliente. Oggi la rotta `/guida` è comunque
+     * chiusa dietro `tenants.view_all` — un cancello di rilascio, non di
+     * sicurezza — ma quel cancello è destinato a cadere quando il manuale sarà
+     * completo, e questo filtro è ciò che deve reggere dopo.
+     *
+     * @param  array<string, mixed>  $guida
+     */
+    private static function visibile(array $guida): bool
+    {
+        $permesso = $guida['permesso'] ?? null;
+
+        return $permesso === null || (bool) auth()->user()?->can($permesso);
     }
 
     public static function dimentica(): void
@@ -128,7 +152,8 @@ final class Manuale
 
                 $argomento = $argomenti[$voce['argomento']] ?? null;
 
-                return self::componi($voce, $manifest, $argomento);
+                return self::componi($voce, $manifest, $argomento)
+                    + ['permesso' => $voce['permesso'] ?? null];
             })
             ->filter()
             ->values();

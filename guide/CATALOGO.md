@@ -158,22 +158,22 @@ altre guide: a un Responsabile lo switcher **non compare affatto**. Vedi
 |---|---|---|---|---|
 | ✅ | `registrarsi` | dal Payment Link alla propria sede attiva | `registrazione.*`, `pagamento.ricevuto` | pubblico |
 
-## M. Piattaforma (interna EasyLab) — 10 guide
+## M. Piattaforma (interna EasyLab) — 10 guide ✅ **complete**
 
 Non compaiono nella Guida dei clienti.
 
 | | slug | contenuto | rotte |
 |---|---|---|---|
-| ▫️ | `cabina-di-regia` | la home di piattaforma: clienti, preferiti, provisioning | `piattaforma.index` |
-| ▫️ | `parco-clienti` | il parco macchine di tutti i clienti, in sola lettura | `piattaforma.parco` |
-| ▫️ | `parco-scadenzario` | che cosa scade su tutto il parco | `piattaforma.parco.scadenzario` |
-| ▫️ | `parco-ricambi` | i ricambi su tutto il parco | `piattaforma.parco.ricambi` |
-| ▫️ | `impersonazione` | entrare come un cliente, e i limiti | `piattaforma.parco.impersona` |
-| ▫️ | `tecnici-easylab` | i tecnici e i clienti su cui lavorano | `piattaforma.tecnici` |
-| ▫️ | `editor-ruoli` | la matrice ruolo→permesso, le celle «personalizzato», le orfane | `piattaforma.ruoli` |
-| ▫️ | `registro-audit` | chi ha fatto che cosa | `piattaforma.audit` |
-| ▫️ | `errori` | l'error tracker interno | `piattaforma.errori`, `piattaforma.errori.mostra` |
-| ▫️ | `listino` | i piani commerciali e i loro tetti | `piattaforma.piani` |
+| ✅ | `cabina-di-regia` | la home di piattaforma: clienti, preferiti, provisioning | `piattaforma.index` |
+| ✅ | `parco-clienti` | il parco macchine di tutti i clienti, in sola lettura | `piattaforma.parco` |
+| ✅ | `parco-scadenzario` | che cosa scade su tutto il parco | `piattaforma.parco.scadenzario` |
+| ✅ | `parco-ricambi` | i ricambi su tutto il parco | `piattaforma.parco.ricambi` |
+| ✅ | `impersonazione` | entrare come un cliente, e i limiti | `piattaforma.parco.impersona` |
+| ✅ | `tecnici-easylab` | i tecnici e i clienti su cui lavorano | `piattaforma.tecnici` |
+| ✅ | `editor-ruoli` | la matrice ruolo→permesso, le celle «personalizzato», le orfane | `piattaforma.ruoli` |
+| ✅ | `registro-audit` | chi ha fatto che cosa | `piattaforma.audit` |
+| ✅ | `errori` | l'error tracker interno | `piattaforma.errori`, `piattaforma.errori.mostra` |
+| ✅ | `listino` | i piani commerciali e i loro tetti | `piattaforma.piani` |
 
 ---
 
@@ -181,13 +181,21 @@ Non compaiono nella Guida dei clienti.
 
 | stato | guide |
 |---|---|
-| ✅ fatte | **36** |
-| ▫️ da fare | **10** |
+| ✅ fatte | **46** |
 | **totale** | **46** |
 
+✅ **Catalogo completo l'8 Set 2026.** Le dieci guide di piattaforma portano
+`permesso` in `config/guide.php` e non compaiono nell'indice di un cliente:
+`Manuale` le filtra **fuori dalla cache**, che è una sola per tutta la
+piattaforma — filtrare prima di scriverla servirebbe a ognuno l'elenco del primo
+che l'ha riempita. `ManualeTest` copre entrambe le direzioni.
+
 ✅ **Il 2FA non blocca più niente** (7 Set 2026): il seme porta un segreto TOTP
-noto e `lib/accesso.ts` supera la challenge da sé, quindi le 11 guide che erano
-⛔ e la `due-fattori` sono girabili come le altre.
+noto e `lib/accesso.ts` supera la challenge da sé. Il seme porta anche il
+**Superadmin e il Developer** di piattaforma (`bin/pianta-piattaforma.sh`), senza
+i quali il gruppo M non era filmabile con nessuno degli utenti esistenti, e un
+**prezzo di scena** sul piano SaaS, senza il quale `/registrati` dice
+«Registrazioni chiuse».
 
 ⚠️ **E ne sbloccava più di undici.** Il catalogo segnava ▫️ anche `creare-nodi`
 e `marchio-ente`, ma `unita_organizzativa.update` è di **Admin, Superadmin e

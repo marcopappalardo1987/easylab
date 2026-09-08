@@ -60,8 +60,10 @@ senza cercarlo.
 
 ## 7
 
-Il caricamento è immediato. Il file viene messo su un archivio privato, mai su
-un indirizzo pubblico: non esiste una URL che lo apra a chi non ha un accesso.
+Il caricamento è immediato. Il file finisce su un archivio privato, mai su un
+indirizzo pubblico: non esiste una URL che lo apra a chi non ha un accesso, e un
+collegamento copiato e inoltrato non funziona per chi non è entrato in Easy Lab.
+È la stessa regola dello scarico, applicata dalla parte opposta.
 
 ## capitolo 3
 

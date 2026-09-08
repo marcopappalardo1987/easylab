@@ -127,6 +127,31 @@ it('renders even when the cache still holds the previous shape', function () {
     Cache::store('file')->clear();
 });
 
+it('hides a guide whose permission the reader does not have', function () {
+    // 🔴 Le guide di piattaforma (argomento M) parlano di cabina di regia,
+    // impersonazione e registro di audit: nell'indice di un cliente non ci
+    // vanno. Oggi `/guida` è comunque chiusa dietro `tenants.view_all`, ma
+    // quello è un cancello di RILASCIO che cadrà a manuale completo: da lì in
+    // avanti l'unica cosa che regge è questo filtro.
+    guidaFinta('guida-interna', 'Guida interna');
+
+    config()->set('guide.guide', collect(config('guide.guide'))->map(fn (array $v) => $v['slug'] === 'guida-interna'
+        ? $v + ['permesso' => 'tenants.view_all']
+        : $v)->all());
+
+    $this->actingAs(utenteConRuolo('Superadmin'));
+    expect(Libreria::tutte()->pluck('slug'))->toContain('guida-interna');
+
+    $this->actingAs(utenteConRuolo('Tecnico'));
+    expect(Libreria::tutte()->pluck('slug'))->not->toContain('guida-interna')
+        // La riga che regge il test: senza, un filtro che togliesse TUTTO
+        // passerebbe la prima asserzione.
+        ->and(Libreria::tutte())->not->toBeEmpty();
+
+    // E non si raggiunge nemmeno per slug: `trova()` passa dallo stesso filtro.
+    expect(Libreria::trova('guida-interna'))->toBeNull();
+});
+
 it('narrows the index to the search text', function () {
     $tutte = Libreria::tutte();
     $bersaglio = $tutte->first();

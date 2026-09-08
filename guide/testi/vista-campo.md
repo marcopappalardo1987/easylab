@@ -35,7 +35,9 @@ Il QR è la strada più corta fra la macchina che hai davanti e la sua scheda.
 ## 3
 
 Il primo pulsante accende la fotocamera del telefono. Non serve un lettore di
-codici a barre né un'app a parte: è la fotocamera che c'è già, dentro la pagina.
+codici a barre né un'app a parte da installare: è la fotocamera che c'è già,
+usata dentro la pagina. Il permesso lo chiede il browser la prima volta, e da lì
+in avanti si apre in un secondo.
 
 ## 4
 

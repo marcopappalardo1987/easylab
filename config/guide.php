@@ -95,6 +95,10 @@ return [
             'titolo' => 'Registrazione',
             'sommario' => 'Aprire un account Easy Lab da zero.',
         ],
+        'M' => [
+            'titolo' => 'Piattaforma',
+            'sommario' => 'Le pagine interne di EasyLab: clienti, impersonazione, audit, errori.',
+        ],
     ],
 
     /*
@@ -140,6 +144,21 @@ return [
         ['slug' => 'chi-vede-cosa', 'argomento' => 'I', 'chiavi' => ['ruoli', 'permessi', 'vede', 'admin', 'responsabile', 'tenant', 'menu']],
         ['slug' => 'scansione-qr', 'argomento' => 'J', 'chiavi' => ['qr', 'inquadrare', 'scansione', 'adesivo', 'telefono', 'codice']],
         ['slug' => 'registrarsi', 'argomento' => 'L', 'chiavi' => ['registrarsi', 'account', 'nuovo', 'piano', 'pagamento', 'stripe', 'iniziare']],
+
+        // ⚠️ Le guide di piattaforma portano `permesso`: `Manuale` le toglie
+        // dall'indice di chi non ce l'ha. Il permesso scelto è nel **set
+        // bloccato** di `config/rbac.php`, quindi l'editor dei ruoli non può
+        // concederlo a un cliente per sbaglio.
+        ['slug' => 'cabina-di-regia', 'argomento' => 'M', 'permesso' => 'tenants.view_all', 'chiavi' => ['cabina', 'piattaforma', 'clienti', 'provisioning', 'mrr']],
+        ['slug' => 'parco-clienti', 'argomento' => 'M', 'permesso' => 'tenants.view_all', 'chiavi' => ['parco', 'clienti', 'strumenti', 'supporto', 'sola lettura']],
+        ['slug' => 'parco-scadenzario', 'argomento' => 'M', 'permesso' => 'tenants.view_all', 'chiavi' => ['scadenzario', 'parco', 'clienti', 'scadenze']],
+        ['slug' => 'parco-ricambi', 'argomento' => 'M', 'permesso' => 'tenants.view_all', 'chiavi' => ['ricambi', 'parco', 'fornitori', 'lotto', 'consumi']],
+        ['slug' => 'impersonazione', 'argomento' => 'M', 'permesso' => 'tenants.view_all', 'chiavi' => ['impersonare', 'cliente', 'audit', 'timbro', 'limiti']],
+        ['slug' => 'tecnici-easylab', 'argomento' => 'M', 'permesso' => 'tenants.view_all', 'chiavi' => ['tecnici', 'portafoglio', 'accesso', 'clienti']],
+        ['slug' => 'editor-ruoli', 'argomento' => 'M', 'permesso' => 'tenants.view_all', 'chiavi' => ['ruoli', 'permessi', 'matrice', 'bloccato', 'personalizzato', 'orfani']],
+        ['slug' => 'registro-audit', 'argomento' => 'M', 'permesso' => 'tenants.view_all', 'chiavi' => ['audit', 'registro', 'tracce', 'chi ha fatto', 'impersonazione']],
+        ['slug' => 'errori', 'argomento' => 'M', 'permesso' => 'tenants.view_all', 'chiavi' => ['errori', 'tracker', 'developer', 'eccezioni', 'diagnostica']],
+        ['slug' => 'listino', 'argomento' => 'M', 'permesso' => 'tenants.view_all', 'chiavi' => ['listino', 'piani', 'prezzi', 'tetti', 'stripe']],
         ['slug' => 'cambiare-sede', 'argomento' => 'A', 'chiavi' => ['sede', 'sedi', 'switcher', 'multi-sede', 'contratto', 'account']],
         ['slug' => 'intervento', 'argomento' => 'D', 'chiavi' => ['intervento', 'manutenzione', 'taratura', 'scadenza', 'assegnatario', 'tecnico']],
     ],

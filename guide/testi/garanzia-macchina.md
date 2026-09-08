@@ -62,7 +62,9 @@ saprebbe più a quale delle due credere.
 ## 7
 
 Il salvataggio è immediato. Se la data di inizio era sbagliata si modifica la
-riga, e la scadenza si ricalcola da sé: non c'è niente da aggiornare a mano.
+riga e la scadenza si ricalcola da sé: non c'è niente da aggiornare a mano, e
+non esiste un secondo posto in cui la stessa data sia scritta e possa restare
+indietro. È il vantaggio pratico di non avere un campo «scadenza».
 
 ## capitolo 3
 

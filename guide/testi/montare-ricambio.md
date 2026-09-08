@@ -40,7 +40,9 @@ l'intervento si salva senza pezzi.
 ## 4
 
 Accendendola compare «+ Aggiungi ricambio»: la riga non nasce da sola, va
-aggiunta. Se un intervento ha montato tre pezzi diversi, si aggiungono tre righe.
+aggiunta. Se un intervento ha montato tre pezzi diversi si aggiungono tre righe,
+una per pezzo, perché ciascuna avrà il proprio nome nel catalogo e la propria
+garanzia — e sono informazioni che non si possono mettere insieme.
 
 ## 5
 
