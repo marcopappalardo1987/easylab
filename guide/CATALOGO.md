@@ -80,20 +80,20 @@ altre guide: a un Responsabile lo switcher **non compare affatto**. Vedi
 | ✅ | `creare-nodi` | aggiungere e rinominare dipartimenti e laboratori | `anagrafica.index` | Admin ⚠️ |
 | ✅ | `marchio-ente` | logo e colore con cui escono digest, avvisi e inviti | `anagrafica.marchio` | Admin |
 
-## C. Strumenti — 10 guide
+## C. Strumenti — 10 guide ✅ **complete**
 
 | | slug | contenuto | rotte | ruoli |
 |---|---|---|---|---|
 | ✅ | `elenco-strumenti` | ricerca, filtro per ubicazione, ordinamento, righe per pagina, «solo obsoleti» | `strumenti.index` | tutti |
 | ✅ | `scheda-strumento` | panoramica e le sei linguette | `strumenti.show` | tutti |
-| ▫️ | `nuovo-strumento` | crearlo dal laboratorio giusto | `anagrafica.index` | Admin, Responsabile |
-| ▫️ | `modificare-strumento` | i campi della scheda, il fornitore, la data di installazione | `strumenti.show` | Admin, Responsabile |
+| ✅ | `nuovo-strumento` | crearlo dal laboratorio giusto | `anagrafica.index` | Admin, Responsabile |
+| ✅ | `modificare-strumento` | i campi della scheda, il fornitore, la data di installazione | `strumenti.show` | Admin, Responsabile |
 | ✅ | `spostare-strumento` | spostamento fra laboratori e storico degli spostamenti | `strumenti.show` | Admin, Responsabile |
 | ✅ | `semaforo-forzato` | forzare lo stato e perché serve una motivazione | `strumenti.show` | Admin, Responsabile |
 | ✅ | `per-modello` | dato un modello, dove sono installate le sue unità e quante | `strumenti.modelli` | tutti |
 | ✅ | `etichetta-qr` | generare, stampare e applicare l'adesivo | `strumenti.qr` | Admin, Responsabile |
-| ▫️ | `import-csv` | carica → anteprima con errori riga per riga → importa le valide | `strumenti.import` | Admin |
-| ▫️ | `storico-pdf` | il PDF con tutta la vita della macchina | `strumenti.storico-pdf` | tutti |
+| ✅ | `import-csv` | carica → anteprima con errori riga per riga → importa le valide | `strumenti.import` | Admin |
+| ✅ | `storico-pdf` | il PDF con tutta la vita della macchina | `strumenti.storico-pdf` | tutti |
 
 ## D. Interventi — 3 guide
 
@@ -181,8 +181,8 @@ Non compaiono nella Guida dei clienti.
 
 | stato | guide |
 |---|---|
-| ✅ fatte | **15** |
-| ▫️ da fare | **31** |
+| ✅ fatte | **19** |
+| ▫️ da fare | **27** |
 | **totale** | **46** |
 
 ✅ **Il 2FA non blocca più niente** (7 Set 2026): il seme porta un segreto TOTP
