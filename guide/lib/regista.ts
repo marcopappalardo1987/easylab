@@ -151,8 +151,22 @@ export class Regista {
   }
 
   /** Attende che la pagina smetta di muoversi: rete ferma e nessuna animazione. */
+  /**
+   * Aspetta che la pagina stia ferma prima di scattare.
+   *
+   * ⚠️ **`networkidle` col suo timeout, e non nudo.** Ci sono pagine che
+   * l'inattività di rete non la raggiungono mai — dopo il salvataggio di una
+   * garanzia, per esempio — e un `waitForLoadState` senza limite non fallisce:
+   * aspetta finché muore il test, due minuti dopo, riportando l'errore sul
+   * `page.evaluate` che viene subito dopo. Sintomo pessimo, perché indica il
+   * punto sbagliato e in una prova isolata quello stesso codice funziona.
+   *
+   * Due secondi sono il compromesso: bastano a far posare una pagina normale,
+   * e su una che non si posa mai si scatta lo stesso invece di piantarsi.
+   * Trovato il 8 Set 2026, girando `garanzia-macchina`.
+   */
   private async quiete(): Promise<void> {
-    await this.page.waitForLoadState('networkidle').catch(() => {});
+    await this.page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
     await this.page.evaluate(() => document.fonts.ready);
     await this.page.waitForTimeout(150);
   }

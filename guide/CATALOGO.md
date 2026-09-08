@@ -103,20 +103,20 @@ altre guide: a un Responsabile lo switcher **non compare affatto**. Vedi
 | ✅ | `completare-intervento` | «Fatto», riaprire, correggere, i cinque tipi | `strumenti.show` | Responsabile, Tecnico |
 | ✅ | `scadenzario` | tutto ciò che è aperto su tutte le macchine, in un elenco solo | `scadenzario.index` | tutti |
 
-## E. Garanzie — 2 guide
+## E. Garanzie — 2 guide ✅ **complete**
 
 | | slug | contenuto | rotte | ruoli |
 |---|---|---|---|---|
-| ▫️ | `garanzia-macchina` | copertura della macchina, scadenza, soggetto | `strumenti.show` | Admin, Responsabile |
-| ▫️ | `garanzia-ricambio` | copertura del pezzo montato, e chi la vede | `strumenti.show` | Admin, Responsabile, Tenant |
+| ✅ | `garanzia-macchina` | copertura della macchina, scadenza, soggetto | `strumenti.show` | Admin, Responsabile |
+| ✅ | `garanzia-ricambio` | copertura del pezzo montato, e chi la vede | `strumenti.show` | Admin, Responsabile, Tenant |
 
-## F. Ricambi — 3 guide
+## F. Ricambi — 3 guide ✅ **complete**
 
 | | slug | contenuto | rotte | ruoli |
 |---|---|---|---|---|
-| ▫️ | `montare-ricambio` | annotare il pezzo usato durante un intervento | `strumenti.show` | Responsabile, Tecnico |
-| ▫️ | `catalogo-ricambi` | il catalogo dei pezzi e le sue schede | `ricambi.index` | Admin, Responsabile |
-| ▫️ | `dove-e-montato` | ricerca incrociata: dato un pezzo, su quali macchine sta | `ricambi.index` | tutti |
+| ✅ | `montare-ricambio` | annotare il pezzo usato durante un intervento | `strumenti.show` | Responsabile, Tecnico |
+| ✅ | `catalogo-ricambi` | il catalogo dei pezzi e le sue schede | `ricambi.index` | Admin, Responsabile |
+| ✅ | `dove-e-montato` | ricerca incrociata: dato un pezzo, su quali macchine sta | `ricambi.index` | tutti |
 
 ## G. Documenti — 2 guide
 
@@ -181,8 +181,8 @@ Non compaiono nella Guida dei clienti.
 
 | stato | guide |
 |---|---|
-| ✅ fatte | **21** |
-| ▫️ da fare | **25** |
+| ✅ fatte | **26** |
+| ▫️ da fare | **20** |
 | **totale** | **46** |
 
 ✅ **Il 2FA non blocca più niente** (7 Set 2026): il seme porta un segreto TOTP

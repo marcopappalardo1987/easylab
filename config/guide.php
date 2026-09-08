@@ -63,6 +63,14 @@ return [
             'titolo' => 'Interventi',
             'sommario' => 'Annotare la manutenzione e tenere sotto controllo le scadenze.',
         ],
+        'E' => [
+            'titolo' => 'Garanzie',
+            'sommario' => 'Le coperture della macchina e dei pezzi, e come pesano sul semaforo.',
+        ],
+        'F' => [
+            'titolo' => 'Ricambi',
+            'sommario' => 'I pezzi montati: annotarli, ritrovarli, sapere dove stanno.',
+        ],
     ],
 
     /*
@@ -93,6 +101,11 @@ return [
         ['slug' => 'storico-pdf', 'argomento' => 'C', 'chiavi' => ['pdf', 'storico', 'stampare', 'documento', 'ispezione', 'certificazione']],
         ['slug' => 'completare-intervento', 'argomento' => 'D', 'chiavi' => ['fatto', 'completare', 'chiudere', 'eseguito', 'report', 'riapri', 'taratura']],
         ['slug' => 'scadenzario', 'argomento' => 'D', 'chiavi' => ['scadenzario', 'scadenze', 'scaduti', 'aperti', 'lista', 'pianificare', 'miei']],
+        ['slug' => 'garanzia-macchina', 'argomento' => 'E', 'chiavi' => ['garanzia', 'copertura', 'contratto', 'scadenza', 'durata', 'mesi']],
+        ['slug' => 'garanzia-ricambio', 'argomento' => 'E', 'chiavi' => ['garanzia', 'ricambio', 'pezzo', 'copertura', 'riservatezza', 'aggregato']],
+        ['slug' => 'montare-ricambio', 'argomento' => 'F', 'chiavi' => ['ricambio', 'pezzo', 'montare', 'sostituire', 'guarnizione', 'intervento']],
+        ['slug' => 'catalogo-ricambi', 'argomento' => 'F', 'chiavi' => ['catalogo', 'ricambi', 'pezzi', 'unisci', 'grafie', 'doppioni']],
+        ['slug' => 'dove-e-montato', 'argomento' => 'F', 'chiavi' => ['dove', 'montato', 'macchine', 'lotto', 'ordine', 'scorta', 'giro']],
         ['slug' => 'cambiare-sede', 'argomento' => 'A', 'chiavi' => ['sede', 'sedi', 'switcher', 'multi-sede', 'contratto', 'account']],
         ['slug' => 'intervento', 'argomento' => 'D', 'chiavi' => ['intervento', 'manutenzione', 'taratura', 'scadenza', 'assegnatario', 'tecnico']],
     ],
