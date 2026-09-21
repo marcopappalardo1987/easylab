@@ -158,14 +158,15 @@ class ElencoDocumenti extends Component
         // di rotta resta comunque. Idioma di `VistaPiattaforma` nel registro.
         Gate::authorize('documenti.view');
 
+        // `!== ''` e non `?:`: la stringa «0» è un filtro vero (T1a, S7).
         $filtro = new FiltroDocumenti(
-            tipo: $this->tipo ?: null,
+            tipo: $this->tipo !== '' ? $this->tipo : null,
             // Grezzo: normalizza `FiltroDocumenti`, esattamente come per il
             // foglio. Un `(int)` qui sarebbe la seconda definizione.
             strumentoId: $this->strumentoId,
-            dal: $this->dal ?: null,
-            al: $this->al ?: null,
-            cerca: $this->cerca ?: null,
+            dal: $this->dal !== '' ? $this->dal : null,
+            al: $this->al !== '' ? $this->al : null,
+            cerca: $this->cerca !== '' ? $this->cerca : null,
         );
 
         // ⚠️ `Documento::query()` porta già i tre scope — tenant, sotto-albero

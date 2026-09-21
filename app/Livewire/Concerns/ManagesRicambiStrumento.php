@@ -125,6 +125,16 @@ trait ManagesRicambiStrumento
             'ricambioForm.scadenza_garanzia' => ['nullable', 'date'],
         ])['ricambioForm'];
 
+        // T1a (S7): un nome che non c'è a catalogo diventa una voce nuova in
+        // `collegaOCrea()`, quindi vuole lo stesso permesso del form intervento.
+        $esisteGia = Ricambio::query()
+            ->where('tenant_id', $utilizzo->tenant_id)
+            ->where('nome_normalizzato', Ricambio::normalizzaNome($validato['nome']))
+            ->exists();
+        if (! $esisteGia) {
+            $this->authorize('ricambi.create');
+        }
+
         // Fuori dalla transazione: un `return` dentro la closure COMMITTA
         // (trappola nota), quindi validazione e authorize stanno prima.
         DB::transaction(function () use ($utilizzo, $validato): void {

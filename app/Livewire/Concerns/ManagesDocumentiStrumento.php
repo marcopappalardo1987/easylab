@@ -9,6 +9,7 @@ use App\Models\Intervento;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Livewire\WithFileUploads;
 
 /**
@@ -63,7 +64,8 @@ trait ManagesDocumentiStrumento
             // mediato andrebbe rivista con numeri alla mano (l'egress di B2 è
             // gratuito fino a 3× lo storage medio, poi si paga).
             'fileDocumento' => ['required', 'file', 'max:20480', 'mimes:pdf,jpg,jpeg,png'],
-            'tipoDocumento' => ['required', 'string'],
+            // T1a (S7): l'enum, non una stringa qualunque, o `from()` qui sotto dà 500.
+            'tipoDocumento' => ['required', 'string', Rule::enum(TipoDocumento::class)],
         ]);
 
         // Il soggetto si risolve DALLA relazione, non dall'id nudo: `findOrFail`

@@ -12,6 +12,7 @@ use App\Enums\TipoUnitaOrganizzativa;
 use App\Livewire\Concerns\ManagesDocumentiStrumento;
 use App\Livewire\Concerns\ManagesRicambiStrumento;
 use App\Livewire\Concerns\ManagesStrumentoForm;
+use App\Livewire\Concerns\RiancoraStrumentoAlloScope;
 use App\Models\Garanzia;
 use App\Models\Intervento;
 use App\Models\Ricambio;
@@ -43,7 +44,7 @@ use Livewire\Component;
 #[Layout('components.layouts.app')]
 class SchedaStrumento extends Component
 {
-    use ManagesDocumentiStrumento, ManagesRicambiStrumento, ManagesStrumentoForm;
+    use ManagesDocumentiStrumento, ManagesRicambiStrumento, ManagesStrumentoForm, RiancoraStrumentoAlloScope;
 
     public Strumento $strumento;
 

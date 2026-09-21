@@ -72,8 +72,12 @@ trait ManagesStrumentoForm
             // La regola è condizionata al permesso: un ruolo che il campo non lo
             // vede nemmeno non può essere bloccato da un campo che non ha.
             'strumentoForm.fornitore_id' => Gate::allows('fornitori.view')
+                // T1a (S7): la stessa lista della tendina — vivi del tenant, più il
+                // cestinato già associato. Prima un id cestinato forgiato passava.
                 ? ['required', 'integer', Rule::exists('fornitori', 'id')->where(
                     fn ($q) => $q->where('tenant_id', $tenantId)
+                        ->where(fn ($q) => $q->whereNull('deleted_at')
+                            ->when($correnteId !== null, fn ($q) => $q->orWhere('id', $correnteId)))
                 )]
                 : ['nullable'],
             'strumentoForm.nome' => ['required', 'string', 'max:255'],
@@ -144,7 +148,7 @@ trait ManagesStrumentoForm
             ->mapWithKeys(fn ($r) => [trim($r['chiave']) => $r['valore'] ?? ''])
             ->all();
 
-        return [
+        $payload = [
             'nome' => $this->strumentoForm['nome'],
             'modello' => $this->strumentoForm['modello'] ?: null,
             'matricola' => $this->strumentoForm['matricola'] ?: null,
@@ -152,5 +156,14 @@ trait ManagesStrumentoForm
             'fornitore_id' => $this->strumentoForm['fornitore_id'] ?: null,
             'parametri_tecnici' => $parametri === [] ? null : $parametri,
         ];
+
+        // T1a (S7): senza `fornitori.view` la regola del campo è `nullable` e l'id
+        // non è validato da nulla. Chi il campo non lo vede non lo scrive: in
+        // modifica resta il fornitore di prima, in creazione nessuno.
+        if (! Gate::allows('fornitori.view')) {
+            unset($payload['fornitore_id']);
+        }
+
+        return $payload;
     }
 }

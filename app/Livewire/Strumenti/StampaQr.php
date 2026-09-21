@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Strumenti;
 
+use App\Livewire\Concerns\RiancoraStrumentoAlloScope;
 use App\Models\Strumento;
 use App\Support\QrStrumento;
 use Illuminate\Support\Facades\Gate;
@@ -24,6 +25,8 @@ use Livewire\Component;
 #[Layout('components.layouts.app')]
 class StampaQr extends Component
 {
+    use RiancoraStrumentoAlloScope;
+
     public Strumento $strumento;
 
     public bool $showRigeneraForm = false;

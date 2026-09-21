@@ -2,7 +2,9 @@
 
 namespace App\Livewire\Dashboard;
 
+use App\Models\UnitaOrganizzativa;
 use App\Support\Parco\MetricheParco;
+use App\Support\Tenancy\CurrentTenant;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Layout;
@@ -84,7 +86,12 @@ class Home extends Component
 {
     public function render(): View
     {
-        $utente = auth()->user();
+        // D-T2-3 (S7): il nome dal contesto, non da `users.tenant_id`: impersonando,
+        // lo switcher sposta la sede nella sessione. Stesso idioma di `SwitcherEnte`.
+        $corrente = CurrentTenant::id();
+        $nomeEnte = $corrente !== null
+            ? UnitaOrganizzativa::whereKey($corrente)->value('nome')
+            : null;
 
         return view('livewire.dashboard.home', [
             // `null` e non un riepilogo vuoto: la vista deve poter distinguere
@@ -97,8 +104,8 @@ class Home extends Component
             // riunione fa il danno che `x-ui.stat-tile` descrive nel proprio
             // docblock. Chi non ha un Ente (Tecnico esterno) legge l'altra
             // frase, perché «le macchine di —» non sarebbe una frase.
-            'perimetro' => $utente?->ente?->nome !== null
-                ? 'Lo stato delle macchine di '.$utente->ente->nome.'.'
+            'perimetro' => $nomeEnte !== null
+                ? 'Lo stato delle macchine di '.$nomeEnte.'.'
                 : 'Lo stato delle macchine che segui.',
         ]);
     }
