@@ -261,3 +261,89 @@ Scheletro reale in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
 | S0.7 CI scheletro | ✅ `.github/workflows/ci.yml` | ⬜ si attiva con l'app in S1 |
 
 **Definition of Done S0** (parte infra): "repo + CI + ambiente staging raggiungibili" → richiede l'esecuzione del provisioning sopra.
+
+---
+
+## 6. Checklist di go-live (30 Set 2026)
+
+Raccolta delle voci «Per Marco» lasciate aperte dal giro multiagente di hardening S7 (21 Set 2026, security pass + isolamento + performance + GDPR — 🔗 Roadmap Sprint 7). Non sono difetti: sono decisioni, verifiche o accessi che solo Marco può chiudere. In ordine di urgenza.
+
+### 🔴 Prima di tutto
+
+- **`APP_ENV`/`APP_DEBUG` di staging e produzione su Laravel Cloud.** Sulla macchina di sviluppo `.env.prod` e `.env.staging` (ignorati da git) hanno `APP_ENV=local` e `APP_DEBUG=true`. Se sono le copie caricate su Laravel Cloud, staging e produzione mostrano stack trace, SQL e percorsi a chiunque provochi un 500 (un 404 non lo rivela: ha una vista propria anche in debug). Verificare le variabili **sul pannello**, non sui file locali: staging subito, produzione prima del go-live. `PagineErroreTest` lo pretende in locale ma si salta dove quei file non esistono (CI) — non è una rete per l'ambiente vero.
+
+### Fuori dal perimetro del giro S7 — Laravel Cloud, produzione
+
+- Creare l'**ambiente di produzione**: non eredita nulla da staging, ogni risorsa si crea per ambiente.
+- `APP_ENV`, `APP_DEBUG`, `APP_TIMEZONE` impostati per l'ambiente di produzione (🔗 sopra, e la migration del fuso orario su staging, ADR-041 — senza, i timestamp di staging restano UTC letti come italiani).
+- **Bucket di produzione** in giurisdizione UE con **cifratura a riposo** verificata (🔗 ADR-042: proprietà per bucket, non ereditata dallo storage precedente).
+- **Managed queue e worker** attivi anche in produzione (senza, gli inviti restano «in consegna» e non partono mai — 🔗 ADR-012). Una managed queue processa una coda sola (`default`).
+- **Scheduler acceso** anche in produzione (su staging è spento): senza, il digest scadenze non parte.
+- **Limite di spesa** impostato anche in produzione (su staging è a $30).
+- **Backup automatici** di DB e storage, con una **prova di restore** effettivamente eseguita, non solo configurata.
+
+### Primo run in produzione
+
+- `easylab:notifica-scadenze --senza-invio` **al primo lancio**, o parte un digest da ~1300 righe verso tutti i destinatari in una volta.
+
+### Stripe
+
+- Regola **Radar** attiva (verificarla, non presupporla).
+- Verifiche dei **Payment Link** con la carta di test `4242 4242 4242 4242` prima di considerarli pronti per clienti veri.
+- Conferma che `customer_details.business_name` arrivi valorizzato dal checkout (la ragione sociale del cliente ne dipende).
+- Dopo il deploy: rilanciare `cashier:webhook` oppure aggiungere l'evento **`checkout.session.async_payment_succeeded`** all'endpoint dalla dashboard Stripe — l'handler c'è già nel controller, manca solo la sottoscrizione all'evento (🔗 T3/A8).
+- Verificare se sono attivi **metodi di pagamento asincroni** (SEPA) o prove/coupon al 100% sui Payment Link: cambiano i tempi di conferma dell'account.
+- ⚠️ Residuo di prodotto, non bloccante: con `REGISTRAZIONE_APERTA` spento una registrazione già verificata può ancora aprire nuovi checkout (`versoStripe` non lo controlla — il docblock dichiara «spegne l'ingresso, non il percorso»). Decidere se chiudere anche questo varco.
+- ⚠️ La sessione Stripe precedente non viene fatta scadere in `versoStripe`: due schede aperte producono due checkout pagabili. Richiede un metodo nuovo su `PortaleCheckout`, non fatto in S7.
+
+### DNS e posta
+
+- **SPF, DKIM, DMARC, PTR** sul dominio di invio di produzione, con `MAIL_FROM_ADDRESS` allineato. *(Già verificato funzionante su staging il 21 Ago 2026 con Aruba: recapito in posta in arrivo, non in spam — da ripetere sul dominio di produzione se diverso.)*
+
+### Backblaze B2
+
+- **Smontaggio del vecchio bucket**: prima **la chiave**, poi il bucket (🔗 ADR-042 — l'ordine inverso lascia una finestra in cui la chiave esiste senza più un bucket da proteggere).
+
+### Guide video
+
+- I video delle guide **si caricano solo in produzione** (~498 MB, fuori da git): su staging il catalogo resta a indice vuoto, ed è voluto.
+- Apertura di `/guida`: oggi sta dietro `tenants.view_all`, da riconsiderare se il pubblico previsto è più largo del solo staff di piattaforma.
+
+### DB di sviluppo
+
+- `UPDATE` dei `qr_token` nulli sul database di sviluppo (dettaglio in `guide/DIFETTI-TROVATI.md`).
+
+### Legale / DPO
+
+- Retention e anonimizzazione delle **persone cestinate** (ADR-038: il cestino nega login e nuove assegnazioni, ma nome e storico restano leggibili con `withTrashed()`).
+- Retention della riga di **`registrazioni`** che resta dopo `EliminaCliente`, con `account_id` NULL ma nome ed email del referente ancora leggibili: cancellarla col cliente, anonimizzarla o tenerla N giorni come traccia di provenienza — nessuna regola scelta oggi.
+- Retention/troncamento degli **snapshot Livewire** salvati dall'error tracker interno: `ChiaviSensibili` non li ripulisce, quindi dati dei clienti (input di richiesta) finiscono nel tracker, visibile al solo Developer ma rilevante per il DPA.
+- **Informativa privacy**, in particolare la terza versione — quella di `/registrati`, superficie pubblica già online e senza informativa da mostrare (🔗 Privacy GDPR §5).
+- Comunicazione ai clienti dei **nomi dei tecnici EasyLab** presenti nel loro portafoglio (già mostrati in app, non ancora coperti da informativa/DPA — 🔗 ADR-038, Privacy GDPR §2 T1).
+- **Export GDPR** (`easylab:esporta-tenant`, 🔗 Privacy GDPR §4): decidere retention e canale di consegna dello zip (oggi resta su un disco effimero dell'istanza), se includere `activity_log`/`notifications` (oggi esclusi e dichiarati nel manifest), se offrire un export self-service all'Admin cliente (oggi negato, nessun permesso creato), e ratificare la riga di audit dell'export come quarta eccezione dichiarata ad ADR-027.
+
+### RBAC e permessi
+
+- Riseeding **mai per riflesso** dopo una modifica a `config/rbac.php`: `php artisan db:seed --class=RolesAndPermissionsSeeder` solo quando la matrice **deve** tornare a bootstrap, mai «per sicurezza» — cancella ogni personalizzazione fatta da `/piattaforma/ruoli` (dettaglio in CLAUDE.md).
+
+### Limiti di upload
+
+- Il limite **temporaneo** di Livewire (`max:12288`, 12 MB) è più basso di quello della regola dei documenti (`max:20480`, 20 MB): un PDF fra 12 e 20 MB è oggi rifiutato con un errore generico prima della regola. Decisione di prodotto su quale dei due tetti vale, più la verifica del limite reale di upload su Laravel Cloud (`upload_max_filesize`/`post_max_size`).
+
+### Verifiche dopo `route:cache`
+
+- `php artisan route:list --name=password` deve mostrare **un solo** `throttle:password-reset-link`/`throttle:password-reset` per rotta: il binding dei limiter alle rotte di Fortify passa da `$this->app->booted()` con `refreshNameLookups()`, e va confermato che la cache delle rotte non lo raddoppi né lo perda.
+
+### Indice parziale `forced_state`
+
+- Migration `2026_09_21_110100_add_indice_parziale_forced_state_to_strumenti_table.php` pronta (solo Postgres): guadagno reale (0,65→0,10 ms e 1,62→0,04 ms sui conteggi rossi a 20.000 strumenti) ma sotto il millisecondo a questo volume, costo trascurabile. Tenerla o toglierla prima di applicare le migration di T7.
+
+### Isolamento — dati esistenti
+
+- Admin retrocessi **prima** del fix di isolamento T2B-1 (commit `324a014`) restano membri del contratto e raggiungono ancora le altre sedi come Tenant. Query di verifica pronta (in sola lettura, incrocia `account_user` coi ruoli Admin correnti); rimuoverli è una decisione non ancora presa.
+
+### UAT e push
+
+- **UAT** con dati reali su staging, fix dei bug bloccanti.
+- Applicare al DB di sviluppo (`php artisan migrate`) le migration del giro: `2026_09_21_100000` (colonna `subscriptions.creazione_ultimo_evento_stripe`), `2026_09_21_110000` e `2026_09_21_110100` (indici `strumenti`, la seconda in attesa della decisione sopra).
+- Suite intera verde **prima** del push su `staging`: ogni push deploya, e la CI gira dopo (CLAUDE.md).
