@@ -4,6 +4,7 @@ use App\Http\Controllers\StripeWebhookController;
 use App\Http\Middleware\EnforceAccountLockout;
 use App\Http\Middleware\EnsureTwoFactorIsEnabled;
 use App\Http\Middleware\RequireSameOriginNavigation;
+use App\Http\Middleware\RimuoviByteNul;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\VerificaFirmaWebhookStripe;
 use App\Support\Errori\CatturaErrori;
@@ -75,6 +76,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Globale e non `web`: copre anche webhook, `/up` e pagine d'errore.
         $middleware->append(SecurityHeaders::class);
+
+        // Il byte NUL arriva fino al DB: Postgres tronca in silenzio o dà 500 (T1cB-4).
+        $middleware->append(RimuoviByteNul::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

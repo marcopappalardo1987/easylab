@@ -113,7 +113,9 @@ class MarchioEnte extends Component
             // Il colore è un esadecimale a sei cifre. Vuoto = «nessuna scelta»,
             // che è il modo di tornare al blu di Easy Lab senza un secondo
             // comando.
-            'colore' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            // `\z` e non `$` (T1cB-5): `$` accetta un a-capo finale, e «#06589c\n»
+            // sono 8 caratteri in una colonna `varchar(7)` — 500 su Postgres.
+            'colore' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}\z/'],
             // ⛔ **SVG escluso due volte**, e non per ridondanza: `image` di
             // Laravel non ammette più l'SVG senza `allow_svg`, e `mimes` lo
             // esclude comunque. Un SVG è XML eseguibile, e per giunta Gmail e

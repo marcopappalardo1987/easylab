@@ -195,7 +195,8 @@ trait AmministraAccount
             // `between:6,7` accetterebbe entrambi e nessuno dei due, cioè
             // farebbe passare una lunghezza che non esiste in nessuno dei due
             // sistemi. Nessun checksum: lo SDI non ne pubblica uno.
-            'fiscali.codice_destinatario_sdi' => ['nullable', 'string', 'regex:/^[A-Za-z0-9]{6}$|^[A-Za-z0-9]{7}$/'],
+            // `\z` e non `$` (T1cB-5): `$` lascia passare un a-capo finale.
+            'fiscali.codice_destinatario_sdi' => ['nullable', 'string', 'regex:/^(?:[A-Za-z0-9]{6}|[A-Za-z0-9]{7})\z/'],
         ], [
             'fiscali.codice_destinatario_sdi.regex' => 'Il codice destinatario è di 6 caratteri (PA) o 7 (privati).',
         ])['fiscali'];

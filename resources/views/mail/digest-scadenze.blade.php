@@ -1,3 +1,5 @@
+{{-- Testo utente: sempre da TestoMarkdown::sicuro(), che neutralizza link e tabelle (D-T1c-1). --}}
+@use('App\Support\Mail\TestoMarkdown')
 @php
     use App\Enums\TipoMotivoSemaforo;
     use App\Support\Notifiche\RigaAvviso;
@@ -27,9 +29,9 @@
      che rende il markdown senza passare dal mailer: lì `$message` non esiste e
      la testata resta senza immagine, che è esattamente ciò che si vuole. --}}
 <x-mail::message :marchio="$marchio" :logo="$marchio->cid($message ?? null)">
-# Scadenze di {{ $ente }}
+# Scadenze di {{ TestoMarkdown::sicuro($ente) }}
 
-Ciao {{ $destinatario->name }}, ecco cosa è cambiato oggi sulle macchine che segui.
+Ciao {{ TestoMarkdown::sicuro($destinatario->name) }}, ecco cosa è cambiato oggi sulle macchine che segui.
 
 @if (count($scadute) > 0)
 ## Scadenze superate
@@ -38,7 +40,7 @@ Ciao {{ $destinatario->name }}, ecco cosa è cambiato oggi sulle macchine che se
 | Macchina | Cosa | Scaduta il |
 |:---------|:-----|:-----------|
 @foreach ($scadute as $riga)
-| [{{ $riga->strumentoNome }}]({{ route('strumenti.show', $riga->strumentoId) }}) | {{ $etichetta($riga) }}{{ $riga->dettaglio ? ' — '.$riga->dettaglio : '' }} | {{ $riga->scadenza->format('d/m/Y') }} |
+| [{{ TestoMarkdown::sicuro($riga->strumentoNome) }}]({{ route('strumenti.show', $riga->strumentoId) }}) | {{ $etichetta($riga) }}{{ $riga->dettaglio ? ' — '.TestoMarkdown::sicuro($riga->dettaglio) : '' }} | {{ $riga->scadenza->format('d/m/Y') }} |
 @endforeach
 </x-mail::table>
 @endif
@@ -50,7 +52,7 @@ Ciao {{ $destinatario->name }}, ecco cosa è cambiato oggi sulle macchine che se
 | Macchina | Cosa | Scade il |
 |:---------|:-----|:---------|
 @foreach ($imminenti as $riga)
-| [{{ $riga->strumentoNome }}]({{ route('strumenti.show', $riga->strumentoId) }}) | {{ $etichetta($riga) }}{{ $riga->dettaglio ? ' — '.$riga->dettaglio : '' }} | {{ $riga->scadenza->format('d/m/Y') }} |
+| [{{ TestoMarkdown::sicuro($riga->strumentoNome) }}]({{ route('strumenti.show', $riga->strumentoId) }}) | {{ $etichetta($riga) }}{{ $riga->dettaglio ? ' — '.TestoMarkdown::sicuro($riga->dettaglio) : '' }} | {{ $riga->scadenza->format('d/m/Y') }} |
 @endforeach
 </x-mail::table>
 @endif

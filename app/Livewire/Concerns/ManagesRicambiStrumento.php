@@ -120,7 +120,8 @@ trait ManagesRicambiStrumento
 
         $validato = $this->validate([
             'ricambioForm.nome' => ['required', 'string', 'max:255', new NomeRicambio],
-            'ricambioForm.quantita' => ['required', 'integer', 'min:1'],
+            // Tetto (T1cB-8): la colonna è `integer`, e 3 miliardi sono un 500 su Postgres.
+            'ricambioForm.quantita' => ['required', 'integer', 'min:1', 'max:100000'],
             'ricambioForm.data' => ['nullable', 'date'],
             'ricambioForm.scadenza_garanzia' => ['nullable', 'date'],
         ])['ricambioForm'];

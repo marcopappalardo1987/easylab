@@ -1,9 +1,11 @@
+{{-- Testo utente: sempre da TestoMarkdown::sicuro(), che neutralizza link e tabelle (D-T1c-1). --}}
+@use('App\Support\Mail\TestoMarkdown')
 {{-- Il `cid:` si calcola qui e non nella componente: vedi la nota estesa in
      `digest-scadenze.blade.php`. --}}
 <x-mail::message :marchio="$marchio" :logo="$marchio->cid($message ?? null)">
 # Conferma il tuo indirizzo
 
-Ciao {{ $nome }}, ci siamo quasi: conferma questo indirizzo e potrai completare l'attivazione di **{{ $ente }}** su Easy Lab.
+Ciao {{ TestoMarkdown::sicuro($nome) }}, ci siamo quasi: conferma questo indirizzo e potrai completare l'attivazione di **{{ TestoMarkdown::sicuro($ente) }}** su Easy Lab.
 
 <x-mail::button :url="$url" :colore="$marchio->colore" :colore-testo="$marchio->coloreTesto">
 Conferma l'indirizzo

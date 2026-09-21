@@ -390,11 +390,12 @@ class ElencoStrumenti extends Component
         $query = Strumento::query()->select('strumenti.*')->with(['unita', 'forcedBy', 'tenant']);
 
         if (filled($this->search)) {
-            $like = '%'.strtolower(trim($this->search)).'%';
+            // `%` e `_` scritti dall'utente sono letterali, come nelle altre ricerche (ESCAPE).
+            $like = '%'.addcslashes(mb_strtolower(trim($this->search)), '%_\\').'%';
             $query->where(function ($q) use ($like) {
-                $q->whereRaw('LOWER(nome) LIKE ?', [$like])
-                    ->orWhereRaw('LOWER(COALESCE(modello, \'\')) LIKE ?', [$like])
-                    ->orWhereRaw('LOWER(COALESCE(matricola, \'\')) LIKE ?', [$like]);
+                $q->whereRaw("LOWER(nome) LIKE ? ESCAPE '\\'", [$like])
+                    ->orWhereRaw("LOWER(COALESCE(modello, '')) LIKE ? ESCAPE '\\'", [$like])
+                    ->orWhereRaw("LOWER(COALESCE(matricola, '')) LIKE ? ESCAPE '\\'", [$like]);
             });
         }
 

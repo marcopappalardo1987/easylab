@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Http\Middleware\EnforceAccountLockout;
 use App\Http\Middleware\EnsureTwoFactorIsEnabled;
+use App\Http\Middleware\RimuoviByteNul;
 use App\Listeners\AuditLogSubscriber;
 use App\Models\Account;
 use App\Models\Garanzia;
@@ -111,6 +112,9 @@ class AppServiceProvider extends ServiceProvider
         // utente promosso a un ruolo col 2FA a pagina aperta continuava a
         // scrivere dalle azioni Livewire. La pagina di attivazione resta esente.
         Livewire::addPersistentMiddleware(EnsureTwoFactorIsEnabled::class);
+
+        // Gli update Livewire saltano i middleware HTTP: il NUL si toglie anche lì.
+        RimuoviByteNul::ancheSuLivewire();
 
         $this->timbraLImpersonazioneSullAudit();
 

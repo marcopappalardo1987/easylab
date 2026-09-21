@@ -1,7 +1,9 @@
+{{-- Testo utente: sempre da TestoMarkdown::sicuro(), che neutralizza link e tabelle (D-T1c-1). --}}
+@use('App\Support\Mail\TestoMarkdown')
 <x-mail::message :marchio="$marchio" :logo="$marchio->cid($message ?? null)">
 # Il tuo account Easy Lab è stato chiuso
 
-L'account **{{ $ragioneSociale !== '' ? $ragioneSociale : 'associato a questo indirizzo' }}** è stato chiuso e i dati che conteneva sono stati eliminati.
+L'account **{{ $ragioneSociale !== '' ? TestoMarkdown::sicuro($ragioneSociale) : 'associato a questo indirizzo' }}** è stato chiuso e i dati che conteneva sono stati eliminati.
 
 Se era attivo un abbonamento, è stato **interrotto**: non ci saranno altri addebiti. L'eventuale periodo già pagato non viene rimborsato automaticamente — se pensi ti spetti, scrivici.
 

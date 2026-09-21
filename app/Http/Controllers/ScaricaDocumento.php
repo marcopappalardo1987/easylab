@@ -6,6 +6,8 @@ use App\Models\Documento;
 use App\Support\AuditLog;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -57,13 +59,15 @@ class ScaricaDocumento extends Controller
             ->performedOn($documento)
             ->log('Documento scaricato');
 
-        return response()->streamDownload(
+        $nome = self::nomeScaricabile($documento->nome);
+
+        $risposta = response()->streamDownload(
             function () use ($documento) {
                 $stream = Storage::disk(Documento::DISCO)->readStream($documento->path);
                 fpassthru($stream);
                 fclose($stream);
             },
-            self::nomeScaricabile($documento->nome),
+            null,
             [
                 'Content-Type' => in_array($documento->mime, self::MIME_AMMESSI, true)
                     ? $documento->mime
@@ -71,12 +75,34 @@ class ScaricaDocumento extends Controller
                 'X-Content-Type-Options' => 'nosniff',
             ],
         );
+
+        // Il ripiego ASCII lo diamo noi (T1cB-1): quello di Laravel è
+        // `Str::ascii()` del nome senza `%`, cioè VUOTO per «%» o per un nome di
+        // sole emoji, e Symfony su un ripiego vuoto rilancia il nome UTF-8 come
+        // ripiego e lo rifiuta: 500 su un documento che l'elenco mostra.
+        $risposta->headers->set('Content-Disposition', $risposta->headers->makeDisposition(
+            HeaderUtils::DISPOSITION_ATTACHMENT,
+            $nome,
+            self::ripiegoAscii($nome),
+        ));
+
+        return $risposta;
     }
 
     /**
      * Il nome che l'header `Content-Disposition` può portare: via separatori di
      * percorso e caratteri di controllo, che Symfony rifiuta lanciando.
      */
+    /** Il nome in ASCII stampabile, mai vuoto: è ciò che legge un client senza RFC 5987. */
+    private static function ripiegoAscii(string $nome): string
+    {
+        $ascii = (string) preg_replace('/[^\x20-\x7E]|[%"\\\\\/]/', '', Str::ascii($nome));
+        $estensione = pathinfo($ascii, PATHINFO_EXTENSION);
+        $base = trim(pathinfo($ascii, PATHINFO_FILENAME), ' .');
+
+        return ($base === '' ? 'documento' : $base).($estensione !== '' ? '.'.$estensione : '');
+    }
+
     private static function nomeScaricabile(?string $nome): string
     {
         $pulito = trim((string) preg_replace('#[\\\\/\x00-\x1F\x7F]+#u', '-', (string) $nome));

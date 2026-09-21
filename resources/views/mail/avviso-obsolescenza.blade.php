@@ -1,9 +1,11 @@
+{{-- Testo utente: sempre da TestoMarkdown::sicuro(), che neutralizza link e tabelle (D-T1c-1). --}}
+@use('App\Support\Mail\TestoMarkdown')
 {{-- Il `cid:` si calcola qui e non nella componente: vedi la nota estesa in
      `digest-scadenze.blade.php`. --}}
 <x-mail::message :marchio="$marchio" :logo="$marchio->cid($message ?? null)">
-# Macchine oltre la soglia di età — {{ $ente }}
+# Macchine oltre la soglia di età — {{ TestoMarkdown::sicuro($ente) }}
 
-Ciao {{ $destinatario->name }}, la soglia di obsolescenza del tuo Ente è di
+Ciao {{ TestoMarkdown::sicuro($destinatario->name) }}, la soglia di obsolescenza del tuo Ente è di
 {{ $soglia }} {{ $soglia === 1 ? 'anno' : 'anni' }}: queste macchine l'hanno
 appena superata.
 
@@ -18,7 +20,7 @@ la manutenzione e non cambia lo stato delle macchine in Easy Lab.
 | Macchina | Installata il | Età |
 |:---------|:--------------|:----|
 @foreach ($righe as $riga)
-| [{{ $riga->strumentoNome }}]({{ route('strumenti.show', $riga->strumentoId) }}) | {{ $riga->dataInstallazione->format('d/m/Y') }} | {{ $riga->eta() }} {{ $riga->eta() === 1 ? 'anno' : 'anni' }} |
+| [{{ TestoMarkdown::sicuro($riga->strumentoNome) }}]({{ route('strumenti.show', $riga->strumentoId) }}) | {{ $riga->dataInstallazione->format('d/m/Y') }} | {{ $riga->eta() }} {{ $riga->eta() === 1 ? 'anno' : 'anni' }} |
 @endforeach
 </x-mail::table>
 

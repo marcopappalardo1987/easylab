@@ -73,7 +73,7 @@ final class GovernoListino
      * un piano che si chiamasse così renderebbe indistinguibili «il piano X» e
      * «nessun piano riconosciuto».
      */
-    private const CODICE_VALIDO = '/^[a-z][a-z0-9_]{1,29}$/';
+    private const CODICE_VALIDO = '/^[a-z][a-z0-9_]{1,29}\z/';
 
     /**
      * Crea un piano.

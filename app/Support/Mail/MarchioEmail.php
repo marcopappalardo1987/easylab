@@ -207,7 +207,7 @@ final class MarchioEmail
     {
         $hex = ltrim($hex, '#');
 
-        if (strlen($hex) !== 6 || preg_match('/^[0-9a-fA-F]{6}$/', $hex) !== 1) {
+        if (strlen($hex) !== 6 || preg_match('/^[0-9a-fA-F]{6}\z/', $hex) !== 1) {
             return '#ffffff';
         }
 

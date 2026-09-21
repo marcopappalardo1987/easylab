@@ -24,7 +24,9 @@ namespace App\Support\Mail;
  *
  * ⚠️ **È idempotente, e deve restarlo**: `text/table.blade.php` normalizza le
  * proprie righe *prima*, e il layout ripassa sullo stesso testo. Un secondo giro
- * su un testo già ripulito non trova più nulla da sostituire.
+ * su un testo già ripulito non trova più nulla da sostituire. (Unica eccezione:
+ * un backslash scritto dall'utente, che il passo 4 toglie a ogni giro; il
+ * layout ci passa una volta sola per pezzo.)
  *
  * ⚠️ **Non è un renderer markdown**, e non deve diventarlo: qui entrano solo le
  * tre forme che le nostre viste usano davvero. Un parser completo su un corpo
@@ -41,13 +43,17 @@ final class TestoEmail
      *    l'URL in entrambe le posizioni, e ripeterlo due volte sarebbe una riga
      *    illeggibile invece di una corretta);
      * 2. i titoli `#`/`##` perdono i cancelletti e restano righe di testo;
-     * 3. `**grassetto**` e `*corsivo*` perdono gli asterischi.
+     * 3. `**grassetto**` e `*corsivo*` perdono gli asterischi;
+     * 4. i backslash di `TestoMarkdown::sicuro()` se ne vanno: nell'HTML li
+     *    toglie CommonMark, qui nessuno. Le tre regole sopra saltano i
+     *    caratteri preceduti da un backslash, o un `\*` scritto da un utente
+     *    diventerebbe enfasi solo nella parte testuale.
      */
     public static function senzaMarkdown(string $testo): string
     {
         // 1. i link.
         $testo = preg_replace_callback(
-            '/\[([^\]]*)\]\(([^)\s]*)\)/',
+            '/(?<!\\\\)\[((?:\\\\.|[^\]\\\\])*)\]\(([^)\s]*)\)/',
             function (array $trovato): string {
                 $etichetta = trim($trovato[1]);
                 $url = trim($trovato[2]);
@@ -65,9 +71,10 @@ final class TestoEmail
 
         // 3. l'enfasi. Il grassetto prima del corsivo, o `**x**` diventerebbe
         //    `*x*`.
-        $testo = preg_replace('/\*\*([^*]+)\*\*/', '$1', (string) $testo);
-        $testo = preg_replace('/(?<!\*)\*([^*\n]+)\*(?!\*)/', '$1', (string) $testo);
+        $testo = preg_replace('/(?<!\\\\)\*\*([^*]+?)(?<!\\\\)\*\*/', '$1', (string) $testo);
+        $testo = preg_replace('/(?<![*\\\\])\*([^*\n]+?)(?<!\\\\)\*(?!\*)/', '$1', (string) $testo);
 
-        return (string) $testo;
+        // 4. gli escape di `TestoMarkdown::sicuro()`.
+        return (string) preg_replace('/\\\\([\\\\`*_\[\]()#|!~])/', '$1', (string) $testo);
     }
 }

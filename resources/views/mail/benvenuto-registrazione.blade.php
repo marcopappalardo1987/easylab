@@ -1,7 +1,9 @@
+{{-- Testo utente: sempre da TestoMarkdown::sicuro(), che neutralizza link e tabelle (D-T1c-1). --}}
+@use('App\Support\Mail\TestoMarkdown')
 <x-mail::message :marchio="$marchio" :logo="$marchio->cid($message ?? null)">
-# {{ $ente }} è attivo
+# {{ TestoMarkdown::sicuro($ente) }} è attivo
 
-Il pagamento è andato a buon fine e il tuo account Easy Lab è pronto. Accedi con l'indirizzo **{{ $email }}** e la password che hai scelto durante la registrazione.
+Il pagamento è andato a buon fine e il tuo account Easy Lab è pronto. Accedi con l'indirizzo **{{ TestoMarkdown::sicuro($email) }}** e la password che hai scelto durante la registrazione.
 
 <x-mail::button :url="$url" :colore="$marchio->colore" :colore-testo="$marchio->coloreTesto">
 Accedi a Easy Lab

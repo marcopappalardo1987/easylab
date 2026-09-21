@@ -437,10 +437,15 @@ class RegistroAudit extends Component
         }
 
         try {
-            return CarbonImmutable::parse(trim($valore))->startOfDay();
+            $giorno = CarbonImmutable::parse(trim($valore))->startOfDay();
         } catch (InvalidFormatException) {
             return null;
         }
+
+        // Anni fuori da 1..9999 si ignorano come un valore illeggibile
+        // (T1cB-7): Carbon legge «0000-01-01» e «+100000000 years», Postgres
+        // no, e un link incollato darebbe un 500 invece dell'elenco.
+        return $giorno->year >= 1 && $giorno->year <= 9999 ? $giorno : null;
     }
 
     public function render(): View

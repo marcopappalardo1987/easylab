@@ -36,7 +36,8 @@
         // 2. le pipe esterne via, quelle interne diventano un separatore medio.
         $riga = trim($riga);
         $riga = trim($riga, '|');
-        $riga = preg_replace('/\s*\|\s*/', ' · ', $riga);
+        // Una pipe preceduta da backslash è testo dell'utente (TestoMarkdown::sicuro), non un bordo.
+        $riga = preg_replace('/\s*(?<!\\\\)\|\s*/', ' · ', $riga);
 
         $righe[] = trim($riga);
     }

@@ -654,12 +654,13 @@ class ParcoGlobale extends Component
         if (filled($this->search)) {
             // Colonne QUALIFICATE: con `sede.nome` in gioco, un `nome` nudo è
             // un'ambiguità che Postgres rifiuta e SQLite risolve a caso.
-            $like = '%'.strtolower(trim($this->search)).'%';
+            // `%` e `_` scritti dall'utente sono letterali, come nelle altre ricerche (ESCAPE).
+            $like = '%'.addcslashes(mb_strtolower(trim($this->search)), '%_\\').'%';
 
             $query->where(function (Builder $q) use ($like) {
-                $q->whereRaw('LOWER(strumenti.nome) LIKE ?', [$like])
-                    ->orWhereRaw('LOWER(COALESCE(strumenti.modello, \'\')) LIKE ?', [$like])
-                    ->orWhereRaw('LOWER(COALESCE(strumenti.matricola, \'\')) LIKE ?', [$like]);
+                $q->whereRaw("LOWER(strumenti.nome) LIKE ? ESCAPE '\\'", [$like])
+                    ->orWhereRaw("LOWER(COALESCE(strumenti.modello, '')) LIKE ? ESCAPE '\\'", [$like])
+                    ->orWhereRaw("LOWER(COALESCE(strumenti.matricola, '')) LIKE ? ESCAPE '\\'", [$like]);
             });
         }
 
