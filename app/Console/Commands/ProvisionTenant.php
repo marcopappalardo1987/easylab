@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\User;
 use App\Notifications\InvitoUtente;
 use App\Support\Provisioning\ProvisionaEnte;
 use App\Support\Provisioning\ProvisioningRifiutato;
@@ -72,6 +73,25 @@ class ProvisionTenant extends Command
     {
         $nome = $this->argument('nome');
         $adminEmail = $this->option('admin-email') ?: Str::slug($nome).'-admin@example.test';
+
+        // 🔴 T2B-3: un indirizzo già in uso da chi NON amministra nessun
+        // contratto (un Tenant di un altro cliente, un tecnico esterno) non
+        // diventa l'Admin del cliente nuovo. `ProvisionaEnte` gli darebbe
+        // `assignRole('Admin')` — ruolo globale, `teams = false` — lasciandolo
+        // sul suo tenant, e il comando stamperebbe un successo.
+        // ⚠️ Non `esigiAccountNuovo: true` come in cabina: da console
+        // rilanciare con l'email di un Admin che ha già UN contratto aggancia
+        // la sede a quel contratto (idempotenza, sede in più), ed è voluto
+        // (ProvisionTenantTest). Si chiude solo il ramo «nessun contratto».
+        if ($this->option('account') === null) {
+            $esistente = User::whereRaw('LOWER(email) = ?', [mb_strtolower(trim($adminEmail))])->first();
+
+            if ($esistente !== null && $esistente->accounts()->doesntExist()) {
+                $this->error("{$adminEmail} appartiene già a un utente della piattaforma che non amministra nessun cliente: un cliente nuovo nasce con un amministratore nuovo, quindi serve un altro indirizzo.");
+
+                return self::FAILURE;
+            }
+        }
 
         try {
             $esito = (new ProvisionaEnte(

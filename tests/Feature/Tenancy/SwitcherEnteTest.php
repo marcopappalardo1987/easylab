@@ -268,11 +268,11 @@ it('drops the ephemeral sede the moment the impersonation ends', function () {
     Livewire\Livewire::test(SwitcherEnte::class)->call('passa', $this->enteB->id);
     expect(CurrentTenant::id())->toBe($this->enteB->id);
 
-    // Si esce dall'impersonazione: la chiave resta in sessione, ma è spenta.
+    // Si esce dall'impersonazione: la chiave è spenta (e da T2B-2 anche tolta
+    // dalla sessione all'uscita; qui conta che non scopi più nessuno).
     $this->get(route('impersonate.leave'));
 
-    expect(session(CurrentTenant::SEDE_IMPERSONATA))->not->toBeNull()
-        ->and(CurrentTenant::id())->toBe($this->enteA->id);
+    expect(CurrentTenant::id())->toBe($this->enteA->id);
 });
 
 it('never lets a leftover key move the CUSTOMER, when they log in themselves', function () {
@@ -294,6 +294,11 @@ it('never lets a leftover key move the CUSTOMER, when they log in themselves', f
 
     Livewire\Livewire::test(SwitcherEnte::class)->call('passa', $this->enteB->id);
     $this->get(route('impersonate.leave'));
+
+    // Da T2B-2 l'uscita toglie la chiave: la si rimette a mano, perché la
+    // guardia `isImpersonating()` va provata anche contro una chiave rimasta
+    // (sessione scritta da un'altra via, uscita non passata dall'evento).
+    session([CurrentTenant::SEDE_IMPERSONATA => ['utente' => $this->membro->id, 'ente' => $this->enteB->id]]);
 
     // Ora entra il cliente, di persona, con la chiave ancora in sessione.
     $this->actingAs($this->membro->fresh());

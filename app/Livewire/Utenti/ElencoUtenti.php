@@ -208,7 +208,41 @@ class ElencoUtenti extends Component
         // «non esiste» sarebbe una bugia verificabile guardando la riga sopra.
         abort_unless(RuoliAssegnabili::amministrabile($persona), 403);
 
+        // 🔴 T2A-1 (ADR-032): ruoli (`teams = false`) e soft delete sono
+        // GLOBALI, e una persona membro di più account sta su un Ente alla
+        // volta. Da qui la si toccherebbe anche presso l'altro cliente: un
+        // cambio ruolo o un cestino dati dall'Ente B la tolgono all'Ente A,
+        // che può restare senza Admin. Si amministra solo chi appartiene al
+        // SOLO contratto di questo Ente.
+        abort_if($this->condivisaConAltriContratti($persona), 403);
+
         return $persona;
+    }
+
+    /**
+     * La persona è membro di un account diverso da quello di questo Ente?
+     * Senza account sull'Ente, qualunque appartenenza è di un altro cliente.
+     */
+    private function condivisaConAltriContratti(User $persona): bool
+    {
+        return in_array($persona->id, $this->idCondiviseConAltriContratti([$persona->id]), true);
+    }
+
+    /**
+     * @param  list<int>  $ids
+     * @return list<int>
+     */
+    private function idCondiviseConAltriContratti(array $ids): array
+    {
+        $accountId = $this->ente()->account_id;
+
+        return DB::table('account_user')
+            ->whereIn('user_id', $ids)
+            ->when($accountId !== null, fn ($q) => $q->where('account_id', '!=', $accountId))
+            ->distinct()
+            ->pluck('user_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
     }
 
     /**
@@ -450,6 +484,7 @@ class ElencoUtenti extends Component
         // proprie e non passa da `personaDellEnte()`, quindi la guardia si
         // ripete qui invece di essere dedotta.
         abort_unless(RuoliAssegnabili::amministrabile($persona), 403);
+        abort_if($this->condivisaConAltriContratti($persona), 403);
 
         $ente = $this->ente();
 
@@ -527,26 +562,53 @@ class ElencoUtenti extends Component
 
         abort_unless(RuoliAssegnabili::ammesso($this->nuovoRuolo), 403);
 
-        $esito = DB::transaction(function (): ?array {
-            $this->bloccaPersoneAttiveDellEnte();
-            $persona = $this->personaDellEnte($this->utenteRuolo);
+        try {
+            $esito = DB::transaction(function (): ?array {
+                $this->bloccaPersoneAttiveDellEnte();
+                $persona = $this->personaDellEnte($this->utenteRuolo);
 
-            if ($persona->hasRole('Admin') && $this->nuovoRuolo !== 'Admin' && $this->ultimoAdmin($persona)) {
-                $this->errore = "{$persona->name} è l'unico Admin di questo Ente: nominane un altro prima di cambiarle ruolo.";
+                if ($persona->hasRole('Admin') && $this->nuovoRuolo !== 'Admin' && $this->ultimoAdmin($persona)) {
+                    $this->errore = "{$persona->name} è l'unico Admin di questo Ente: nominane un altro prima di cambiarle ruolo.";
 
-                return null;
+                    return null;
+                }
+
+                $eraAdmin = $persona->hasRole('Admin');
+                $precedenti = $persona->getRoleNames()->all();
+                $persona->syncRoles([$this->nuovoRuolo]);
+
+                // Come nell'invito: chi diventa Admin entra fra i membri
+                // dell'account.
+                $this->aggiornaAppartenenza($persona);
+
+                // 🔴 T2B-1 (ADR-032): e chi smette di esserlo ne ESCE. La
+                // membership non è un'etichetta: è ciò che `sediRaggiungibili()`
+                // e `passaAllEnte()` leggono per aprire le altre sedi del
+                // contratto, e ciò che il digest usa per la sede. Lasciarla a
+                // un retrocesso gli dava, col ruolo nuovo, un accesso che un
+                // Tenant nato tale non ha. Si toglie qui e non nello switcher
+                // (che richiederebbe il ruolo Admin): «membro = chi amministra
+                // il contratto» è l'invariante di ADR-032 che `rimuoviMembro()`
+                // già difende, e un solo posto che la mantiene vale più di due
+                // che la reinterpretano. L'ultimo membro lancia, e la
+                // transazione annulla anche il cambio di ruolo.
+                if ($eraAdmin && $this->nuovoRuolo !== 'Admin') {
+                    $this->accountDellEnte()?->rimuoviMembro($persona);
+                }
+
+                return [$persona, $precedenti];
+            });
+        } catch (RuntimeException $e) {
+            // Solo il rifiuto di `rimuoviMembro()`: un errore di database è
+            // anch'esso un RuntimeException, e deve continuare a salire.
+            if ($e::class !== RuntimeException::class) {
+                throw $e;
             }
 
-            $precedenti = $persona->getRoleNames()->all();
-            $persona->syncRoles([$this->nuovoRuolo]);
+            $this->errore = "Chi stai retrocedendo è l'unica persona che amministra il contratto di questo Ente: aggiungine un'altra prima di cambiarle ruolo.";
 
-            // Come nell'invito: chi diventa Admin entra fra i membri
-            // dell'account. Chi smette di esserlo non ne esce: i permessi li
-            // porta il ruolo, mentre l'uscita dal contratto passa dal cestino.
-            $this->aggiornaAppartenenza($persona);
-
-            return [$persona, $precedenti];
-        });
+            return;
+        }
 
         if ($esito === null) {
             return;
@@ -726,7 +788,8 @@ class ElencoUtenti extends Component
      * Un Admin è anche un membro dell'Account (🔗 ADR-032).
      *
      * Solo in aggiunta: l'uscita dal contratto passa da `rimuoviMembro()`, che
-     * difende l'invariante e vive nel cestino.
+     * difende l'invariante, e la chiamano il cestino e la retrocessione da
+     * Admin (T2B-1, vedi `cambiaRuolo()`).
      */
     private function aggiornaAppartenenza(User $persona): void
     {
@@ -821,6 +884,8 @@ class ElencoUtenti extends Component
             // diventare un oracle sull'esistenza di persone di altri Enti.
             'stati' => $persone->mapWithKeys(fn (User $u) => [$u->id => $this->stato($u)]),
             'amministrabili' => $persone->mapWithKeys(fn (User $u) => [$u->id => $this->amministrabile($u)]),
+            // Persone anche di un altro cliente (ADR-032): nessun gesto da qui.
+            'condivise' => $this->idCondiviseConAltriContratti($persone->pluck('id')->map(fn ($id) => (int) $id)->all()),
             'inCestino' => $this->utenteCestino !== null
                 ? $persone->firstWhere('id', $this->utenteCestino)
                 : null,

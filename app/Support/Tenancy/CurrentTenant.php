@@ -3,8 +3,10 @@
 namespace App\Support\Tenancy;
 
 use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Lab404\Impersonate\Services\ImpersonateManager;
+use WeakMap;
 
 /**
  * Risolutore del tenant corrente per il Global Scope multi-tenant (ADR-001/018).
@@ -38,9 +40,10 @@ use Lab404\Impersonate\Services\ImpersonateManager;
  * le condizioni valgono: si sta impersonando ADESSO, e l'utente autenticato è
  * ancora quello. Una chiave rimasta appesa dopo la fine dell'impersonazione non
  * può quindi scopare nessuno verso l'Ente di un altro: la condizione più
- * stretta la spegne, e senza costare una query per richiesta. La legittimità
- * del bersaglio (stesso account, non in lockout) si verifica dove la chiave
- * viene SCRITTA, in `SwitcherEnte::passa()`.
+ * stretta la spegne. La legittimità del bersaglio (stesso account, non in
+ * lockout) si verifica dove la chiave viene SCRITTA, in `SwitcherEnte::passa()`,
+ * e dal 21 Set 2026 anche dove viene LETTA (T2A-2): una query per richiesta,
+ * solo durante un'impersonazione.
  */
 class CurrentTenant
 {
@@ -85,9 +88,42 @@ class CurrentTenant
             return null;
         }
 
-        return ($scelta['utente'] ?? null) === $user->getKey()
+        $ente = ($scelta['utente'] ?? null) === $user->getKey()
             ? ($scelta['ente'] ?? null)
             : null;
+
+        // 🔴 T2A-2: la chiave vive in sessione e sopravvive all'impersonazione
+        // che l'ha scritta. Se nel frattempo la persona ha perso l'account di
+        // quella sede (o è andato in lockout), la prossima impersonazione la
+        // riaprirebbe: la legittimità si riverifica qui, non solo in scrittura.
+        if ($ente === null || ! self::sedeAncoraRaggiungibile($user, (int) $ente)) {
+            return null;
+        }
+
+        return (int) $ente;
+    }
+
+    /**
+     * Una query per richiesta e per coppia utente/sede: `id()` è chiamato da
+     * ogni query scopata, e l'impersonazione è l'unico caso che paga.
+     *
+     * @var WeakMap<Request, array<string, bool>>|null
+     */
+    private static ?WeakMap $verifiche = null;
+
+    private static function sedeAncoraRaggiungibile(User $user, int $ente): bool
+    {
+        $richiesta = app('request');
+        self::$verifiche ??= new WeakMap;
+        $chiave = $user->getKey().'|'.$ente;
+
+        $memo = self::$verifiche[$richiesta] ?? [];
+        if (! array_key_exists($chiave, $memo)) {
+            $memo[$chiave] = $user->sediRaggiungibili()->whereKey($ente)->exists();
+            self::$verifiche[$richiesta] = $memo;
+        }
+
+        return $memo[$chiave];
     }
 
     /**

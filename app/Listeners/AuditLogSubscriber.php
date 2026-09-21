@@ -3,6 +3,7 @@
 namespace App\Listeners;
 
 use App\Support\AuditLog;
+use App\Support\Tenancy\CurrentTenant;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
@@ -22,6 +23,9 @@ class AuditLogSubscriber
 {
     public function suImpersonationAvviata(TakeImpersonation $event): void
     {
+        // La sede scelta impersonando vale per quella sola impersonazione (T2A-2).
+        session()->forget(CurrentTenant::SEDE_IMPERSONATA);
+
         activity(AuditLog::NAME)
             ->causedBy($event->impersonator)
             ->performedOn($event->impersonated)
@@ -31,6 +35,9 @@ class AuditLogSubscriber
 
     public function suImpersonationTerminata(LeaveImpersonation $event): void
     {
+        // La sede scelta impersonando vale per quella sola impersonazione (T2A-2).
+        session()->forget(CurrentTenant::SEDE_IMPERSONATA);
+
         activity(AuditLog::NAME)
             ->causedBy($event->impersonator)
             ->performedOn($event->impersonated)

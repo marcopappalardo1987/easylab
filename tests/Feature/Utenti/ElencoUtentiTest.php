@@ -603,21 +603,41 @@ it('puts a promoted Admin on the contract too, since the hole is the same from t
         ->and($this->account->membri()->whereKey($promossa->id)->exists())->toBeTrue();
 });
 
-it('never takes a demoted Admin off the contract, because that invariant is not this action to break', function () {
-    // ⚠️ La direzione opposta è **voluta**: `membri()` è ciò che tiene in piedi
-    // «un account non resta senza amministratori», e sfilare qui vorrebbe dire
-    // poterla violare con un cambio di ruolo. L'appartenenza di troppo non apre
-    // niente — i permessi li porta il ruolo, che è cambiato.
+it('takes a demoted Admin off the contract, so the new role does not keep the other sedi', function () {
+    // 🔴 T2B-1 (ADR-032). Fino al 21 Set 2026 questo test pretendeva il
+    // contrario, con l'argomento «l'appartenenza di troppo non apre niente».
+    // Apriva invece le altre sedi del contratto: `sediRaggiungibili()` e
+    // `passaAllEnte()` leggono la membership, non il ruolo. L'invariante
+    // «un account non resta senza amministratori» la difende `rimuoviMembro()`
+    // (test sotto), non il lasciare membri i retrocessi.
     $secondo = personaDellEnte('Secondo Admin', 'Admin', ['email' => 'secondo@rossi.test']);
     $this->account->aggiungiMembro($secondo);
 
     Livewire::actingAs($this->admin)->test(ElencoUtenti::class)
         ->call('apriRuolo', $secondo->id)
         ->set('nuovoRuolo', 'Tenant')
-        ->call('cambiaRuolo');
+        ->call('cambiaRuolo')
+        ->assertHasNoErrors();
 
     expect($secondo->fresh()->hasRole('Tenant'))->toBeTrue()
-        ->and($this->account->membri()->whereKey($secondo->id)->exists())->toBeTrue();
+        ->and($this->account->membri()->whereKey($secondo->id)->exists())->toBeFalse()
+        ->and($secondo->fresh()->sediRaggiungibili()->count())->toBe(0);
+});
+
+it('refuses to demote the last member of the contract, and keeps the role as it was', function () {
+    // Un secondo Admin dell'Ente che NON è membro: `ultimoAdmin()` lascia
+    // passare, ed è `rimuoviMembro()` a fermare il gesto — la transazione
+    // annulla anche il cambio di ruolo.
+    personaDellEnte('Admin Non Membro', 'Admin', ['email' => 'nonmembro@rossi.test']);
+
+    Livewire::actingAs($this->admin)->test(ElencoUtenti::class)
+        ->call('apriRuolo', $this->admin->id)
+        ->set('nuovoRuolo', 'Tenant')
+        ->call('cambiaRuolo')
+        ->assertSet('errore', "Chi stai retrocedendo è l'unica persona che amministra il contratto di questo Ente: aggiungine un'altra prima di cambiarle ruolo.");
+
+    expect($this->admin->fresh()->getRoleNames()->all())->toBe(['Admin'])
+        ->and($this->account->membri()->whereKey($this->admin->id)->exists())->toBeTrue();
 });
 
 it('shows the binned people with their own state, because otherwise nobody could bring them back', function () {

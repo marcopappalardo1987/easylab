@@ -144,7 +144,9 @@
                                      toglie resta `ghost`. Due bottoni identici, uno dei
                                      quali cestina, sono due bottoni uguali. --}}
                                 <div class="flex flex-wrap justify-end gap-2 max-md:justify-start">
-                                    @if (! $amministrabile)
+                                    @if (in_array($persona->id, $condivise, true))
+                                        <span class="text-xs text-ink-3">Anche di un altro cliente: si amministra da lì</span>
+                                    @elseif (! $amministrabile)
                                         <span class="text-xs text-ink-3">Ruolo di piattaforma: si amministra da console</span>
                                     @elseif ($persona->trashed())
                                         @can('utenti.delete')

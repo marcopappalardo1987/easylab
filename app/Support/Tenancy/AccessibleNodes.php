@@ -81,15 +81,20 @@ class AccessibleNodes
     protected static function expandSubtrees(array $roots, int $tenantId): array
     {
         $childrenByParent = [];
+        $delTenant = [];
         UnitaOrganizzativa::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->get(['id', 'parent_id'])
-            ->each(function ($node) use (&$childrenByParent) {
+            ->each(function ($node) use (&$childrenByParent, &$delTenant) {
                 $childrenByParent[$node->parent_id][] = (int) $node->id;
+                $delTenant[(int) $node->id] = true;
             });
 
+        // D-T2-2: una radice di `responsabile_unita` fuori dal tenant (dato
+        // corrotto o scritto da fuori Eloquent) non diventa accessibile. Prima
+        // lo impediva solo il TenantScope applicato insieme.
         $accessible = [];
-        $queue = $roots;
+        $queue = array_values(array_filter($roots, fn ($root) => isset($delTenant[(int) $root])));
         while ($queue !== []) {
             $id = (int) array_shift($queue);
             if (isset($accessible[$id])) {

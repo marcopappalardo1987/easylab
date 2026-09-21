@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Dashboard;
 
+use App\Models\Scopes\DepartmentScope;
 use App\Models\UnitaOrganizzativa;
 use App\Support\Parco\MetricheParco;
 use App\Support\Tenancy\CurrentTenant;
@@ -90,7 +91,7 @@ class Home extends Component
         // lo switcher sposta la sede nella sessione. Stesso idioma di `SwitcherEnte`.
         $corrente = CurrentTenant::id();
         $nomeEnte = $corrente !== null
-            ? UnitaOrganizzativa::whereKey($corrente)->value('nome')
+            ? UnitaOrganizzativa::withoutGlobalScope(DepartmentScope::class)->whereKey($corrente)->value('nome')
             : null;
 
         return view('livewire.dashboard.home', [

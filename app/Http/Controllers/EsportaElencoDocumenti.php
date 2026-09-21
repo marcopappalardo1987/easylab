@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Documento;
+use App\Models\Scopes\DepartmentScope;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Support\Documenti\FiltroDocumenti;
@@ -130,7 +131,7 @@ class EsportaElencoDocumenti extends Controller
             // Il nome della sede CORRENTE, non di `users.tenant_id`: impersonando,
             // lo switcher sposta il contesto in sessione e le righe sono di
             // quella sede (D-T2-3, security pass S7).
-            'ente' => UnitaOrganizzativa::query()->whereKey(CurrentTenant::id())->value('nome'),
+            'ente' => UnitaOrganizzativa::withoutGlobalScope(DepartmentScope::class)->whereKey(CurrentTenant::id())->value('nome'),
         ])->setPaper('a4');
 
         // `stream` e non `download`, come sullo storico macchina: si vuole

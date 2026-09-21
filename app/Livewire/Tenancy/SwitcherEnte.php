@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Tenancy;
 
+use App\Models\Scopes\DepartmentScope;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Support\AuditLog;
@@ -76,7 +77,12 @@ class SwitcherEnte extends Component
         // (`BypassNudiGuardrailTest` lo rende rosso, ed è giusto), e leggere da
         // `sediRaggiungibili()` era troppo stretto — un utente la cui sede non
         // passa dal pivot del contratto perdeva del tutto l'etichetta.
-        $this->nomeEnte = UnitaOrganizzativa::whereKey($corrente)->value('nome');
+        // T2 (S7): tolto il solo DepartmentScope, per nome. Il Responsabile
+        // non ha la radice dell'Ente nel proprio sotto-albero, e la query
+        // scopata gli toglieva l'etichetta. Il TenantScope resta: l'id viene
+        // da `CurrentTenant`, e il confine fra clienti non si muove.
+        $this->nomeEnte = UnitaOrganizzativa::withoutGlobalScope(DepartmentScope::class)
+            ->whereKey($corrente)->value('nome');
 
         $this->sediRaggiungibili = $this->sedi()->where('id', '!=', $corrente)->count();
     }
