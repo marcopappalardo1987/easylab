@@ -4,8 +4,10 @@ use App\Livewire\Strumenti\SchedaStrumento;
 use App\Models\Errore;
 use App\Models\Strumento;
 use App\Models\User;
+use App\Support\Guide\Manuale;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportTesting\Testable;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -403,9 +405,9 @@ function prefissiDiColore(): string
  */
 function guidaFinta(string $slug, string $titolo = 'Guida di prova', bool $conVideo = true, bool $conCopertina = true): void
 {
-    $disco = App\Support\Guide\Manuale::disco();
+    $disco = Manuale::disco();
 
-    $disco->put(App\Support\Guide\Manuale::percorso($slug, 'manifest'), (string) json_encode([
+    $disco->put(Manuale::percorso($slug, 'manifest'), (string) json_encode([
         'titolo' => $titolo,
         'sottotitolo' => "Sottotitolo di {$slug}",
         'larghezza' => 1440,
@@ -426,11 +428,11 @@ function guidaFinta(string $slug, string $titolo = 'Guida di prova', bool $conVi
     if ($conVideo) {
         // Un mp4 finto ma di lunghezza nota: al controller dei byte serve una
         // dimensione su cui calcolare gli intervalli, non un video vero.
-        $disco->put(App\Support\Guide\Manuale::percorso($slug, 'video'), str_repeat('V', 2048));
+        $disco->put(Manuale::percorso($slug, 'video'), str_repeat('V', 2048));
     }
 
     if ($conCopertina) {
-        $disco->put(App\Support\Guide\Manuale::percorso($slug, 'copertina'), str_repeat('C', 128));
+        $disco->put(Manuale::percorso($slug, 'copertina'), str_repeat('C', 128));
     }
 
     config()->set('guide.guide', [
@@ -442,7 +444,7 @@ function guidaFinta(string $slug, string $titolo = 'Guida di prova', bool $conVi
 /** Il disco delle guide, svuotato, e il catalogo azzerato. */
 function discoGuideVuoto(): void
 {
-    Illuminate\Support\Facades\Storage::fake(config('guide.disco'));
+    Storage::fake(config('guide.disco'));
     config()->set('guide.guide', []);
-    App\Support\Guide\Manuale::dimentica();
+    Manuale::dimentica();
 }

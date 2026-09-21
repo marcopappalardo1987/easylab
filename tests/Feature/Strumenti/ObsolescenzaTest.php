@@ -186,12 +186,13 @@ it('reads the soglie in a fixed number of queries when the filter is on', functi
         ($this->strumentoInstallato)(today()->subYears(12)->toDateString());
     }
 
-    // Costante al crescere delle righe, e **fissa nel numero**: quattro
-    // statement su `unita_organizzativa`, e sapere quali è ciò che rende utile
-    // il numero — le soglie di `scopeObsoleti()`, l'elenco dei nodi dei filtri,
-    // e i due eager load della pagina (`unita` e `tenant`). Una quinta lettura
-    // è qualcuno che ha rimesso una query dentro un ciclo.
-    expect($conUno)->toBe(4)
+    // Costante al crescere delle righe, e **fissa nel numero**: tre statement
+    // su `unita_organizzativa`, e sapere quali è ciò che rende utile il numero:
+    // le soglie di `scopeObsoleti()`, l'elenco dei nodi dei filtri e l'eager
+    // load di `tenant`. (Erano quattro: l'eager load di `unita` è stato tolto in
+    // S7/T4, la vista legge il percorso da `$percorsi`.) Una quarta lettura è
+    // qualcuno che ha rimesso una query dentro un ciclo.
+    expect($conUno)->toBe(3)
         ->and($conta())->toBe($conUno);
 });
 
