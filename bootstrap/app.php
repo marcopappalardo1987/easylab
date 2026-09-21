@@ -3,6 +3,7 @@
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Middleware\EnforceAccountLockout;
 use App\Http\Middleware\EnsureTwoFactorIsEnabled;
+use App\Http\Middleware\RequireSameOriginNavigation;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\VerificaFirmaWebhookStripe;
 use App\Support\Errori\CatturaErrori;
@@ -62,6 +63,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->prependToPriorityList(
             before: AuthenticatesRequests::class,
             prepend: ValidateSignature::class,
+        );
+
+        // La guardia di stessa origine gira PRIMA di `auth`: altrimenti uno
+        // sloggato con un link esterno di impersonazione finiva in `url.intended`
+        // e, dopo login e 2FA, il redirect same-origin la eseguiva (T1bA-1).
+        $middleware->prependToPriorityList(
+            before: AuthenticatesRequests::class,
+            prepend: RequireSameOriginNavigation::class,
         );
 
         // Globale e non `web`: copre anche webhook, `/up` e pagine d'errore.

@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Documento;
 use App\Models\Strumento;
+use App\Models\UnitaOrganizzativa;
 use App\Support\Documenti\FiltroDocumenti;
+use App\Support\Tenancy\CurrentTenant;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -125,7 +127,10 @@ class EsportaElencoDocumenti extends Controller
             ),
             'generatoIl' => now(),
             'generatoDa' => $utente?->name,
-            'ente' => $utente?->ente?->nome,
+            // Il nome della sede CORRENTE, non di `users.tenant_id`: impersonando,
+            // lo switcher sposta il contesto in sessione e le righe sono di
+            // quella sede (D-T2-3, security pass S7).
+            'ente' => UnitaOrganizzativa::query()->whereKey(CurrentTenant::id())->value('nome'),
         ])->setPaper('a4');
 
         // `stream` e non `download`, come sullo storico macchina: si vuole

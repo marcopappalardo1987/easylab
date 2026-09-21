@@ -38,6 +38,19 @@ use Symfony\Component\HttpFoundation\Response;
  * browser di prima del 2023 **e** una pagina con `referrerpolicy=no-referrer`.
  * Rifiutare anche l'assenza avrebbe chiuso fuori i test HTTP e ogni client che
  * non è un browser, per un caso che la piattaforma non supporta.
+ *
+ * Il `Referer` si confronta sul solo **host**, non su schema e porta: dietro il
+ * proxy di Laravel Cloud l'app può vedere `http` e la porta interna mentre il
+ * browser ha navigato in `https:443`, e un confronto pieno rifiutava utenti
+ * legittimi (sospetto S1 della caccia T1b). Un attaccante non può servire una
+ * pagina dal nostro host su un'altra porta, quindi l'host basta.
+ *
+ * ⚠️ **Secondo rischio dichiarato (S2 della caccia T1b):** un link aperto da un
+ * client di posta desktop o da un'app arriva con `Sec-Fetch-Site: none`, come un
+ * URL digitato, e passa. Chi manda al Superadmin un'email con il link di
+ * impersonazione lo fa entrare in un tenant con un clic. Resta così perché
+ * `none` è anche il preferito e l'URL incollato, e il browser non li distingue;
+ * il gesto è comunque un clic dell'utente, loggato, e col banner a schermo.
  */
 class RequireSameOriginNavigation
 {
@@ -64,16 +77,8 @@ class RequireSameOriginNavigation
 
     private function stessaOrigine(string $url, Request $request): bool
     {
-        $parti = parse_url($url);
+        $host = parse_url($url, PHP_URL_HOST);
 
-        if (! is_array($parti) || ! isset($parti['scheme'], $parti['host'])) {
-            return false;
-        }
-
-        $porta = $parti['port'] ?? ($parti['scheme'] === 'https' ? 443 : 80);
-
-        return strtolower($parti['scheme']) === $request->getScheme()
-            && strtolower($parti['host']) === strtolower($request->getHost())
-            && (int) $porta === (int) $request->getPort();
+        return is_string($host) && strtolower($host) === strtolower($request->getHost());
     }
 }

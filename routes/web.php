@@ -481,8 +481,11 @@ Route::middleware(['auth', 'two-factor.enforce', RequireSameOriginNavigation::cl
     Route::get('/impersonate/take/{id}/{guardName?}', [ImpersonateController::class, 'take'])->name('impersonate');
 });
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', RequireSameOriginNavigation::class])->group(function () {
     Route::get('/impersonate/leave', [ImpersonateController::class, 'leave'])->name('impersonate.leave');
+});
+
+Route::middleware('auth')->group(function () {
 
     // Lockout (ADR-013): la pagina di stato e la fuga verso una sede sana
     // stanno FUORI dal gruppo protetto per COLLOCAZIONE, non per un'esclusione

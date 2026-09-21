@@ -99,3 +99,25 @@ it('still applies an event that carries no creation time, as before', function (
 
     expect($this->account->fresh()->is_locked)->toBeTrue();
 });
+
+it('never reopens a cancelled subscription with an «active» event of the same second delivered late', function () {
+    // Caccia T1bB-2 (S7): il confronto era strettamente minore, quindi a pari
+    // `created` l'«active» arrivato dopo il `deleted` riapriva l'account.
+    // `canceled` è terminale su Stripe: a parità di secondo vince la chiusura.
+    consegnaOrdine(eventoSubscription('evt_creata', 'active', 1_700_000_000, 'customer.subscription.created'))->assertOk();
+    consegnaOrdine(eventoSubscription('evt_chiusa', 'canceled', 1_700_000_300, 'customer.subscription.deleted'))->assertOk();
+    expect($this->account->fresh()->is_locked)->toBeTrue();
+
+    consegnaOrdine(eventoSubscription('evt_stesso_secondo', 'active', 1_700_000_300))->assertOk();
+
+    expect($this->account->fresh()->is_locked)->toBeTrue()
+        ->and($this->account->subscriptions()->sole()->stripe_status)->toBe('canceled');
+});
+
+it('still applies two events of the same second when nothing was closed', function () {
+    consegnaOrdine(eventoSubscription('evt_creata', 'active', 1_700_000_000, 'customer.subscription.created'))->assertOk();
+    consegnaOrdine(eventoSubscription('evt_insoluto', 'unpaid', 1_700_000_300))->assertOk();
+    consegnaOrdine(eventoSubscription('evt_pagato', 'active', 1_700_000_300))->assertOk();
+
+    expect($this->account->fresh()->is_locked)->toBeFalse();
+});

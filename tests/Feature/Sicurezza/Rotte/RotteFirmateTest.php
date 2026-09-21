@@ -4,7 +4,10 @@ use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Str;
 
 /**
  * Le porte che si aprono con una firma invece che con una sessione (security
@@ -91,6 +94,28 @@ it('refuses an invite whose expiry was pushed forward by hand', function () {
     expect($allungato)->not->toBe($firmato);
 
     $this->get($allungato)->assertForbidden();
+});
+
+it('never lets an invite link overwrite a password the user already chose through the reset', function () {
+    // Caccia T1bB-1: `giaAttivato` guarda `email_verified_at`, che il reset non
+    // scriveva. Ora il reset verifica la casella (ResetUserPassword).
+    $invitata = User::factory()->unverified()->create([
+        'email' => 'anna.bianchi@laboratorio.test',
+        'password' => Hash::make(Str::password(64)),
+    ]);
+    $invito = URL::temporarySignedRoute('invito.imposta', now()->addDays(7), ['user' => $invitata->id]);
+
+    $this->post('/reset-password', [
+        'token' => Password::broker()->createToken($invitata),
+        'email' => $invitata->email,
+        'password' => 'Scelta-da-Anna-2026',
+        'password_confirmation' => 'Scelta-da-Anna-2026',
+    ])->assertSessionHasNoErrors();
+
+    $this->post($invito, ['password' => 'Scelta-da-altri-2026', 'password_confirmation' => 'Scelta-da-altri-2026'])
+        ->assertRedirect(route('login'));
+
+    expect(Hash::check('Scelta-da-Anna-2026', $invitata->fresh()->password))->toBeTrue();
 });
 
 // --- Webhook Stripe ---

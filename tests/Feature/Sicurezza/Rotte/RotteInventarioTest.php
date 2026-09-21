@@ -137,18 +137,18 @@ it('keeps no stale exemption for a route that no longer exists', function () {
     expect(array_diff(array_keys(ROTTE_SENZA_AUTH), $esistenti, ['banco']))->toBe([]);
 });
 
-it('checks the signature before the binding, the guest check and the permission', function () {
+it('checks the signature before authentication, binding, guest check, throttle and permission', function () {
     // L'ordine EFFETTIVO, non quello scritto: il router riordina secondo
-    // `middlewarePriority`, dove `signed` non compare. La firma cade prima del
-    // route-model binding (un id manomesso dà 403, non un 404 che direbbe «questa
-    // riga non c'è»), prima di `guest` e prima di `can:`.
+    // `middlewarePriority`. `bootstrap/app.php` antepone `ValidateSignature` ad
+    // `AuthenticatesRequests`, quindi la firma cade prima di tutto ciò che
+    // guarda la richiesta: un id manomesso dà 403 (non un 404 che direbbe «questa
+    // riga non c'è»), e una firma falsa non arriva nemmeno al login a parcheggiare
+    // un `intended` costruito da chi l'ha forgiata.
     //
-    // ⚠️ `auth` e `throttle` invece la PRECEDONO, perché stanno nella lista di
-    // priorità del framework: il commento di `routes/web.php` sul QR
-    // («signed → auth») descrive l'ordine dichiarato, non quello eseguito. Non
-    // apre nulla (la firma resta verificata prima del controller), ed è in board.
+    // Unica eccezione: `verification.verify` di Fortify, dove `auth` precede
+    // `signed` per costruzione del pacchetto (verifica la PROPRIA casella).
     $fuoriOrdine = [];
-    $dopoLaFirma = [SubstituteBindings::class, RedirectIfAuthenticated::class, 'Illuminate\Auth\Middleware\Authorize'];
+    $dopoLaFirma = [Authenticate::class, SubstituteBindings::class, RedirectIfAuthenticated::class, ThrottleRequests::class, 'Illuminate\Auth\Middleware\Authorize'];
 
     foreach (Route::getRoutes() as $rotta) {
         $classi = middlewareRisolti($rotta);
@@ -199,19 +199,29 @@ it('throttles every public POST that is not a webhook', function () {
         $senzaLimite[] = chiaveRotta($rotta);
     }
 
-    // ⚠️ ROSSO finché non si applica la richiesta in board: `password.email` e
-    // `password.update` (Fortify non ha un'opzione di limiter su quelle due).
+    // `password.email` e `password.update` ricevono il limiter da
+    // FortifyServiceProvider: Fortify non ha un'opzione per quelle due.
     expect($senzaLimite)->toBe([]);
 });
 
-it('uses the named limiters, never a bare number, on login and two factor', function (string $nome, string $limiter) {
+it('uses the named limiters, never a bare number, on the doors that take a password or an email', function (string $nome, string $limiter) {
     expect(middlewareGrezzi(Route::getRoutes()->getByName($nome)))
         ->toContain(ThrottleRequests::class.':'.$limiter);
 })->with([
     ['login.store', 'login'],
     ['two-factor.login.store', 'two-factor'],
     ['registrazione.avvia', 'registrazione'],
+    // ⚠️ Queste due sono ROSSE finché R-T1b-9 non separa i limiter del reset
+    // (caccia T1bB-3: link e form condividevano il secchio per email).
+    ['password.email', 'password-reset-link'],
+    ['password.update', 'password-reset'],
 ]);
+
+it('never counts the reset link and the reset form in the same bucket', function () {
+    // T1bB-3: il form di reset non deve portare anche il limiter del link.
+    expect(middlewareGrezzi(Route::getRoutes()->getByName('password.update')))
+        ->not->toContain(ThrottleRequests::class.':password-reset-link');
+});
 
 it('keeps every domain page behind the two factor gate, except the declared escapes', function () {
     // Le uscite dichiarate: il lockout (per pagare bisogna poterci arrivare),
@@ -238,8 +248,7 @@ it('keeps every domain page behind the two factor gate, except the declared esca
         }
     }
 
-    // ⚠️ ROSSO finché `Route::impersonate()` non entra nel gruppo
-    // `two-factor.enforce` (richiesta in board): oggi `impersonate` è l'unica
-    // rotta della piattaforma raggiungibile da un Superadmin senza 2FA.
+    // `impersonate` NON è fra le uscite: stava nel solo gruppo `auth` e da lì un
+    // Superadmin senza 2FA entrava in qualunque tenant (D-T1b-1).
     expect($senza2fa)->toBe([]);
 });

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\SecurityHeaders;
+use App\Models\User;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -8,9 +9,8 @@ use Illuminate\Support\Facades\Route;
  *
  * Due blocchi: il comportamento del middleware, provato su una rotta di prova
  * che lo monta da sé, e la sua **registrazione globale**, provata sulle rotte
- * vere. ⚠️ Il secondo blocco è ROSSO finché l'orchestratore non applica la
- * richiesta in board (`$middleware->append(SecurityHeaders::class)` in
- * `bootstrap/app.php`): è la rete che dice se l'aggancio c'è.
+ * vere (`$middleware->append(SecurityHeaders::class)` in `bootstrap/app.php`):
+ * è la rete che dice se l'aggancio c'è ancora.
  */
 beforeEach(function () {
     Route::middleware(SecurityHeaders::class)->get('/_prova/intestazioni', fn () => 'ok');
@@ -66,13 +66,22 @@ it('never overwrites a header the response decided for itself', function () {
     $this->get('/_prova/con-frame')->assertHeader('X-Frame-Options', 'SAMEORIGIN');
 });
 
-// --- La registrazione globale (ROSSO finché bootstrap/app.php non la aggancia) ---
+// --- La registrazione globale ---
 
-it('puts the headers on the real pages, guest and authenticated alike', function (string $uri) {
+it('puts the headers on the pages a guest reaches, and on the redirect that keeps a guest out', function (string $uri) {
     $this->get($uri)
         ->assertHeader('X-Frame-Options', 'DENY')
         ->assertHeader('Content-Security-Policy-Report-Only', SecurityHeaders::CSP);
 })->with(['/login', '/forgot-password', '/dashboard']);
+
+it('puts the headers on an authenticated page too', function () {
+    $utente = User::factory()->create();
+
+    $this->actingAs($utente)->get('/dashboard')
+        ->assertOk()
+        ->assertHeader('X-Frame-Options', 'DENY')
+        ->assertHeader('Content-Security-Policy-Report-Only', SecurityHeaders::CSP);
+});
 
 it('puts the headers on the stripe webhook too, which lives outside the web group', function () {
     config(['cashier.webhook.secret' => 'whsec_prova_intestazioni']);

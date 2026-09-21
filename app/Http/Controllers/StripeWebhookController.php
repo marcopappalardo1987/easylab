@@ -63,6 +63,12 @@ class StripeWebhookController extends CashierWebhookController
     /**
      * Gli stati in cui Stripe ha smesso di provarci: qui si chiude.
      */
+    /** Gli stati da cui una subscription di Stripe non torna mai indietro. */
+    private const STATI_TERMINALI = [
+        StripeSubscription::STATUS_CANCELED,
+        StripeSubscription::STATUS_INCOMPLETE_EXPIRED,
+    ];
+
     private const STATI_CHE_BLOCCANO = [
         StripeSubscription::STATUS_UNPAID,
         StripeSubscription::STATUS_CANCELED,
@@ -394,9 +400,13 @@ class StripeWebhookController extends CashierWebhookController
      * quello dell'ultimo applicato alla stessa subscription.
      *
      * ⚠️ Strettamente minore: due eventi nello stesso secondo si applicano
-     * entrambi, come prima. Senza `created`, o senza storia sulla riga, si
-     * applica: è il comportamento di sempre, e non si scarta ciò che non si sa
-     * datare.
+     * entrambi, come prima — **tranne dopo una chiusura**. `canceled` e
+     * `incomplete_expired` sono stati TERMINALI su Stripe (un cliente che torna
+     * riceve una subscription nuova, con un id nuovo): un evento non-`deleted`
+     * dello stesso secondo, recapitato dopo il `deleted`, è per forza più vecchio
+     * della chiusura, e riaprirebbe un account chiuso (caccia T1bB-2, security
+     * pass S7). Senza `created`, o senza storia sulla riga, si applica: è il
+     * comportamento di sempre, e non si scarta ciò che non si sa datare.
      */
     private function eventoSuperato(array $payload): bool
     {
@@ -407,11 +417,20 @@ class StripeWebhookController extends CashierWebhookController
             return false;
         }
 
-        $ultimo = Cashier::$subscriptionModel::query()
+        $riga = Cashier::$subscriptionModel::query()
             ->where('stripe_id', $subscriptionId)
-            ->value('creazione_ultimo_evento_stripe');
+            ->first(['stripe_status', 'creazione_ultimo_evento_stripe']);
+        $ultimo = $riga?->creazione_ultimo_evento_stripe;
 
-        if ($ultimo === null || $creato >= (int) $ultimo) {
+        if ($ultimo === null || $creato > (int) $ultimo) {
+            return false;
+        }
+
+        $pariDopoLaChiusura = $creato === (int) $ultimo
+            && in_array($riga->stripe_status, self::STATI_TERMINALI, true)
+            && ($payload['type'] ?? null) !== 'customer.subscription.deleted';
+
+        if ($creato === (int) $ultimo && ! $pariDopoLaChiusura) {
             return false;
         }
 
