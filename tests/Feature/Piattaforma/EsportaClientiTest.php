@@ -3,10 +3,12 @@
 use App\Livewire\Piattaforma\Cabina;
 use App\Livewire\Piattaforma\Concerns\EsportaClienti;
 use App\Models\Account;
+use App\Models\Piano;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Support\AuditLog;
+use App\Support\Listino\CatalogoPiani;
 use App\Support\Listino\GovernoListino;
 use App\Support\Piattaforma\CsvSicuro;
 use App\Support\Piattaforma\EsportazioneClienti;
@@ -299,7 +301,7 @@ it('never explodes on a customer whose plan left the catalogue', function () {
     $riga = rigaEsportata($t, 'Orfani SPA');
 
     expect($riga['a_catalogo'])->toBe('no')
-        ->and($riga['valore_mensile_eur'])->toBe('0')
+        ->and($riga['valore_mensile_eur'])->toBe('0,00')
         // ⚠️ `?` e `illimitato` restano **distinti**: fonderli farebbe leggere il
         // caso corrotto come il più permissivo dei due, proprio sulla riga che
         // la pagina invita a riparare.
@@ -632,3 +634,41 @@ it('gives the browser no way out of the portfolio that skips the audit row', fun
             ->toThrow(MethodNotFoundException::class);
     }
 });
+
+// ─── I centesimi del listino (caccia T3, A7/B4) ──────────────────────────────
+
+/** Il saas del listino a 49,90 €: un prezzo legittimo, il listino si governa in centesimi. */
+function saasConCentesimi(): void
+{
+    Piano::query()->where('codice', 'saas')->update(['prezzo_mensile_cent' => 4990]);
+    app(CatalogoPiani::class)->dimentica();
+}
+
+it('never truncates the cents of the monthly value in the clients CSV', function () {
+    saasConCentesimi();
+
+    $riga = rigaEsportata(Livewire::test(Cabina::class), 'Gruppo Rossi');
+
+    // Virgola e due decimali: la forma che un Excel italiano legge come numero.
+    expect($riga['valore_mensile_eur'])->toBe('49,90');
+});
+
+it('never truncates the cents of the listed total on the PDF sheet', function () {
+    saasConCentesimi();
+
+    $foglio = foglioDi(Livewire::test(Cabina::class)->set('piano', 'saas'));
+
+    // ⚠️ Dipende anche dalla vista `pdf/clienti-piattaforma` (file non di T3):
+    // stampa con `number_format(…, 2, ',', '.')`, diff richiesto in board.
+    expect($foglio)->toContain('Totale a listino delle righe in elenco: 49,90');
+});
+
+it('formats cents as euros with a comma and two decimals', function (int $centesimi, string $atteso) {
+    expect(EsportazioneClienti::euro($centesimi))->toBe($atteso);
+})->with([
+    [4990, '49,90'],
+    [4900, '49,00'],
+    [5, '0,05'],
+    [0, '0,00'],
+    [123456, '1234,56'],
+]);

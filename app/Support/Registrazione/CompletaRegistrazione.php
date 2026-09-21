@@ -133,7 +133,7 @@ final class CompletaRegistrazione
             // ⛔ **Fuori dalla transazione, o non resterebbe niente**: la
             // scrittura della traccia gira dopo il rollback, altrimenti verrebbe
             // annullata insieme al gesto che sta raccontando.
-            $this->registraIlRifiuto($registrazione, $e);
+            $this->registraIlRifiuto($registrazione, $e, $esito);
 
             throw $e;
         }
@@ -176,6 +176,21 @@ final class CompletaRegistrazione
             // L'idempotenza vera: il gesto è già avvenuto, e ripeterlo
             // produrrebbe un secondo Account per un solo pagamento.
             if ($riga->completata()) {
+                // 🔴 **Ma solo per la STESSA sessione.** Due schede aperte su
+                // «vai a Stripe» sono due checkout, e il cliente può pagarli
+                // entrambi: il secondo è un abbonamento incassato e orfano, che
+                // assorbito in silenzio nessuno rimborserebbe mai. Qui non si
+                // crea niente (l'account c'è già): si lascia la traccia di un
+                // rifiuto, che porta il caso a una persona.
+                if ($esito->sessionId !== null && $esito->sessionId !== $riga->stripe_session_id) {
+                    throw new RegistrazioneRifiutata(
+                        "La registrazione {$riga->getKey()} è già completata con la sessione {$riga->stripe_session_id}, ".
+                        "ma è arrivata pagata anche la sessione {$esito->sessionId}: ".
+                        'il secondo abbonamento va annullato e rimborsato.',
+                        RegistrazioneRifiutata::GIA_COMPLETATA,
+                    );
+                }
+
                 return [$riga->account, false, false];
             }
 
@@ -297,6 +312,11 @@ final class CompletaRegistrazione
                 // `users.password` nasce: conservarlo sarebbe una seconda copia
                 // di una credenziale in una tabella che nessuna Policy protegge.
                 'password_hash' => null,
+                // ⚠️ La sessione **pagata**, non l'ultima aperta: con due schede
+                // su «vai a Stripe» la riga porta l'id della seconda, e il
+                // confronto qui sopra deve riconoscere il pagamento che ha
+                // fatto nascere l'account.
+                'stripe_session_id' => $esito->sessionId ?? $riga->stripe_session_id,
             ])->save();
 
             // ⛔ La riga di audit si scrive **da qui** e non dal model
@@ -310,7 +330,7 @@ final class CompletaRegistrazione
                 ->withProperties([
                     'registrazione_id' => $riga->getKey(),
                     'piano' => $riga->piano,
-                    'stripe_session_id' => $riga->stripe_session_id,
+                    'stripe_session_id' => $esito->sessionId ?? $riga->stripe_session_id,
                     'stripe_customer_id' => $esito->customerId,
                 ])
                 ->log(self::DESCRIZIONE_AUDIT);
@@ -351,7 +371,7 @@ final class CompletaRegistrazione
      * non ci deve arrivare. Il testo per intero vive nel log dei chiamanti e
      * nell'issue del tracker, che sono superfici operative.
      */
-    private function registraIlRifiuto(Registrazione $registrazione, RegistrazioneRifiutata $e): void
+    private function registraIlRifiuto(Registrazione $registrazione, RegistrazioneRifiutata $e, EsitoCheckout $esito): void
     {
         report($e);
 
@@ -361,7 +381,11 @@ final class CompletaRegistrazione
                 'registrazione_id' => $registrazione->getKey(),
                 'codice' => $e->codice,
                 'piano' => $registrazione->piano,
-                'stripe_session_id' => $registrazione->stripe_session_id,
+                // La sessione **pagata** con i suoi oggetti Stripe: sono ciò che
+                // serve per rimborsare, e la riga può portare un altro id.
+                'stripe_session_id' => $esito->sessionId ?? $registrazione->stripe_session_id,
+                'stripe_customer_id' => $esito->customerId,
+                'stripe_subscription_id' => $esito->subscriptionId,
             ])
             ->log(self::DESCRIZIONE_RIFIUTO);
     }

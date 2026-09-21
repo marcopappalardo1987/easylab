@@ -141,6 +141,23 @@ class Registrazione extends Model
         return $this->email_verificata_at !== null;
     }
 
+    /**
+     * 🔴 L'impronta che lega il link di verifica al **contenuto** della riga,
+     * non solo al suo id.
+     *
+     * Una riga non verificata si riusa quando qualcuno ripete il modulo
+     * (`RegistrazionePubblica::rigaPendentePer`), e il POST è pubblico: chi
+     * conosce l'indirizzo riscrive `password_hash`. Firmato sul solo id, il link
+     * già spedito alla vittima restava valido e verificava la password
+     * dell'attaccante. `Hash::make` sala ogni hash, quindi ogni riscrittura
+     * cambia l'impronta e **spegne i link precedenti**. HMAC con la chiave
+     * dell'app: l'URL non espone nulla dell'hash.
+     */
+    public function improntaVerifica(): string
+    {
+        return hash_hmac('sha256', 'registrazione-verifica|'.$this->getKey().'|'.$this->password_hash, (string) config('app.key'));
+    }
+
     /** L'account esiste già: ogni gesto successivo è un no-op. */
     public function completata(): bool
     {

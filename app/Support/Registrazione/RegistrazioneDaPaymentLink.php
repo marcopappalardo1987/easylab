@@ -5,6 +5,7 @@ namespace App\Support\Registrazione;
 use App\Models\PrezzoPiano;
 use App\Models\Registrazione;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * 🔴 La riga `registrazioni` che nasce da un **pagamento su Payment Link**
@@ -124,7 +125,11 @@ final class RegistrazioneDaPaymentLink
         $referente = self::testo($raccolti['individual_name'] ?? null)
             ?? self::testo($dettagli['individual_name'] ?? null);
 
+        // ⚠️ Minuscola come al modulo pubblico (`RegistrazionePubblica::avvia`):
+        // Fortify cerca l'utente in minuscolo al login (`lowercase_usernames`),
+        // e un indirizzo salvato come Stripe lo ha raccolto non entrerebbe mai.
         $email = self::testo($dettagli['email'] ?? null);
+        $email = $email === null ? null : Str::lower($email);
 
         // ⚠️ Un solo messaggio per tutti e tre: dice **cosa** manca senza
         // ripetere i valori raccolti, che sono dati personali e finirebbero nel

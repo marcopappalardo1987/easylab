@@ -146,6 +146,12 @@ final class ProvisionaEnte
         return $this->passwordEsplicita !== null || $this->passwordHash !== null;
     }
 
+    /** L'indirizzo dell'Admin come lo salva e lo cerca Fortify: minuscolo e senza spazi. */
+    private function email(): string
+    {
+        return Str::lower(trim($this->adminEmail));
+    }
+
     /**
      * L'email appartiene a una persona **cestinata**? Allora ci si ferma qui
      * (🔗 ADR-038).
@@ -166,7 +172,7 @@ final class ProvisionaEnte
      */
     private function rifiutaSeCestinato(): void
     {
-        $cestinato = User::onlyTrashed()->where('email', $this->adminEmail)->exists();
+        $cestinato = User::onlyTrashed()->whereRaw('LOWER(email) = ?', [$this->email()])->exists();
 
         if ($cestinato) {
             throw new ProvisioningRifiutato(
@@ -207,9 +213,12 @@ final class ProvisionaEnte
 
             $ente->radicaComeEnte($account);
 
-            $admin = User::firstOrCreate(
-                ['email' => $this->adminEmail],
+            // ⚠️ Cerca senza badare alle maiuscole e crea in minuscolo: un
+            // indirizzo arrivato da Stripe come «Marta@Studio.it» è la stessa
+            // persona di «marta@studio.it», e Fortify cerca in minuscolo.
+            $admin = User::whereRaw('LOWER(email) = ?', [$this->email()])->first() ?? User::create(
                 [
+                    'email' => $this->email(),
                     'name' => $this->adminName,
                     // ⚠️ `Hash::make` **solo** quando la password arriva in
                     // chiaro: `$passwordHash` è già un hash, e rihasharlo
@@ -266,6 +275,26 @@ final class ProvisionaEnte
                 );
             }
 
+            // 🔴 **«Aggiungi una sede» non promuove né aggancia chi c'è già.**
+            // Senza questo ramo qualunque indirizzo esistente passava: un utente
+            // Tenant del cliente Y, scritto come Admin della sede nuova di X,
+            // diventava Admin nel proprio tenant Y **e** membro di X; e il
+            // Superadmin che scriveva la propria email diventava membro di X,
+            // entrando dallo switcher senza impersonazione (ADR-018). Un utente
+            // esistente si riusa solo se è **già** Admin e membro di quel
+            // contratto; altrimenti serve un indirizzo nuovo.
+            $utenteEsistente = User::whereRaw('LOWER(email) = ?', [$this->email()])->first();
+
+            if ($utenteEsistente !== null
+                && ! ($utenteEsistente->hasRole('Admin')
+                    && $account->membri()->whereKey($utenteEsistente->getKey())->exists())) {
+                throw new ProvisioningRifiutato(
+                    "{$this->email()} appartiene già a un utente che non amministra «{$account->ragione_sociale}»: ".
+                    'una sede nuova si affida a un Admin di quel cliente o a un indirizzo nuovo.',
+                    ProvisioningRifiutato::GIA_AMMINISTRA,
+                );
+            }
+
             return $account;
         }
 
@@ -274,7 +303,7 @@ final class ProvisionaEnte
         // `rifiutaSeCestinato()` in cima a `esegui()`. Leggerlo anche qui
         // darebbe a quella riga un secondo esito possibile — «amministra già
         // questi account» — per una persona che non amministra più niente.
-        $utenteEsistente = User::where('email', $this->adminEmail)->first();
+        $utenteEsistente = User::whereRaw('LOWER(email) = ?', [$this->email()])->first();
 
         if ($utenteEsistente === null) {
             return null;
@@ -296,6 +325,21 @@ final class ProvisionaEnte
                 "{$this->adminEmail} amministra già ".
                 $suoi->pluck('ragione_sociale')->map(fn ($r) => "«{$r}»")->implode(', ').
                 ': una sede in più si aggiunge dalla riga di quel cliente, non creandone uno nuovo.',
+                ProvisioningRifiutato::GIA_AMMINISTRA,
+            );
+        }
+
+        // 🔴 **E nemmeno promuovere chi c'è già.** Un utente senza account
+        // (un Tecnico, un Referente di un Ente altrui) passava il ramo sopra, e
+        // `assignRole('Admin')` qui sotto lo faceva Admin **del tenant in cui
+        // vive** — dal Payment Link, pagando e basta. Un cliente nuovo nasce con
+        // un amministratore nuovo, e un indirizzo già in uso è un rifiuto.
+        // Il codice è `GIA_AMMINISTRA` perché nessun chiamante ramifica su un
+        // caso diverso: il gesto richiesto è lo stesso, usare un'altra email.
+        if ($this->esigiAccountNuovo) {
+            throw new ProvisioningRifiutato(
+                "{$this->email()} appartiene già a un utente della piattaforma: ".
+                'un cliente nuovo nasce con un amministratore nuovo, quindi serve un altro indirizzo.',
                 ProvisioningRifiutato::GIA_AMMINISTRA,
             );
         }
@@ -388,7 +432,7 @@ final class ProvisionaEnte
             // che un cliente riceve da Easy Lab sarebbe l'unica senza il proprio
             // marchio (🔗 MarchioEmail). È un `int`, non un model: attraversa la
             // coda senza rifetchare nulla.
-            $admin->notify(new InvitoUtente($this->nome, $this->adminEmail, $ente->id));
+            $admin->notify(new InvitoUtente($this->nome, $this->email(), $ente->id));
 
             return $base(true, null);
         } catch (Throwable $e) {

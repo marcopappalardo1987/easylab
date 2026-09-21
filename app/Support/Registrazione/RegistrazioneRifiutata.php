@@ -57,6 +57,20 @@ class RegistrazioneRifiutata extends RuntimeException
      */
     public const DATI_INSUFFICIENTI = 'dati_insufficienti';
 
+    /**
+     * Una seconda sessione pagata per una registrazione **già completata**: due
+     * checkout aperti dalla stessa riga, entrambi pagati. L'account c'è, il
+     * secondo abbonamento è orfano e va annullato e rimborsato a mano.
+     */
+    public const GIA_COMPLETATA = 'gia_completata';
+
+    /**
+     * Checkout chiuso **senza incasso** (`no_payment_required`: coupon al 100%
+     * o prova). Nessun account nasce: se il caso vada onorato lo decide una
+     * persona, e questo codice glielo porta nel tracker.
+     */
+    public const SENZA_PAGAMENTO = 'senza_pagamento';
+
     public function __construct(string $messaggio, public readonly string $codice)
     {
         parent::__construct($messaggio);

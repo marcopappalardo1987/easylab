@@ -27,7 +27,15 @@ beforeEach(function () {
 /** L'URL firmato di un passo, come lo costruisce il controller. */
 function passoFirmato(string $rotta, Registrazione $registrazione, int $ore = 2): string
 {
-    return URL::temporarySignedRoute($rotta, now()->addHours($ore), ['registrazione' => $registrazione->getKey()]);
+    // Il link di verifica porta anche l'impronta del contenuto della riga, come
+    // lo costruisce `VerificaEmailRegistrazione` (🔗 Registrazione::improntaVerifica).
+    $parametri = ['registrazione' => $registrazione->getKey()];
+
+    if ($rotta === 'registrazione.verifica') {
+        $parametri['impronta'] = $registrazione->improntaVerifica();
+    }
+
+    return URL::temporarySignedRoute($rotta, now()->addHours($ore), $parametri);
 }
 
 // ─── La verifica della casella ───────────────────────────────────────────────

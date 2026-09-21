@@ -241,6 +241,13 @@ class RegistrazionePubblica extends Controller
             return $this->allaLogin('Il tuo account è già attivo: accedi con la password che hai scelto.');
         }
 
+        // 🔴 La firma copre l'id, l'impronta copre il **contenuto**: un link
+        // spedito prima che qualcuno riscrivesse la riga (stesso indirizzo,
+        // altra password) non vale più. 403 come una firma scaduta: chi ha
+        // ripetuto il modulo ha nella casella il link più recente.
+        $impronta = $request->query('impronta');
+        abort_unless(is_string($impronta) && hash_equals($registrazione->improntaVerifica(), $impronta), 403);
+
         // ⚠️ **Idempotente.** Riaprire il link non riscrive il timbro: la data
         // della verifica è un fatto, e sovrascriverla la sposterebbe in avanti
         // ogni volta che qualcuno rilegge la posta.

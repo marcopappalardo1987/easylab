@@ -81,7 +81,9 @@ class VerificaEmailRegistrazione extends Notification implements ShouldQueue
         $url = URL::temporarySignedRoute(
             'registrazione.verifica',
             now()->addHours(self::ORE_VALIDITA),
-            ['registrazione' => $notifiable->getKey()],
+            // L'impronta cambia a ogni riscrittura della riga: un nuovo invio
+            // del modulo spegne i link spediti prima (🔗 Registrazione::improntaVerifica).
+            ['registrazione' => $notifiable->getKey(), 'impronta' => $notifiable->improntaVerifica()],
         );
 
         return (new MailMessage)

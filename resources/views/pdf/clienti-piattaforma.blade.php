@@ -89,7 +89,7 @@
     @endif
     <br>
     {{ number_format(count($righe), 0, ',', '.') }} clienti su {{ number_format($riepilogo->clienti, 0, ',', '.') }}.
-    Totale a listino delle righe in elenco: {{ number_format($totaleListinoEuro, 0, ',', '.') }} &euro;.
+    Totale a listino delle righe in elenco: {{ number_format($totaleListinoEuro, 2, ',', '.') }} &euro;.
 </p>
 
 <table style="margin-top: 4mm;">

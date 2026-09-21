@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Support\AuditLog;
 use App\Support\Provisioning\ProvisionaEnte;
 use App\Support\Registrazione\CompletaRegistrazione;
+use App\Support\Registrazione\RegistrazioneRifiutata;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Testing\TestResponse;
 use Spatie\Activitylog\Models\Activity;
@@ -108,8 +109,14 @@ it('makes one account even if Stripe delivers the same event twice', function ()
     consegnaRegistrazione($payload)->assertOk();
     consegnaRegistrazione($payload)->assertOk();
 
+    // ⚠️ Il conteggio da solo non può fallire: senza la guardia di idempotenza
+    // la seconda consegna arriva al provisioning, che rifiuta l'email già in
+    // uso, e gli account restano uno. Il gesto ripetuto dev'essere **muto**:
+    // nessun rifiuto registrato e nessuna issue nel tracker.
     expect(Account::query()->count())->toBe(1)
-        ->and(User::query()->count())->toBe(1);
+        ->and(User::query()->count())->toBe(1)
+        ->and(Activity::query()->where('description', CompletaRegistrazione::DESCRIZIONE_RIFIUTO)->count())->toBe(0)
+        ->and(Errore::query()->count())->toBe(0);
 });
 
 it('reads the two conditions of «paid» from the payload, and creates nothing without them', function (array $stato) {
@@ -219,4 +226,85 @@ it('never makes an account from the webhook for a mailbox nobody confirmed', fun
     expect(Account::query()->count())->toBe(0)
         ->and(User::query()->count())->toBe(0)
         ->and($nonVerificata->fresh()->completata())->toBeFalse();
+});
+
+// ─── 🔴 Due sessioni pagate per una riga (caccia T3, A3/B3) ──────────────────
+
+it('leaves a trace when a second paid session lands on an already completed registration', function () {
+    // Due schede aperte su «vai a Stripe»: la riga porta l'id dell'ultima
+    // aperta (cs_test_aurora), e il cliente le paga entrambe.
+    consegnaRegistrazione(sessionePagata(
+        ['registrazione_id' => (string) $this->riga->getKey()],
+        ['id' => 'cs_test_prima', 'customer' => 'cus_prima', 'subscription' => 'sub_prima'],
+    ))->assertOk();
+
+    expect(Errore::query()->count())->toBe(0);
+
+    consegnaRegistrazione(sessionePagata(
+        ['registrazione_id' => (string) $this->riga->getKey()],
+        ['id' => 'cs_test_aurora', 'customer' => 'cus_seconda', 'subscription' => 'sub_seconda'],
+    ))->assertOk();
+
+    $rifiuto = Activity::query()->where('description', CompletaRegistrazione::DESCRIZIONE_RIFIUTO)->sole();
+
+    // Un account solo, e il secondo incasso con gli oggetti Stripe che servono
+    // a rimborsarlo: nel registro e nel tracker.
+    expect(Account::query()->count())->toBe(1)
+        ->and($rifiuto->properties['codice'])->toBe(RegistrazioneRifiutata::GIA_COMPLETATA)
+        ->and($rifiuto->properties['stripe_session_id'])->toBe('cs_test_aurora')
+        ->and($rifiuto->properties['stripe_customer_id'])->toBe('cus_seconda')
+        ->and($rifiuto->properties['stripe_subscription_id'])->toBe('sub_seconda')
+        ->and(Errore::query()->count())->toBe(1);
+});
+
+it('records in the audit the session that was actually paid, not the last one opened', function () {
+    consegnaRegistrazione(sessionePagata(
+        ['registrazione_id' => (string) $this->riga->getKey()],
+        ['id' => 'cs_test_prima'],
+    ))->assertOk();
+
+    $audit = Activity::query()->where('description', CompletaRegistrazione::DESCRIZIONE_AUDIT)->sole();
+
+    expect($audit->properties['stripe_session_id'])->toBe('cs_test_prima')
+        ->and($this->riga->fresh()->stripe_session_id)->toBe('cs_test_prima');
+});
+
+// ─── Il pagamento differito (caccia T3, A8/B6) ───────────────────────────────
+
+it('births the account when an asynchronous payment settles after the checkout', function () {
+    // ⚠️ Dipende da `config/cashier.php`: senza l'evento in `webhook.events`
+    // `handleWebhook()` lo scarta prima dell'handler. Lo si aggiunge qui per
+    // provare l'handler; la presenza nel config la prova il guardrail sotto.
+    config(['cashier.webhook.events' => array_values(array_unique([
+        ...config('cashier.webhook.events'), 'checkout.session.async_payment_succeeded',
+    ]))]);
+
+    $metadata = ['registrazione_id' => (string) $this->riga->getKey()];
+
+    consegnaRegistrazione(sessionePagata($metadata, ['payment_status' => 'unpaid']))->assertOk();
+    expect($this->riga->fresh()->completata())->toBeFalse();
+
+    $incasso = sessionePagata($metadata);
+    $incasso['type'] = 'checkout.session.async_payment_succeeded';
+    consegnaRegistrazione($incasso)->assertOk();
+
+    expect($this->riga->fresh()->completata())->toBeTrue()
+        ->and(Account::query()->count())->toBe(1);
+});
+
+it('asks Stripe for the event that settles an asynchronous payment', function () {
+    // Il diff sul config lo applica l'orchestratore (file conteso): finché
+    // manca, questo test è rosso ed è giusto che lo sia.
+    expect(config('cashier.webhook.events'))->toContain('checkout.session.async_payment_succeeded');
+});
+
+it('leaves a trace when a checkout closes with no payment required, and births nothing', function () {
+    consegnaRegistrazione(sessionePagata(
+        ['registrazione_id' => (string) $this->riga->getKey()],
+        ['payment_status' => 'no_payment_required'],
+    ))->assertOk();
+
+    expect(Account::query()->count())->toBe(0)
+        ->and($this->riga->fresh()->completata())->toBeFalse()
+        ->and(Errore::query()->count())->toBe(1);
 });

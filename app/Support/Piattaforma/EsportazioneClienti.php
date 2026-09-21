@@ -155,7 +155,7 @@ final class EsportazioneClienti
                 (string) $c->piano,
                 $aCatalogo ? Piani::etichetta($c->piano) : $c->piano.' — fuori catalogo',
                 self::siNo($aCatalogo),
-                (string) self::valoreMensileEuro($c),
+                self::valoreMensileEuro($c),
                 self::siNo((bool) $c->is_locked),
                 self::siNo($c->locked_at !== null),
                 self::siNo($c->stripe_locked_at !== null),
@@ -192,9 +192,20 @@ final class EsportazioneClienti
      * ⛔ `Piani::esiste()` **prima**: vedi il docblock di classe. Mai
      * `$c->valoreMensileCent()`, che lancia sul piano fuori catalogo.
      */
-    private static function valoreMensileEuro(Account $c): int
+    private static function valoreMensileEuro(Account $c): string
     {
-        return Piani::esiste($c->piano) ? intdiv(Piani::prezzoMensileCent($c->piano), 100) : 0;
+        return self::euro(Piani::esiste($c->piano) ? Piani::prezzoMensileCent($c->piano) : 0);
+    }
+
+    /**
+     * Centesimi → «49,90»: due decimali e virgola, come li legge un Excel
+     * italiano. Il listino si governa in centesimi (`/piattaforma/listino`), e
+     * `intdiv` scriveva 49,90 € come «49». Aritmetica intera, niente float, e
+     * nessun separatore delle migliaia: «1.234,00» si importerebbe come testo.
+     */
+    public static function euro(int $centesimi): string
+    {
+        return sprintf('%d,%02d', intdiv($centesimi, 100), $centesimi % 100);
     }
 
     /** ⛔ `?` (non lo sappiamo) e `illimitato` restano distinti: vedi il docblock di classe. */

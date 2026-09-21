@@ -181,7 +181,7 @@ trait EsportaClienti
      * denaro. Accanto ci va invece il totale a listino **delle sole righe in
      * elenco**, etichettato come tale — che è il numero che segue i filtri.
      *
-     * @return array{intestazioni: list<string>, righe: list<list<string>>, riepilogo: RiepilogoPiattaforma, filtri: array<string,string>, totaleListinoEuro: int, generatoIl: Carbon, generatoDa: ?string}
+     * @return array{intestazioni: list<string>, righe: list<list<string>>, riepilogo: RiepilogoPiattaforma, filtri: array<string,string>, totaleListinoEuro: float, generatoIl: Carbon, generatoDa: ?string}
      */
     protected function datiFoglioClienti(): array
     {
@@ -200,7 +200,8 @@ trait EsportaClienti
             'righe' => $righe,
             'riepilogo' => MetrichePiattaforma::riepilogo(),
             'filtri' => $this->filtriAttivi(),
-            'totaleListinoEuro' => intdiv(EsportazioneClienti::totaleListinoCent($clienti), 100),
+            // Diviso e non `intdiv`: i centesimi del listino (49,90 €) non si troncano.
+            'totaleListinoEuro' => EsportazioneClienti::totaleListinoCent($clienti) / 100,
             'generatoIl' => now(),
             'generatoDa' => auth()->user()?->name,
         ];

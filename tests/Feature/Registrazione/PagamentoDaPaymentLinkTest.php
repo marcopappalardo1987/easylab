@@ -4,6 +4,7 @@ use App\Models\Account;
 use App\Models\Errore;
 use App\Models\PrezzoPiano;
 use App\Models\Registrazione;
+use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Notifications\BenvenutoRegistrazione;
 use App\Notifications\InvitoUtente;
@@ -14,6 +15,7 @@ use App\Support\Registrazione\RegistrazioneDaPaymentLink;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Testing\TestResponse;
+use Spatie\Activitylog\Models\Activity;
 use Tests\Support\BancoRegistrazione;
 
 /**
@@ -418,4 +420,102 @@ it('never sells the free plan through a payment link', function () {
 
     expect($gratuiti)->toBe(0)
         ->and(Piani::eGratuito('free'))->toBeTrue();
+});
+
+// ─── 🔴 Un indirizzo già in uso non si promuove (caccia T3, A2) ──────────────
+
+it('never promotes an existing plain user to Admin of their own tenant by paying a link', function () {
+    // Un Tecnico del laboratorio Beta, che non è membro di nessun account: il
+    // ramo «amministra già» non lo vedeva, e `assignRole('Admin')` lo faceva
+    // Admin del tenant in cui vive. Bastava pagare.
+    $accountBeta = Account::factory()->saas()->create(['ragione_sociale' => 'Laboratorio Beta']);
+    $enteBeta = UnitaOrganizzativa::factory()->ente()->perAccount($accountBeta)->create(['nome' => 'Beta']);
+    $tecnico = User::factory()->create(['email' => 'luca@laboratorio-beta.it']);
+    $tecnico->forceFill(['tenant_id' => $enteBeta->id])->save();
+    $tecnico->assignRole('Tecnico');
+
+    $entiPrima = UnitaOrganizzativa::query()->count();
+    $erroriPrima = Errore::query()->count();
+
+    consegnaDaLink(sessioneDaLink(dettagli: ['email' => 'luca@laboratorio-beta.it']))->assertOk();
+
+    $tecnico->refresh();
+
+    expect($tecnico->tenant_id)->toBe($enteBeta->id)
+        ->and($tecnico->hasRole('Admin'))->toBeFalse()
+        ->and($tecnico->accounts()->count())->toBe(0)
+        // Nessun Account e nessun Ente orfano: il rifiuto viene prima di scrivere.
+        ->and(Account::query()->count())->toBe(1)
+        ->and(UnitaOrganizzativa::query()->count())->toBe($entiPrima)
+        // La traccia del rifiuto dopo l'incasso: tracker e audit.
+        ->and(Errore::query()->count())->toBeGreaterThan($erroriPrima)
+        ->and(Activity::query()->where('description', CompletaRegistrazione::DESCRIZIONE_RIFIUTO)->count())->toBe(1);
+});
+
+it('recognises an existing user whatever the case Stripe collected the address in', function () {
+    $esistente = User::factory()->create(['email' => 'luca@laboratorio-beta.it']);
+
+    consegnaDaLink(sessioneDaLink(dettagli: ['email' => 'Luca@Laboratorio-Beta.IT']))->assertOk();
+
+    // Riconosciuto e rifiutato: niente secondo utente con la stessa casella in
+    // maiuscolo, e nessun ruolo nuovo a quello che c'era.
+    expect(User::query()->count())->toBe(1)
+        ->and($esistente->fresh()->hasRole('Admin'))->toBeFalse()
+        ->and(Account::query()->count())->toBe(0)
+        ->and(Activity::query()->where('description', CompletaRegistrazione::DESCRIZIONE_RIFIUTO)->count())->toBe(1);
+});
+
+it('never reuses the address of a trashed user, whatever its case', function () {
+    User::factory()->create(['email' => 'luca@laboratorio-beta.it'])->delete();
+
+    consegnaDaLink(sessioneDaLink(dettagli: ['email' => 'LUCA@laboratorio-beta.it']))->assertOk();
+
+    expect(User::withTrashed()->count())->toBe(1)
+        ->and(Account::query()->count())->toBe(0)
+        ->and(Activity::query()->where('description', CompletaRegistrazione::DESCRIZIONE_RIFIUTO)->count())->toBe(1);
+});
+
+// ─── L'indirizzo come lo cerca Fortify (caccia T3, A9/B2) ────────────────────
+
+it('lets the admin born from a payment link log in with the address typed at checkout', function () {
+    Notification::fake();
+
+    consegnaDaLink(sessioneDaLink(dettagli: ['email' => 'Marta.Bianchi@Laboratorio-Aurora.it']))->assertOk();
+
+    $admin = User::query()->sole();
+
+    expect($admin->email)->toBe('marta.bianchi@laboratorio-aurora.it')
+        ->and(Registrazione::query()->sole()->email)->toBe('marta.bianchi@laboratorio-aurora.it');
+
+    // L'invito imposta la password (il flusso d'invito va per id): qui a mano.
+    $admin->forceFill(['password' => 'ParolaSegreta!2026'])->save();
+
+    $this->post('/login', ['email' => 'Marta.Bianchi@Laboratorio-Aurora.it', 'password' => 'ParolaSegreta!2026']);
+
+    $this->assertAuthenticatedAs($admin);
+});
+
+// ─── Il pagamento differito (caccia T3, A8/B6) ───────────────────────────────
+
+it('births the account when an asynchronous payment settles after the checkout', function () {
+    Notification::fake();
+
+    // ⚠️ Dipende da `config/cashier.php`: senza l'evento in `webhook.events`
+    // `handleWebhook()` lo scarta prima dell'handler. Lo si aggiunge qui per
+    // provare l'handler; la presenza nel config ha il suo guardrail altrove.
+    config(['cashier.webhook.events' => array_values(array_unique([
+        ...config('cashier.webhook.events'), 'checkout.session.async_payment_succeeded',
+    ]))]);
+
+    // SEPA: `completed` arriva non incassato, e non nasce niente...
+    consegnaDaLink(sessioneDaLink(['payment_status' => 'unpaid']))->assertOk();
+    expect(Account::query()->count())->toBe(0);
+
+    // ...poi l'incasso, con questo evento e la stessa sessione ora «paid».
+    $incasso = sessioneDaLink();
+    $incasso['type'] = 'checkout.session.async_payment_succeeded';
+    consegnaDaLink($incasso)->assertOk();
+
+    expect(Account::query()->count())->toBe(1)
+        ->and(User::query()->where('email', 'marta@laboratorio-aurora.it')->exists())->toBeTrue();
 });

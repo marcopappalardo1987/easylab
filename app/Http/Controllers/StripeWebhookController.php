@@ -11,6 +11,7 @@ use App\Support\Registrazione\RegistrazioneDaPaymentLink;
 use App\Support\Registrazione\RegistrazioneRifiutata;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Laravel\Cashier\Cashier;
 use Laravel\Cashier\Http\Controllers\WebhookController as CashierWebhookController;
 use Stripe\Subscription as StripeSubscription;
 use Symfony\Component\HttpFoundation\Response;
@@ -181,6 +182,25 @@ class StripeWebhookController extends CashierWebhookController
         $sessione = $payload['data']['object'] ?? [];
         $registrazioneId = $sessione['metadata']['registrazione_id'] ?? null;
 
+        // ⚠️ **Checkout chiuso senza incasso** (coupon al 100%, prova gratuita):
+        // `EsitoCheckout` lo legge come «non pagato» e nessun account nasce, e
+        // prima non lo sapeva nessuno. Se sia un caso da onorare lo decide una
+        // persona: qui si lascia la traccia nel tracker, non si regala un account.
+        if (($sessione['payment_status'] ?? null) === 'no_payment_required') {
+            report(new RegistrazioneRifiutata(
+                'La sessione '.($sessione['id'] ?? '?').' si è chiusa senza pagamento (no_payment_required): '.
+                'nessun account è nato. Verificare coupon o prova sul Payment Link, e creare il tenant a mano se dovuto.',
+                RegistrazioneRifiutata::SENZA_PAGAMENTO,
+            ));
+
+            Log::channel(config('cashier.logger'))->error(
+                'Checkout completato senza pagamento: nessun account creato.',
+                ['sessione' => $sessione['id'] ?? null, 'evento' => $payload['id'] ?? null]
+            );
+
+            return $this->successMethod();
+        }
+
         if (! is_numeric($registrazioneId)) {
             // 🔴 **La seconda strada: il Payment Link** (ADR-039). Non ha e non
             // può avere `registrazione_id` — la riga non esiste ancora quando
@@ -253,6 +273,21 @@ class StripeWebhookController extends CashierWebhookController
      * incasso che non è diventato un account. Il 200 dice a Stripe «ricevuto»,
      * non «andato bene».
      */
+    /**
+     * 🔴 **Il pagamento differito (SEPA e simili).** Con un metodo asincrono
+     * `checkout.session.completed` arriva con `payment_status` «unpaid», e
+     * l'incasso arriva dopo con questo evento: senza handler, un cliente che ha
+     * pagato restava senza account. Il gesto è lo stesso di `completed`, che è
+     * idempotente, e l'oggetto è la stessa `checkout.session` ora «paid».
+     *
+     * ⚠️ Serve anche l'evento in `config/cashier.php` (`webhook.events`), o
+     * `handleWebhook()` lo scarta prima di arrivare qui.
+     */
+    protected function handleCheckoutSessionAsyncPaymentSucceeded(array $payload): Response
+    {
+        return $this->handleCheckoutSessionCompleted($payload);
+    }
+
     protected function completaDaPaymentLink(array $sessione, array $payload): Response
     {
         try {
@@ -321,18 +356,91 @@ class StripeWebhookController extends CashierWebhookController
      */
     protected function handleCustomerSubscriptionCreated(array $payload): Response
     {
+        if ($this->eventoSuperato($payload)) {
+            return $this->successMethod();
+        }
+
         parent::handleCustomerSubscriptionCreated($payload);
 
-        return $this->applicaStato($payload);
+        $risposta = $this->applicaStato($payload);
+        $this->ricordaEvento($payload);
+
+        return $risposta;
     }
 
     protected function handleCustomerSubscriptionUpdated(array $payload): Response
     {
         // Il parent per primo: è lui a scrivere/aggiornare la riga
         // `subscriptions`, che è lo specchio locale dello stato su Stripe.
+        // 🔴 Prima anche del parent: un evento superato non deve riscrivere
+        // nemmeno lo specchio locale (`subscriptions.stripe_status`).
+        if ($this->eventoSuperato($payload)) {
+            return $this->successMethod();
+        }
+
         parent::handleCustomerSubscriptionUpdated($payload);
 
-        return $this->applicaStato($payload);
+        $risposta = $this->applicaStato($payload);
+        $this->ricordaEvento($payload);
+
+        return $risposta;
+    }
+
+    /**
+     * 🔴 **Un evento più vecchio dell'ultimo applicato non si applica.** Stripe
+     * non garantisce l'ordine e ritenta un evento fallito per giorni: un
+     * «active» di ieri che arriva dopo l'«unpaid» di oggi riapriva un account
+     * insoluto. Si confronta il `created` dell'evento (epoch di Stripe) con
+     * quello dell'ultimo applicato alla stessa subscription.
+     *
+     * ⚠️ Strettamente minore: due eventi nello stesso secondo si applicano
+     * entrambi, come prima. Senza `created`, o senza storia sulla riga, si
+     * applica: è il comportamento di sempre, e non si scarta ciò che non si sa
+     * datare.
+     */
+    private function eventoSuperato(array $payload): bool
+    {
+        $creato = $payload['created'] ?? null;
+        $subscriptionId = $payload['data']['object']['id'] ?? null;
+
+        if (! is_int($creato) || ! is_string($subscriptionId)) {
+            return false;
+        }
+
+        $ultimo = Cashier::$subscriptionModel::query()
+            ->where('stripe_id', $subscriptionId)
+            ->value('creazione_ultimo_evento_stripe');
+
+        if ($ultimo === null || $creato >= (int) $ultimo) {
+            return false;
+        }
+
+        Log::channel(config('cashier.logger'))->warning(
+            'Webhook Stripe più vecchio dell\'ultimo applicato alla subscription: ignorato.',
+            ['subscription' => $subscriptionId, 'evento' => $payload['id'] ?? null, 'tipo' => $payload['type'] ?? null]
+        );
+
+        return true;
+    }
+
+    /**
+     * Annota il `created` dell'evento appena applicato. Solo in avanti: il
+     * `WHERE` impedisce a una consegna concorrente più vecchia di arretrarlo.
+     */
+    private function ricordaEvento(array $payload): void
+    {
+        $creato = $payload['created'] ?? null;
+        $subscriptionId = $payload['data']['object']['id'] ?? null;
+
+        if (! is_int($creato) || ! is_string($subscriptionId)) {
+            return;
+        }
+
+        Cashier::$subscriptionModel::query()
+            ->where('stripe_id', $subscriptionId)
+            ->where(fn ($q) => $q->whereNull('creazione_ultimo_evento_stripe')
+                ->orWhere('creazione_ultimo_evento_stripe', '<', $creato))
+            ->update(['creazione_ultimo_evento_stripe' => $creato]);
     }
 
     /**
@@ -385,6 +493,10 @@ class StripeWebhookController extends CashierWebhookController
     protected function handleCustomerSubscriptionDeleted(array $payload): Response
     {
         parent::handleCustomerSubscriptionDeleted($payload);
+
+        // La cancellazione è definitiva e non si scarta mai; si annota, così un
+        // «active» più vecchio consegnato dopo non la contraddice.
+        $this->ricordaEvento($payload);
 
         $account = $this->accountDa($payload);
 
