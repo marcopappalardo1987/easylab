@@ -104,10 +104,22 @@ final class EliminaCliente
         $ragioneSociale = (string) $account->ragione_sociale;
         $accountId = $account->getKey();
 
-        $enti = $account->enti()->pluck('id')->all();
+        // ⚠️ **Cestinate comprese**: la FK `unita_organizzativa.account_id` è
+        // RESTRICT, quindi una sede nel cestino dimenticata qui fa fallire il
+        // `forceDelete()` dell'account in fondo alla transazione.
+        $enti = $account->enti()->withTrashed()->pluck('id')->all();
+
+        // ⚠️ **Tutto l'albero, non le sole radici**: un reparto vero non ha
+        // `account_id` (il model lo vieta), e cancellare l'Ente sopra un reparto
+        // ancora vivo sbatte sulla FK `parent_id`. Stesso perimetro dell'export
+        // GDPR (`PerimetroTenant`): ogni nodo il cui `tenant_id` è uno degli Enti.
+        $nodi = DB::table('unita_organizzativa')
+            ->whereIn('tenant_id', $enti)
+            ->orWhereIn('id', $enti)
+            ->pluck('id')->map(fn ($id) => (int) $id)->all();
         $subscription = $account->subscriptions()->where('stripe_status', '!=', 'canceled')->first();
 
-        DB::transaction(function () use ($account, $enti) {
+        DB::transaction(function () use ($account, $enti, $nodi) {
             foreach (self::TABELLE as $tabella) {
                 DB::table($tabella)->whereIn('tenant_id', $enti)->delete();
             }
@@ -115,14 +127,14 @@ final class EliminaCliente
             // Cascade dagli Enti, ma esplicite: leggere qui l'elenco completo di
             // ciò che sparisce vale più di due righe risparmiate.
             DB::table('tecnico_cliente')->whereIn('ente_id', $enti)->delete();
-            DB::table('responsabile_unita')->whereIn('unita_organizzativa_id', $enti)->delete();
+            DB::table('responsabile_unita')->whereIn('unita_organizzativa_id', $nodi)->delete();
 
             // ⚠️ **Dalle foglie alla radice**: `unita_organizzativa.parent_id`
             // punta a sé stessa, quindi cancellare un nodo che ha ancora figli
             // sbatte sulla FK. `orderByDesc('id')` non basterebbe — l'ordine di
             // creazione non è l'ordine dell'albero — quindi si scende per
             // profondità finché non resta niente.
-            self::eliminaAlbero($enti);
+            self::eliminaAlbero($nodi);
 
             self::eliminaPersoneSenzaAltriContratti($account);
 
