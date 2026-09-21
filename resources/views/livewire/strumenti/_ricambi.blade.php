@@ -48,7 +48,22 @@
                 @forelse ($ricambiMontati as $utilizzo)
                     @php [$testoData, $coloreData, $notaData] = $etichettaMontaggio($utilizzo); @endphp
                     <tr wire:key="ric-{{ $utilizzo->id }}">
-                        <td data-etichetta="Pezzo" class="px-4 py-3 font-medium text-ink">{{ $utilizzo->ricambio->nome }}</td>
+                        {{-- ADR-030 (T4B-2): un Tecnico che vede la macchina solo per
+                             ASSEGNAZIONE non ha il catalogo ricambi dell'Ente, che è
+                             per-Ente e gli arriva solo col portafoglio. La relazione è
+                             quindi null e `->nome` dava 500. Qui NON si scavalca lo scope
+                             (una vista non è il posto per un'eccezione di tenancy): si
+                             mostra un segnaposto neutro, come già fa la modale
+                             dell'intervento. Mostrare il nome richiederebbe un'eccezione
+                             nominata nel loader, a decisione di Marco. --}}
+                        <td data-etichetta="Pezzo" class="px-4 py-3 font-medium text-ink">
+                            @if ($utilizzo->ricambio)
+                                {{ $utilizzo->ricambio->nome }}
+                            @else
+                                <span class="text-ink-3">—</span>
+                                <span class="sr-only">Pezzo del catalogo dell'Ente, non consultabile</span>
+                            @endif
+                        </td>
                         <td data-etichetta="Q.tà" class="px-4 py-3 tabular-nums text-ink-2">{{ $utilizzo->quantita }}</td>
                         <td data-etichetta="Montaggio" class="px-4 py-3 whitespace-nowrap {{ $coloreData }}">
                             <span @if ($notaData) title="{{ $notaData }}" @endif>

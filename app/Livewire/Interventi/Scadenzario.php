@@ -60,14 +60,11 @@ use Livewire\WithPagination;
  * `render()`): lì il paginatore gira due volte, ed è il prezzo di non mostrare
  * un elenco vuoto sotto tile che dicono cinque.
  *
- * (b) ⚠️ **Costante non vuol dire uguale per tutti i ruoli.** Per il
- * Responsabile Reparto ogni query scopata passa da
- * `DepartmentThroughStrumentoScope` → `AccessibleNodes::forCurrentUser()`, che
- * **non è memoizzata** e rilegge il pivot più l'intero albero dell'Ente. È lo
- * stesso moltiplicatore misurato nel docblock di `App\Support\Parco\MetricheParco`
- * (6 statement per l'Admin diventano 28 per il Responsabile). Non si memoizza
- * qui: è un risolutore di **autorizzazioni** e vuole il proprio invalidamento
- * (login, `SwitcherEnte::passa()`, impersonazione).
+ * (b) Per il Responsabile Reparto ogni query scopata passa da
+ * `DepartmentThroughStrumentoScope` → `AccessibleNodes::forCurrentUser()`,
+ * memoizzata per richiesta da `App\Support\Tenancy\AccessibleNodesMemo` (S7):
+ * paga pivot e albero una volta sola (47 statement sulla pagina prima della
+ * memo, 13 dopo, `tests/Feature/Performance/QueryPagineTest.php`).
  *
  * ## Postura di autorizzazione
  *

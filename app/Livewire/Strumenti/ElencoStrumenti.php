@@ -387,7 +387,7 @@ class ElencoStrumenti extends Component
         $sortBy = in_array($this->sortBy, self::SORTABLE, true) ? $this->sortBy : 'nome';
         $sortDir = $this->sortDir === 'desc' ? 'desc' : 'asc';
 
-        $query = Strumento::query()->select('strumenti.*')->with(['unita', 'forcedBy', 'tenant']);
+        $query = Strumento::query()->select('strumenti.*')->with(['forcedBy', 'tenant']);
 
         if (filled($this->search)) {
             // `%` e `_` scritti dall'utente sono letterali, come nelle altre ricerche (ESCAPE).

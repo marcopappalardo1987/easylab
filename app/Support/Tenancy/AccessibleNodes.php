@@ -23,13 +23,25 @@ class AccessibleNodes
      * loro discendenti nel proprio Ente. Senza assegnazioni → [] (fail-safe:
      * non vede nulla).
      *
+     * Memoizzata per richiesta/job in `AccessibleNodesMemo` (S7): lì il perché
+     * della durata, della chiave e dell'invalidamento. Il controllo del ruolo
+     * resta fuori dalla memo, di proposito.
+     *
      * @return list<int>|null
      */
     public static function forCurrentUser(): ?array
     {
         $user = Auth::user();
 
-        return $user instanceof User ? self::forUser($user) : null;
+        if (! $user instanceof User || ! $user->isDepartmentScoped()) {
+            return null;
+        }
+
+        return app(AccessibleNodesMemo::class)->ricorda(
+            $user,
+            CurrentTenant::id(),
+            fn (): array => self::forUser($user) ?? [],
+        );
     }
 
     /**

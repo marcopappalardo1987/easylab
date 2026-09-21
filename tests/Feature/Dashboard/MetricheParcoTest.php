@@ -326,18 +326,11 @@ it('costs the same whether there is one machine or thirty', function () {
         ->and($conUna)->toBe(6);
 });
 
-it('costs a Responsabile far more than six, and that is a declared debt', function () {
-    // 🔴 **Il numero che il docblock prometteva non vale per tutti.** Ogni query
-    // scopata fa passare `DepartmentScope`, che chiama
-    // `AccessibleNodes::forCurrentUser()` — non memoizzata — e quella rilegge
-    // **l'intero albero dell'Ente** più il pivot `responsabile_unita`. Undici
-    // volte, sulla pagina che quel ruolo apre a ogni login.
-    //
-    // Non si corregge qui: memoizzare un risolutore di autorizzazioni vuole il
-    // proprio invalidamento (login, cambio sede, impersonazione) e non entra di
-    // straforo in un commit di dashboard. Il numero è **congelato** perché una
-    // regressione si veda, e la riga è in roadmap per il passo performance di
-    // S7.
+it('costs a Responsabile two statements more than the Admin, once per request', function () {
+    // Il debito dichiarato in S6 (28 statement, undici riletture dell'albero)
+    // è chiuso da `AccessibleNodesMemo` (S7/T4): pivot e albero si leggono
+    // UNA volta per richiesta. Si azzerano le istanze scoped prima di
+    // misurare, cioè si misura una richiesta nuova: 6 + le due letture.
     $mio = UnitaOrganizzativa::factory()->dipartimento()->under($this->ente)->create(['nome' => 'Mio']);
     Strumento::factory()->forNode($mio)->create(['nome' => 'Sua']);
 
@@ -347,6 +340,7 @@ it('costs a Responsabile far more than six, and that is a declared debt', functi
     $this->actingAs($resp->fresh());
 
     MetricheParco::riepilogo();
+    app()->forgetScopedInstances();
 
     DB::flushQueryLog();
     DB::enableQueryLog();
@@ -356,9 +350,8 @@ it('costs a Responsabile far more than six, and that is a declared debt', functi
 
     $albero = $statement->filter(fn ($q) => str_contains($q['query'], 'responsabile_unita'))->count();
 
-    expect($statement)->toHaveCount(28)
-        // Undici riletture dell'albero: è il costo, e questa riga lo nomina.
-        ->and($albero)->toBe(11);
+    expect($statement)->toHaveCount(8)
+        ->and($albero)->toBe(1);
 });
 
 // ─── Privacy: il pallino è un aggregato, la sua causa no ─────────────────────

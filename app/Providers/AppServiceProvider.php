@@ -15,6 +15,7 @@ use App\Support\Listino\Stripe\PortaListinoStripe;
 use App\Support\Listino\Stripe\PortaListinoStripeReale;
 use App\Support\Registrazione\PortaleCheckout;
 use App\Support\Registrazione\PortaleCheckoutStripe;
+use App\Support\Tenancy\AccessibleNodesMemo;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
@@ -89,6 +90,11 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Event::subscribe(AuditLogSubscriber::class);
+
+        // La memo di AccessibleNodes (S7/T4) si svuota su login, logout,
+        // impersonazione e scritture di assegnazioni e albero. Senza questa
+        // riga resta inerte: si torna ai conteggi di prima, mai a nodi vecchi.
+        Event::subscribe(AccessibleNodesMemo::class);
 
         // ADR-029. Registrata a mano e non per convenzione (`GaranziaPolicy`)
         // perché non governa il model `Garanzia` per intero: risponde alle due
