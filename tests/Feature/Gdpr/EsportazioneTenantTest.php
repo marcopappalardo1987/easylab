@@ -82,7 +82,7 @@ function vociZip(string $percorso): array
 }
 
 /** @return list<array<string, string>> */
-function righeCsv(string $contenuto): array
+function righeCsvGdpr(string $contenuto): array
 {
     $contenuto = preg_replace('/^\xEF\xBB\xBF/', '', $contenuto);
     $righe = array_map(fn ($r) => str_getcsv($r, ';', '"', ''), preg_split('/\r?\n/', trim($contenuto)));
@@ -120,7 +120,7 @@ it('exports only the rows and files of the requested account, never those of the
     // Riga per riga: ogni tabella del tenant porta solo tenant_id di A.
     $entiA = PerimetroTenant::di($this->mondo->riga('A', 'account'))->enti;
     foreach (PerimetroTenant::tabelleDelTenant() as $tabella) {
-        $righe = righeCsv($voci["dati/{$tabella}.csv"]);
+        $righe = righeCsvGdpr($voci["dati/{$tabella}.csv"]);
         expect($righe)->not->toBeEmpty();
         foreach ($righe as $riga) {
             expect((int) $riga['tenant_id'])->toBeIn($entiA);
@@ -165,7 +165,7 @@ it('writes a manifest whose counts and hashes match the archive', function () {
 
     foreach ($manifest['righe'] as $file => $n) {
         $nome = $file === 'account' ? 'dati/account.csv' : "dati/{$file}.csv";
-        expect(count(righeCsv($voci[$nome])))->toBe($n);
+        expect(count(righeCsvGdpr($voci[$nome])))->toBe($n);
     }
 
     $attese = collect($voci)->except('manifest.json')->map(fn ($c) => hash('sha256', $c))->all();
@@ -195,7 +195,7 @@ it('never exports password hashes, remember tokens, 2FA secrets or recovery code
         ->and($tutto)->not->toContain('CODICI-RECUPERO-A')
         ->and($tutto)->not->toContain($hash);
 
-    $riga = collect(righeCsv($voci['dati/users.csv']))->firstWhere('email', $admin->email);
+    $riga = collect(righeCsvGdpr($voci['dati/users.csv']))->firstWhere('email', $admin->email);
     expect($riga)->not->toBeNull()
         ->and($riga['doppio_fattore_attivo'])->toBe('1')
         ->and($riga['ruoli'])->toBe('Admin')
@@ -308,7 +308,7 @@ it('includes trashed rows and trashed Enti, because they are data still held', f
     $percorso = $this->cartella.'/a.zip';
     esporta($this->mondo->riga('A', 'account'), $this->superadmin->email, $percorso)->assertSuccessful();
 
-    $riga = collect(righeCsv(vociZip($percorso)['dati/strumenti.csv']))->firstWhere('id', (string) $strumento->id);
+    $riga = collect(righeCsvGdpr(vociZip($percorso)['dati/strumenti.csv']))->firstWhere('id', (string) $strumento->id);
     expect($riga)->not->toBeNull()->and($riga['deleted_at'])->not->toBe('');
 });
 
@@ -471,9 +471,9 @@ it('exports only the pivot rows of the requested account, checked by id', functi
     $enteA = (string) $this->mondo->riga('A', 'ente')->id;
     $nodiA = DB::table('unita_organizzativa')->where('tenant_id', $enteA)->pluck('id')->map(fn ($id) => (string) $id)->all();
 
-    $membri = righeCsv($voci['dati/account_user.csv']);
-    $tecnici = righeCsv($voci['dati/tecnico_cliente.csv']);
-    $responsabili = righeCsv($voci['dati/responsabile_unita.csv']);
+    $membri = righeCsvGdpr($voci['dati/account_user.csv']);
+    $tecnici = righeCsvGdpr($voci['dati/tecnico_cliente.csv']);
+    $responsabili = righeCsvGdpr($voci['dati/responsabile_unita.csv']);
 
     expect($membri)->not->toBeEmpty()->and($tecnici)->not->toBeEmpty()->and($responsabili)->not->toBeEmpty()
         ->and(implode("\n", $voci))->not->toContain('TecnicoEsterno-SOLO-B');
@@ -504,7 +504,7 @@ it('exports a person of both contracts once, and no member of the other account 
     $voci = vociZip($percorso);
 
     expect(implode("\n", $voci))->not->toContain('MembroCommerciale-SOLO-B')
-        ->and(collect(righeCsv($voci['dati/users.csv']))->where('name', 'Doppio-Contratto')->count())->toBe(1);
+        ->and(collect(righeCsvGdpr($voci['dati/users.csv']))->where('name', 'Doppio-Contratto')->count())->toBe(1);
 });
 
 it('still exports a trashed Ente with its rows, and the file of a trashed document', function () {
@@ -610,6 +610,6 @@ it('renders booleans as 0/1 in the CSV on every driver', function () {
     esporta($this->mondo->riga('A', 'account'), $this->superadmin->email, $percorso)->assertSuccessful();
     $voci = vociZip($percorso);
 
-    expect(righeCsv($voci['dati/account.csv'])[0]['is_locked'])->toBe('0')
-        ->and(righeCsv($voci['dati/users.csv'])[0]['riceve_email_scadenze'])->toBeIn(['0', '1']);
+    expect(righeCsvGdpr($voci['dati/account.csv'])[0]['is_locked'])->toBe('0')
+        ->and(righeCsvGdpr($voci['dati/users.csv'])[0]['riceve_email_scadenze'])->toBeIn(['0', '1']);
 });
