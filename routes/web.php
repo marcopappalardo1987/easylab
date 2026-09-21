@@ -12,6 +12,7 @@ use App\Http\Controllers\PaginaBloccato;
 use App\Http\Controllers\RegistrazionePubblica;
 use App\Http\Controllers\ScaricaDocumento;
 use App\Http\Controllers\ServeFileGuida;
+use App\Http\Middleware\RequireSameOriginNavigation;
 use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Anagrafica\MarchioEnte;
 use App\Livewire\Billing\PaginaAbbonamento;
@@ -41,6 +42,7 @@ use App\Livewire\Strumenti\SchedaStrumento;
 use App\Livewire\Strumenti\StampaQr;
 use App\Livewire\Utenti\ElencoUtenti;
 use Illuminate\Support\Facades\Route;
+use Lab404\Impersonate\Controllers\ImpersonateController;
 
 // Login, logout, reset password, verifica email e 2FA sono registrati da Fortify
 // (vedi App\Providers\FortifyServiceProvider). La root rimanda alla login;
@@ -284,7 +286,7 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     // nel route-model binding a farsi cercare come id.
     Route::get('/piattaforma/parco/impersona/{utente}/strumento/{strumento}', ImpersonaVersoStrumento::class)
         ->whereNumber('utente')->whereNumber('strumento')
-        ->middleware('can:'.ParcoGlobale::PERMESSO)
+        ->middleware(['can:'.ParcoGlobale::PERMESSO, RequireSameOriginNavigation::class])
         ->name('piattaforma.parco.impersona');
 
     // 🔴 L'error tracker interno (S6), e qui il permesso è **un terzo ancora**:
@@ -468,10 +470,19 @@ Route::middleware(['signed', 'auth', 'can:qr.scan'])->group(function () {
     Route::get('/q/{token}', AccessoQr::class)->name('qr.strumento');
 });
 
-// Impersonation (lab404) — rotte gate-protette da canImpersonate, ancora SENZA UI.
-// Fuori dal gruppo two-factor.enforce così la rotta di uscita resta sempre raggiungibile.
+// Impersonation (lab404): le due rotte di `Route::impersonate()` scritte a mano
+// perché vogliono guardie diverse (S7, security pass).
+// - `take` dietro `two-factor.enforce`: senza, un Superadmin privo di 2FA entrava
+//   in qualunque tenant, e da impersonante il 2FA non viene più chiesto.
+//   `RequireSameOriginNavigation` chiude il CSRF via GET (un link su un altro
+//   sito che fa navigare il Superadmin connesso dentro un tenant).
+// - `leave` resta fuori dal gruppo 2FA: l'uscita deve essere sempre raggiungibile.
+Route::middleware(['auth', 'two-factor.enforce', RequireSameOriginNavigation::class])->group(function () {
+    Route::get('/impersonate/take/{id}/{guardName?}', [ImpersonateController::class, 'take'])->name('impersonate');
+});
+
 Route::middleware('auth')->group(function () {
-    Route::impersonate();
+    Route::get('/impersonate/leave', [ImpersonateController::class, 'leave'])->name('impersonate.leave');
 
     // Lockout (ADR-013): la pagina di stato e la fuga verso una sede sana
     // stanno FUORI dal gruppo protetto per COLLOCAZIONE, non per un'esclusione

@@ -3,12 +3,15 @@
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Middleware\EnforceAccountLockout;
 use App\Http\Middleware\EnsureTwoFactorIsEnabled;
+use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\VerificaFirmaWebhookStripe;
 use App\Support\Errori\CatturaErrori;
+use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\ValidateSignature;
 use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -51,6 +54,18 @@ return Application::configure(basePath: dirname(__DIR__))
             'account.lockout' => EnforceAccountLockout::class,
             'two-factor.enforce' => EnsureTwoFactorIsEnabled::class,
         ]);
+
+        // `signed` fuori dalla lista di priorità girava DOPO `SubstituteBindings`
+        // del gruppo web: un id inesistente dava 404 e uno esistente 403, cioè
+        // le registrazioni si enumeravano. La firma cade prima dell'autenticazione
+        // (e quindi del binding), come dichiarano le rotte QR e di registrazione.
+        $middleware->prependToPriorityList(
+            before: AuthenticatesRequests::class,
+            prepend: ValidateSignature::class,
+        );
+
+        // Globale e non `web`: copre anche webhook, `/up` e pagine d'errore.
+        $middleware->append(SecurityHeaders::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

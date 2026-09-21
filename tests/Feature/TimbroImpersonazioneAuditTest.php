@@ -25,7 +25,7 @@ beforeEach(function () {
     $this->ente = UnitaOrganizzativa::factory()->ente()->create();
     $this->account = Account::factory()->create();
 
-    $this->superadmin = User::factory()->create(['name' => 'Direzione EasyLab']);
+    $this->superadmin = User::factory()->create(['name' => 'Direzione EasyLab', 'two_factor_confirmed_at' => now()]);
     $this->superadmin->assignRole('Superadmin');
 
     $this->cliente = User::factory()->create(['name' => 'Anna Bianchi', 'tenant_id' => $this->ente->id]);

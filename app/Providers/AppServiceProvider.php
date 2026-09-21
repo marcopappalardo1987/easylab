@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Http\Middleware\EnforceAccountLockout;
+use App\Http\Middleware\EnsureTwoFactorIsEnabled;
 use App\Listeners\AuditLogSubscriber;
 use App\Models\Account;
 use App\Models\Garanzia;
@@ -105,6 +106,11 @@ class AppServiceProvider extends ServiceProvider
         // (cioè quasi tutte le scritture dell'app) aggirerebbe il lockout. Un
         // test la esercita con un POST reale all'endpoint update.
         Livewire::addPersistentMiddleware(EnforceAccountLockout::class);
+
+        // Stessa ragione per il 2FA obbligatorio (S7, security pass): senza, un
+        // utente promosso a un ruolo col 2FA a pagina aperta continuava a
+        // scrivere dalle azioni Livewire. La pagina di attivazione resta esente.
+        Livewire::addPersistentMiddleware(EnsureTwoFactorIsEnabled::class);
 
         $this->timbraLImpersonazioneSullAudit();
 

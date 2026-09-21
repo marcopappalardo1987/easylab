@@ -50,7 +50,7 @@ it('logs a logout', function () {
 });
 
 it('logs an impersonation take with causer and subject', function () {
-    $superadmin = User::factory()->create();
+    $superadmin = User::factory()->create(['two_factor_confirmed_at' => now()]);
     $superadmin->assignRole('Superadmin');
     $tenant = User::factory()->create();
     $tenant->assignRole('Tenant');

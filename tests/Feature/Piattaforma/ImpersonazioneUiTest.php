@@ -196,7 +196,7 @@ it('offers a direct link when the customer has one member', function () {
 });
 
 it('lets a Superadmin be impersonated: only the Developer is untouchable', function () {
-    $developer = User::factory()->create();
+    $developer = User::factory()->create(['two_factor_confirmed_at' => now()]);
     $developer->assignRole('Developer');
 
     $this->actingAs($developer)->get(route('impersonate', $this->superadmin));

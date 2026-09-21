@@ -43,7 +43,7 @@ it('writes one row per failed login, not two', function () {
 });
 
 it('writes one row per impersonation, not two', function () {
-    $superadmin = User::factory()->create();
+    $superadmin = User::factory()->create(['two_factor_confirmed_at' => now()]);
     $superadmin->assignRole('Superadmin');
     $cliente = User::factory()->create();
     $cliente->assignRole('Tenant');

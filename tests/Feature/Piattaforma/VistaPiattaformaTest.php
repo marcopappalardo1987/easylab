@@ -31,7 +31,7 @@ beforeEach(function () {
     $this->enteB = UnitaOrganizzativa::factory()->ente()->perAccount($this->accountB)->create(['nome' => 'Sede Bianchi']);
     $this->strumentoB = Strumento::factory()->forNode($this->enteB)->create(['nome' => 'Autoclave Bianchi']);
 
-    $this->superadmin = User::factory()->create(['tenant_id' => $this->enteA->id]);
+    $this->superadmin = User::factory()->create(['tenant_id' => $this->enteA->id, 'two_factor_confirmed_at' => now()]);
     $this->superadmin->assignRole('Superadmin');
     $this->accountA->aggiungiMembro($this->superadmin);
 });

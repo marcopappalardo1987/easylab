@@ -21,7 +21,7 @@ it('renders the app shell for an authenticated user', function () {
 });
 
 it('shows the impersonation banner while impersonating', function () {
-    $superadmin = User::factory()->create();
+    $superadmin = User::factory()->create(['two_factor_confirmed_at' => now()]);
     $superadmin->assignRole('Superadmin');
     $tenant = User::factory()->create(['name' => 'Cliente Impersonato']);
     $tenant->assignRole('Tenant');

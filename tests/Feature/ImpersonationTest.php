@@ -42,7 +42,7 @@ it('protects only the Developer from being impersonated', function () {
 });
 
 it('allows a Superadmin to take and leave impersonation', function () {
-    $superadmin = User::factory()->create();
+    $superadmin = User::factory()->create(['two_factor_confirmed_at' => now()]);
     $superadmin->assignRole('Superadmin');
     $tenant = User::factory()->create();
     $tenant->assignRole('Tenant');
@@ -55,7 +55,7 @@ it('allows a Superadmin to take and leave impersonation', function () {
 });
 
 it('forbids impersonation for users without the permission', function () {
-    $admin = User::factory()->create();
+    $admin = User::factory()->create(['two_factor_confirmed_at' => now()]);
     $admin->assignRole('Admin');
     $tenant = User::factory()->create();
     $tenant->assignRole('Tenant');

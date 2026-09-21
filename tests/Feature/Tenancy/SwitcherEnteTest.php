@@ -134,7 +134,7 @@ it('refuses the enti of an account in lockout', function () {
 });
 
 it('refuses to switch while impersonating', function () {
-    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id]);
+    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id, 'two_factor_confirmed_at' => now()]);
     $superadmin->assignRole('Superadmin');
 
     $this->actingAs($superadmin)->get(route('impersonate', $this->membro));
@@ -222,7 +222,7 @@ it('does not redirect on an illegitimate target', function () {
 // cliente non viene toccato.
 
 it('lets an impersonator move between the sedi WITHOUT touching the customer record', function () {
-    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id]);
+    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id, 'two_factor_confirmed_at' => now()]);
     $superadmin->assignRole('Superadmin');
     $this->actingAs($superadmin)->get(route('impersonate', $this->membro));
 
@@ -244,7 +244,7 @@ it('refuses an ephemeral move toward a sede outside the customer contract', func
     // allentasse, la sessione diventerebbe un varco verso un Ente qualunque.
     $estraneo = UnitaOrganizzativa::factory()->ente()->create(['nome' => 'Ente Estraneo']);
 
-    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id]);
+    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id, 'two_factor_confirmed_at' => now()]);
     $superadmin->assignRole('Superadmin');
     $this->actingAs($superadmin)->get(route('impersonate', $this->membro));
 
@@ -261,7 +261,7 @@ it('drops the ephemeral sede the moment the impersonation ends', function () {
     // quello. Una chiave rimasta appesa non può quindi scopare nessuno verso
     // l'Ente di un altro — che è il modo in cui questa scorciatoia potrebbe
     // diventare un buco.
-    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id]);
+    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id, 'two_factor_confirmed_at' => now()]);
     $superadmin->assignRole('Superadmin');
     $this->actingAs($superadmin)->get(route('impersonate', $this->membro));
 
@@ -288,7 +288,7 @@ it('never lets a leftover key move the CUSTOMER, when they log in themselves', f
     // impedisce di scoparlo verso una sede che non ha scelto è
     // `isImpersonating()`. Senza, un cliente si troverebbe in un'altra sede per
     // una chiave lasciata da un tecnico dell'assistenza.
-    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id]);
+    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id, 'two_factor_confirmed_at' => now()]);
     $superadmin->assignRole('Superadmin');
     $this->actingAs($superadmin)->get(route('impersonate', $this->membro));
 
@@ -354,7 +354,7 @@ it('leaves a Responsabile fail-safe in the ente they switched into', function ()
 });
 
 it('renders the sede names in the panel once opened, while impersonating', function () {
-    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id]);
+    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id, 'two_factor_confirmed_at' => now()]);
     $superadmin->assignRole('Superadmin');
     $this->actingAs($superadmin)->get(route('impersonate', $this->membro));
 
@@ -419,7 +419,7 @@ it('names the sede you are ACTUALLY in, and offers the one you came from', funct
     // della sede di partenza mentre la pagina mostrava già i dati dell'altra, e
     // l'elenco offriva come «altra sede» proprio quella in cui ci si trovava —
     // mentre quella da cui si era partiti spariva, cioè non si poteva tornare.
-    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id]);
+    $superadmin = User::factory()->create(['tenant_id' => $this->enteA->id, 'two_factor_confirmed_at' => now()]);
     $superadmin->assignRole('Superadmin');
     $this->actingAs($superadmin)->get(route('impersonate', $this->membro));
 
