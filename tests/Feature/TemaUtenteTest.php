@@ -141,7 +141,9 @@ it('refuses a value outside the three at the schema level too, where an import o
     // l'`<html>` di ogni pagina di quell'utente, login compreso.
     $utente = User::factory()->create();
 
-    expect(fn () => DB::table('users')->where('id', $utente->id)->update(['tema' => 'viola']))
+    // Savepoint: su Postgres l'errore abortirebbe la transazione del test, e la
+    // lettura qui sotto esploderebbe con 25P02.
+    expect(fn () => DB::transaction(fn () => DB::table('users')->where('id', $utente->id)->update(['tema' => 'viola'])))
         ->toThrow(QueryException::class);
 
     expect($utente->fresh()->tema)->toBe(TemaUtente::Sistema);

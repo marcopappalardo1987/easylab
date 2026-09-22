@@ -27,6 +27,11 @@ use Illuminate\Support\Facades\DB;
  * tabella. Qui si passa quindi dal **query builder**, che è anche la strada da
  * cui arriva la migration di backfill.
  *
+ * ⚠️ **Ogni scrittura che deve fallire gira in un savepoint** (`DB::transaction`
+ * annidato in quello di RefreshDatabase). Su Postgres un errore abortisce la
+ * transazione: senza savepoint la verifica successiva esplode con 25P02, e in un
+ * ciclo ogni insert dopo il primo «fallisce» per quello, non per il vincolo.
+ *
  * ⚠️ **Le tre migration del listino non sono ancora applicate al database di
  * sviluppo, di proposito**: la suite gira su SQLite ricreato da zero, ed è lì che
  * questi vincoli vengono verificati.
@@ -58,7 +63,7 @@ it('refuses two plans with the same codice, because accounts.piano keeps it by s
     // che finisce nell'MRR. L'unicità è a database e non solo validata in PHP,
     // perché `GovernoListino` non è l'unica strada verso questa tabella: la
     // migration di backfill scrive col query builder.
-    expect(fn () => DB::table('piani')->insert(unaRigaDiPiano(['codice' => 'saas'])))
+    expect(fn () => DB::transaction(fn () => DB::table('piani')->insert(unaRigaDiPiano(['codice' => 'saas']))))
         ->toThrow(QueryException::class);
 
     expect(Piano::query()->where('codice', 'saas')->count())->toBe(1);
@@ -74,7 +79,7 @@ it('refuses a plan declared by halves, which used to be a guard in PHP', functio
     // che decide il denaro e l'identità non può mancare — e separarle
     // produrrebbe tre corpi identici.
     foreach (['codice', 'etichetta', 'prezzo_mensile_cent'] as $colonna) {
-        expect(fn () => DB::table('piani')->insert(unaRigaDiPiano([$colonna => null])))
+        expect(fn () => DB::transaction(fn () => DB::table('piani')->insert(unaRigaDiPiano([$colonna => null]))))
             ->toThrow(QueryException::class);
     }
 
@@ -121,7 +126,7 @@ it('refuses a price row that decides money without saying how much or in what cu
     ], $sovrascritture);
 
     foreach (['piano_id', 'stripe_price_id', 'importo_cent', 'valuta'] as $colonna) {
-        expect(fn () => DB::table('prezzi_piano')->insert($riga([$colonna => null])))
+        expect(fn () => DB::transaction(fn () => DB::table('prezzi_piano')->insert($riga([$colonna => null]))))
             ->toThrow(QueryException::class);
     }
 });

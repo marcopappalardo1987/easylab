@@ -570,7 +570,7 @@ it('lights it orange for the warranty of a part mounted on someone else machine'
 
 it('lets the forced state win over the calculated one', function () {
     // 🔗 ADR-005 punto 5: il rosso esiste solo come forzatura manuale, e vince.
-    $this->autoclaveRossi->forzaSemaforo(StatoSemaforo::Rosso, $this->superadmin, 'Fuori uso');
+    $this->autoclaveRossi->forzaSemaforo(StatoSemaforo::Rosso, 'Fuori uso');
 
     alComandoDelParco($this->superadmin);
 
@@ -942,8 +942,8 @@ it('lets the forced state decide the filter, and keeps red a forced only affair'
     // arancione vero, e il rosso non lo produce nessuna fonte — quindi il suo
     // ramo non deve nemmeno interrogarle.
     Intervento::factory()->forStrumento($this->autoclaveBianchi)->scaduto()->create();
-    $this->autoclaveBianchi->forzaSemaforo(StatoSemaforo::Verde, $this->superadmin, 'Verificata a mano');
-    $this->autoclaveRossi->forzaSemaforo(StatoSemaforo::Rosso, $this->superadmin, 'Fuori uso');
+    $this->autoclaveBianchi->forzaSemaforo(StatoSemaforo::Verde, 'Verificata a mano');
+    $this->autoclaveRossi->forzaSemaforo(StatoSemaforo::Rosso, 'Fuori uso');
 
     // 🔴 Due macchine NON forzate, e senza di loro questo test non poteva
     // fallire sulla seconda metà del proprio nome. Con le sole due autoclavi
@@ -998,8 +998,8 @@ it('partitions exactly like the per-Ente filter does, on an Ente where both are 
     Garanzia::factory()->forRicambio($utilizzo)->scaduta()->create();
 
     Intervento::factory()->forStrumento($forzatoVerde)->scaduto()->create();
-    $forzatoVerde->forzaSemaforo(StatoSemaforo::Verde, $this->superadmin, 'Verificata a mano');
-    $forzatoRosso->forzaSemaforo(StatoSemaforo::Rosso, $this->superadmin, 'Fuori uso');
+    $forzatoVerde->forzaSemaforo(StatoSemaforo::Verde, 'Verificata a mano');
+    $forzatoRosso->forzaSemaforo(StatoSemaforo::Rosso, 'Fuori uso');
 
     alComandoDelParco($this->superadmin);
 
