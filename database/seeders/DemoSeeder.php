@@ -215,8 +215,28 @@ class DemoSeeder extends Seeder
         $this->creaInterventi($ente, $strumentiIds, $tecnici);
         $this->creaSpostamenti($ente, $strumentiIds, $nodi, $utenti['admin']);
         $this->creaGaranzie($ente, $strumentiIds);
+        $this->aggiornaStatistiche(['strumenti', 'interventi', 'spostamenti_strumento', 'garanzie']);
         $this->creaRicambi($ente, $strumentiIds);
         $this->forzaAlcuniSemafori($ente, $utenti['admin'], $strumentiIds);
+    }
+
+    /**
+     * ⛔ `ANALYZE` dopo gli insert a blocchi, solo su Postgres: senza, il seeder
+     * può diventare quadratico e non finire più (T7 di S7: un worker fermo 15 ore).
+     *
+     * Dopo un rollback l'autovacuum lascia le tabelle con `reltuples = 0` e
+     * `relpages > 0`: il planner stima 1 riga per quanta ne vada inserita, e le
+     * join di `verificaInvarianti()` e `scadenzeGaranzieRicambi()` diventano
+     * nested loop su scansioni complete. `ANALYZE` è ammesso in transazione e
+     * conta come vive le righe non ancora committate: stime vere, piani giusti.
+     *
+     * @param  list<string>  $tabelle
+     */
+    private function aggiornaStatistiche(array $tabelle): void
+    {
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('analyze '.implode(', ', $tabelle));
+        }
     }
 
     /** @return list<int> id dei nodi foglia (dove stanno gli strumenti) */
@@ -638,6 +658,7 @@ class DemoSeeder extends Seeder
         foreach (array_chunk($righe, 500) as $blocco) {
             RicambioUtilizzo::insert($blocco);
         }
+        $this->aggiornaStatistiche(['ricambio_utilizzo']);
 
         $this->command?->info('  ricambi montati: '.count($righe));
 
