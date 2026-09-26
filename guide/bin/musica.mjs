@@ -34,10 +34,12 @@ const SR = 44100;
 const CODA = 3;
 
 /**
- * Gli stili disponibili. `passo` è quello in uso e NON va cambiato: gli altri
- * esistono per essere ascoltati sotto un video vero prima di decidere.
+ * Gli stili disponibili. Quello in uso è `IN_USO`, e finisce in `tema.wav`:
+ * gli altri si generano a parte, per ascoltarli sotto un video vero prima di
+ * decidere. `passo` è il primo che abbiamo avuto e resta qui come termine di
+ * paragone — si torna indietro cambiando una riga.
  *
- *   node bin/musica.mjs                 → out/audio/tema.wav        (passo)
+ *   node bin/musica.mjs                   → out/audio/tema.wav (lo stile in uso)
  *   node bin/musica.mjs --stile=cristallo → out/audio/tema-cristallo.wav
  *
  * Campi: `giro` è la successione di accordi (0 = Do centrale, `pentatonica` è
@@ -140,7 +142,10 @@ const STILI = {
   },
 };
 
-const nomeStile = (process.argv.find((a) => a.startsWith('--stile=')) ?? '--stile=passo').slice(8);
+/** Lo stile che va nei video. Scelto il 26 Set 2026 ascoltando i quattro spezzoni. */
+const IN_USO = 'officina';
+
+const nomeStile = (process.argv.find((a) => a.startsWith('--stile=')) ?? `--stile=${IN_USO}`).slice(8);
 const S = STILI[nomeStile];
 if (!S) {
   console.error(`stile sconosciuto: ${nomeStile} — disponibili: ${Object.keys(STILI).join(', ')}`);
@@ -359,6 +364,6 @@ testa.write('data', 36);
 testa.writeUInt32LE(buf.length, 40);
 
 fs.mkdirSync(path.join('out', 'audio'), { recursive: true });
-const uscita = nomeStile === 'passo' ? 'tema.wav' : `tema-${nomeStile}.wav`;
+const uscita = nomeStile === IN_USO ? 'tema.wav' : `tema-${nomeStile}.wav`;
 fs.writeFileSync(path.join('out', 'audio', uscita), Buffer.concat([testa, buf]));
 console.log(`${uscita} — ${BPM} BPM, anello di ${DURATA.toFixed(2)}s, ${GIRO.map((g) => g.nome).join(' · ')}`);
