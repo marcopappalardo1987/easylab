@@ -303,7 +303,7 @@ const Finestra: React.FC<{
  * enorme copre l'intera pagina e il buco è il riquadro stesso, quindi il bordo
  * arrotondato combacia sempre.
  */
-const Alone: React.FC<{ f: Fuoco; forza: number }> = ({ f, forza }) => (
+const Alone: React.FC<{ f: Fuoco; forza: number; scurisci: boolean }> = ({ f, forza, scurisci }) => (
   <div
     style={{
       position: 'absolute',
@@ -312,7 +312,9 @@ const Alone: React.FC<{ f: Fuoco; forza: number }> = ({ f, forza }) => (
       width: f.w + 24,
       height: f.h + 24,
       borderRadius: 12,
-      boxShadow: `0 0 0 9999px rgba(8,14,26,${0.42 * forza})`,
+      boxShadow: scurisci
+        ? `0 0 0 9999px rgba(8,14,26,${0.42 * forza})`
+        : `0 0 26px ${6 * forza}px rgba(41,151,212,${0.28 * forza})`,
       outline: `2px solid rgba(41,151,212,${0.95 * forza})`,
       outlineOffset: -1,
     }}
@@ -547,12 +549,23 @@ const Schermo: React.FC<{
   // ⚠️ L'alone va sull'ELEMENTO, non sul riquadro della camera: quello è già
   // stato allargato per l'inquadratura, quindi copre mezza pagina e lo scuro
   // finisce fuori campo — cioè non si vede niente, che è quanto succedeva.
-  // Sulle RIPRESE l'alone è un lampo: indica il punto e si toglie di mezzo,
-  // perché quello che c'è da guardare succede subito dopo, spesso proprio
-  // nella parte di pagina che l'alone starebbe scurendo.
-  const fine = scena.tipo === 'ripresa' ? 2.4 : scena.durata - 0.8;
+  /*
+   * ⛔ Su una RIPRESA l'alone dura un istante e NON scurisce la pagina.
+   *
+   * Il riquadro è misurato PRIMA dell'azione, e un'azione cambia la pagina —
+   * anche senza cambiare indirizzo, come fa Livewire. Tenendolo acceso, quelle
+   * coordinate finiscono sopra un contenuto nuovo che non c'entra niente: il
+   * 26 Set 2026 l'alone è rimasto a illuminare un rettangolo vuoto di fianco a
+   * un bottone, per due secondi, e sembrava un guasto.
+   *
+   * Quindi: si accende sul bersaglio mentre il cursore arriva, e si spegne al
+   * click. Dopo il click quel che conta è il RISULTATO, non più il bersaglio.
+   * Lo scurimento resta ai soli fermi immagine, dove la pagina non si muove.
+   */
+  const ripresa = scena.tipo === 'ripresa';
+  const fine = ripresa ? 0.62 : scena.durata - 0.8;
   const alone = scena.elemento
-    ? conAgio(t, 0.45, 1.2) * (1 - conAgio(t, fine, fine + 0.6))
+    ? conAgio(t, ripresa ? 0.05 : 0.45, ripresa ? 0.3 : 1.2) * (1 - conAgio(t, fine, fine + 0.45))
     : 0;
 
   // Il cursore nella finestra: pagina → vista, con la camera del momento.
@@ -585,7 +598,7 @@ const Schermo: React.FC<{
               muted
             />
           )}
-          {scena.elemento && alone > 0 && <Alone f={scena.elemento} forza={alone} />}
+          {scena.elemento && alone > 0 && <Alone f={scena.elemento} forza={alone} scurisci={!ripresa} />}
         </div>
         {punto && (
           <Cursore

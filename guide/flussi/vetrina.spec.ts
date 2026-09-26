@@ -98,8 +98,8 @@ test('vetrina', async ({ page }) => {
     { su: page.getByText('Genetica Medica').first(), zoom: 1.12, coda: 1.2 },
   );
 
-  await s.scatto('Le briciole in alto dicono sempre dove sei, e ogni pezzo riporta indietro.', {
-    su: page.getByRole('navigation').first(),
+  await s.scatto('Il percorso in alto dice sempre dove sei, e ogni pezzo riporta indietro.', {
+    su: page.getByRole('navigation', { name: 'Percorso' }),
     zoom: 2.4,
     durata: 6,
   });

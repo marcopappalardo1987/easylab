@@ -112,8 +112,13 @@ export class Scenografo {
     if (opzioni.su) {
       const box = await opzioni.su.boundingBox();
       if (!box) throw new Error(`Scatto ${file}: elemento senza riquadro`);
-      elemento = { x: box.x, y: box.y, w: box.width, h: box.height };
-      fuoco = this.allarga(box, opzioni.zoom ?? 1.6);
+      elemento = await this.riquadroVisibile(opzioni.su);
+      fuoco = this.allarga(elemento, opzioni.zoom ?? 1.6);
+      if (!this.staInFinestra(elemento)) elemento = null;
+      // Il cursore resta sull'elemento VERO, non sulla scheda: è lì che
+      // Playwright ha cliccato, e un puntatore che indica il centro di un
+      // riquadro grande mentre il click è avvenuto su una riga dentro di esso
+      // racconta una cosa che non è successa.
       cursore = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
     }
 
@@ -188,8 +193,9 @@ export class Scenografo {
     if (opzioni.su) {
       const box = await opzioni.su.boundingBox();
       if (box) {
-        elemento = { x: box.x, y: box.y, w: box.width, h: box.height };
-        fuoco = this.allarga(box, opzioni.zoom ?? 1.25);
+        elemento = await this.riquadroVisibile(opzioni.su);
+        fuoco = this.allarga(elemento, opzioni.zoom ?? 1.25);
+        if (!this.staInFinestra(elemento)) elemento = null;
         // Lo screencast non riprende il puntatore del sistema: il click vero
         // c'è, ma invisibile. Il cursore lo ridisegna il montaggio, dove è
         // avvenuto davvero.
@@ -204,6 +210,27 @@ export class Scenografo {
       opzioni.durata ?? this.respiro(didascalia),
       opzioni.coda ?? 0.6,
     );
+
+    /*
+     * ⛔ Se l'azione ha cambiato la pagina, l'alone NON si disegna.
+     *
+     * Il riquadro è misurato prima; un click su una scheda porta altrove in
+     * trecento millesimi — anche senza cambiare indirizzo, perché è Livewire a
+     * riscrivere la pagina. Tenendo l'alone acceso «per poco» si illumina
+     * comunque un pezzo di contenuto NUOVO, che non c'entra: il 26 Set 2026 era
+     * un rettangolo vuoto di fianco a un bottone, e sembrava un guasto.
+     *
+     * Il tempo non si indovina: si guarda se l'elemento è ancora dov'era. Se
+     * non c'è più, o si è spostato, restano il cursore e il suono del click a
+     * dire dove si è cliccato — che è quanto serve, perché da lì in poi quel
+     * che conta è il risultato.
+     */
+    if (elemento && opzioni.su) {
+      const dopo = await opzioni.su.boundingBox().catch(() => null);
+      const fermo = dopo !== null && Math.abs(dopo.x - elemento.x) < 12 && Math.abs(dopo.y - elemento.y) < 12;
+      if (!fermo) elemento = null;
+    }
+
     const vp = this.page.viewportSize()!;
 
     this.scene.push({
@@ -240,6 +267,67 @@ export class Scenografo {
     fs.writeFileSync(path.join(this.cartella, 'copione.json'), JSON.stringify(copione, null, 2));
   }
 
+  /**
+   * Il riquadro che l'occhio VEDE come «quella cosa lì».
+   *
+   * ⚠️ Un localizzatore di testo pesca il nodo del testo, che dentro una
+   * scheda è una riga alta venti pixel in mezzo a un riquadro da cento. Se
+   * l'alone si accende su quello, nel video sembra un difetto — ed è successo:
+   * il 26 Set 2026 la luce sulla scheda «Genetica Medica» illuminava la sola
+   * etichetta. Quindi si sale al primo antenato CLICCABILE (è lui che l'utente
+   * percepisce come il bersaglio) e, se quello sta dentro una scheda vera
+   * (bordo o ombra) poco più grande, si prende la scheda.
+   *
+   * ⛔ Nessuna euristica sulle dimensioni: si sale solo lungo antenati
+   * cliccabili o schede, mai «finché cresce», o su una pagina diversa si
+   * finirebbe a illuminare mezzo schermo.
+   */
+  private async riquadroVisibile(su: Locator): Promise<Fuoco> {
+    return su.evaluate((el) => {
+      const cliccabile = (n: Element | null): boolean =>
+        !!n &&
+        (n.matches('a, button, summary, [role=button], [role=link], [role=menuitem]') ||
+          n.hasAttribute('wire:click') ||
+          n.hasAttribute('onclick'));
+
+      let nodo: Element = el;
+      for (let i = 0; i < 6 && nodo.parentElement && !cliccabile(nodo); i++) {
+        nodo = nodo.parentElement;
+      }
+      if (!cliccabile(nodo)) nodo = el;
+
+      const padre = nodo.parentElement;
+      if (padre) {
+        const dentro = nodo.getBoundingClientRect();
+        const fuori = padre.getBoundingClientRect();
+        const stile = getComputedStyle(padre);
+        const scheda = stile.borderTopWidth !== '0px' || stile.boxShadow !== 'none';
+        // 2,8 e non 2: una scheda con `p-4` intorno a un bottone stretto sta
+        // già a 2,05, e con la soglia bassa restava fuori — cioè si tornava
+        // esattamente al difetto che questa funzione esiste per togliere.
+        if (scheda && fuori.width * fuori.height <= dentro.width * dentro.height * 2.8) nodo = padre;
+      }
+
+      const r = nodo.getBoundingClientRect();
+
+      return { x: r.x, y: r.y, w: r.width, h: r.height };
+    });
+  }
+
+  /**
+   * L'alone si disegna solo se il riquadro ci sta dentro la finestra.
+   *
+   * ⚠️ Un elemento più alto del viewport — una tabella di quaranta righe — dà
+   * un alone con bordi fuori campo: a schermo non si vede una luce su qualcosa,
+   * si vede la pagina che si scurisce e basta. In quel caso l'inquadratura
+   * basta da sola a dire di che cosa si parla.
+   */
+  private staInFinestra(f: Fuoco): boolean {
+    const vp = this.page.viewportSize()!;
+
+    return f.w <= vp.width * 0.92 && f.h <= vp.height * 0.88;
+  }
+
   /** Quanto in basso arriva il contenuto vero, ignorando il bianco sotto. */
   private async altezzaContenuto(): Promise<number> {
     return this.page.evaluate(() => {
@@ -270,12 +358,12 @@ export class Scenografo {
     await this.page.waitForTimeout(150);
   }
 
-  private allarga(box: { x: number; y: number; width: number; height: number }, zoom: number): Fuoco {
+  private allarga(box: Fuoco, zoom: number): Fuoco {
     const vp = this.page.viewportSize()!;
     const w = Math.min(vp.width, vp.width / zoom);
     const h = Math.min(vp.height, vp.height / zoom);
-    const cx = box.x + box.width / 2;
-    const cy = box.y + box.height / 2;
+    const cx = box.x + box.w / 2;
+    const cy = box.y + box.h / 2;
     return {
       x: Math.max(0, Math.min(vp.width - w, cx - w / 2)),
       y: Math.max(0, Math.min(vp.height - h, cy - h / 2)),

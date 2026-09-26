@@ -36,8 +36,8 @@ test('nuovo strumento', async ({ page }) => {
   await page.getByText('Camera Bianca').first().click();
   await page.waitForLoadState('networkidle');
 
-  await g.passo("Le briciole in alto sono la conferma: quello che stai per creare nascerà qui dentro.", {
-    su: page.getByRole('navigation').first(),
+  await g.passo("Il percorso in alto è la conferma: quello che stai per creare nascerà qui dentro.", {
+    su: page.getByRole('navigation', { name: 'Percorso' }),
     zoom: 2.3,
     durata: 7,
   });

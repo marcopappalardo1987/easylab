@@ -28,7 +28,7 @@ test('chi vede cosa', async ({ page }) => {
   });
 
   await g.passo("L'Amministratore ha il menù più lungo: anagrafica, persone, fornitori, abbonamento. È chi governa l'Ente.", {
-    su: page.getByRole('navigation').first(),
+    su: page.getByRole('navigation', { name: 'Menù principale' }),
     zoom: 1.6,
     durata: 8,
   });
@@ -43,7 +43,7 @@ test('chi vede cosa', async ({ page }) => {
   await accedi(page, 'giulia.ferrari@aurora.test');
 
   await g.passo("Il Responsabile vede solo i reparti che gli sono assegnati: non è un menù più corto, è un parco più piccolo.", {
-    su: page.getByRole('navigation').first(),
+    su: page.getByRole('navigation', { name: 'Menù principale' }),
     zoom: 1.6,
     durata: 8,
   });
@@ -63,7 +63,7 @@ test('chi vede cosa', async ({ page }) => {
   await accedi(page, 'paolo.greco@aurora.test');
 
   await g.passo("Il referente del cliente ha il menù più corto: guarda il proprio parco, non lo amministra.", {
-    su: page.getByRole('navigation').first(),
+    su: page.getByRole('navigation', { name: 'Menù principale' }),
     zoom: 1.6,
     durata: 8,
   });

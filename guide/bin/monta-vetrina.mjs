@@ -18,6 +18,10 @@ for (const [origine, destinazione] of [
   fs.copyFileSync(path.join('..', 'public', 'brand', origine), path.join('out', 'brand', destinazione));
 }
 
+// ⛔ Il lessico si controlla PRIMA di montare, non dopo: una parola sbagliata
+// scoperta guardando il video costa la voce già sintetizzata e pagata.
+execFileSync('node', ['bin/lessico.mjs'], { stdio: 'inherit' });
+
 // Gli effetti sono generati, non versionati: su un clone pulito mancherebbero
 // e il montaggio fallirebbe su un file che non c'è.
 if (!fs.existsSync(path.join('out', 'audio', 'sfx', 'click.wav'))) {
