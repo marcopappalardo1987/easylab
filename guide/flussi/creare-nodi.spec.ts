@@ -104,7 +104,7 @@ test('creare nodi', async ({ page }) => {
   await page.waitForLoadState('networkidle');
   await page.fill('#nome', 'Microscopia elettronica');
 
-  await g.passo('Si corregge e si salva: il nome nuovo compare ovunque, briciole comprese.', {
+  await g.passo('Si corregge e si salva: il nome nuovo compare ovunque, percorso compreso.', {
     su: page.getByLabel('Nome'),
     zoom: 2.2,
     durata: 6,

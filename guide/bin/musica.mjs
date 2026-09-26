@@ -31,31 +31,136 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const SR = 44100;
-const BPM = 100;
-const BATTITO = 60 / BPM;
-const BATTUTA = BATTITO * 4;
-const BATTUTE_PER_ACCORDO = 2;
 const CODA = 3;
 
-// Fa maggiore, I–V–vi–IV: il giro più camminante che ci sia. 0 = Do centrale.
-const GIRO = [
-  { nome: 'F', accordo: [0, 5, 9, 12], basso: -12, pentatonica: [12, 14, 16, 17, 21] },
-  { nome: 'C/E', accordo: [0, 4, 7, 12], basso: -8, pentatonica: [12, 16, 19, 21, 24] },
-  { nome: 'Dm7', accordo: [0, 2, 5, 9], basso: -10, pentatonica: [14, 17, 21, 24, 26] },
-  { nome: 'Bb', accordo: [-3, 2, 5, 10], basso: -14, pentatonica: [10, 14, 17, 21, 22] },
-];
+/**
+ * Gli stili disponibili. Quello in uso è `IN_USO`, e finisce in `tema.wav`:
+ * gli altri si generano a parte, per ascoltarli sotto un video vero prima di
+ * decidere. `passo` è il primo che abbiamo avuto e resta qui come termine di
+ * paragone — si torna indietro cambiando una riga.
+ *
+ *   node bin/musica.mjs                   → out/audio/tema.wav (lo stile in uso)
+ *   node bin/musica.mjs --stile=cristallo → out/audio/tema-cristallo.wav
+ *
+ * Campi: `giro` è la successione di accordi (0 = Do centrale, `pentatonica` è
+ * la scala su cui pescano arpeggio e melodia); `passoBasso` e `passoArpeggio`
+ * sono maschere di ottavi; `melodia` ha una riga per accordo, ognuna
+ * `[battito, grado, durata]`.
+ */
+const STILI = {
+  // Fa maggiore, I–V–vi–IV: il giro più camminante che ci sia.
+  passo: {
+    bpm: 100,
+    battutePerAccordo: 2,
+    percussione: true,
+    riverbero: { decadimento: 1.5, send: 0.3 },
+    ampiezze: { tappeto: 0.036, basso: 0.13, sub: 0.16, arpeggio: 0.06, melodia: 0.085, ottava: 0.022, charleston: 0.038 },
+    giro: [
+      { nome: 'F', accordo: [0, 5, 9, 12], basso: -12, pentatonica: [12, 14, 16, 17, 21] },
+      { nome: 'C/E', accordo: [0, 4, 7, 12], basso: -8, pentatonica: [12, 16, 19, 21, 24] },
+      { nome: 'Dm7', accordo: [0, 2, 5, 9], basso: -10, pentatonica: [14, 17, 21, 24, 26] },
+      { nome: 'Bb', accordo: [-3, 2, 5, 10], basso: -14, pentatonica: [10, 14, 17, 21, 22] },
+    ],
+    passoBasso: [1, 0, 1, 0, 0, 1, 0, 1],
+    passoArpeggio: [0, 2, 1, 3, 2, 4, 3, 2],
+    melodia: [
+      [[0, 3, 1.2], [1.5, 4, 0.9], [3, 2, 1.4], [5.5, 3, 1.1]],
+      [[0.5, 4, 1.0], [2, 3, 1.2], [4, 2, 1.0], [5.5, 1, 1.3]],
+      [[0, 2, 1.1], [1.5, 3, 0.9], [3.5, 4, 1.2], [6, 3, 1.0]],
+      [[0.5, 3, 1.0], [2, 2, 1.1], [3.5, 1, 0.9], [5, 2, 1.6]],
+    ],
+  },
 
-/** Ottavi del basso: la spinta. 1 = suona, 0 = tace. */
-const PASSO_BASSO = [1, 0, 1, 0, 0, 1, 0, 1];
-/** Ottavi dell'arpeggio, come indici nella pentatonica dell'accordo. */
-const PASSO_ARPEGGIO = [0, 2, 1, 3, 2, 4, 3, 2];
-/** Melodia: [battito nella battuta doppia, grado, durata]. Sincopata sul 2,5 e sul 4,5. */
-const MELODIA = [
-  [[0, 3, 1.2], [1.5, 4, 0.9], [3, 2, 1.4], [5.5, 3, 1.1]],
-  [[0.5, 4, 1.0], [2, 3, 1.2], [4, 2, 1.0], [5.5, 1, 1.3]],
-  [[0, 2, 1.1], [1.5, 3, 0.9], [3.5, 4, 1.2], [6, 3, 1.0]],
-  [[0.5, 3, 1.0], [2, 2, 1.1], [3.5, 1, 0.9], [5, 2, 1.6]],
-];
+  // Lo stesso giro partendo dal RELATIVO MINORE (vi–IV–I–V): stessi accordi,
+  // colore più serio. Più veloce e con la melodia ridotta all'osso, perché qui
+  // a raccontare è il passo, non il motivo.
+  officina: {
+    bpm: 112,
+    battutePerAccordo: 2,
+    percussione: true,
+    riverbero: { decadimento: 1.25, send: 0.24 },
+    ampiezze: { tappeto: 0.04, basso: 0.15, sub: 0.18, arpeggio: 0.055, melodia: 0.07, ottava: 0.018, charleston: 0.042 },
+    giro: [
+      { nome: 'Dm7', accordo: [0, 2, 5, 9], basso: -10, pentatonica: [14, 17, 19, 21, 26] },
+      { nome: 'Bb', accordo: [-3, 2, 5, 10], basso: -14, pentatonica: [10, 14, 17, 21, 22] },
+      { nome: 'F', accordo: [0, 5, 9, 12], basso: -12, pentatonica: [12, 14, 17, 21, 24] },
+      { nome: 'C', accordo: [0, 4, 7, 12], basso: -8, pentatonica: [12, 16, 19, 21, 24] },
+    ],
+    passoBasso: [1, 0, 1, 1, 0, 1, 0, 1],
+    passoArpeggio: [0, 2, 4, 2, 1, 3, 2, 4],
+    melodia: [
+      [[0, 2, 1.6], [3, 3, 1.4]],
+      [[0.5, 3, 1.4], [3.5, 2, 1.6]],
+      [[0, 4, 1.5], [3, 2, 1.5]],
+      [[1, 3, 1.3], [4, 1, 2.0]],
+    ],
+  },
+
+  // Niente percussione, accordi lunghi il doppio, riverbero che tiene: il
+  // silenzio fra una nota e l'altra diventa parte della musica. È il letto che
+  // non chiede mai attenzione, al prezzo di non spingere.
+  cristallo: {
+    bpm: 76,
+    battutePerAccordo: 4,
+    percussione: false,
+    riverbero: { decadimento: 2.9, send: 0.44 },
+    ampiezze: { tappeto: 0.05, basso: 0.1, sub: 0.1, arpeggio: 0.042, melodia: 0.075, ottava: 0.02, charleston: 0 },
+    giro: [
+      { nome: 'Fmaj7', accordo: [0, 4, 9, 16], basso: -12, pentatonica: [16, 19, 21, 24, 28] },
+      { nome: 'Dm7', accordo: [0, 2, 5, 9], basso: -10, pentatonica: [14, 17, 21, 24, 26] },
+      { nome: 'Bbmaj7', accordo: [-3, 2, 5, 9], basso: -14, pentatonica: [14, 17, 21, 22, 26] },
+      { nome: 'C', accordo: [0, 4, 7, 12], basso: -8, pentatonica: [12, 16, 19, 21, 24] },
+    ],
+    passoBasso: [1, 0, 0, 0, 0, 0, 1, 0],
+    passoArpeggio: [0, 2, 4, 3, 1, 3, 2, 4],
+    melodia: [
+      [[0, 4, 3.2], [5, 3, 2.6]],
+      [[1, 3, 3.0], [6, 2, 2.4]],
+      [[0.5, 4, 3.4], [5.5, 2, 2.2]],
+      [[2, 2, 2.8], [7, 3, 3.0]],
+    ],
+  },
+
+  // Armonia quasi ferma — accordi sospesi, una battuta ciascuno — e basso
+  // sincopato: l'energia viene dal ritmo, non dai cambi. È il taglio più da
+  // demo di prodotto, e il più facile da stancarsi di ascoltare.
+  motore: {
+    bpm: 118,
+    battutePerAccordo: 1,
+    percussione: true,
+    riverbero: { decadimento: 1.05, send: 0.2 },
+    ampiezze: { tappeto: 0.034, basso: 0.16, sub: 0.2, arpeggio: 0.05, melodia: 0.062, ottava: 0.016, charleston: 0.045 },
+    giro: [
+      { nome: 'Fsus2', accordo: [0, 2, 7, 12], basso: -12, pentatonica: [12, 14, 17, 19, 24] },
+      { nome: 'Bbsus2', accordo: [-2, 0, 5, 10], basso: -14, pentatonica: [10, 12, 17, 19, 22] },
+      { nome: 'Dm9', accordo: [-3, 2, 5, 9], basso: -10, pentatonica: [14, 17, 19, 21, 26] },
+      { nome: 'Csus4', accordo: [0, 5, 7, 12], basso: -8, pentatonica: [12, 17, 19, 21, 24] },
+    ],
+    passoBasso: [1, 0, 0, 1, 0, 1, 1, 0],
+    passoArpeggio: [4, 2, 3, 1, 4, 2, 3, 0],
+    melodia: [[[0, 4, 0.9]], [[1.5, 3, 0.9]], [[0, 2, 1.0]], [[1.5, 4, 1.2]]],
+  },
+};
+
+/** Lo stile che va nei video. Scelto il 26 Set 2026 ascoltando i quattro spezzoni. */
+const IN_USO = 'officina';
+
+const nomeStile = (process.argv.find((a) => a.startsWith('--stile=')) ?? `--stile=${IN_USO}`).slice(8);
+const S = STILI[nomeStile];
+if (!S) {
+  console.error(`stile sconosciuto: ${nomeStile} — disponibili: ${Object.keys(STILI).join(', ')}`);
+  process.exit(1);
+}
+
+const BPM = S.bpm;
+const BATTITO = 60 / BPM;
+const BATTUTA = BATTITO * 4;
+const BATTUTE_PER_ACCORDO = S.battutePerAccordo;
+const GIRO = S.giro;
+const PASSO_BASSO = S.passoBasso;
+const PASSO_ARPEGGIO = S.passoArpeggio;
+const MELODIA = S.melodia;
+const AMP = S.ampiezze;
 
 const hz = (semitoni) => 440 * 2 ** ((semitoni - 9) / 12);
 
@@ -159,27 +264,27 @@ for (let g = 0; g < GIRO.length; g++) {
   const ottavo = BATTITO / 2;
   const ottavi = Math.round(durata / ottavo);
 
-  accordo.forEach((s, k) => tappeto(t0, durata * 0.94, s, 0.036, 0.5 + (k % 2 ? 0.2 : -0.2)));
+  accordo.forEach((s, k) => tappeto(t0, durata * 0.94, s, AMP.tappeto, 0.5 + (k % 2 ? 0.2 : -0.2)));
 
   for (let o = 0; o < ottavi; o++) {
     const t = t0 + o * ottavo;
 
     if (PASSO_BASSO[o % PASSO_BASSO.length]) {
-      nota(t, basso, 0.13, 0.5, 0.5, [1, 0.35, 0.12]);
-      if (o % 4 === 0) impulso(t, basso - 12, 0.16);
+      nota(t, basso, AMP.basso, 0.5, 0.5, [1, 0.35, 0.12]);
+      if (o % 4 === 0) impulso(t, basso - 12, AMP.sub);
     }
 
     // Arpeggio: decadimento corto, o gli ottavi si sovrappongono e impastano.
     const grado = PASSO_ARPEGGIO[o % PASSO_ARPEGGIO.length];
-    nota(t, pentatonica[grado], 0.06, 0.28, o % 2 ? 0.62 : 0.38);
+    nota(t, pentatonica[grado], AMP.arpeggio, 0.28, o % 2 ? 0.62 : 0.38);
 
     // Charleston sui levare, con un accento leggero ogni due battute.
-    if (o % 2 === 1) battuto(t, 0.038 + (o % 8 === 7 ? 0.022 : 0), 0.5 + (o % 4 === 1 ? 0.18 : -0.18));
+    if (S.percussione && o % 2 === 1) battuto(t, AMP.charleston + (o % 8 === 7 ? 0.022 : 0), 0.5 + (o % 4 === 1 ? 0.18 : -0.18));
   }
 
   for (const [b, grado, durataNota] of MELODIA[g]) {
-    nota(t0 + b * BATTITO, pentatonica[grado], 0.085, durataNota * 0.55, 0.45);
-    nota(t0 + b * BATTITO + 0.022, pentatonica[grado] + 12, 0.022, durataNota * 0.4, 0.6);
+    nota(t0 + b * BATTITO, pentatonica[grado], AMP.melodia, durataNota * 0.55, 0.45);
+    nota(t0 + b * BATTITO + 0.022, pentatonica[grado] + 12, AMP.ottava, durataNota * 0.4, 0.6);
   }
 }
 
@@ -218,10 +323,10 @@ const riverbero = (canale, ritardi, decadimento) => {
   return uscita;
 };
 
-const SEND = 0.3;
+const SEND = S.riverbero.send;
 const bagnato = [
-  riverbero(asciutto[0], [1557, 1617, 1491, 1422], 1.5),
-  riverbero(asciutto[1], [1580, 1640, 1514, 1445], 1.5),
+  riverbero(asciutto[0], [1557, 1617, 1491, 1422], S.riverbero.decadimento),
+  riverbero(asciutto[1], [1580, 1640, 1514, 1445], S.riverbero.decadimento),
 ];
 
 const lung = Math.round(DURATA * SR);
@@ -259,5 +364,6 @@ testa.write('data', 36);
 testa.writeUInt32LE(buf.length, 40);
 
 fs.mkdirSync(path.join('out', 'audio'), { recursive: true });
-fs.writeFileSync(path.join('out', 'audio', 'tema.wav'), Buffer.concat([testa, buf]));
-console.log(`tema.wav — ${BPM} BPM, anello di ${DURATA.toFixed(2)}s, ${GIRO.map((g) => g.nome).join(' · ')}`);
+const uscita = nomeStile === IN_USO ? 'tema.wav' : `tema-${nomeStile}.wav`;
+fs.writeFileSync(path.join('out', 'audio', uscita), Buffer.concat([testa, buf]));
+console.log(`${uscita} — ${BPM} BPM, anello di ${DURATA.toFixed(2)}s, ${GIRO.map((g) => g.nome).join(' · ')}`);

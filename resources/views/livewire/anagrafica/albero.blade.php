@@ -14,7 +14,7 @@
             <h1 class="text-2xl font-bold tracking-tight text-ink">Anagrafica</h1>
 
             @if ($breadcrumb->isNotEmpty())
-                <nav class="mt-1 flex flex-wrap items-center gap-1 text-sm text-ink-3">
+                <nav aria-label="Percorso" class="mt-1 flex flex-wrap items-center gap-1 text-sm text-ink-3">
                     @foreach ($breadcrumb as $crumb)
                         @if (! $loop->last)
                             <button type="button" wire:click="goTo({{ $crumb->id }})"

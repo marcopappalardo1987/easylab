@@ -53,8 +53,8 @@ test('albero anagrafica', async ({ page }) => {
     durata: 7,
   });
 
-  await g.passo("Le briciole in alto dicono sempre dove sei, e ogni pezzo è cliccabile.", {
-    su: page.getByRole('navigation').first(),
+  await g.passo("Il percorso in alto dice sempre dove sei, e ogni pezzo è cliccabile.", {
+    su: page.getByRole('navigation', { name: 'Percorso' }),
     zoom: 2.4,
     durata: 6,
   });
@@ -80,8 +80,8 @@ test('albero anagrafica', async ({ page }) => {
     durata: 6,
   });
 
-  await g.passo('E le briciole riportano su di un livello, o alla radice, senza ricominciare.', {
-    su: page.getByRole('navigation').first(),
+  await g.passo('E il percorso riporta su di un livello, o alla radice, senza ricominciare.', {
+    su: page.getByRole('navigation', { name: 'Percorso' }),
     zoom: 2.4,
     durata: 6,
   });
@@ -89,7 +89,7 @@ test('albero anagrafica', async ({ page }) => {
   g.chiusura('Da ricordare', [
     "L'anagrafica risponde alla domanda «dove», l'elenco degli strumenti alla domanda «quale».",
     'Il conteggio di una riga comprende tutto quello che sta sotto, non solo il livello immediato.',
-    'Le briciole in alto sono la via di ritorno: dicono dove sei e riportano indietro di un passo.',
+    'Il percorso in alto è la via di ritorno: dice dove sei e riporta indietro di un passo.',
   ]);
 
   g.scrivi();

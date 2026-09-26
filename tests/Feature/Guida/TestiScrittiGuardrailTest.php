@@ -37,10 +37,20 @@ it('numbers the written texts exactly like the shooting scripts', function () {
     foreach (config('guide.guide') as $voce) {
         $slug = $voce['slug'];
 
-        $copione = file_get_contents(base_path("guide/flussi/{$slug}.spec.ts"));
-        $passi = substr_count((string) $copione, 'g.passo(');
+        $copione = (string) file_get_contents(base_path("guide/flussi/{$slug}.spec.ts"));
 
-        expect($passi)->toBeGreaterThan(0);
+        // ⚠️ DUE formati, e li conta entrambi. Quello storico (`Regista`) chiama
+        // `g.passo()`; quello «vetrina» (`Scenografo`, 🔗 guide/lib/scenografo.ts)
+        // distingue i materiali — fermo immagine, pagina intera, ripresa vera —
+        // e quindi ha tre nomi per la stessa cosa: un passo numerato. Contarne
+        // uno solo renderebbe il test verde per assenza proprio sulle guide
+        // rifatte, che sono quelle in cui la numerazione è appena cambiata.
+        $passi = substr_count($copione, 'g.passo(')
+            + substr_count($copione, 's.scatto(')
+            + substr_count($copione, 's.panoramica(')
+            + substr_count($copione, 's.movimento(');
+
+        expect($passi)->toBeGreaterThan(0, "Nessun passo trovato nel copione di «{$slug}»: il formato è cambiato?");
 
         $testi = TestiScritti::per($slug);
 
@@ -49,8 +59,8 @@ it('numbers the written texts exactly like the shooting scripts', function () {
         // non vedrà mai nessuno.
         expect(array_keys($testi['passi']))->toBe(range(1, $passi));
 
-        // Stessa cosa per i cartelli: `g.capitolo()` è la loro numerazione.
-        $capitoli = substr_count((string) $copione, 'g.capitolo(');
+        // Stessa cosa per i cartelli: `g.capitolo()` e `s.cartello()`.
+        $capitoli = substr_count($copione, 'g.capitolo(') + substr_count($copione, 's.cartello(');
 
         expect(array_keys($testi['capitoli']))->toBe(range(1, $capitoli));
         expect($testi['premessa'])->not->toBeNull();

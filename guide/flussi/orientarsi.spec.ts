@@ -44,7 +44,7 @@ test('orientarsi', async ({ page }) => {
   g.capitolo('Parte 2 di 3', 'Il menù di sinistra');
 
   await g.passo('Il menù resta sempre lì, e cambia con quello che il tuo ruolo può fare.', {
-    su: page.getByRole('navigation').first(),
+    su: page.getByRole('navigation', { name: 'Menù principale' }),
     zoom: 1.9,
     durata: 5.5,
   });
@@ -58,7 +58,7 @@ test('orientarsi', async ({ page }) => {
 
   await page.waitForURL('**/anagrafica**');
 
-  await g.passo('Si scende un nodo alla volta, e le briciole in alto dicono sempre dove sei.', { durata: 5 });
+  await g.passo('Si scende un nodo alla volta, e il percorso in alto dice sempre dove sei.', { durata: 5 });
 
   await g.passo('«Scadenzario» raccoglie in un elenco solo tutto ciò che è aperto su tutte le macchine.', {
     su: page.getByRole('link', { name: 'Scadenzario', exact: true }),

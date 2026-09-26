@@ -2,7 +2,7 @@
 
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">
-            <nav class="flex flex-wrap items-center gap-1 text-sm text-ink-3">
+            <nav aria-label="Percorso" class="flex flex-wrap items-center gap-1 text-sm text-ink-3">
                 <a href="{{ route('anagrafica.index') }}" wire:navigate
                     class="rounded px-1 py-0.5 hover:bg-surface-sunken hover:text-ink">Anagrafica</a>
                 <span class="text-ink-3">›</span>

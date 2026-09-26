@@ -152,7 +152,7 @@ it('gates the sidebar entry on documenti.view', function () {
     $sidebar = function (User $u): string {
         $html = $this->actingAs($u->fresh())->get(route('dashboard'))->assertOk()->getContent();
 
-        preg_match('/<nav class="flex-1 space-y-1[^"]*">.*?<\/nav>/s', $html, $blocco);
+        preg_match('/<nav[^>]*aria-label="Menù principale".*?<\/nav>/s', $html, $blocco);
 
         // Non `?? ''`: un blocco assente e un blocco vuoto vanno distinti, o un
         // `not->toContain()` sarebbe verde proprio quando la nav è sparita.
