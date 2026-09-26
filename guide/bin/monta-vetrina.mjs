@@ -18,6 +18,12 @@ for (const [origine, destinazione] of [
   fs.copyFileSync(path.join('..', 'public', 'brand', origine), path.join('out', 'brand', destinazione));
 }
 
+// Gli effetti sono generati, non versionati: su un clone pulito mancherebbero
+// e il montaggio fallirebbe su un file che non c'è.
+if (!fs.existsSync(path.join('out', 'audio', 'sfx', 'click.wav'))) {
+  execFileSync('node', ['bin/suoni.mjs'], { stdio: 'inherit' });
+}
+
 const props = path.join('out', slug, '.props-vetrina.json');
 fs.writeFileSync(props, JSON.stringify({ slug, copione, ...(voci ? { voci } : {}) }));
 

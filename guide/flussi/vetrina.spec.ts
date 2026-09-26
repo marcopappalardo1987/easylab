@@ -43,7 +43,7 @@ test('vetrina', async ({ page }) => {
       await page.locator('#search').pressSequentially('centrifuga', { delay: 130 });
       await page.waitForTimeout(900);
     },
-    { su: page.locator('#search'), zoom: 1, coda: 1.1 },
+    { su: page.locator('#search'), zoom: 1, coda: 1.1, suono: 'tastiera' },
   );
 
   await s.scatto('Quel che resta è già il risultato: matricola, ubicazione, stato.', {
@@ -65,7 +65,7 @@ test('vetrina', async ({ page }) => {
       await page.waitForTimeout(500);
       await page.mouse.wheel(0, -1350);
     },
-    { coda: 0.9 },
+    { coda: 0.9, suono: 'scorrimento' },
   );
 
   await s.movimento(

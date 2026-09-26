@@ -5,6 +5,8 @@ import { Ripresa } from './ripresa';
 
 export type Fuoco = { x: number; y: number; w: number; h: number };
 export type Pagina = { w: number; h: number };
+/** L'effetto che accompagna una ripresa. Marca una cosa che si vede accadere. */
+export type Suono = 'click' | 'tastiera' | 'scorrimento';
 
 export type Scena =
   | { tipo: 'apertura'; titolo: string; sottotitolo: string; durata: number }
@@ -33,6 +35,7 @@ export type Scena =
       elemento: Fuoco | null;
       cursore: { x: number; y: number } | null;
       vista: Pagina;
+      suono: Suono | null;
       url: string;
     }
   | { tipo: 'chiusura'; titolo: string; punti: string[]; durata: number };
@@ -71,7 +74,15 @@ export class Scenografo {
     private readonly sottotitolo: string,
   ) {
     this.cartella = path.join(process.cwd(), 'out', slug);
-    fs.rmSync(this.cartella, { recursive: true, force: true });
+    // ⛔ La cartella si svuota, ma `voce/` NO: quella è sintesi già PAGATA, e
+    // rigirare la cattura per cambiare una didascalia non deve ricomprarla.
+    // È già successo il 26 Set 2026: un `rmSync` della cartella intera, e le
+    // dieci frasi della vetrina rigenerate da capo senza motivo.
+    if (fs.existsSync(this.cartella)) {
+      for (const voce of fs.readdirSync(this.cartella)) {
+        if (voce !== 'voce') fs.rmSync(path.join(this.cartella, voce), { recursive: true, force: true });
+      }
+    }
     fs.mkdirSync(this.cartella, { recursive: true });
     this.ripresa = new Ripresa(page, this.cartella);
   }
@@ -167,7 +178,7 @@ export class Scenografo {
   async movimento(
     didascalia: string,
     azione: () => Promise<void>,
-    opzioni: { su?: Locator; zoom?: number; coda?: number; durata?: number } = {},
+    opzioni: { su?: Locator; zoom?: number; coda?: number; durata?: number; suono?: Suono | null } = {},
   ): Promise<void> {
     const file = `r${String(++this.clip).padStart(2, '0')}.mp4`;
     let fuoco: Fuoco | null = null;
@@ -195,7 +206,21 @@ export class Scenografo {
     );
     const vp = this.page.viewportSize()!;
 
-    this.scene.push({ tipo: 'ripresa', file, didascalia, durata, pagina: { w: vp.width, h: vp.height }, fuoco, elemento, cursore, vista: { w: vp.width, h: vp.height }, url: this.indirizzo() });
+    this.scene.push({
+      tipo: 'ripresa',
+      file,
+      didascalia,
+      durata,
+      pagina: { w: vp.width, h: vp.height },
+      fuoco,
+      elemento,
+      cursore,
+      vista: { w: vp.width, h: vp.height },
+      // Dove c'è un elemento c'è stato un click vero: è il caso normale, e
+      // dirlo ogni volta nel copione sarebbe rumore.
+      suono: opzioni.suono === undefined ? (opzioni.su ? 'click' : null) : opzioni.suono,
+      url: this.indirizzo(),
+    });
   }
 
   chiusura(titolo: string, punti: string[], durata = 6.5): void {

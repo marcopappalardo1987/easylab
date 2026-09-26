@@ -42,6 +42,7 @@ import { ALTEZZA, FPS, LARGHEZZA } from './camera';
 export type Fuoco = { x: number; y: number; w: number; h: number };
 export type Pagina = { w: number; h: number };
 export type Punto = { x: number; y: number };
+export type Suono = 'click' | 'tastiera' | 'scorrimento';
 
 export type Scena =
   | { tipo: 'apertura'; titolo: string; sottotitolo: string; durata: number }
@@ -70,6 +71,7 @@ export type Scena =
       elemento: Fuoco | null;
       cursore: Punto | null;
       vista: Pagina;
+      suono: Suono | null;
       url: string;
     }
   | { tipo: 'chiusura'; titolo: string; punti: string[]; durata: number };
@@ -94,6 +96,34 @@ const BLU = '#2997D4';
 const BLU_CUPO = '#06589C';
 const PANNA = '#F1F5F9';
 const GRIGIO = '#8FA3BC';
+
+/**
+ * Gli effetti, col loro volume e il ritardo dall'inizio della scena.
+ *
+ * ⚠️ I volumi NON sono tutti uguali perché i file non lo sono: misurati, i
+ * picchi vanno da -8 dB (`stacco`) a -22 dB (`scorrimento`). Questi numeri li
+ * riportano tutti intorno a -19 dB, che è il punto in cui si sentono sotto la
+ * voce senza coprirla. Cambiando un file va rimisurato il suo picco, non
+ * ritoccato a orecchio il numero di fianco.
+ *
+ * Il ritardo dice A CHE COSA corrisponde il suono: il click arriva quando il
+ * cursore si posa (0,28 s), i tasti subito dopo, perché nella ripresa prima si
+ * clicca il campo e poi si scrive.
+ */
+const EFFETTI = {
+  apertura: { volume: 0.6, quando: 0.15 },
+  stacco: { volume: 0.28, quando: 0 },
+  conferma: { volume: 0.7, quando: 0.1 },
+  click: { volume: 0.5, quando: 0.28 },
+  tastiera: { volume: 0.65, quando: 0.62 },
+  scorrimento: { volume: 1, quando: 0.3 },
+} as const;
+
+const Effetto: React.FC<{ nome: keyof typeof EFFETTI; da: number }> = ({ nome, da }) => (
+  <Sequence from={Math.round((da + EFFETTI[nome].quando) * FPS)} layout="none">
+    <Audio src={staticFile(`audio/sfx/${nome}.wav`)} volume={EFFETTI[nome].volume} />
+  </Sequence>
+);
 
 const BARRA = 44;
 const SFUMATURA = 0.34;
@@ -672,6 +702,17 @@ const ScenaResa: React.FC<{
           <Audio src={staticFile(`${slug}/voce/${String(voce.i).padStart(2, '0')}.wav`)} />
         </Sequence>
       )}
+      {scena.tipo === 'apertura' && <Effetto nome="apertura" da={anticipo} />}
+      {scena.tipo === 'cartello' && <Effetto nome="stacco" da={anticipo} />}
+      {scena.tipo === 'chiusura' && <Effetto nome="conferma" da={anticipo} />}
+      {scena.tipo === 'ripresa' && scena.suono && (
+        <>
+          {/* Scrivere in un campo vuol dire prima cliccarlo: due suoni, non uno. */}
+          {(scena.suono === 'click' || scena.suono === 'tastiera') && <Effetto nome="click" da={anticipo} />}
+          {scena.suono !== 'click' && <Effetto nome={scena.suono} da={anticipo} />}
+        </>
+      )}
+
       {scena.tipo === 'apertura' && <Apertura scena={scena} t={t} />}
       {scena.tipo === 'cartello' && <Cartello scena={scena} t={t} numero={numero} />}
       {scena.tipo === 'chiusura' && <Chiusura scena={scena} t={t} />}

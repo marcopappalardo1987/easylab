@@ -137,6 +137,10 @@ const main = async () => {
     process.exit(1);
   }
   const voce = argomento('voce', F.voce);
+  // ⚠️ Rigirare la cattura azzera le durate del copione e rifà le clip, ma la
+  // voce è già pagata: con `--riusa` si riapplicano i tempi senza ricomprare
+  // una sola frase.
+  const riusa = process.argv.includes('--riusa');
 
   const cartella = path.join('out', slug);
   const copione = JSON.parse(fs.readFileSync(path.join(cartella, 'copione.json'), 'utf8'));
@@ -151,19 +155,26 @@ const main = async () => {
   const voci = [];
   let caratteri = 0;
   for (let k = 0; k < indici.length; k++) {
-    if (k > 0) await new Promise((r) => setTimeout(r, PAUSA));
+    if (k > 0 && !riusa) await new Promise((r) => setTimeout(r, PAUSA));
 
     const i = indici[k];
     const file = path.join(cartella, 'voce', `${String(i).padStart(2, '0')}.wav`);
-    const durata = await sintetizza(
-      F,
-      testi[i],
-      voce,
-      k > 0 ? testi[indici[k - 1]] : '',
-      k + 1 < indici.length ? testi[indici[k + 1]] : '',
-      file,
-    );
-    caratteri += testi[i].length;
+    const gia = riusa && fs.existsSync(file);
+    const durata = gia
+      ? Number(
+          execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file])
+            .toString()
+            .trim(),
+        )
+      : await sintetizza(
+          F,
+          testi[i],
+          voce,
+          k > 0 ? testi[indici[k - 1]] : '',
+          k + 1 < indici.length ? testi[indici[k + 1]] : '',
+          file,
+        );
+    caratteri += gia ? 0 : testi[i].length;
     voci.push({ i, durata: Number(durata.toFixed(2)) });
     console.log(`  ${String(i).padStart(2, '0')}  ${durata.toFixed(1)}s  ${testi[i].length} car.`);
 
