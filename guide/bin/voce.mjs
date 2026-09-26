@@ -1,73 +1,123 @@
 #!/usr/bin/env node
 /**
- * Voce narrante con ElevenLabs.
+ * Voce narrante, via Replicate.
  *
- *   node bin/voce.mjs vetrina testi/vetrina-voce.json [--voce=<id>]
- *   node bin/voce.mjs --voci            # elenca le voci disponibili
+ *   node bin/voce.mjs vetrina testi/vetrina-voce.json
+ *   node bin/voce.mjs vetrina testi/vetrina-voce.json --fornitore=elevenlabs --voce=Sarah
  *
  * Produce `out/<slug>/voce/NN.wav` (NN = indice della scena nel copione),
  * allunga le scene che non stanno dentro il parlato e scrive
  * `out/<slug>/.voci.json` da passare a `bin/monta-vetrina.mjs`.
  *
- * ⚠️ La chiave sta in `.env` alla radice del progetto (`ELEVENLABS_API_KEY`) e
- * non passa mai dalla riga di comando: finirebbe nella cronologia della shell.
+ * ⚠️ Il token sta in `.env` alla radice (`REPLICATE_API_TOKEN`) e non passa mai
+ * dalla riga di comando: finirebbe nella cronologia della shell.
  *
- * ⚠️ `previous_text` / `next_text` non sono un dettaglio: senza, ogni frase
- * viene sintetizzata come se fosse l'unica al mondo e riparte ogni volta dalla
- * stessa intonazione neutra — è esattamente il «meccanico» che si sente quando
- * si incollano dieci clip generate a parte. Dando alla frase il suo contesto, il
- * modello chiude la cadenza di quella prima e apre quella dopo.
+ * Perché **Replicate** e non l'API di ElevenLabs: lì si paga a mese con un
+ * tetto di caratteri (30.000 sul piano base, cioè meno di quanto servirebbe per
+ * le 46 guide), qui si paga a consumo. In più dà accesso ai modelli di più
+ * fornitori con una chiave sola, e la differenza si sente: le voci di
+ * ElevenLabs sono personaggi inglesi a cui si chiede di parlare italiano,
+ * MiniMax ha voci italiane native.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-const API = 'https://api.elevenlabs.io/v1';
-const MODELLO = 'eleven_multilingual_v2';
-/** Rachel non parla italiano: la voce si sceglie con `--voci` e si fissa qui. */
-const VOCE_PREDEFINITA = process.env.ELEVENLABS_VOICE_ID ?? '';
+/**
+ * ⚠️ Sei richieste al minuto finché il credito Replicate sta sotto i 5 dollari
+ * (risposta 429, verificata il 26 Set 2026). Undici secondi fra una frase e
+ * l'altra stanno dentro il limite senza rimbalzare. Sopra i 5 dollari si può
+ * abbassare: cinquecento file a questo ritmo sono un'ora e mezza.
+ */
+const PAUSA = 11_000;
 
-const chiave = () => {
-  const env = fs.readFileSync(path.join('..', '.env'), 'utf8');
-  const riga = env.split('\n').find((r) => r.startsWith('ELEVENLABS_API_KEY='));
-  if (!riga) throw new Error('ELEVENLABS_API_KEY manca in .env');
-
-  return riga.slice('ELEVENLABS_API_KEY='.length).trim().replace(/^["']|["']$/g, '');
+const FORNITORI = {
+  // Voci italiane native. `<#0.4#>` nel testo inserisce una pausa in secondi:
+  // è il modo di dare respiro a una frase senza spezzarla in due chiamate.
+  minimax: {
+    modello: 'minimax/speech-02-hd',
+    voce: 'Italian_DiligentLeader',
+    corpo: (testo, voce) => ({
+      text: testo,
+      voice_id: voce,
+      language_boost: 'Italian',
+      emotion: 'auto',
+      speed: 1,
+    }),
+  },
+  // `previous_text` / `next_text` non sono un dettaglio: senza, ogni frase
+  // viene sintetizzata come se fosse l'unica al mondo e riparte ogni volta
+  // dalla stessa intonazione neutra — è il «meccanico» che si sente quando si
+  // incollano dieci clip generate a parte.
+  elevenlabs: {
+    modello: 'elevenlabs/v3',
+    voce: 'Sarah',
+    corpo: (testo, voce, prima, dopo) => ({
+      prompt: testo,
+      voice: voce,
+      language_code: 'it',
+      previous_text: prima,
+      next_text: dopo,
+      stability: 0.4,
+      similarity_boost: 0.75,
+      style: 0.35,
+      speed: 1,
+    }),
+  },
 };
 
-const elencaVoci = async () => {
-  const r = await fetch(`${API}/voices`, { headers: { 'xi-api-key': chiave() } });
-  const { voices } = await r.json();
-  for (const v of voices) {
-    const lingue = (v.verified_languages ?? []).map((l) => l.language).join(',');
-    console.log(`${v.voice_id}  ${v.name.padEnd(22)} ${v.labels?.accent ?? ''} ${v.labels?.description ?? ''} ${lingue}`);
+const gettone = () => {
+  const riga = fs
+    .readFileSync(path.join('..', '.env'), 'utf8')
+    .split('\n')
+    .find((r) => r.startsWith('REPLICATE_API_TOKEN='));
+  if (!riga) throw new Error('REPLICATE_API_TOKEN manca in .env');
+
+  return riga.slice('REPLICATE_API_TOKEN='.length).trim().replace(/^["']|["']$/g, '');
+};
+
+const argomento = (nome, difetto) =>
+  (process.argv.find((a) => a.startsWith(`--${nome}=`)) ?? `--${nome}=${difetto}`).slice(nome.length + 3);
+
+/**
+ * Una frase, con tre tentativi.
+ *
+ * ⚠️ Replicate fallisce da solo ogni tanto («Director: unexpected error
+ * handling prediction», visto il 26 Set 2026 su una frase qualunque, ripetuta
+ * subito dopo senza problemi). Su cinquecento file una riprova automatica non è
+ * un lusso: è la differenza fra un comando che finisce e uno da sorvegliare.
+ */
+const sintetizza = async (F, testo, voce, prima, dopo, destinazione) => {
+  for (let tentativo = 1; ; tentativo++) {
+    try {
+      return await unaVolta(F, testo, voce, prima, dopo, destinazione);
+    } catch (e) {
+      if (tentativo === 3) throw e;
+      console.log(`     ritento (${e.message.slice(0, 60)}…)`);
+      await new Promise((r) => setTimeout(r, 6000));
+    }
   }
 };
 
-const sintetizza = async (testo, prima, dopo, voce, destinazione) => {
-  const r = await fetch(`${API}/text-to-speech/${voce}?output_format=mp3_44100_128`, {
+const unaVolta = async (F, testo, voce, prima, dopo, destinazione) => {
+  const r = await fetch(`https://api.replicate.com/v1/models/${F.modello}/predictions`, {
     method: 'POST',
-    headers: { 'xi-api-key': chiave(), 'content-type': 'application/json' },
-    body: JSON.stringify({
-      text: testo,
-      model_id: MODELLO,
-      previous_text: prima,
-      next_text: dopo,
-      voice_settings: {
-        // Stabilità bassa = più variazione fra una frase e l'altra, che è ciò
-        // che distingue una persona da un lettore automatico. Troppo bassa
-        // (<0,3) e il modello comincia a inventarsi enfasi che non c'entrano.
-        stability: 0.38,
-        similarity_boost: 0.75,
-        style: 0.32,
-        use_speaker_boost: true,
-      },
-    }),
+    headers: {
+      Authorization: `Bearer ${gettone()}`,
+      'content-type': 'application/json',
+      // Aspetta la fine invece di restituire subito un id da interrogare: per
+      // una frase di due secondi il giro di polling costa più della sintesi.
+      Prefer: 'wait',
+    },
+    body: JSON.stringify({ input: F.corpo(testo, voce, prima, dopo) }),
   });
-  if (!r.ok) throw new Error(`ElevenLabs ${r.status}: ${await r.text()}`);
+  const p = await r.json();
+  if (p.status !== 'succeeded') {
+    throw new Error(`${F.modello}: ${p.status ?? r.status} ${JSON.stringify(p.error ?? p.detail ?? p).slice(0, 300)}`);
+  }
 
   const mp3 = `${destinazione}.mp3`;
-  fs.writeFileSync(mp3, Buffer.from(await r.arrayBuffer()));
+  fs.writeFileSync(mp3, Buffer.from(await (await fetch(p.output)).arrayBuffer()));
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', mp3, '-ar', '48000', '-ac', '2', destinazione]);
   fs.rmSync(mp3);
 
@@ -79,38 +129,43 @@ const sintetizza = async (testo, prima, dopo, voce, destinazione) => {
 };
 
 const main = async () => {
-  if (process.argv.includes('--voci')) return elencaVoci();
-
   const slug = process.argv[2];
   const testiFile = process.argv[3];
-  const voce = (process.argv.find((a) => a.startsWith('--voce=')) ?? `--voce=${VOCE_PREDEFINITA}`).slice(7);
-  if (!slug || !testiFile || !voce) {
-    console.error('uso: node bin/voce.mjs <slug> <testi.json> --voce=<id>');
+  const F = FORNITORI[argomento('fornitore', 'minimax')];
+  if (!slug || !testiFile || !F) {
+    console.error('uso: node bin/voce.mjs <slug> <testi.json> [--fornitore=minimax|elevenlabs] [--voce=...]');
     process.exit(1);
   }
+  const voce = argomento('voce', F.voce);
 
   const cartella = path.join('out', slug);
   const copione = JSON.parse(fs.readFileSync(path.join(cartella, 'copione.json'), 'utf8'));
   const testi = JSON.parse(fs.readFileSync(testiFile, 'utf8'));
-  const indici = Object.keys(testi).map(Number).sort((a, b) => a - b);
+  const indici = Object.keys(testi)
+    .map(Number)
+    .sort((a, b) => a - b);
 
   fs.mkdirSync(path.join(cartella, 'voce'), { recursive: true });
+  console.log(`${F.modello} · ${voce} · ${indici.length} frasi`);
 
   const voci = [];
   let caratteri = 0;
   for (let k = 0; k < indici.length; k++) {
+    if (k > 0) await new Promise((r) => setTimeout(r, PAUSA));
+
     const i = indici[k];
     const file = path.join(cartella, 'voce', `${String(i).padStart(2, '0')}.wav`);
     const durata = await sintetizza(
+      F,
       testi[i],
+      voce,
       k > 0 ? testi[indici[k - 1]] : '',
       k + 1 < indici.length ? testi[indici[k + 1]] : '',
-      voce,
       file,
     );
     caratteri += testi[i].length;
     voci.push({ i, durata: Number(durata.toFixed(2)) });
-    console.log(`${String(i).padStart(2, '0')}  ${durata.toFixed(1)}s  ${testi[i].length} car.`);
+    console.log(`  ${String(i).padStart(2, '0')}  ${durata.toFixed(1)}s  ${testi[i].length} car.`);
 
     // La scena dura almeno quanto la sua frase, più un respiro: se il parlato
     // sfora, la voce finirebbe sopra la scena successiva.
@@ -136,7 +191,7 @@ const main = async () => {
 
   fs.writeFileSync(path.join(cartella, 'copione.json'), JSON.stringify(copione, null, 2));
   fs.writeFileSync(path.join(cartella, '.voci.json'), JSON.stringify({ voci }, null, 2));
-  console.log(`\n${caratteri} caratteri consumati · ${voci.length} frasi`);
+  console.log(`\n${caratteri} caratteri · ${voci.length} frasi · ${(voci.reduce((a, v) => a + v.durata, 0)).toFixed(1)}s di parlato`);
 };
 
 main().catch((e) => {
