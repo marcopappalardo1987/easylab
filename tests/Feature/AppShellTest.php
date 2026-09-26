@@ -62,7 +62,7 @@ it('no longer promises a page nobody is writing', function () {
 
         $html = $this->actingAs($u->fresh())->get(route('dashboard'))->assertOk()->getContent();
 
-        preg_match('/<nav class="flex-1 space-y-1[^"]*">.*?<\/nav>/s', $html, $blocco);
+        preg_match('/<nav[^>]*aria-label="Menù principale".*?<\/nav>/s', $html, $blocco);
 
         // Non `?? ''`: un blocco assente e un blocco vuoto vanno distinti, o
         // un `not->toContain()` sarebbe verde proprio quando la nav è sparita.
@@ -110,7 +110,7 @@ it('keeps the personal pages out of the sidebar, where only the Ente data lives'
     // ⚠️ Si asserisce sul solo blocco <nav> della barra, estratto: «Sicurezza» è
     // una parola che vive legittimamente altrove nella stessa pagina — nel menù
     // utente, che è precisamente il posto in cui deve stare.
-    preg_match('/<nav class="flex-1 space-y-1[^"]*">(.*?)<\/nav>/s', $html, $trovato);
+    preg_match('/<nav[^>]*aria-label="Menù principale"[^>]*>(.*?)<\/nav>/s', $html, $trovato);
 
     expect($trovato)->not->toBeEmpty();
     expect($trovato[1])->not->toContain('Sicurezza');

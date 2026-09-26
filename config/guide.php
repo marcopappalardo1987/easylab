@@ -110,6 +110,11 @@ return [
      * conto loro.
      */
     'guide' => [
+        // ⚠️ Panoramica, non una guida operativa: tocca Dashboard, ricerca e
+        // anagrafica, che hanno ciascuna la propria voce più sotto. Sta prima
+        // di tutte perché è quella da guardare per prima; si toglie dal
+        // catalogo cancellando questa riga, senza toccare altro.
+        ['slug' => 'vetrina', 'argomento' => 'A', 'chiavi' => ['panoramica', 'introduzione', 'giro', 'inizio', 'dashboard', 'cercare', 'anagrafica', 'minuto']],
         ['slug' => 'primo-accesso', 'argomento' => 'A', 'chiavi' => ['invito', 'password', 'registrazione', 'email', 'accesso', 'login']],
         ['slug' => 'orientarsi', 'argomento' => 'A', 'chiavi' => ['dashboard', 'menù', 'semaforo', 'stati', 'obsoleti', 'campanella', 'notifiche']],
         ['slug' => 'tema-e-notifiche', 'argomento' => 'A', 'chiavi' => ['tema', 'scuro', 'chiaro', 'buio', 'preferenze', 'email', 'digest', 'avvisi']],

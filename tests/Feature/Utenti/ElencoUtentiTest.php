@@ -130,7 +130,7 @@ it('does not show a platform user a link to the tenant-bound people page', funct
 
     $html = $this->actingAs($developer)->get(route('dashboard'))->assertOk()->getContent();
 
-    preg_match('/<nav class="flex-1 space-y-1[^"]*">.*?<\/nav>/s', $html, $blocco);
+    preg_match('/<nav[^>]*aria-label="Menù principale".*?<\/nav>/s', $html, $blocco);
 
     expect($blocco)->not->toBeEmpty();
     expect($blocco[0])->toContain(route('piattaforma.index'))

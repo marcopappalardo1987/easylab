@@ -226,7 +226,10 @@ export class Scenografo {
      * che conta è il risultato.
      */
     if (elemento && opzioni.su) {
-      const dopo = await opzioni.su.boundingBox().catch(() => null);
+      // ⚠️ Col timeout, e corto: dopo un'azione che porta altrove l'elemento
+      // non c'è più, e un `boundingBox()` nudo resta in attesa fino alla morte
+      // del test — due minuti per scoprire una cosa che si sa in un secondo.
+      const dopo = await opzioni.su.boundingBox({ timeout: 1200 }).catch(() => null);
       const fermo = dopo !== null && Math.abs(dopo.x - elemento.x) < 12 && Math.abs(dopo.y - elemento.y) < 12;
       if (!fermo) elemento = null;
     }

@@ -83,18 +83,11 @@ Da qui in avanti la strada è sempre questa: la pagina di accesso, l'indirizzo a
 
 ## 7
 
-L'invito è consumato e l'account esiste. Da qui in avanti non c'è più niente di
-speciale: si entra dalla pagina di accesso, come si farà tutte le mattine.
-Questo passaggio in più esiste apposta, per farti fare almeno una volta il giro
-che poi farai sempre.
-
-## 8
-
 Questa è la pagina da salvare fra i preferiti, non il link dell'email. È
 l'unico indirizzo che ti servirà d'ora in poi, e se un giorno dimenticherai la
 password è anche il punto da cui si chiede di reimpostarla.
 
-## 9
+## 8
 
 L'indirizzo da usare è quello a cui è arrivato l'invito: è l'indirizzo a
 identificarti, non il nome, quindi se lavori per due laboratori diversi con due
@@ -103,14 +96,14 @@ casella su cui arriveranno le email delle scadenze, se le terrai accese.
 «Ricordami su questo dispositivo» ha senso sul proprio computer, molto meno su
 una postazione condivisa del laboratorio.
 
-## 10
+## 9
 
 Si accede, e la sessione resta aperta sul dispositivo finché non esci o non
 passa abbastanza tempo. Se ti chiedono un secondo fattore, è perché il tuo
 ruolo lo richiede: alcuni profili gestiscono dati altrui e la sola password non
 basta.
 
-## 11
+## 10
 
 La Dashboard è la pagina che vedrai per prima ogni volta, e riassume lo stato
 delle macchine della tua sede: quante sono in regola, quante chiedono un'azione
@@ -120,7 +113,7 @@ possono vedere numeri diversi, ed è voluto. Se ti sembra di vedere troppo poco 
 per esempio nessuna macchina — quasi sempre manca l'assegnazione a un reparto, e
 si chiede a chi amministra l'Ente.
 
-## 12
+## 11
 
 In alto a destra ci sono il tuo nome e, appena sotto, il tuo ruolo. Da quel
 menù si aprono le preferenze, il tema chiaro o scuro e l'uscita. Il ruolo non è
@@ -128,3 +121,4 @@ un'etichetta decorativa: governa quali voci compaiono nel menù di sinistra e
 quali azioni sono disponibili sulle schede, quindi due persone sedute una
 accanto all'altra possono vedere due Easy Lab diversi. Se ti aspetti un pulsante
 che non c'è, la prima cosa da guardare è quella riga.
+
