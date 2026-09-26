@@ -191,16 +191,6 @@ const Palco: React.FC<{ t: number }> = ({ t }) => (
         filter: 'blur(40px)',
       }}
     />
-    {/* Reticolo appena accennato: dà una superficie al fondo, così la finestra
-        ci si appoggia sopra invece di galleggiare nel nulla. */}
-    <AbsoluteFill
-      style={{
-        backgroundImage:
-          'linear-gradient(rgba(255,255,255,.055) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.055) 1px, transparent 1px)',
-        backgroundSize: '72px 72px',
-        maskImage: 'radial-gradient(ellipse at 50% 45%, rgba(0,0,0,.9), transparent 72%)',
-      }}
-    />
   </AbsoluteFill>
 );
 
@@ -347,24 +337,39 @@ const Didascalia: React.FC<{ testo: string; t: number; numero: string; y: number
 
 const Apertura: React.FC<{ scena: Extract<Scena, { tipo: 'apertura' }>; t: number }> = ({ scena, t }) => {
   const uscita = 1 - conAgio(t, scena.durata - 0.5, scena.durata);
+  // Il lockup del marchio scrive già «EasyLab»: ripeterlo sotto a caratteri
+  // cubitali è la stessa parola due volte, e la seconda non aggiunge niente.
+  // Quando il titolo È il nome, il posto grande va al sottotitolo, che dice
+  // di che cosa parla il video.
+  const gliLoDiceIlMarchio = /^easy\s*lab$/i.test(scena.titolo.trim());
 
   return (
     <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center', opacity: uscita }}>
       <div style={{ opacity: molla(t), transform: `translateY(${(1 - molla(t)) * 14}px)` }}>
-        <Marchio larghezza={340} />
+        <Marchio larghezza={380} />
       </div>
-      <div style={{ width: molla(t - 0.35) * 120, height: 3, background: BLU, marginTop: 34, marginBottom: 28 }} />
-      <Parole
-        testo={scena.titolo}
-        t={t - 0.5}
-        stile={{ color: '#fff', fontSize: 92, fontWeight: 700, letterSpacing: -2.4 }}
-      />
-      <div style={{ height: 18 }} />
-      <Parole
-        testo={scena.sottotitolo}
-        t={t - 0.85}
-        stile={{ color: GRIGIO, fontSize: 36, fontWeight: 400, letterSpacing: -0.2 }}
-      />
+      <div style={{ width: molla(t - 0.35) * 120, height: 3, background: BLU, marginTop: 38, marginBottom: 34 }} />
+      {gliLoDiceIlMarchio ? (
+        <Parole
+          testo={scena.sottotitolo}
+          t={t - 0.5}
+          stile={{ color: '#fff', fontSize: 62, fontWeight: 600, letterSpacing: -1.4 }}
+        />
+      ) : (
+        <>
+          <Parole
+            testo={scena.titolo}
+            t={t - 0.5}
+            stile={{ color: '#fff', fontSize: 92, fontWeight: 700, letterSpacing: -2.4 }}
+          />
+          <div style={{ height: 18 }} />
+          <Parole
+            testo={scena.sottotitolo}
+            t={t - 0.85}
+            stile={{ color: GRIGIO, fontSize: 36, fontWeight: 400, letterSpacing: -0.2 }}
+          />
+        </>
+      )}
     </AbsoluteFill>
   );
 };
@@ -397,8 +402,7 @@ const Cartello: React.FC<{ scena: Extract<Scena, { tipo: 'cartello' }>; t: numbe
           fontSize: 460,
           fontWeight: 800,
           letterSpacing: -14,
-          color: 'transparent',
-          WebkitTextStroke: '2px rgba(255,255,255,.16)',
+          color: 'rgba(255,255,255,.085)',
           opacity: conAgio(t, 0.1, 0.9),
           transform: `translateY(${(1 - conAgio(t, 0.1, 1.1)) * 40}px)`,
         }}
