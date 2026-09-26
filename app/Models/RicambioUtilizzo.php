@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Concerns\BelongsToOrgNodeThroughStrumento;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\SerializzaGiorniCivili;
 use App\Models\Contracts\ReachesStrumento;
 use App\Models\Scopes\GaranziaRicambioPrivacyScope;
 use Carbon\CarbonInterface;
@@ -53,7 +54,7 @@ use InvalidArgumentException;
 class RicambioUtilizzo extends Model implements ReachesStrumento
 {
     /** @use HasFactory<RicambioUtilizzoFactory> */
-    use AuditsDomainWrites, BelongsToOrgNodeThroughStrumento, BelongsToTenant, HasFactory, SoftDeletes;
+    use AuditsDomainWrites, BelongsToOrgNodeThroughStrumento, BelongsToTenant, HasFactory, SerializzaGiorniCivili, SoftDeletes;
 
     protected $table = 'ricambio_utilizzo';
 

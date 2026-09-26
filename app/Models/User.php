@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\TemaUtente;
 use App\Enums\TipoUnitaOrganizzativa;
 use App\Support\AuditLog;
 use Database\Factories\UserFactory;
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Lab404\Impersonate\Models\Impersonate;
@@ -28,8 +30,25 @@ use Spatie\Permission\Traits\HasRoles;
 #[Hidden(['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes'])]
 class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
-    use HasFactory, HasRoles, Impersonate, Notifiable, TwoFactorAuthenticatable;
+    /**
+     * @use HasFactory<UserFactory>
+     *
+     * 🔴 `SoftDeletes` dal 29 Ago 2026 (🔗 ADR-038), ed è una guardia di
+     * accesso travestita da colonna: il provider di autenticazione di Laravel
+     * costruisce la query dal model, quindi applica i global scope — una
+     * persona cestinata **non viene trovata al login**, senza che nessuno abbia
+     * scritto un controllo. Lo stesso scope la toglie dalle tendine
+     * dell'assegnatario, dai destinatari del digest notturno e dai candidati
+     * all'impersonazione.
+     *
+     * ⛔ Il rovescio, e va conosciuto: lo storico **deve** continuare a
+     * nominarla. Le cinque relazioni di attribuzione (`Intervento::tecnico`,
+     * `Documento::caricato_da`, `Strumento::forced_by`,
+     * `SpostamentoStrumento::eseguito_da`, `Errore::risolto_da`) e le due
+     * letture del registro di audit leggono `withTrashed()`: senza,
+     * cestinare una persona riscriverebbe il passato in «—».
+     */
+    use HasFactory, HasRoles, Impersonate, Notifiable, SoftDeletes, TwoFactorAuthenticatable;
 
     /**
      * Ruolo soggetto al secondo filtro (sotto-albero) del Global Scope (ADR-006).
@@ -40,6 +59,16 @@ class User extends Authenticatable
      * Ruolo con accesso per unione portafoglio ∪ assegnazione (ADR-007/030).
      */
     public const TECNICO_ROLE = 'Tecnico';
+
+    /**
+     * Il laboratorio/Ente finale (🔗 Funzionalità per Ruolo §4).
+     *
+     * Vive qui come costante, e non come stringa ribattuta, per la ragione dei
+     * due sopra: è il ruolo che 🔗 ADR-029 protegge, quindi ogni punto che lo
+     * nomina deve nominare **lo stesso** — un refuso in una delle due copie
+     * spegnerebbe una regola di privacy senza rompere nulla.
+     */
+    public const TENANT_ROLE = 'Tenant';
 
     /**
      * Get the attributes that should be cast.
@@ -57,6 +86,17 @@ class User extends Authenticatable
             // preferenze dell'utente, mai per mass-assignment — la stessa
             // postura di `visibilita_garanzie_ricambio` (ADR-029).
             'riceve_email_scadenze' => 'boolean',
+            // La preferenza di tema (ADR-034). Fuori dall'attributo Fillable
+            // come le due qui sopra: si scrive solo dalle preferenze
+            // dell'utente, con `forceFill`, mai per mass-assignment.
+            //
+            // ⚠️ **Il cast è la seconda metà del vincolo di schema**, non un
+            // ornamento: la colonna porta un CHECK sui tre valori, e qui
+            // `TemaUtente::from()` fa fallire con un `ValueError` ogni
+            // assegnazione fuori enum *prima* che arrivi al database. Le due
+            // guardie coprono strade diverse — questa Eloquent, quella gli
+            // import e le migration di correzione.
+            'tema' => TemaUtente::class,
         ];
     }
 
@@ -133,6 +173,24 @@ class User extends Authenticatable
     public function accounts(): BelongsToMany
     {
         return $this->belongsToMany(Account::class, 'account_user')->withTimestamps();
+    }
+
+    /**
+     * I clienti **preferiti** di questa persona (🔗 ADR-037): il perimetro
+     * «i miei preferiti» del Parco clienti.
+     *
+     * ⛔ **Non è un'autorizzazione e non va usata come tale.** Dice quali clienti
+     * l'utente ha messo da parte, non quali può vedere: l'insieme legittimo
+     * resta `VistaPiattaforma::accounts()`, con cui `ParcoClienti::clienti()`
+     * interseca. Un preferito segnato quando l'account era vivo sopravvive al
+     * suo cestinamento — la riga cade nell'intersezione, non nel `whereIn`.
+     *
+     * Si legge sempre da `App\Support\Piattaforma\Preferiti`, che è la porta
+     * gata: questa relazione è la sua forma Eloquent, non il suo sostituto.
+     */
+    public function clientiPreferiti(): BelongsToMany
+    {
+        return $this->belongsToMany(Account::class, 'clienti_preferiti')->withTimestamps();
     }
 
     /**

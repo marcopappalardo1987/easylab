@@ -202,7 +202,7 @@ class DemoSeeder extends Seeder
         });
     }
 
-    private function popolaEnte(UnitaOrganizzativa $ente, ?Account $condiviso = null): void
+    protected function popolaEnte(UnitaOrganizzativa $ente, ?Account $condiviso = null): void
     {
         $nodi = $this->creaAlberatura($ente);
         $utenti = $this->creaUtenti($ente);
@@ -215,8 +215,28 @@ class DemoSeeder extends Seeder
         $this->creaInterventi($ente, $strumentiIds, $tecnici);
         $this->creaSpostamenti($ente, $strumentiIds, $nodi, $utenti['admin']);
         $this->creaGaranzie($ente, $strumentiIds);
+        $this->aggiornaStatistiche(['strumenti', 'interventi', 'spostamenti_strumento', 'garanzie']);
         $this->creaRicambi($ente, $strumentiIds);
         $this->forzaAlcuniSemafori($ente, $utenti['admin'], $strumentiIds);
+    }
+
+    /**
+     * ⛔ `ANALYZE` dopo gli insert a blocchi, solo su Postgres: senza, il seeder
+     * può diventare quadratico e non finire più (T7 di S7: un worker fermo 15 ore).
+     *
+     * Dopo un rollback l'autovacuum lascia le tabelle con `reltuples = 0` e
+     * `relpages > 0`: il planner stima 1 riga per quanta ne vada inserita, e le
+     * join di `verificaInvarianti()` e `scadenzeGaranzieRicambi()` diventano
+     * nested loop su scansioni complete. `ANALYZE` è ammesso in transazione e
+     * conta come vive le righe non ancora committate: stime vere, piani giusti.
+     *
+     * @param  list<string>  $tabelle
+     */
+    private function aggiornaStatistiche(array $tabelle): void
+    {
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('analyze '.implode(', ', $tabelle));
+        }
     }
 
     /** @return list<int> id dei nodi foglia (dove stanno gli strumenti) */
@@ -345,11 +365,12 @@ class DemoSeeder extends Seeder
         $righe = [];
         $adesso = now();
 
-        // Alcune decine di strumenti per nodo foglia → migliaia per Ente. Ogni
-        // unità pesca dal catalogo chiuso, così lo STESSO modello finisce in
-        // molti laboratori e la vista "Per modello" ha qualcosa da aggregare.
+        // Almeno 35 strumenti per nodo: con 12 dipartimenti e almeno 2
+        // laboratori ciascuno sono almeno 1.260 strumenti per Ente. Ogni unità
+        // pesca dal catalogo chiuso, così lo STESSO modello finisce in molti
+        // laboratori e la vista "Per modello" ha qualcosa da aggregare.
         foreach ($nodi as $nodo) {
-            foreach (range(1, random_int(20, 35)) as $ignored) {
+            foreach (range(1, random_int(35, 45)) as $ignored) {
                 $nome = $nomi[array_rand($nomi)];
                 $varianti = self::CATALOGO[$nome];
                 [$modello, $sigla] = $varianti[array_rand($varianti)];
@@ -360,6 +381,14 @@ class DemoSeeder extends Seeder
                     'nome' => $nome,
                     'modello' => $modello,
                     'matricola' => $sigla.'-'.str_pad((string) random_int(1, 999999), 6, '0', STR_PAD_LEFT),
+                    // 🔴 Lo genera il hook `creating` del model, che con
+                    // `insert()` NON scatta: senza questa riga ogni strumento
+                    // seminato nasce senza token, e `/strumenti/{id}/qr` va in
+                    // 500 — `URL::signedRoute` non accetta un parametro nullo.
+                    // Trovato il 7 Set 2026 girando la guida dell'etichetta QR:
+                    // 7559 strumenti su 7559 ne erano privi, nel DB dimostrativo
+                    // e in quello di sviluppo.
+                    'qr_token' => Strumento::nuovoQrToken(),
                     'parametri_tecnici' => json_encode([
                         'Alimentazione' => random_int(0, 1) ? '230 V — 50 Hz' : '400 V — 50 Hz',
                         'Potenza' => random_int(200, 4000).' W',
@@ -629,6 +658,7 @@ class DemoSeeder extends Seeder
         foreach (array_chunk($righe, 500) as $blocco) {
             RicambioUtilizzo::insert($blocco);
         }
+        $this->aggiornaStatistiche(['ricambio_utilizzo']);
 
         $this->command?->info('  ricambi montati: '.count($righe));
 
@@ -736,7 +766,7 @@ class DemoSeeder extends Seeder
      * Gli insert() a blocchi saltano gli eventi Eloquent: qui si verifica a
      * posteriori che gli invarianti del dominio siano comunque rispettati.
      */
-    private function verificaInvarianti(): void
+    protected function verificaInvarianti(): void
     {
         $fattiSenzaData = Intervento::withoutGlobalScopes()
             ->where('stato', StatoIntervento::Fatto->value)->whereNull('data_esecuzione')->count();
@@ -788,7 +818,17 @@ class DemoSeeder extends Seeder
             );
         }
 
-        $this->command?->info('Invarianti verificati: stato/data_esecuzione, tenant allineati, ricambi montati coerenti, account agganciati.');
+        // 🔴 Il token del QR: lo assegna un hook `creating` che con `insert()`
+        // non scatta, quindi è esattamente il tipo di invariante che questo
+        // seeder deve garantire da sé. Senza, `/strumenti/{id}/qr` va in 500 —
+        // ed è così che è stato scoperto, girando una guida e non con un test.
+        $senzaQr = Strumento::withoutGlobalScopes()->whereNull('qr_token')->count();
+
+        if ($senzaQr) {
+            throw new \RuntimeException("Invariante violato — strumenti senza qr_token: {$senzaQr}");
+        }
+
+        $this->command?->info('Invarianti verificati: stato/data_esecuzione, tenant allineati, ricambi montati coerenti, account agganciati, token QR presenti.');
     }
 
     /**
@@ -828,7 +868,7 @@ class DemoSeeder extends Seeder
         }
     }
 
-    private function riepilogo(): void
+    protected function riepilogo(): void
     {
         $this->command?->table(
             ['Tabella', 'Righe totali'],

@@ -200,6 +200,13 @@ it('forbids Tenant and Tecnico from every forzatura action', function () {
     foreach (['Tenant', 'Tecnico'] as $ruolo) {
         $utente = User::factory()->create(['tenant_id' => $this->ente->id]);
         $utente->assignRole($ruolo);
+        if ($ruolo === 'Tecnico') {
+            // S7 (T1a): la scheda rilegge la macchina con gli scope a ogni
+            // richiesta; il Tecnico la vede solo dal portafoglio (ADR-007/030),
+            // altrimenti 404 come sulla rotta. Col portafoglio il 403 misura il
+            // permesso, non lo scope.
+            $utente->portafoglioClienti()->attach($this->ente->id);
+        }
 
         foreach ([['openForza'], ['forza'], ['rimuoviForzatura']] as $azione) {
             scheda($utente, $this->strumento)->call(...$azione)->assertForbidden();

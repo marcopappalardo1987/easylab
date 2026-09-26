@@ -6,6 +6,7 @@ use App\Enums\TipoDocumento;
 use App\Models\Documento;
 use App\Models\Intervento;
 use App\Models\Strumento;
+use App\Support\Documenti\NomeFileSicuro;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -27,9 +28,21 @@ use InvalidArgumentException;
  */
 class CaricaDocumento
 {
+    /** Le estensioni che `mimes:` della schermata ammette, dedotte dai byte. */
+    public const ESTENSIONI = ['pdf', 'jpg', 'jpeg', 'png'];
+
     public function esegui(Model $soggetto, UploadedFile $file, TipoDocumento $tipo): Documento
     {
         $strumento = $this->strumentoDi($soggetto);
+
+        // Estensione e MIME dal CONTENUTO, non dal client (T1cA-2, T1cB-2): da
+        // Livewire `getClientMimeType()` vale sempre `application/octet-stream`,
+        // e il nome del client può dire `.hta` di un file che è un PDF. Un
+        // chiamante che salta la validazione trova qui la stessa regola.
+        $estensione = strtolower((string) $file->guessExtension());
+        if (! in_array($estensione, self::ESTENSIONI, true)) {
+            throw new InvalidArgumentException('Documento: ammessi solo PDF, JPG e PNG, a giudicare dal contenuto.');
+        }
 
         // `tenant_id` nel prefisso (ERD §8.1): non è sicurezza — quella è la
         // Policy — ma rende il bucket leggibile e un ripristino circoscrivibile.
@@ -41,9 +54,9 @@ class CaricaDocumento
             'documentabile_id' => $soggetto->getKey(),
             'strumento_id' => $strumento->id,
             'tipo' => $tipo,
-            'nome' => $file->getClientOriginalName(),
+            'nome' => NomeFileSicuro::conEstensione(NomeFileSicuro::da($file->getClientOriginalName()), $estensione),
             'path' => $path,
-            'mime' => $file->getClientMimeType(),
+            'mime' => $file->getMimeType(),
             'size' => $file->getSize(),
             'caricato_da' => auth()->id(),
         ]));

@@ -10,7 +10,9 @@ use App\Models\UnitaOrganizzativa;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -28,19 +30,35 @@ class ImportStrumenti extends Component
 
     public const MAX_RIGHE = 1000;
 
+    /** Caratteri di un valore mostrati per una riga scartata. */
+    public const ANTEPRIMA_SCARTATE = 100;
+
     public const COLONNE = ['nome', 'modello', 'matricola', 'data_installazione', 'ubicazione', 'provenienza'];
 
     public $file;
 
+    /*
+     * `#[Locked]` sull'esito dell'analisi (S7, T1c): `importa()` si fida di
+     * `$righe` — errori, dati e `nodoId` — e una proprietà pubblica è scrivibile
+     * dal client. Senza il lucchetto un `$set('righe', …)` saltava ogni
+     * controllo di `valutaRiga()`: nomi oltre 255 caratteri, date arbitrarie, il
+     * nodo Ente. Lo scope del nodo reggeva l'isolamento, non la validazione.
+     */
+
     /** @var list<array{numero:int,dati:array<string,string>,nodoId:?int,nodoNome:?string,errori:list<string>}> */
+    #[Locked]
     public array $righe = [];
 
+    #[Locked]
     public bool $analizzato = false;
 
+    #[Locked]
     public bool $troncato = false;
 
+    #[Locked]
     public ?int $importate = null;
 
+    #[Locked]
     public ?int $scartate = null;
 
     public function scaricaTemplate(): StreamedResponse
@@ -68,9 +86,23 @@ class ImportStrumenti extends Component
             'file' => ['required', 'file', 'max:2048', 'extensions:csv,txt'],
         ]);
 
-        $this->reset(['righe', 'importate', 'scartate', 'troncato']);
+        // Un CSV è testo: un byte NUL vuol dire un binario rinominato, e le sue
+        // "righe" finirebbero nell'anteprima e nel database come spazzatura.
+        $contenuto = (string) file_get_contents($this->file->getRealPath());
+        if (str_contains($contenuto, "\0")) {
+            $this->addError('file', 'Il file non è un CSV di testo.');
 
-        $lette = $this->leggiCsv($this->file->getRealPath());
+            return;
+        }
+
+        // Il BOM via PRIMA di decidere la codifica (T1cA-5): con un solo byte
+        // Windows-1252 nel resto del file, la conversione trasformerebbe il BOM
+        // in «ï»¿» e l'intestazione `nome` non si troverebbe più.
+        $contenuto = (string) preg_replace('/^\xEF\xBB\xBF/', '', $contenuto);
+
+        $this->reset(['righe', 'importate', 'scartate', 'troncato', 'analizzato']);
+
+        $lette = $this->leggiCsv($this->inUtf8($contenuto));
         [$perNome, $perPercorso] = $this->mappeNodi();
 
         foreach ($lette as $i => $dati) {
@@ -135,12 +167,14 @@ class ImportStrumenti extends Component
      *
      * @return list<array<string,string>>
      */
-    protected function leggiCsv(string $path): array
+    protected function leggiCsv(string $contenuto): array
     {
-        $handle = fopen($path, 'r');
+        $handle = fopen('php://temp', 'r+');
         if ($handle === false) {
             return [];
         }
+        fwrite($handle, $contenuto);
+        rewind($handle);
 
         $primaRiga = fgets($handle);
         if ($primaRiga === false) {
@@ -182,6 +216,22 @@ class ImportStrumenti extends Component
         fclose($handle);
 
         return $righe;
+    }
+
+    /**
+     * Il contenuto in UTF-8, qualunque cosa abbia salvato il foglio di calcolo.
+     *
+     * L'Excel italiano esporta «CSV (delimitato)» in Windows-1252: «Unità» ha
+     * un byte 0xE0 che non è UTF-8 valido. Passato così com'è rompeva la
+     * serializzazione JSON del componente (500 all'analisi) e, su Postgres,
+     * l'INSERT. Un file è in una codifica sola: si decide sul file intero, non
+     * cella per cella.
+     */
+    private function inUtf8(string $contenuto): string
+    {
+        return mb_check_encoding($contenuto, 'UTF-8')
+            ? $contenuto
+            : mb_convert_encoding($contenuto, 'UTF-8', 'Windows-1252');
     }
 
     /**
@@ -248,18 +298,25 @@ class ImportStrumenti extends Component
                 $chiave = implode(' > ', array_map('trim', explode('>', $chiave)));
                 $nodo = $perPercorso[$chiave] ?? null;
                 if ($nodo === null) {
-                    $errori[] = 'Ubicazione non trovata: '.$dati['ubicazione'];
+                    $errori[] = 'Ubicazione non trovata: '.Str::limit($dati['ubicazione'], self::ANTEPRIMA_SCARTATE);
                 }
             } else {
                 $candidati = $perNome[$chiave] ?? collect();
                 if ($candidati->isEmpty()) {
-                    $errori[] = 'Ubicazione non trovata: '.$dati['ubicazione'];
+                    $errori[] = 'Ubicazione non trovata: '.Str::limit($dati['ubicazione'], self::ANTEPRIMA_SCARTATE);
                 } elseif ($candidati->count() > 1) {
                     $errori[] = 'Ubicazione ambigua: usa il percorso (es. "Dipartimento > '.$dati['ubicazione'].'")';
                 } else {
                     $nodo = $candidati->first();
                 }
             }
+        }
+
+        // Una riga scartata si mostra e basta: i suoi valori finiscono nello
+        // snapshot di Livewire, e un campo da 1,5 MB lo porterebbe oltre il
+        // limite del payload (T1cB-9). Le righe valide sono già entro 255.
+        if ($errori !== []) {
+            $dati = array_map(fn (string $v) => Str::limit($v, self::ANTEPRIMA_SCARTATE), $dati);
         }
 
         return [
@@ -281,7 +338,9 @@ class ImportStrumenti extends Component
         foreach (['Y-m-d', 'd/m/Y'] as $formato) {
             try {
                 $data = CarbonImmutable::createFromFormat($formato, $valore);
-                if ($data !== false && $data->format($formato) === $valore) {
+                // Anno ≥ 1 (T1cA-4/T1cB-6): «0000-01-01» fa il giro del formato
+                // ma Postgres rifiuta l'anno zero, e il form manuale lo scarta.
+                if ($data !== false && $data->format($formato) === $valore && $data->year >= 1) {
                     return $data->toDateString();
                 }
             } catch (\Throwable) {

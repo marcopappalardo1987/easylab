@@ -5,8 +5,10 @@ use App\Models\Intervento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
+use App\Notifications\AvvisoObsolescenza;
 use App\Notifications\DigestScadenze;
 use App\Support\Notifiche\RigaAvviso;
+use App\Support\Notifiche\RigaObsolescenza;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Livewire\Livewire;
 
@@ -49,6 +51,20 @@ it('counts the unread notifications', function () {
     Livewire::test(Campanella::class)->assertSet('nonLette', 2);
 });
 
+// 🔴 **La regola NON è cambiata, ed è la conclusione di tre tentativi.**
+//
+// Il caricamento pigro era stato tolto il 28 Ago 2026 credendolo la causa per
+// cui il pannello non si apriva: il click chiedeva le righe al server, e si
+// pensava che la risposta, ridisegnando il frammento, azzerasse lo stato di
+// Alpine. Il DOM di staging ha smentito la diagnosi — Alpine era vivo e legato,
+// le righe erano in pagina, e il pannello restava chiuso lo stesso.
+//
+// La cura vera è stata togliere Alpine dal gesto: il pannello è reso da un
+// `@if ($aperta)`, cioè da stato del SERVER, come le modali di questa
+// applicazione. E siccome aprire passa comunque dal server, il caricamento
+// pigro è tornato — con esso la query che l'esperimento aveva aggiunto a ogni
+// pagina, per ogni utente.
+
 it('loads the list only when the panel is opened', function () {
     notificaA($this->admin, $this->ente, $this->strumento);
     $this->actingAs($this->admin);
@@ -57,9 +73,13 @@ it('loads the list only when the panel is opened', function () {
         // Chiusa: nessuna riga letta dal database — il componente si monta su
         // ogni pagina dell'applicazione.
         ->assertDontSee('Ente A')
-        ->call('apri')
+        ->call('alterna')
         ->assertSee('Ente A')
-        ->assertSee('1 in arrivo');
+        ->assertSee('1 in arrivo')
+        // E `alterna()` chiude davvero, invece di limitarsi ad aprire.
+        ->call('alterna')
+        ->assertSet('aperta', false)
+        ->assertDontSee('Ente A');
 });
 
 it('marks everything as read', function () {
@@ -97,4 +117,58 @@ it('appears in the app shell for an authenticated user', function () {
         ->get('/dashboard')
         ->assertOk()
         ->assertSeeLivewire(Campanella::class);
+});
+
+// --- La terza transizione, che usciva muta ---
+//
+// 🔴 La campanella rende DUE notifiche diverse dallo stesso blocco: il digest
+// delle scadenze e l'avviso di obsolescenza. Il secondo è nato leggendo solo
+// `scadute` e `imminenti`, che nel suo payload non esistono — quindi il
+// paragrafo usciva VUOTO: nome dell'Ente, una riga bianca, «0 secondi fa».
+// Non dava errore. Dava il nulla, e per chi ha spento le email era l'unico
+// canale che gli restava.
+
+it('says what an obsolescence notice is about, instead of showing a blank line', function () {
+    $this->actingAs($this->admin);
+
+    $vecchia = Strumento::factory()->forNode($this->ente)->create([
+        'nome' => 'Centrifuga CF-12',
+        'data_installazione' => today()->subYears(14)->toDateString(),
+    ]);
+
+    $this->admin->notify(new AvvisoObsolescenza(
+        enteId: $this->ente->id,
+        enteNome: $this->ente->nome,
+        soglia: 10,
+        righe: [RigaObsolescenza::daStrumento($vecchia)],
+    ));
+
+    Livewire::test(Campanella::class)
+        ->call('apri')
+        // ⚠️ Ago SENZA apostrofi: `assertSee` di Livewire escapa, quindi
+        // «soglia di età» combacia mentre «l'età» non combacerebbe mai.
+        ->assertSee('1 macchina oltre la soglia');
+});
+
+it('pluralises the obsolescence notice, and keeps the two counts apart', function () {
+    $this->actingAs($this->admin);
+
+    $righe = collect(['Autoclave AC-200', 'Frigo -80 FR-3'])
+        ->map(fn (string $nome) => RigaObsolescenza::daStrumento(
+            Strumento::factory()->forNode($this->ente)->create([
+                'nome' => $nome,
+                'data_installazione' => today()->subYears(12)->toDateString(),
+            ])
+        ))
+        ->all();
+
+    $this->admin->notify(new AvvisoObsolescenza($this->ente->id, $this->ente->nome, 10, $righe));
+
+    Livewire::test(Campanella::class)
+        ->call('apri')
+        ->assertSee('2 macchine oltre la soglia')
+        // E NON deve prendere in prestito il vocabolario del digest: le due
+        // notifiche vivono nello stesso blocco e leggono chiavi diverse.
+        ->assertDontSee('scadenze superate')
+        ->assertDontSee('in arrivo');
 });

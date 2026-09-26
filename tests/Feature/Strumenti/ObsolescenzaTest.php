@@ -150,6 +150,52 @@ it('goes back to the first page when the obsoleti filter changes', function () {
         ->assertSet('paginators.page', 1);
 });
 
+it('reads the soglie in a fixed number of queries when the filter is on', function () {
+    // ⚠️ **Il test qui sotto non copre questo caso**, e la differenza conta: là
+    // `soloObsoleti` resta falso, quindi `scopeObsoleti()` non gira nemmeno.
+    // Dal blocco A di S6 quello scope fa una lettura propria delle soglie.
+    //
+    // ⚠️ **Si asserisce il numero ASSOLUTO e non la sola costanza**, ed è una
+    // correzione misurata: il ciclo di `scopeObsoleti()` gira sui tenant
+    // DISTINTI, non sulle righe, quindi una query infilata lì dentro resta
+    // costante al crescere del parco e la sola costanza non la vede. Con un
+    // Ente solo gli statement su `unita_organizzativa` sono due — le soglie e
+    // l'elenco dei nodi dei filtri — e fissarli è l'unico modo di accorgersene.
+    // ⚠️ `withQueryParams()` e non `set()`: `set()` monta col default e poi
+    // RIRENDERIZZA, cioè misura due pagine invece di una — ed è anche la strada
+    // da cui il filtro arriva davvero, essendo `#[Url]`.
+    $conta = function (): int {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        Livewire::withQueryParams(['soloObsoleti' => true])
+            ->actingAs($this->admin)->test(ElencoStrumenti::class);
+        $n = collect(DB::getQueryLog())->filter(fn ($q) => str_contains($q['query'], 'from "unita_organizzativa"'))->count();
+        DB::disableQueryLog();
+
+        return $n;
+    };
+
+    ($this->strumentoInstallato)(today()->subYears(12)->toDateString());
+
+    // Un render a vuoto prima di misurare: scalda la cache dei permessi di
+    // spatie, che altrimenti finirebbe nel primo conteggio e non nel secondo.
+    Livewire::actingAs($this->admin)->test(ElencoStrumenti::class);
+    $conUno = $conta();
+
+    foreach (range(1, 10) as $n) {
+        ($this->strumentoInstallato)(today()->subYears(12)->toDateString());
+    }
+
+    // Costante al crescere delle righe, e **fissa nel numero**: tre statement
+    // su `unita_organizzativa`, e sapere quali è ciò che rende utile il numero:
+    // le soglie di `scopeObsoleti()`, l'elenco dei nodi dei filtri e l'eager
+    // load di `tenant`. (Erano quattro: l'eager load di `unita` è stato tolto in
+    // S7/T4, la vista legge il percorso da `$percorsi`.) Una quarta lettura è
+    // qualcuno che ha rimesso una query dentro un ciclo.
+    expect($conUno)->toBe(3)
+        ->and($conta())->toBe($conUno);
+});
+
 it('loads the tenant once, whatever the number of rows', function () {
     // Il badge per riga legge la soglia dal tenant: senza eager load sarebbe N+1.
     $queryTenant = function (): int {

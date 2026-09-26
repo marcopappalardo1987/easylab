@@ -25,14 +25,6 @@ beforeEach(function () {
     $this->account->aggiungiMembro($this->membro);
 });
 
-/** Estrae il primo wire:snapshot dall'HTML, come fa il vendor stesso. */
-function snapshotDa(string $html): string
-{
-    $grezzo = str($html)->betweenFirst('wire:snapshot="', '"')->toString();
-
-    return html_entity_decode($grezzo, ENT_QUOTES);
-}
-
 it('redirects every request of the protected group to /bloccato', function () {
     $this->account->blocca('Insoluto');
 

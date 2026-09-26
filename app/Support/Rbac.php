@@ -48,6 +48,40 @@ class Rbac
         return in_array($permission, self::locked(), true);
     }
 
+    /**
+     * Ruoli la cui **riga** l'editor della matrice non tocca (S6, ADR-016).
+     *
+     * Guardia diversa e ortogonale a `locked()`: quella è una **colonna** (un
+     * permesso che nessun ruolo può guadagnare né perdere dalla UI), questa è
+     * una **riga** (un ruolo di cui non si tocca nessuna cella, in nessuna
+     * direzione).
+     *
+     * Vive in config e non in codice perché è la stessa forma di
+     * `two_factor_required_roles`: un elenco di nomi di ruolo che governa il
+     * comportamento della piattaforma. ⚠️ Non è nella matrice, quindi
+     * cambiarla **non richiede** un riseeding.
+     *
+     * @return list<string>
+     */
+    public static function ruoliProtetti(): array
+    {
+        return config('rbac.protected_roles', []);
+    }
+
+    /**
+     * **La** definizione di quale riga è inerte — una sola, mai una seconda copia.
+     *
+     * La leggono sia il metodo di dominio (`MatriceRuoli`) sia la vista, per la
+     * disciplina che `OffreImpersonazione::candidatiDi()` documenta a proposito
+     * di `canBeImpersonated()`: riscrivere la stessa regola una seconda volta
+     * altrove crea una copia che, il giorno in cui la prima cambia, resta
+     * indietro in silenzio.
+     */
+    public static function isRuoloProtetto(string $role): bool
+    {
+        return in_array($role, self::ruoliProtetti(), true);
+    }
+
     /** Ruoli per cui il 2FA è obbligatorio. */
     public static function twoFactorRequiredRoles(): array
     {

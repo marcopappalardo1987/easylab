@@ -1,0 +1,335 @@
+/* ---------------------------------------------------------------------------
+ * Il tema delle email di Easy Lab (🔗 ADR-011, ADR-033, ADR-034).
+ *
+ * ⛔ Nessuna variabile CSS, nessun `@media (prefers-color-scheme)`, nessun
+ *    token: LE EMAIL NON HANNO UN TEMA (ADR-034). I valori del Design System
+ *    sono riportati qui a mano, in esadecimale, perché `CssToInlineStyles` —
+ *    che è ciò che trasforma questo foglio in `style=""` su ogni elemento — non
+ *    risolve `var()`, e nessun client di posta garantisce le custom property.
+ *
+ * Corrispondenze col Design System:
+ *    fondo pagina    #f6f8fb   (--bg chiaro)
+ *    superficie      #ffffff   (--surface chiaro)
+ *    testo           #0f172a   (neutral-900 / --ink)
+ *    testo secondo   #475569   (neutral-600 / --ink-2)
+ *    bordo           #e2e8f0   (neutral-200 / --border)
+ *    marchio         #06589c   (primary-600, ADR-033)
+ * ------------------------------------------------------------------------- */
+
+/* Base */
+
+body,
+body *:not(html):not(style):not(br):not(tr):not(code) {
+    box-sizing: border-box;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif,
+        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+    position: relative;
+}
+
+body {
+    -webkit-text-size-adjust: none;
+    background-color: #f6f8fb;
+    color: #475569;
+    height: 100%;
+    line-height: 1.5;
+    margin: 0;
+    padding: 0;
+    width: 100% !important;
+}
+
+p,
+ul,
+ol,
+blockquote {
+    line-height: 1.5;
+    text-align: start;
+}
+
+a {
+    color: #06589c;
+}
+
+a img {
+    border: none;
+}
+
+/* Tipografia */
+
+h1 {
+    color: #0f172a;
+    font-size: 20px;
+    font-weight: bold;
+    margin-top: 0;
+    text-align: start;
+}
+
+h2 {
+    color: #0f172a;
+    font-size: 16px;
+    font-weight: bold;
+    margin-top: 24px;
+    text-align: start;
+}
+
+h3 {
+    color: #0f172a;
+    font-size: 14px;
+    font-weight: bold;
+    margin-top: 0;
+    text-align: left;
+}
+
+p {
+    color: #475569;
+    font-size: 16px;
+    line-height: 1.5em;
+    margin-top: 0;
+    text-align: left;
+}
+
+p.sub {
+    font-size: 12px;
+}
+
+img {
+    max-width: 100%;
+}
+
+/* Impaginazione */
+
+.wrapper {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    background-color: #f6f8fb;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+.content {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+/* Testata */
+
+.header {
+    padding: 24px 0;
+    text-align: center;
+}
+
+.header a {
+    color: #0f172a;
+    font-size: 18px;
+    font-weight: bold;
+    text-decoration: none;
+}
+
+.header-nome {
+    color: #0f172a;
+    display: block;
+    font-size: 18px;
+    font-weight: bold;
+    margin-top: 8px;
+}
+
+/* Logo */
+
+.logo {
+    display: block;
+    height: auto;
+    margin: 0 auto;
+    max-width: 180px;
+}
+
+/* Corpo */
+
+.body {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    background-color: #f6f8fb;
+    border-bottom: 1px solid #f6f8fb;
+    border-top: 1px solid #f6f8fb;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+.inner-body {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 570px;
+    background-color: #ffffff;
+    border-color: #e2e8f0;
+    border-radius: 8px;
+    border-style: solid;
+    border-width: 1px;
+    margin: 0 auto;
+    padding: 0;
+    width: 570px;
+}
+
+.inner-body a {
+    word-break: break-all;
+}
+
+/* Sottotesto */
+
+.subcopy {
+    border-top: 1px solid #e2e8f0;
+    margin-top: 24px;
+    padding-top: 24px;
+}
+
+.subcopy p {
+    color: #475569;
+    font-size: 13px;
+}
+
+/* Piè di pagina */
+
+.footer {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 570px;
+    margin: 0 auto;
+    padding: 0;
+    text-align: center;
+    width: 570px;
+}
+
+.footer p {
+    color: #475569;
+    font-size: 12px;
+    text-align: center;
+}
+
+.footer a {
+    color: #475569;
+    text-decoration: underline;
+}
+
+/* Tabelle */
+
+.table table {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    margin: 24px auto;
+    width: 100%;
+}
+
+.table th {
+    border-bottom: 1px solid #e2e8f0;
+    color: #0f172a;
+    font-size: 13px;
+    margin: 0;
+    padding-bottom: 8px;
+    text-align: left;
+}
+
+.table td {
+    border-bottom: 1px solid #e2e8f0;
+    color: #475569;
+    font-size: 15px;
+    line-height: 20px;
+    margin: 0;
+    padding: 10px 0;
+}
+
+.content-cell {
+    max-width: 100vw;
+    padding: 32px;
+}
+
+/* Pulsanti */
+
+.action {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    margin: 28px auto;
+    padding: 0;
+    text-align: center;
+    width: 100%;
+    float: unset;
+}
+
+.button {
+    -webkit-text-size-adjust: none;
+    border-radius: 6px;
+    color: #ffffff;
+    display: inline-block;
+    font-weight: bold;
+    overflow: hidden;
+    text-decoration: none;
+}
+
+/*
+ * I bordi ripetono il fondo: è il modo di ottenere il padding di un pulsante
+ * nei client che ignorano `padding` su un `<a>` (Outlook in testa).
+ */
+.button-blue,
+.button-primary {
+    background-color: #06589c;
+    border-bottom: 10px solid #06589c;
+    border-left: 20px solid #06589c;
+    border-right: 20px solid #06589c;
+    border-top: 10px solid #06589c;
+}
+
+.button-green,
+.button-success {
+    background-color: #157347;
+    border-bottom: 10px solid #157347;
+    border-left: 20px solid #157347;
+    border-right: 20px solid #157347;
+    border-top: 10px solid #157347;
+}
+
+.button-red,
+.button-error {
+    background-color: #b3261e;
+    border-bottom: 10px solid #b3261e;
+    border-left: 20px solid #b3261e;
+    border-right: 20px solid #b3261e;
+    border-top: 10px solid #b3261e;
+}
+
+/* Riquadri */
+
+.panel {
+    border-left: #06589c solid 4px;
+    margin: 21px 0;
+}
+
+.panel-content {
+    background-color: #f6f8fb;
+    color: #475569;
+    padding: 16px;
+}
+
+.panel-content p {
+    color: #475569;
+}
+
+.panel-item {
+    padding: 0;
+}
+
+.panel-item p:last-of-type {
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+/* Utilità */
+
+.break-all {
+    word-break: break-all;
+}

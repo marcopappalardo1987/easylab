@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\AvvisoScadenza;
+use App\Support\Retention;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -17,12 +17,16 @@ Artisan::command('inspire', function () {
  * scheduler e worker di coda come parte della piattaforma — va solo attivato
  * nell'ambiente.
  *
- * **06:00 sul fuso di Roma** e non «all'alba UTC»: il digest parla di giorni
- * (scaduto ieri, scade fra trenta giorni) e l'applicazione calcola `today()` in
- * UTC. Alle 06:00 italiane le due date coincidono sempre, in ora solare come
- * legale, mentre un orario a cavallo della mezzanotte le farebbe divergere per
- * un'ora l'anno — cioè un giorno in cui il confine «scade oggi» direbbe una cosa
- * all'email e un'altra alla schermata.
+ * **06:00 sul fuso di Roma**, dichiarato qui anche se dal 6 Set 2026 è già
+ * quello dell'applicazione (🔗 ADR-041): un orario esplicito continua a valere
+ * più di un default ereditato, e regge se un domani la config cambiasse.
+ *
+ * ⚠️ La ragione **storica** di questa riga era un'altra, e non vale più: il
+ * digest parla di giorni (scaduto ieri, scade fra trenta) mentre `today()` era
+ * calcolato in UTC, e le 06:00 italiane erano l'ora in cui le due date
+ * coincidevano comunque. Era una toppa attorno a un disallineamento, non una
+ * scelta di consegna. Ora app e scheduler stanno sullo stesso fuso e il confine
+ * «scade oggi» dice la stessa cosa all'email e alla schermata a qualunque ora.
  *
  * `withoutOverlapping` e `onOneServer` sono cinture doppie e volute: se un
  * giorno l'esecuzione durasse più di ventiquattr'ore, o se Laravel Cloud
@@ -37,14 +41,49 @@ Schedule::command('easylab:notifica-scadenze')
     ->onOneServer();
 
 /*
- * Rotazione dei dati di notifica: è la «rotazione» che il registro dei
- * trattamenti dichiara per T4, resa un fatto invece che un'intenzione.
+ * L'alert di obsolescenza (🔗 ADR-014), fratello minore del digest qui sopra.
  *
- * Due orizzonti diversi perché rispondono a due domande diverse: gli avvisi (24
- * mesi) servono al comando per non ripetersi, le notifiche in-app (12 mesi) sono
- * posta letta che nessuno riapre dopo un anno.
+ * **06:15 e non 06:00**, e i quindici minuti non sono decorativi. I due comandi
+ * mandano due email diverse alla stessa persona: separarli mette il digest
+ * operativo per primo nella casella — è quello che chiede un'azione oggi — e
+ * toglie l'unico caso in cui il lock `withoutOverlapping` non protegge da
+ * niente, cioè **due comandi diversi** che scrivono su `avvisi_scadenza` nello
+ * stesso secondo (il lock è per comando, non per tabella).
+ *
+ * Il fuso `Europe/Rome` ha la stessa ragione scritta sopra la riga del digest:
+ * esplicito anche dove ormai coincide con quello dell'app (🔗 ADR-041).
  */
-Schedule::command('model:prune', ['--model' => [AvvisoScadenza::class]])
+Schedule::command('easylab:notifica-obsolescenza')
+    ->dailyAt('06:15')
+    ->timezone('Europe/Rome')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+/*
+ * 🔴 **La potatura, ed è QUI che una retention smette di essere un'intenzione.**
+ *
+ * È la «rotazione» che il registro dei trattamenti dichiara per T4 (avvisi) e
+ * T8 (error tracker), resa un fatto. L'elenco dei modelli non si scrive a mano
+ * su questa riga: arriva da `App\Support\Retention::MODELLI`, e la ragione è
+ * che così il legame fra «un model dichiara `prunable()`» e «qualcuno lo pota
+ * davvero» diventa **verificabile** — `tests/Feature/RetentionTest.php` legge
+ * `app(Schedule::class)->events()` e pretende che questa riga li nomini tutti.
+ *
+ * ⚠️ **Nessun comando `errors:prune` nuovo**, benché il piano S1 ne volesse uno
+ * «da schedulare al deploy»: sarebbe stata la forma esatta del difetto T6 —
+ * `clean_after_days => 365` dichiarato in `config/activitylog.php` e
+ * `activitylog:clean` mai schedulato, cioè una retention **inerte**. Il
+ * `model:prune` di Laravel gira già: i modelli si aggiungono a lui.
+ *
+ * Gli orizzonti stanno **sui model** (`prunable()`), non qui, perché sono
+ * decisioni di dominio e vanno lette accanto ai dati che riguardano: 24 mesi per
+ * gli avvisi (servono al comando per non ripetersi), 90 giorni per le occorrenze
+ * e per le issue chiuse, 180 per quelle aperte — e `ignorato` mai.
+ *
+ * Le notifiche in-app (12 mesi qui sotto) non passano di lì: non sono un model,
+ * sono posta letta che nessuno riapre dopo un anno.
+ */
+Schedule::command('model:prune', ['--model' => Retention::MODELLI])
     ->dailyAt('03:30')
     ->timezone('Europe/Rome')
     ->onOneServer();

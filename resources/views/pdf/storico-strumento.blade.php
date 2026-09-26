@@ -10,6 +10,21 @@
     Font di sistema: caricarne uno via `@font-face` vorrebbe dire scaricarlo a
     ogni render o versionarlo nel repository. La coerenza col Design System si
     esprime in struttura e gerarchia, non nel disegno delle lettere.
+
+    ⛔ Resta SEMPRE chiaro e SENZA `primary` (DS §8.4, ADR-031/033): dompdf non
+    vede il tema, e un foglio A4 non ne ha uno. I 12 hex qui sotto sono presi a
+    mano dalla scala di `resources/css/app.css` (F5, verificato il 26 Ago 2026 —
+    invariati da ADR-033) e NON vanno letti come token semantici, che qui non
+    esistono:
+      · #1e293b (×1)  = --color-neutral-800  (testo del corpo)
+      · #475569 (×2)  = --color-neutral-600  (sottotitolo, report intervento)
+      · #94a3b8 (×4)  = --color-neutral-400  (intestazioni th, piede, etichette sintesi, riga vuota)
+      · #e2e8f0 (×2)  = --color-neutral-200  (bordo sotto th, bordo sopra il piede)
+      · #f1f5f9 (×1)  = --color-neutral-100  (bordo sotto td)
+      · #b91c1c (×1)  = --color-danger-600   (scaduto)
+      · #15803d (×1)  = --color-success-600  (fatto)
+    Se una futura revisione della scala li spostasse, questo elenco è il posto
+    da cui ripartire per riallinearli — non per introdurre `primary` o un tema.
 --}}
 <!DOCTYPE html>
 <html lang="it">

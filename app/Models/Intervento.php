@@ -7,6 +7,7 @@ use App\Enums\TipoIntervento;
 use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Concerns\BelongsToOrgNodeThroughStrumento;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\SerializzaGiorniCivili;
 use App\Models\Contracts\ReachesStrumento;
 use App\Support\Semaforo;
 use Carbon\CarbonInterface;
@@ -64,7 +65,7 @@ class Intervento extends Model implements ReachesStrumento
      * dei campi cambiati dice già tutto, e una riga esplicita in più
      * significherebbe due righe per un gesto solo.
      */
-    use AuditsDomainWrites, BelongsToOrgNodeThroughStrumento, BelongsToTenant, HasFactory, SoftDeletes;
+    use AuditsDomainWrites, BelongsToOrgNodeThroughStrumento, BelongsToTenant, HasFactory, SerializzaGiorniCivili, SoftDeletes;
 
     protected $table = 'interventi';
 
@@ -295,8 +296,42 @@ class Intervento extends Model implements ReachesStrumento
     /**
      * Nome dell'assegnatario per la UI, mai quello di un utente di un altro
      * Ente: `tecnico_id` è una FK su `users`, che NON ha il TenantScope. I
-     * Tecnici esterni (`tenant_id` null, ADR-007) restano legittimamente
-     * visibili. La validazione di `tecnico_id` in scrittura arriva col punto 3.
+     * Tecnici esterni (`tenant_id` null, 🔗 ADR-007) restano legittimamente
+     * visibili.
+     *
+     * ## 🔴 Perché NON segue il portafoglio, pur essendo lo speculare in lettura
+     *
+     * Dal 29 Ago 2026 (🔗 ADR-038) la **scrittura** è più stretta di questa
+     * lettura: `App\Support\Utenti\Assegnabili` accetta un tecnico EasyLab solo
+     * se sta in `tecnico_cliente` per quella sede. La tentazione è di ripetere
+     * qui la stessa condizione — «la scrittura non deve accettare ciò che la
+     * lettura non sa mostrare» — e va respinta, perché la disuguaglianza è
+     * nella direzione **sicura**: scrivibile ⊂ mostrabile. Il difetto che quella
+     * frase teme è il verso opposto (si salva un nome e la riga dice subito
+     * «—»), e con questa lettura più larga non è raggiungibile.
+     *
+     * Aggiungere il portafoglio qui produrrebbe invece tre danni veri:
+     *
+     * 1. **Lo storico si riscriverebbe da sé.** Revocare un portafoglio è un
+     *    gesto di oggi; farebbe diventare «—» interventi chiusi mesi fa, e il
+     *    PDF dello storico (`pdf/storico-strumento`) stamperebbe un documento
+     *    diverso da quello di ieri. È la stessa ragione per cui `tecnico()` è
+     *    `withTrashed()`: chi ha fatto una cosa l'ha fatta, anche dopo essere
+     *    uscito di scena.
+     * 2. **Contraddirebbe il secondo canale di 🔗 ADR-030.** L'assegnazione
+     *    puntuale apre quella macchina *senza* passare dal portafoglio: quel
+     *    tecnico ci sta lavorando davvero, e il cliente deve poter leggere il
+     *    nome di chi gli entra in laboratorio.
+     * 3. **Costerebbe una query per riga.** Oggi è un confronto in PHP sul
+     *    `tecnico` già eager-loaded (`SchedaStrumento` e `Scadenzario` fanno
+     *    `with('tecnico')` apposta); il portafoglio si legge da un pivot, cioè
+     *    un N+1 nello scadenzario paginato.
+     *
+     * ⚠️ Resta vero che questo ramo mostra il nome di **qualunque** utente senza
+     * `tenant_id`, ruolo Tecnico o no. Dopo ADR-038 nessuna interfaccia può più
+     * produrre una riga simile (la validazione la rifiuta), quindi restringere
+     * qui non chiuderebbe una porta aperta: nasconderebbe solo dati storici già
+     * scritti da console o da un seeder.
      */
     public function tecnicoLabel(): string
     {
@@ -321,7 +356,11 @@ class Intervento extends Model implements ReachesStrumento
      */
     public function tecnico(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'tecnico_id');
+        // ⚠️ `withTrashed()`: da 🔗 ADR-038 una persona si cestina, e senza
+        // questa riga l'attribuzione storica tornerebbe `null` — la pagina
+        // direbbe «—» dove prima diceva un nome. Chi ha fatto una cosa l'ha
+        // fatta anche dopo essersene andato.
+        return $this->belongsTo(User::class, 'tecnico_id')->withTrashed();
     }
 
     /**

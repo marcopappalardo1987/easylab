@@ -4,10 +4,11 @@
     Sovrascrive la vista di default `livewire::tailwind`, quindi vale per ogni
     lista paginata dell'app senza doverla indicare a mano.
 
-    Differenze dall'originale: testi in italiano, palette del design system
-    (neutral/primary invece di gray/blue, niente varianti dark) e NESSUN
-    riepilogo "Showing X to Y of Z" — il conteggio è già accanto al selettore
-    "Righe per pagina", e ripeterlo confonde.
+    Differenze dall'originale: testi in italiano, token semantici del design
+    system (`bg-surface`/`text-ink`/`bg-brand` invece di gray/blue, niente
+    varianti dark — DS §8.1) e NESSUN riepilogo "Showing X to Y of Z" — il
+    conteggio è già accanto al selettore "Righe per pagina", e ripeterlo
+    confonde.
 --}}
 @php
     if (! isset($scrollTo)) {
@@ -20,10 +21,14 @@
         JS
         : '';
 
-    $bottone = 'inline-flex items-center justify-center rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-primary-600';
-    $inattivo = 'inline-flex items-center justify-center rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-300';
-    $attivo = 'inline-flex items-center justify-center rounded-md border border-primary-600 bg-primary-600 px-3 py-2 text-sm font-medium text-white';
-    $ellissi = 'inline-flex items-center justify-center px-1.5 py-2 text-sm text-neutral-400';
+    // Mappatura DS §1.2 sul campione `.el-pag`: bottone normale
+    // bg-surface/border-border/text-ink-2 con hover:bg-surface-sunken,
+    // pagina corrente bg-brand/border-brand/text-brand-ink, disabilitate
+    // smorzate con opacity (come `.el-pag nav .off`, non un grigio a parte).
+    $bottone = 'inline-flex items-center justify-center rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-ink-2 transition hover:bg-surface-sunken hover:text-ink focus:outline-none focus:ring-2 focus:ring-ring';
+    $inattivo = 'inline-flex items-center justify-center rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-ink-2 opacity-45';
+    $attivo = 'inline-flex items-center justify-center rounded-md border border-brand bg-brand px-3 py-2 text-sm font-semibold text-brand-ink';
+    $ellissi = 'inline-flex items-center justify-center px-1.5 py-2 text-sm text-ink-3';
 @endphp
 
 @if ($paginator->hasPages())
@@ -37,7 +42,7 @@
                     x-on:click="{{ $scrollIntoViewJsSnippet }}" wire:loading.attr="disabled">Precedente</button>
             @endif
 
-            <span class="text-sm text-neutral-500">Pagina {{ $paginator->currentPage() }} di {{ $paginator->lastPage() }}</span>
+            <span class="text-sm text-ink-3">Pagina {{ $paginator->currentPage() }} di {{ $paginator->lastPage() }}</span>
 
             @if ($paginator->hasMorePages())
                 <button type="button" class="{{ $bottone }}" wire:click="nextPage('{{ $paginator->getPageName() }}')"

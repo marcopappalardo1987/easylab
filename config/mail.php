@@ -101,6 +101,38 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Markdown Mail Settings — il tema è NOSTRO (🔗 ADR-011, ADR-033, ADR-034)
+    |--------------------------------------------------------------------------
+    |
+    | ⚠️ Questa chiave NON esisteva: `MailChannel::markdownRenderer()` legge
+    | `config('mail.markdown.theme', 'default')` e senza di essa ricadeva sul
+    | tema Laravel — cioè le email uscivano grigie e stock, con un piè di pagina
+    | in inglese, mentre tutto il resto dell'applicazione era già passato al
+    | Design System. Il guasto è quello classico di questo progetto: nessun
+    | errore, nessun test rosso, solo un colore che non c'è.
+    |
+    | `paths` fa vincere le componenti pubblicate in `resources/views/vendor/mail`
+    | su quelle del pacchetto, ed è ciò che rende il layout, la testata e il
+    | piè di pagina modificabili — `Markdown::componentPaths()` mette questi
+    | percorsi PRIMA di quello del framework.
+    |
+    | Il tema è un file `.css` (`html/themes/easylab.css`) e `CssToInlineStyles`
+    | lo trasforma in `style=""` inline su ogni elemento: è il meccanismo con cui
+    | si ottengono gli stili inline che i client di posta pretendono senza
+    | scriverli a mano su ogni tag.
+    |
+    */
+
+    'markdown' => [
+        'theme' => 'easylab',
+
+        'paths' => [
+            resource_path('views/vendor/mail'),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Global "From" Address
     |--------------------------------------------------------------------------
     |

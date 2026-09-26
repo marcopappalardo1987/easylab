@@ -2,16 +2,12 @@
 
 namespace App\Console\Commands;
 
-use App\Enums\TipoUnitaOrganizzativa;
-use App\Models\Account;
-use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Notifications\InvitoUtente;
+use App\Support\Provisioning\ProvisionaEnte;
+use App\Support\Provisioning\ProvisioningRifiutato;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use Throwable;
 
 /**
  * Bootstrap di un tenant: crea il nodo Ente radice, il suo Account (ADR-032) e
@@ -35,12 +31,23 @@ use Throwable;
  *                      il `tenant_id` dell'utente esistente NON si tocca:
  *                      l'Ente nuovo si raggiunge con lo switcher.
  *
+ * **`--sede=` separa i due nomi.** L'argomento `nome` è la **ragione sociale**
+ * del cliente; senza `--sede` il nodo Ente prende lo stesso valore, ed è il
+ * comportamento storico. Con `--sede` la prima sede si chiama come la chiama chi
+ * ci lavora — «Laboratorio San Raffaele» dentro «Gruppo Rossi SpA» — che è la
+ * differenza che il Parco clienti rendeva visibile: la colonna SEDE del primo
+ * Ente ripeteva la ragione sociale su ogni cliente. La sede **non si può
+ * omettere** (il nodo Ente è la radice del tenant: senza, non c'è un posto dove
+ * mettere la prima macchina), il suo nome sì.
+ *
  * Tutto in transazione: con cinque scritture (account, ente, tenant_id,
  * utente, pivot) un fallimento a metà lascerebbe un account orfano o un ente
  * senza intestatario.
  *
- * Il limite di Enti per piano («chi paga di più gestisce più Enti») si farà
- * rispettare QUI quando il piano esisterà — cioè col blocco Cashier.
+ * Il limite di Enti per piano («chi paga di più gestisce più Enti») si fa
+ * rispettare qui, prima della transazione (ADR-032, blocco Cashier). La regola
+ * però vive su `Account::puoAggiungereEnte()`: questo comando la consuma, e la
+ * UI di provisioning di S6 riuserà lo stesso metodo invece di riscriverla.
  *
  * **L'Admin nuovo viene invitato, non gli si consegna una password** (ADR-012):
  * senza `--admin-password` nasce con un tappo random di 64 caratteri che
@@ -53,7 +60,8 @@ use Throwable;
 class ProvisionTenant extends Command
 {
     protected $signature = 'easylab:provision-tenant
-        {nome : Ragione sociale dell\'Ente}
+        {nome : Ragione sociale del cliente}
+        {--sede= : Nome della prima sede; assente, prende la ragione sociale}
         {--account= : ID dell\'account esistente a cui agganciare l\'Ente}
         {--admin-email= : Email dell\'utente Admin}
         {--admin-name= : Nome dell\'utente Admin}
@@ -65,118 +73,72 @@ class ProvisionTenant extends Command
     {
         $nome = $this->argument('nome');
         $adminEmail = $this->option('admin-email') ?: Str::slug($nome).'-admin@example.test';
-        $adminName = $this->option('admin-name') ?: "Admin {$nome}";
 
-        // Senza `--admin-password` l'utente nasce **invitato**: la password è un
-        // tappo di 64 caratteri che nessuno vedrà mai — non un segreto da
-        // custodire — e la password vera la scelge lui dal link firmato
-        // (ADR-012). Con l'opzione resta il comportamento storico, utile in
-        // locale e nei test.
-        $passwordEsplicita = $this->option('admin-password');
-        $passwordIniziale = $passwordEsplicita ?: Str::password(64);
+        // 🔴 T2B-3: un indirizzo già in uso da chi NON amministra nessun
+        // contratto (un Tenant di un altro cliente, un tecnico esterno) non
+        // diventa l'Admin del cliente nuovo. `ProvisionaEnte` gli darebbe
+        // `assignRole('Admin')` — ruolo globale, `teams = false` — lasciandolo
+        // sul suo tenant, e il comando stamperebbe un successo.
+        // ⚠️ Non `esigiAccountNuovo: true` come in cabina: da console
+        // rilanciare con l'email di un Admin che ha già UN contratto aggancia
+        // la sede a quel contratto (idempotenza, sede in più), ed è voluto
+        // (ProvisionTenantTest). Si chiude solo il ramo «nessun contratto».
+        if ($this->option('account') === null) {
+            $esistente = User::whereRaw('LOWER(email) = ?', [mb_strtolower(trim($adminEmail))])->first();
 
-        // Risoluzione PRIMA di scrivere qualunque cosa.
-        $accountEsistente = null;
-
-        if ($this->option('account') !== null) {
-            $accountEsistente = Account::find($this->option('account'));
-            if ($accountEsistente === null) {
-                $this->error("Nessun account con id {$this->option('account')}.");
+            if ($esistente !== null && $esistente->accounts()->doesntExist()) {
+                $this->error("{$adminEmail} appartiene già a un utente della piattaforma che non amministra nessun cliente: un cliente nuovo nasce con un amministratore nuovo, quindi serve un altro indirizzo.");
 
                 return self::FAILURE;
             }
-        } else {
-            $utenteEsistente = User::where('email', $adminEmail)->first();
-
-            if ($utenteEsistente !== null) {
-                $suoi = $utenteEsistente->accounts()->get();
-
-                if ($suoi->count() > 1) {
-                    $this->error(
-                        "{$adminEmail} è membro di {$suoi->count()} account (".
-                        $suoi->pluck('id')->implode(', ').
-                        '): specificare --account=.'
-                    );
-
-                    return self::FAILURE;
-                }
-
-                $accountEsistente = $suoi->first();
-            }
         }
 
-        [$ente, $admin, $account, $accountNuovo] = DB::transaction(function () use ($nome, $adminEmail, $adminName, $passwordIniziale, $passwordEsplicita, $accountEsistente) {
-            $account = $accountEsistente ?? Account::create(['ragione_sociale' => $nome]);
+        try {
+            $esito = (new ProvisionaEnte(
+                nome: $nome,
+                adminEmail: $adminEmail,
+                adminName: $this->option('admin-name') ?: "Admin {$nome}",
+                passwordEsplicita: $this->option('admin-password'),
+                accountId: $this->option('account') !== null ? (int) $this->option('account') : null,
+                // `--sede` non valorizzata vale `null`; valorizzata a vuoto la
+                // normalizza `ProvisionaEnte`, che è il solo posto in cui «vuoto
+                // = non scelto» è deciso.
+                nomeSede: $this->option('sede'),
+            ))->esegui();
+        } catch (ProvisioningRifiutato $rifiuto) {
+            $this->error($rifiuto->getMessage());
 
-            $ente = UnitaOrganizzativa::create([
-                'tipo' => TipoUnitaOrganizzativa::Ente,
-                'nome' => $nome,
-                'parent_id' => null,
-            ]);
-            $ente->forceFill([
-                'tenant_id' => $ente->id,
-                'account_id' => $account->id,
-            ])->saveQuietly();
-
-            $admin = User::firstOrCreate(
-                ['email' => $adminEmail],
-                [
-                    'name' => $adminName,
-                    'password' => Hash::make($passwordIniziale),
-                ],
-            );
-
-            // `tenant_id` è fuori dal Fillable (ADR-032) e si scrive SOLO
-            // sull'utente appena nato: riscriverlo a uno esistente lo
-            // strapperebbe al suo Ente per effetto collaterale — l'Ente nuovo
-            // lo raggiunge con lo switcher.
-            //
-            // ⚠️ `email_verified_at` sta anch'esso fuori dal Fillable, e va
-            // scritto QUI: passarlo a `firstOrCreate` non funzionava — il
-            // mass-assignment lo scartava in silenzio, e ogni utente creato dal
-            // provisioning restava non verificato contro l'intenzione di chi
-            // l'aveva scritto. Difetto latente trovato dai test dell'invito.
-            //
-            // Con `--admin-password` l'utente è subito utilizzabile (verificato:
-            // la password la conosce chi l'ha passata); senza, resta a null ed è
-            // il click sul link d'invito a fare la verifica (ADR-012).
-            if ($admin->wasRecentlyCreated) {
-                $admin->forceFill([
-                    'tenant_id' => $ente->id,
-                    'email_verified_at' => $passwordEsplicita ? now() : null,
-                ])->save();
+            if (str_contains($rifiuto->getMessage(), 'limite raggiunto')) {
+                $this->line('Passare a un piano superiore (easylab:abbona) o cestinare una sede prima di aggiungerne un\'altra.');
             }
 
-            if (! $admin->hasRole('Admin')) {
-                $admin->assignRole('Admin');
+            if (str_contains($rifiuto->getMessage(), 'specificare quale')) {
+                $this->line('Usare --account=ID.');
             }
 
-            $account->aggiungiMembro($admin);
+            return self::FAILURE;
+        }
 
-            return [$ente, $admin, $account, $accountEsistente === null];
-        });
+        // ⚠️ `$esito->ente->nome` e non `$nome`: con `--sede` i due valori sono
+        // diversi, e stampare quello chiesto invece di quello scritto è il modo
+        // in cui un comando racconta un provisioning che non è avvenuto così.
+        $this->info("Ente «{$esito->ente->nome}» creato (id {$esito->ente->id}).");
+        $this->info("Account: «{$esito->account->ragione_sociale}» (id {$esito->account->id}, ".($esito->accountNuovo ? 'nuovo' : 'esistente').').');
+        $this->info("Admin: {$adminEmail}".($esito->adminNuovo ? '' : ' (utente esistente: resta sul suo Ente, il nuovo si raggiunge con lo switcher)'));
 
-        $this->info("Ente «{$nome}» creato (id {$ente->id}).");
-        $this->info("Account: «{$account->ragione_sociale}» (id {$account->id}, ".($accountNuovo ? 'nuovo' : 'esistente').').');
-        $this->info("Admin: {$adminEmail}".($admin->wasRecentlyCreated ? '' : ' (utente esistente: resta sul suo Ente, il nuovo si raggiunge con lo switcher)'));
+        if ($esito->invitoAccodato) {
+            // «In consegna» e non «inviato»: la notifica è accodata, quindi da
+            // qui non si sa se partirà. Se la coda non c'è (locale, `sync`) è
+            // partita davvero — ma la frase deve essere vera in **entrambi** i
+            // casi, e questa lo è.
+            $this->info("Invito in consegna a {$adminEmail} (link valido ".InvitoUtente::GIORNI_VALIDITA.' giorni).');
+        }
 
-        // L'invito parte **fuori dalla transazione**: una mail spedita per una
-        // transazione poi rollbackata manderebbe qualcuno su un link che non
-        // porta a nulla. E parte solo se c'è qualcuno da invitare — questa
-        // unica condizione copre per costruzione i tre casi: utente nuovo senza
-        // password (invito), utente già attivo agganciato a una sede nuova
-        // (niente: la password ce l'ha), utente invitato in un giro precedente
-        // e mai attivato (reinvio, che è il rilancio dello stesso comando).
-        if ($passwordEsplicita === null && $admin->email_verified_at === null) {
-            try {
-                $admin->notify(new InvitoUtente($nome));
-                $this->info("Invito inviato a {$adminEmail} (valido ".InvitoUtente::GIORNI_VALIDITA.' giorni).');
-            } catch (Throwable $e) {
-                // Il provisioning È riuscito: le scritture sono committate. Un
-                // SMTP giù non deve far sembrare fallito ciò che c'è a DB —
-                // basta rilanciare lo stesso comando per reinviare.
-                $this->warn("Invito NON inviato ({$e->getMessage()}): rilanciare lo stesso comando per riprovare.");
-            }
+        if ($esito->invitoFallito !== null) {
+            // Il provisioning È riuscito: le scritture sono committate. Un SMTP
+            // giù non deve far sembrare fallito ciò che c'è a DB — basta
+            // rilanciare lo stesso comando per reinviare.
+            $this->warn("Invito NON inviato ({$esito->invitoFallito}): rilanciare lo stesso comando per riprovare.");
         }
 
         return self::SUCCESS;

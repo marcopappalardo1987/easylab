@@ -4,7 +4,6 @@ namespace App\Console\Commands;
 
 use App\Enums\SoggettoGaranzia;
 use App\Enums\TipoMotivoSemaforo;
-use App\Enums\TipoUnitaOrganizzativa;
 use App\Enums\TransizioneAvviso;
 use App\Models\AvvisoScadenza;
 use App\Models\Garanzia;
@@ -13,12 +12,14 @@ use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Notifications\DigestScadenze;
+use App\Support\Notifiche\DestinatariEnte;
+use App\Support\Notifiche\EntiNotificabili;
 use App\Support\Notifiche\RigaAvviso;
-use App\Support\Tenancy\AccessibleNodes;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Lo scheduler delle scadenze: l'«email del futuro» (ADR-011, S5).
@@ -52,10 +53,20 @@ use Illuminate\Support\Facades\DB;
  * applicazione — mentre l'ordine inverso, a ogni interruzione, manderebbe due
  * volte le stesse righe alle stesse persone.
  *
- * Il ruolo `Tenant` non è fra i destinatari (decisione di prodotto del 18 Ago
- * 2026: Admin, Responsabile di reparto e Tecnico assegnato), quindi
- * l'impostazione per-Ente di ADR-029 non entra in gioco: nessun destinatario è
- * il ruolo che quella regola protegge.
+ * 🔴 **Il ruolo `Tenant` È fra i destinatari dal 25 Ago 2026**, e la riga che
+ * stava qui diceva il contrario: «non è fra i destinatari (decisione del 18 Ago),
+ * quindi l'impostazione per-Ente di ADR-029 non entra in gioco — nessun
+ * destinatario è il ruolo che quella regola protegge». Era vera, ed era anche
+ * ciò che rendeva **strutturalmente vuota** la campanella del Tenant:
+ * `DigestScadenze::via()` scrive `database` sempre, ma solo per chi
+ * `destinatari()` sceglie. `Funzionalità per Ruolo` §4 gli prometteva le
+ * notifiche programmate e `/settings/notifiche` una preferenza per un'email che
+ * nessuno gli mandava.
+ *
+ * ⚠️ Con lui **entra in gioco ADR-029**, e il filtro esiste: le righe delle
+ * garanzie ricambio si tolgono a chi il proprio Ente le nasconde
+ * (`senzaRicambiNascosti()`), chiedendo l'**ability** della Policy e mai il
+ * permesso nudo.
  *
  * **⚠️ `--senza-invio` è obbligatorio al primo avvio su dati esistenti.** Il
  * comando avvisa dei *cambi di stato*, ma alla prima esecuzione non ha memoria:
@@ -76,24 +87,13 @@ class NotificaScadenze extends Command
 
     public function handle(): int
     {
-        // Gli Enti degli account in lockout restano fuori (ADR-013): il blocco
-        // per insoluto è **totale**, e mandare a un cliente a cui abbiamo
-        // chiuso la porta un promemoria operativo — con un link che lo sbatte
-        // su /bloccato — la contraddirebbe due volte, dicendogli «fai la
-        // manutenzione» e «non puoi entrare» nello stesso minuto. Gli avvisi
-        // non si perdono: `avvisi_scadenza` non viene scritto per loro, quindi
-        // allo sblocco le scadenze ancora aperte tornano a essere novità.
-        //
-        // `whereDoesntHave` e NON `whereNotIn(...)`: su un Ente con
-        // `account_id` NULL — legittimo, fail-open come nel middleware — il
-        // `NOT IN` darebbe UNKNOWN e lo escluderebbe in silenzio.
-        $enti = UnitaOrganizzativa::query()
-            ->where('tipo', TipoUnitaOrganizzativa::Ente->value)
-            ->whereDoesntHave('account', fn ($query) => $query->where('is_locked', true))
-            ->orderBy('id')
-            ->get(['id', 'nome']);
-
-        foreach ($enti as $ente) {
+        // Chi resta fuori — gli Enti degli account in lockout (ADR-013) — e
+        // perché la query sia cross-tenant senza passare da `VistaPiattaforma`
+        // sono spiegati per intero nel docblock di `EntiNotificabili`, che dal
+        // 27 Ago 2026 è l'unico posto in cui quella lista si costruisce: la
+        // condivide con `easylab:notifica-obsolescenza`, e due copie sarebbero
+        // state due posti liberi di divergere su chi NON riceve.
+        foreach (EntiNotificabili::tutti() as $ente) {
             $this->perEnte($ente);
         }
 
@@ -312,6 +312,8 @@ class NotificaScadenze extends Command
      * - **Tecnico assegnato**: i soli interventi che gli sono stati affidati, e
      *   nessuna garanzia. Cercato **senza** filtro sul tenant, perché il tecnico
      *   esterno non ne ha uno (ADR-030).
+     * - **Tenant** (dal 25 Ago 2026): tutte le righe del proprio Ente come
+     *   l'Admin, **meno** le garanzie ricambio che il suo Ente gli nasconde.
      *
      * Chi rientra da più canali riceve una notifica sola, con l'unione delle
      * proprie righe: un Admin che è anche l'assegnatario non deve ricevere due
@@ -339,22 +341,28 @@ class NotificaScadenze extends Command
             }
         };
 
-        $utenti = User::query()->where('tenant_id', $tenantId)->get();
-
-        foreach ($utenti as $utente) {
-            if ($utente->hasRole('Admin')) {
-                $aggiungi($utente, $righe);
-
-                continue;
-            }
-
-            if ($utente->isDepartmentScoped()) {
-                $nodi = AccessibleNodes::forUser($utente) ?? [];
-                $aggiungi($utente, array_values(array_filter(
+        // Il «chi» e i «suoi nodi» arrivano da `DestinatariEnte`, condiviso con
+        // l'avviso di obsolescenza (27 Ago 2026). Il filtro delle RIGHE resta
+        // qui, e con esso il filtro dei ricambi nascosti: è proprio del digest,
+        // e l'altro comando non deve ereditarlo per distrazione.
+        foreach (DestinatariEnte::perEnte($tenantId) as ['utente' => $utente, 'nodi' => $nodi]) {
+            $sue = $nodi === null
+                ? $righe
+                : array_values(array_filter(
                     $righe,
                     fn (RigaAvviso $riga) => $riga->unitaId !== null && in_array($riga->unitaId, $nodi, true),
-                )));
+                ));
+
+            // ⚠️ `! hasRole('Admin')` e non solo `hasRole(TENANT_ROLE)`: nella
+            // stesura precedente il ramo Admin veniva PRIMA e faceva `continue`,
+            // quindi chi fosse Admin *e* Tenant riceveva tutto senza passare dal
+            // filtro di ADR-029. L'estrazione non deve cambiarlo di straforo —
+            // sarebbe una modifica di comportamento travestita da refactoring.
+            if (! $utente->hasRole('Admin') && $utente->hasRole(User::TENANT_ROLE)) {
+                $sue = $this->senzaRicambiNascosti($utente, $sue);
             }
+
+            $aggiungi($utente, $sue);
         }
 
         $perTecnico = [];
@@ -377,6 +385,51 @@ class NotificaScadenze extends Command
             'utente' => $voce['utente'],
             'righe' => array_values($voce['righe']),
         ], $perUtente));
+    }
+
+    /**
+     * Le righe che un destinatario può leggere, tolte le garanzie dei pezzi
+     * montati se il suo Ente gliele nasconde (🔗 ADR-029).
+     *
+     * 🔴 **Serve al solo Tenant, ma non si gata sul ruolo: si chiede l'ability.**
+     * Il ruolo dice *chi* è protetto dalla regola, l'ability dice *quanto vale
+     * qui* — e sono due domande diverse, perché l'impostazione è dell'Ente e ha
+     * tre stati. `spatie` concede appena il permesso esiste sul ruolo, cioè
+     * **prima** che l'impostazione dell'Ente sia letta, e il Tenant
+     * `garanzie.ricambio.view` ce l'ha dal 15 Ago: col permesso nudo le righe
+     * passerebbero proprio negli Enti su `nascosta`, cioè l'unico caso che
+     * questo filtro esiste per coprire.
+     *
+     * ⚠️ **In console i global scope non filtrano** — `CurrentTenant::shouldScope()`
+     * è falso senza utente autenticato — quindi `GaranziaRicambioPrivacyScope`
+     * qui non gira: le righe sono già state lette tutte, e questa è l'unica
+     * guardia fra loro e una casella di posta. È il motivo per cui il filtro sta
+     * a valle e non nella query.
+     *
+     * ⚠️ E il controllo sta **nel comando, non nella Notification**:
+     * `DigestScadenze` è una `Notification`, quindi appartiene all'insieme che
+     * `PermessiInCodaGuardrailTest` sorveglia — una lettura di permessi lì
+     * dentro girerebbe nel worker, dove la cache dei permessi può essere quella
+     * di un altro processo.
+     *
+     * Il **nome del pezzo** non c'entra e non è mai stato in gioco: la query del
+     * comando legge solo id e scadenza, e l'email lo rende neutro per chiunque.
+     * Ciò che qui si nega è l'**esistenza della riga**, cioè il fatto che su
+     * quella macchina un pezzo sia stato sostituito.
+     *
+     * @param  list<RigaAvviso>  $righe
+     * @return list<RigaAvviso>
+     */
+    private function senzaRicambiNascosti(User $utente, array $righe): array
+    {
+        if (Gate::forUser($utente)->allows('view', Garanzia::class)) {
+            return $righe;
+        }
+
+        return array_values(array_filter(
+            $righe,
+            fn (RigaAvviso $riga) => $riga->tipo !== TipoMotivoSemaforo::GaranziaRicambio,
+        ));
     }
 
     /**

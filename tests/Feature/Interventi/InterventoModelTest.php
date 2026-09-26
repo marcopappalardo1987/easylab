@@ -191,3 +191,39 @@ it('shows an em dash when no tecnico is assigned', function () {
 
     expect($intervento->tecnicoLabel())->toBe('—');
 });
+
+it('does NOT follow the portafoglio: reading stays wider than writing (ADR-038)', function () {
+    // 🔴 La decisione del 29 Ago 2026, congelata. `Assegnabili` (la scrittura)
+    // vuole il tecnico EasyLab in `tecnico_cliente`; `tecnicoLabel()` (la
+    // lettura) NO — e le due asserzioni qui sotto sono la stessa persona prima
+    // e dopo la revoca.
+    //
+    // Perché la disparità è voluta: scrivibile ⊂ mostrabile è la direzione
+    // sicura (il difetto temuto è il verso opposto, salvare un nome e vedere
+    // subito «—»); il portafoglio si revoca oggi e riscriverebbe uno storico
+    // di mesi fa, PDF compreso; ed è il secondo canale di ADR-030 — chi ha un
+    // intervento assegnato ci sta lavorando davvero, e il cliente deve poter
+    // leggere il nome di chi gli entra in laboratorio.
+    // (Nessun `assignRole` qui: questo file non semina i ruoli, e il ruolo non
+    // entra in `tecnicoLabel()` — che è esattamente ciò che il test dice.)
+    $tecnico = User::factory()->create(['tenant_id' => null, 'name' => 'Gino Verdi']);
+    $tecnico->portafoglioClienti()->attach($this->ente->id);
+
+    $intervento = Intervento::factory()->forStrumento($this->strumento)->assegnatoA($tecnico)->create();
+    expect($intervento->tecnicoLabel())->toBe('Gino Verdi');
+
+    $tecnico->portafoglioClienti()->detach($this->ente->id);
+
+    expect($intervento->fresh()->tecnicoLabel())->toBe('Gino Verdi');
+});
+
+it('keeps naming a trashed assegnatario (ADR-038: the bin does not rewrite history)', function () {
+    // `Intervento::tecnico()` è `withTrashed()`: senza, ogni ex dipendente
+    // diventerebbe «—» in scheda, nello scadenzario e nel PDF dello storico.
+    $uscito = User::factory()->create(['tenant_id' => $this->ente->id, 'name' => 'Ex Dipendente']);
+    $intervento = Intervento::factory()->forStrumento($this->strumento)->assegnatoA($uscito)->create();
+
+    $uscito->delete();
+
+    expect($intervento->fresh()->tecnicoLabel())->toBe('Ex Dipendente');
+});

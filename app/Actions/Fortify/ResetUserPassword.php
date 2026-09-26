@@ -8,6 +8,15 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Contracts\ResetsUserPasswords;
 
+/**
+ * Reset della password dimenticata (Fortify; 🔗 ADR-012 per l'invito).
+ *
+ * 🔴 Il reset **verifica la casella**: il token è arrivato a quell'indirizzo e
+ * chi lo usa l'ha letto. Senza `email_verified_at` l'invito (ADR-012), che
+ * considera «già attivato» solo chi ha la casella verificata, restava aperto: chi
+ * aveva il link di invito riscriveva, giorni dopo, la password scelta qui
+ * (caccia T1bB-1, security pass S7).
+ */
 class ResetUserPassword implements ResetsUserPasswords
 {
     use PasswordValidationRules;
@@ -27,6 +36,7 @@ class ResetUserPassword implements ResetsUserPasswords
 
         $user->forceFill([
             'password' => Hash::make($input['password']),
+            'email_verified_at' => $user->email_verified_at ?? now(),
         ])->save();
     }
 }

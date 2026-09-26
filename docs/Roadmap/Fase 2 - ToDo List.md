@@ -7,9 +7,9 @@
 
 - [ ] Integrare la gestione dell'infrastruttura SaaS e dei piani in abbonamento tramite Stripe/Cashier.
 - [ ] `[V1.1 — Rivenditori]` Creare il sistema di abilitazione e gestione per i Rivenditori/Admin terzi.
-- [ ] Costruire la Dashboard Globale (Master) per visualizzare metriche totali (clienti, laboratori, strumenti, MRR globale).
-- [ ] Implementare l'erogazione degli abbonamenti "Free" per i clienti con contratto "chiavi in mano".
-- [ ] Sviluppare il blocco automatico degli accessi per insoluti o abbonamenti scaduti.
+- [x] Costruire la Dashboard Globale (Master) per visualizzare metriche totali (clienti, laboratori, strumenti, MRR globale). ✅ *(21 Ago 2026 — `/piattaforma`: quattro KPI in tre query costanti, MRR **a listino** e non incassato. «Laboratori» sono le **Sedi**, cioè i nodi Ente dei clienti: EasyLab esclusa.)*
+- [x] Implementare l'erogazione degli abbonamenti "Free" per i clienti con contratto "chiavi in mano". ✅ *(21 Ago 2026 — dal form della cabina, senza passare dal terminale.)*
+- [x] Sviluppare il blocco automatico degli accessi per insoluti o abbonamenti scaduti. ✅ *(webhook Stripe in S5; la leva **manuale** e la lettura del motivo arrivano dalla cabina in S6. Sono **due sorgenti ortogonali** e restano tali: quella automatica si riapre da sé al pagamento, e non ha un pulsante — ADR-013.)*
 - [ ] Assicurarsi che la dashboard erediti e includa tutte le funzionalità previste per gli Admin.
 
 **3. Sviluppo Dashboard Admin (Proprietari Abbonati)**

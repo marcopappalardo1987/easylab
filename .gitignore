@@ -46,3 +46,8 @@ Thumbs.db
 
 # Config MCP locale (Playwright): strumento di sviluppo, non di progetto
 .mcp.json
+
+# Stato di esecuzione del restyling (lucchetti, segnali, scatti) — non è sorgente
+/.restyling/
+
+.ai/

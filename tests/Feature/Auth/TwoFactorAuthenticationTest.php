@@ -48,9 +48,25 @@ it('disables two-factor authentication', function () {
     $code = app(Google2FA::class)->getCurrentOtp(decrypt($user->two_factor_secret));
     $component->set('code', $code)->call('confirm');
 
+    // S7 (T1aB-2): spegnere un fattore confermato vuole la password recente,
+    // come le rotte di Fortify (`confirmPassword => true`).
+    session()->put('auth.password_confirmed_at', time());
     $component->call('disable');
 
     expect($user->fresh()->two_factor_secret)->toBeNull();
+});
+
+it('does not disable a confirmed factor without a recent password confirmation', function () {
+    $user = User::factory()->create();
+
+    $component = Livewire::actingAs($user)->test(TwoFactorAuthentication::class)->call('enable');
+    $user->refresh();
+    $code = app(Google2FA::class)->getCurrentOtp(decrypt($user->two_factor_secret));
+    $component->set('code', $code)->call('confirm');
+
+    $component->call('disable')->assertRedirect(route('password.confirm'));
+
+    expect($user->fresh()->two_factor_secret)->not->toBeNull();
 });
 
 it('redirects to the two-factor challenge at login when 2FA is confirmed', function () {

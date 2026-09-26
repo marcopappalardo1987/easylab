@@ -1,6 +1,6 @@
 🏗️ Setup Repository, Ambienti & CI — Easy Lab
 
-*Convenzioni di repository, strategia di branch/commit, definizione degli ambienti (locale/staging/produzione) e impostazione CI. Copre i task S0.5 (repo + branch + commit), S0.6 (ambienti + provisioning) e S0.7 (CI scheletro) della roadmap. La parte di **provisioning effettivo** (repo privato, ambienti Laravel Cloud, bucket Backblaze B2) richiede i tuoi account e va eseguita a parte: qui resta la **specifica** da seguire.*
+*Convenzioni di repository, strategia di branch/commit, definizione degli ambienti (locale/staging/produzione) e impostazione CI. Copre i task S0.5 (repo + branch + commit), S0.6 (ambienti + provisioning) e S0.7 (CI scheletro) della roadmap. La parte di **provisioning effettivo** (repo privato, ambienti Laravel Cloud, bucket dei documenti) richiede i tuoi account e va eseguita a parte: qui resta la **specifica** da seguire.*
 
 > **Stato:** bozza di Sprint 0 (task S0.5–S0.7). Convenzioni e scheletro CI pronti; provisioning da eseguire.
 
@@ -9,15 +9,17 @@
 ## 1. Repository (S0.5)
 
 - **Hosting:** GitHub, repository **privato** `easylab` (o org dedicata). Accesso minimo necessario.
-- **Default branch:** `main` — **protetto** (no push diretto; merge solo via Pull Request con CI verde).
+- **Default branch:** `main` = **produzione**, **protetto** (no push diretto; merge solo via Pull Request con CI verde). Il ramo su cui si lavora è **`staging`** (§1.1), che conviene proteggere allo stesso modo: è lui a ricevere le PR di tutti i giorni.
 - **Struttura monorepo-light:** app Laravel alla radice; la cartella `docs/` (questa documentazione) versionata insieme al codice.
 - **`.gitignore`:** quello standard generato dall'installer Laravel (in S1) + aggiunte: `/.env*` (tranne `.env.example`), `/storage/*.key`, `/public/build`, file IDE.
 
-### 1.1 Strategia di branch (GitHub Flow leggero, adatto a solo+AI)
-- `main` = sempre deployabile; ogni merge su `main` → **deploy automatico su staging** (§3).
-- `feature/<breve-descrizione>` = branch a vita breve per ogni task; PR verso `main`.
+### 1.1 Strategia di branch — **rivista il 19 Ago 2026**
+- **`staging`** = il ramo di lavoro; ogni push → **deploy automatico sull'ambiente di staging** (§3).
+- **`main`** = **produzione**. Ci si arriva solo con una PR di **promozione** da `staging`, dopo la verifica sull'ambiente. Mai un commit diretto.
+- ~~`feature/<breve-descrizione>` = branch a vita breve per ogni task; **PR verso `staging`**.~~ — **superato il 21 Ago 2026**: si committa **direttamente su `staging`**. La PR restava un gesto verso sé stessi, e il suo unico effetto pratico — la CI come cancello — si ottiene tenendo la suite verde in locale prima di pushare. Un `feature/*` resta legittimo quando serve *davvero* isolare un lavoro lungo o rischioso, ma non è più la regola.
 - `fix/<...>`, `chore/<...>`, `docs/<...>` per le altre nature di lavoro.
-- **Produzione:** non da branch separato ma da **release taggata** (`v*`) o deploy manuale promosso da staging (§3). Niente long-lived `develop`.
+
+> *La versione precedente di questa sezione diceva «`main` = sempre deployabile → deploy automatico su staging» e «niente long-lived `develop`»: un ramo solo, con la produzione promossa da release taggata. Con `staging` la promozione diventa **un merge visibile e revisionabile** invece di un gesto sul pannello — e il codice che va in produzione è, per costruzione, quello che qualcuno ha già visto girare.*
 
 ### 1.2 Convenzioni di commit (Conventional Commits)
 Formato: `<tipo>(<scope opz.>): <descrizione imperativa>`.
@@ -55,18 +57,45 @@ APP_KEY=            # php artisan key:generate
 APP_URL=
 DB_CONNECTION=pgsql DB_HOST= DB_PORT=5432 DB_DATABASE= DB_USERNAME= DB_PASSWORD=
 REDIS_HOST= REDIS_PASSWORD= REDIS_PORT=6379
-QUEUE_CONNECTION=redis  CACHE_STORE=redis
+CACHE_STORE=redis
+QUEUE_CONNECTION=redis      # ⚠️ SOLO in locale. Su Cloud con una managed queue NON va impostata: vedi §2.1.1
 MAIL_MAILER=smtp MAIL_HOST= MAIL_PORT= MAIL_USERNAME= MAIL_PASSWORD=   # ADR-011 — server di posta INTERNO
 MAIL_FROM_ADDRESS= MAIL_FROM_NAME="Easy Lab"                          # dominio EasyLab, allineato a SPF/DKIM
-FILESYSTEM_DISK=s3                                                    # 🔗 ADR-025 (Backblaze B2)
-AWS_ACCESS_KEY_ID= AWS_SECRET_ACCESS_KEY=       # Application Key B2 limitata AL SINGOLO bucket
-AWS_DEFAULT_REGION=eu-central-003               # Amsterdam — regione UE (GDPR)
-AWS_BUCKET= AWS_ENDPOINT=https://s3.eu-central-003.backblazeb2.com
+# ⛔ Storage documenti: in cloud NON si scrive nessuna AWS_*. Si collega il
+# bucket all'ambiente dal pannello e la piattaforma inietta da sé
+# FILESYSTEM_DISK e LARAVEL_CLOUD_DISK_CONFIG; il disco `documenti` eredita da
+# lì (🔗 ADR-042). Una AWS_* lasciata a mano VINCE su quella iniettata, quindi
+# si continuerebbe a scrivere sul bucket vecchio credendo di aver migrato.
+# Le AWS_* servono solo a puntare un bucket a mano, che è ciò che fa lo sviluppo.
 STRIPE_KEY= STRIPE_SECRET= STRIPE_WEBHOOK_SECRET=                     # S5, Cashier
 ```
-**Segreti:** mai nel repo. In locale `.env`; su Laravel Cloud → variabili d'ambiente dell'ambiente. Stripe in **modalità test** su staging, **live** solo in produzione; **bucket B2 separati** per staging e produzione, così un test non tocca mai i documenti dei clienti.
+#### 2.1.1 ⚠️ `QUEUE_CONNECTION` su Cloud: **non impostarla a mano**
 
-> Le chiavi B2 usano i nomi `AWS_*` perché è il driver S3 standard di Laravel puntato a un endpoint diverso: non c'è nulla di Amazon coinvolto.
+Quando si crea una **managed queue**, Laravel Cloud inietta da sé `QUEUE_CONNECTION=cloud` nell'ambiente. Ma la documentazione di Cloud avverte che **le variabili custom hanno la priorità su quelle iniettate**: lasciare `QUEUE_CONNECTION=redis` fra le variabili dell'ambiente significa che **vince quella**, i job continuano ad andare su Redis, e la managed queue resta lì a non ricevere niente — senza un errore da nessuna parte, perché per Laravel è una configurazione perfettamente valida.
+
+Regola pratica:
+
+| Dove | `QUEUE_CONNECTION` |
+|---|---|
+| locale (`.env`) | `redis` (o `sync` per lavorare senza worker) |
+| Cloud **con** managed queue | **assente** dalle variabili custom — la mette la piattaforma |
+| Cloud **senza** managed queue (background process `queue:work`) | `redis`, impostata a mano |
+
+> ✅ **Staging ha una managed queue dal 21 Ago 2026** (`default`, Flex 256 MiB, autoscaling 0–3 worker, $0–13/mese: a riposo costa zero). Verificato che la variabile iniettata vinca, eseguendo sull'ambiente `php artisan tinker --execute="echo config('queue.default');"` → **`cloud`**. È il controllo da rifare a ogni dubbio, ed è l'unico che smaschera il sintomo muto descritto qui sopra.
+>
+> ⚠️ **Il runner dei Comandi non è un worker.** Lanciare `php artisan queue:work` da lì sembra funzionare — resta a girare — ma è un container effimero con un limite di durata, non sopravvive al deploy e non riparte. Nel frattempo occupa lo slot dei comandi e non c'è modo di fermarlo dal pannello. Le due strade vere sono la **managed queue** (raccomandata: compute dedicata, quindi le code non competono col traffico web e lo *scale-to-zero* dell'App cluster non interrompe i job) e il **background process** sull'App cluster (che invece paga entrambe le cose). Il **Worker cluster** richiede il piano Growth.
+>
+> ⚠️ **Una managed queue processa UNA coda** — la nostra è `default`, come si legge nella preview del comando: `php artisan queue:work cloud --queue=default`. Un job spedito con `onQueue('altro')` non verrebbe preso da nessuno. Serve una seconda managed queue per una seconda coda.
+>
+> ⚠️ **`--tries` e `--backoff` del worker si lasciano vuoti nel pannello**, e i tentativi si dichiarano **sulla classe del job** (`InvitoUtente` lo fa). Un'impostazione che vive solo nella console di Cloud non sta in nessun file, non passa da una revisione e non si scopre leggendo il repository: è la stessa forma di problema delle migration non applicate al DB di sviluppo e di `config/rbac.php` non riseminato. Sul job, inoltre, le property vincono sui flag del worker.
+>
+> ⚠️ **In locale**, senza un worker acceso, `QUEUE_CONNECTION` va su **`sync`**. Con `redis` il push riesce, l'applicazione dichiara «in consegna» e la mail resta in coda per sempre — nessun errore da nessuna parte. Era la configurazione di sviluppo fino al 21 Ago 2026, e ha smesso di essere innocua il giorno in cui l'invito è passato in coda.
+
+Il sintomo di aver sbagliato è muto: il digest non arriva a nessuno e la dashboard delle code resta vuota. Il primo controllo, in quel caso, è proprio l'elenco delle variabili dell'ambiente.
+
+**Segreti:** mai nel repo. In locale `.env`; su Laravel Cloud → variabili d'ambiente dell'ambiente. Stripe in **modalità test** su staging, **live** solo in produzione; **bucket separati** per staging e produzione, così un test non tocca mai i documenti dei clienti.
+
+> Dove si scrivono a mano, le chiavi di un bucket usano i nomi `AWS_*` perché è il driver S3 standard di Laravel puntato a un endpoint diverso: non c'è nulla di Amazon coinvolto. In cloud non si scrivono affatto (🔗 ADR-042).
 
 > **Posta in uscita — server interno** (🔗 ADR-011, deciso il 18 Ago 2026). Niente servizio transazionale: le email partono dal mailserver di EasyLab via SMTP autenticato. In locale resta `MAIL_MAILER=log` e le email finiscono in `storage/logs/laravel.log`.
 >
@@ -76,16 +105,33 @@ STRIPE_KEY= STRIPE_SECRET= STRIPE_WEBHOOK_SECRET=                     # S5, Cash
 
 ### 2.2 Provisioning base (da eseguire con i tuoi account)
 - **Laravel Cloud:** collega GitHub, crea gli ambienti staging e produzione in **regione UE**, provisiona Postgres e Redis gestiti, configura worker di coda e scheduler. Deploy da Git, niente server da amministrare.
-- **Backblaze B2:** bucket **privato** in `eu-central-003` (Amsterdam), uno per ambiente; **Application Key limitata al singolo bucket**, mai la master key (🔗 ADR-025).
-- **DPA firmati con entrambi i fornitori prima che arrivino dati reali** — sono sub-responsabili ex art. 28 (🔗 `Privacy GDPR e Registro Trattamenti.md`).
+- **Object storage:** il bucket **incluso in Laravel Cloud**, uno per ambiente, **privato** e con **EU jurisdiction** attiva; «Allowed origins» resta vuoto, perché i file li serve l'applicazione da una rotta firmata e mai il browser (🔗 ADR-042/026). *(Fino al 7 Set 2026 era un bucket Backblaze B2 con Application Key limitata al singolo bucket, 🔗 ADR-025.)*
+- **DPA firmato col fornitore prima che arrivino dati reali** — è un sub-responsabile ex art. 28 (🔗 `Privacy GDPR e Registro Trattamenti.md`). Con lo storage incluso il fornitore è **uno solo**: Cloudflare resta sub-responsabile di Laravel.
 - SSL e dominio gestiti dalla piattaforma.
+
+**Nota operativa — bucket di staging collegato il 7 Set 2026.** Creato dal pannello come `easylab_staging`, **Private**, **EU jurisdiction: Yes**, «Allowed origins» **vuoto**. Tre cose emerse collegandolo, tutte verificate sul posto:
+
+1. **Il disco si chiama `private`, non come il bucket.** Laravel Cloud inietta `LARAVEL_CLOUD_DISK_CONFIG` (che contiene chiavi, bucket ed endpoint) e imposta `FILESYSTEM_DISK=private`; l'identificativo `fls-…` del bucket non compare mai nel codice. Un disco si **nomina**, non si configura: vedi 🔗 ADR-042 per il perché scriverne uno con `env('AWS_*')` produce, in cloud, un disco senza credenziali.
+2. ⚠️ **Il pannello avvisa che `FILESYSTEM_DISK` verrà sovrascritto.** Nel nostro caso è innocuo, ed è stato verificato prima di confermare: **nessuna chiamata dell'applicazione usa il disco di default** — ogni `Storage::disk(…)` nomina il proprio (`documenti`, il marchio email, le guide). Chi collegherà il bucket di **produzione** rifaccia quel controllo invece di fidarsi di questa riga.
+3. ⛔ **«Allowed origins» resta vuoto** e non è una svista: è CORS, e serve solo se è JavaScript a leggere il file (`fetch`, un `<video crossorigin>`, un canvas). I nostri file li serve l'applicazione, e un `<video>` carica i byte come **media**, che cross-origin non richiede CORS — anche seguendo un redirect.
+
+**Caricare file su un ambiente dalla propria macchina.** Il meccanismo di Laravel Cloud **non è riusabile da fuori**: `Illuminate\Foundation\Cloud` registra i dischi iniettati solo se `laravel_cloud()` è vero, cioè con `LARAVEL_CLOUD=1`, e accendere quel flag su una macchina di sviluppo tira dentro code gestite, logging su socket e connessione Postgres non poolata. Si copiano quindi a mano le quattro credenziali da `LARAVEL_CLOUD_DISK_CONFIG` nel proprio `.env` (`GUIDE_REMOTO_*`, vedi `.env.example`) e si usa il disco `guide_remoto`. È la via con cui i video delle guide sono stati caricati, e vale per qualunque file che nasca fuori dal repository.
 
 ---
 
 ## 3. Pipeline di deploy
 
-- **Staging:** merge su `main` → deploy automatico di Laravel Cloud (migrazioni incluse). Obiettivo roadmap S1: "push → staging" verde.
-- **Produzione:** deploy **promosso** dopo verifica su staging, mai automatico. Migrazioni in deploy con `--force`.
+**Dal 19 Ago 2026 i rami sono due**, e la differenza è quella fra «provare» e «pubblicare»:
+
+| Ramo | Ambiente | Come ci si arriva |
+|---|---|---|
+| `staging` | **staging** — deploy automatico a ogni push | **commit diretti** (dal 21 Ago 2026). ⚠️ La CI gira *dopo* il push, non fa da cancello: la rete è la suite verde in locale. |
+| `main` | **produzione** — deploy **promosso**, mai automatico | PR di promozione `staging` → `main`, dopo la verifica sull'ambiente di staging |
+
+- Mai un commit diretto su `main`: ciò che è in produzione è passato da staging, e questo è l'unico modo per poterlo affermare.
+- La CI (`.github/workflows/ci.yml`) gira su **entrambi** i rami — aggiungerlo è stata la prima conseguenza pratica del ramo nuovo: senza, le PR verso staging sarebbero passate senza rete.
+- Migrazioni in deploy con `--force` su tutti e due gli ambienti.
+- ⚠️ **Staging deve avere risorse SUE**: database, Redis, **bucket separato** e Stripe in modalità test. Un ambiente di prova che scrive sui dati veri non è un ambiente di prova — ed è la stessa lezione dell'incidente del 18 Ago, quando Redis condiviso fra `easylab` ed `easylab_test` ha avvelenato la cache dei permessi del database di sviluppo.
 - ⚠️ **Migration distruttive:** il progetto ne ha già in storia (drop di colonne e tabelle popolate, 🔗 ADR-019). Su un deploy automatico girano senza che nessuno guardi: **backup del database verificato prima di promuovere in produzione**, e revisione umana della migration secondo la Policy di Code Review (area rossa).
 
 ### 3.1 Prima attivazione dello scheduler scadenze (S5 — 🔗 ADR-011)
@@ -98,6 +144,98 @@ Da fare **una volta sola**, nell'ordine, quando le notifiche vanno in un ambient
 
 Dal giorno dopo il digest manda solo le novità.
 
+### 3.4 Registrazione del webhook Stripe (blocco Cashier — 🔗 ADR-013)
+
+Da fare **una volta per ambiente**, dopo il primo deploy che porta il blocco Cashier:
+
+```bash
+php artisan config:show cashier      # key, secret, webhook.secret, path=stripe
+php artisan route:list --path=stripe # DEVE mostrare VerifyWebhookSignature
+php artisan cashier:webhook --url=https://<ambiente>/stripe/webhook
+```
+
+Poi si copia il `whsec_…` restituito in `STRIPE_WEBHOOK_SECRET` **e si ridistribuisce** (la config è cachata in build, §3.2).
+
+- ⚠️ **`--url` è obbligatorio.** Con `Cashier::ignoreRoutes()` il comando non sa più derivare l'indirizzo da `route('cashier.webhook')` e fallirebbe.
+- ⚠️ **Se `config:show cashier` mostra `null`**, le variabili non c'erano nell'**ambiente di build**: `php artisan optimize` gira lì e le ha cotte a null. Si ricostruisce, non si riprova.
+- ⚠️ **Un segreto sbagliato non dà errore visibile**: ogni evento prende 403 e il lockout semplicemente non scatta mai. Il controllo si fa dalla dashboard Stripe (consegne tutte 2xx), non dai log dell'app.
+- Gli eventi registrati sono i soli tre `customer.subscription.*`, letti da `config/cashier.php`: gli 8 di default trascinerebbero handler del pacchetto che fanno round-trip verso Stripe dentro la richiesta.
+- Le variabili `STRIPE_KEY`, `STRIPE_SECRET`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_SAAS` e `CASHIER_*` vanno fra quelle presenti **in build**. Stripe in **modalità test** su staging, **live** solo in produzione.
+
+### 3.2 Comandi su Laravel Cloud — **build ≠ deploy**, e la differenza conta
+
+Laravel Cloud separa due fasi, e metterci il comando sbagliato non dà errore: semplicemente **non fa nulla**. I *build commands* girano mentre si costruisce l'immagine e ciò che scrivono resta; i *deploy commands* girano appena prima che la release vada live, e **le modifiche al filesystem che fanno NON vengono conservate**. Una `config:cache` messa fra i deploy commands genera una cache che viene buttata via subito dopo.
+
+**Build commands** — dipendenze, asset e tutte le cache di ottimizzazione:
+
+```bash
+composer install --no-dev && npm run build && php artisan optimize
+```
+
+*(`optimize` racchiude config, route, view ed event cache: una riga invece di quattro.)*
+
+**Deploy commands** — solo ciò che tocca il database:
+
+```bash
+php artisan migrate --force
+```
+
+⚠️ **Comandi che su Cloud NON vanno messi**, perché la piattaforma li gestisce da sé o perché fanno danno (elenco della documentazione ufficiale):
+
+| Comando | Perché no |
+|---|---|
+| `queue:restart` | I worker sono **riavviati automaticamente a ogni deploy**. Su un VPS con Supervisor sarebbe indispensabile — qui è rumore. |
+| `horizon:terminate` | Idem, gestito dalla piattaforma. |
+| `optimize:clear` | Svuota le cache a runtime e «può causare comportamenti inattesi, specie legati alle code». |
+| `storage:link` | Il symlink non sopravvive: le modifiche dei deploy commands non persistono. E a noi non serve — i documenti stanno sull'object storage, non sul filesystem dell'istanza (🔗 ADR-042; fino al 7 Set 2026 era B2, 🔗 ADR-025). |
+
+### 3.3 Comandi una-tantum, alla nascita di un ambiente
+
+Si eseguono dal tab **«Commands»** dell'ambiente (comandi non interattivi, massimo 30 minuti), **non** dai deploy commands: girano una volta sola e non a ogni release.
+
+```bash
+php artisan db:seed --class=RolesAndPermissionsSeeder --force   # bootstrap RBAC
+php artisan db:seed --class=SuperadminSeeder --force            # il Superadmin, col suo Account e il suo Ente
+php artisan db:seed --class=StagingSeeder --force               # solo staging: 3 sedi EasyLab con dati dimostrativi
+php artisan easylab:provision-tenant "EasyLab" --admin-email=…  # primo Ente cliente + Admin (riceve l'invito)
+php artisan easylab:notifica-scadenze --senza-invio             # §3.1: obbligatorio
+php artisan cashier:webhook --url=https://<ambiente>/stripe/webhook   # §3.4
+```
+
+`StagingSeeder` rifiuta ambienti diversi da `staging`, non cancella righe ed è rieseguibile: crea `EasyLab Milano`, `EasyLab Roma` ed `EasyLab Catania` sotto un unico account SaaS, con almeno 1.001 strumenti per sede e i relativi tecnici, fornitori, interventi, spostamenti, garanzie e ricambi. Se trova una delle tre sedi popolata solo in parte si ferma, invece di duplicarne l'alberatura.
+
+⚠️ Il **SuperadminSeeder** va prima del provisioning e non dopo: è l'account che deve poter entrare quando non esiste ancora nessuno che possa invitarlo. Legge `SUPERADMIN_EMAIL`/`SUPERADMIN_PASSWORD` da `config/easylab.php` e **senza quelle variabili non crea nulla**, invece di ripiegare su un default — deroga consapevole ad ADR-012, motivata nel suo docblock.
+
+Poi, dal canvas dell'ambiente: **scheduler** (impostazione dell'App compute cluster — nessun crontab da scrivere, il cron è già in `routes/console.php`) e i **worker delle code**.
+
+⚠️ **Sulle code, una scelta da fare consapevolmente.** Se si usa una **managed queue** di Cloud, la piattaforma imposta da sé `QUEUE_CONNECTION=cloud` e **ogni job dispacciato senza connessione esplicita finisce lì**, anche quelli che oggi ADR-011 immagina su Redis. È la strada raccomandata (worker isolati dal traffico web, failed job visibili in dashboard, autoscaling fino a zero) e richiede `aws/aws-sdk-php`, che nel nostro `composer.json` arriva già come dipendenza di `league/flysystem-aws-s3-v3`. L'alternativa è un *background process* `queue:work` sull'App cluster, che tiene `QUEUE_CONNECTION=redis` ma fa competere le code col traffico web.
+
+⚠️ **Scale to zero e code non vanno d'accordo** sull'App cluster: l'ambiente si risveglia da solo per i task pianificati e per i job, ma se un job è ancora in corso quando scade il *sleep timeout* l'App cluster si ferma e il job viene interrotto. Con le managed queue il problema non si pone (girano su compute dedicata).
+
+⚠️ **Il nostro scheduler usa `onOneServer()` e `withoutOverlapping()`**: entrambi si appoggiano alla **cache condivisa**. Su Cloud vanno bene finché `CACHE_STORE` punta al KV Store (Valkey/Redis) dell'ambiente; con una cache locale al singolo replica non farebbero il loro lavoro, e con più repliche il digest partirebbe più volte.
+
+*Nota minore ma vera:* `APP_MAINTENANCE_DRIVER=file` (il default del nostro `.env.example`) su Cloud non è consistente fra repliche — `php artisan down` spegnerebbe una replica sola. Per la produzione: `APP_MAINTENANCE_DRIVER=cache` con `APP_MAINTENANCE_STORE=database`.
+
+⚠️ Il seeder RBAC è un **bootstrap, non una sincronizzazione**: dal primo seeding in poi la fonte di verità è il DB (🔗 ADR-016 §7). Rilanciarlo dopo aver toccato `config/rbac.php` va fatto sapendo che `firstOrCreate` non rimuove i permessi tolti dalla config — vanno cancellati a mano — e che le personalizzazioni fatte dalla UI di S6 non vanno perse: si confronta ruolo per ruolo **prima**.
+
+### 3.4 Comandi di manutenzione, quando servono
+
+```bash
+php artisan permission:cache-reset                    # dopo OGNI modifica a ruoli/permessi
+php artisan easylab:lockout {account} --motivo="…"    # blocco per insoluto (ADR-013)
+php artisan easylab:lockout {account} --sblocca
+php artisan easylab:provision-tenant "Sede" --account={id}   # sede nuova su account esistente
+php artisan schedule:list                             # verifica che i cron siano quelli attesi
+```
+
+Il resto gira da sé: il digest delle scadenze alle 06:00 di Roma, la rotazione di `avvisi_scadenza` (24 mesi) e delle `notifications` (12 mesi) alle 03:30/03:35.
+
+🔴 **E per l'error tracker (🔗 ADR-017) NON c'è nessun comando da ricordarsi — è scritto qui apposta, perché qualcuno lo cercherà.** La conservazione dichiarata in Privacy §T8 — occorrenze 90 giorni, issue chiuse 90, aperte 180, `ignorato` mai potato, e **il messaggio oscurato dopo 180 giorni in qualunque stato** — avviene **tutta** dentro il `model:prune` delle 03:30 che è già in quella riga: i due modelli dell'error tracker si sono aggiunti a quello esistente invece di aprire un secondo cron. L'oscuramento dei messaggi in particolare non ha un comando proprio: è agganciato a `Errore::pruneAll()`, cioè al metodo che `model:prune` chiama già.
+
+> **Perché la nota vale la riga che occupa.** Chi legge «il messaggio si oscura a 180 giorni» in un registro dei trattamenti va a cercare l'operazione che lo fa, non la trova, e conclude una delle due cose sbagliate: che manchi (e ne scrive una nuova, duplicando il gesto) oppure che sia inerte. È la forma del difetto **T6**, dove `clean_after_days => 365` è dichiarato in `config/activitylog.php` e `activitylog:clean` non è schedulato da nessuna parte — una retention scritta e mai avvenuta. Qui l'assenza del comando è la **prova che il gesto è agganciato**, non il sintomo che manchi.
+>
+> Come si verifica, se il dubbio torna: `php artisan schedule:list` deve mostrare un `model:prune` con `--model='App\Models\AvvisoScadenza' --model='App\Models\Errore' --model='App\Models\OccorrenzaErrore'`. Due meta-test (`tests/Feature/RetentionTest.php`) pretendono esattamente quella forma — compreso il fatto che **non** ci sia un `--pretend` di troppo, che darebbe un cron che gira ogni notte senza cancellare niente.
+
 ---
 
 ## 4. CI — GitHub Actions (S0.7)
@@ -105,7 +243,7 @@ Dal giorno dopo il digest manda solo le novità.
 Scheletro reale in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). Si attiva quando l'app Laravel atterra in S1 (prima non c'è codice da lint/testare).
 
 **Cosa fa lo scheletro:**
-1. Trigger su `push` e `pull_request` verso `main`.
+1. Trigger su `push` e `pull_request` verso `staging` e `main` (dal 19 Ago 2026: il ramo di lavoro è staging, e senza il suo trigger le PR passerebbero senza rete).
 2. Servizi: **PostgreSQL** + **Redis** (per i feature/isolation test).
 3. Step: checkout → setup PHP 8.3 → `composer install` → copia `.env` → `key:generate` → **lint (Pint)** → **test (Pest)**.
 4. La PR non è mergeabile se il job fallisce (branch protection §1).
@@ -119,7 +257,93 @@ Scheletro reale in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
 | Task | Specifica | Esecuzione |
 |---|---|---|
 | S0.5 Repo + branch + commit | ✅ definita qui | ⬜ creare repo privato su GitHub |
-| S0.6 Ambienti + provisioning | ✅ definita qui (.env, ambienti) | ⬜ provisioning Laravel Cloud (regione UE) + bucket B2 privati + DPA |
+| S0.6 Ambienti + provisioning | ✅ definita qui (.env, ambienti) | ⬜ provisioning Laravel Cloud (regione UE) + bucket privati per ambiente |
 | S0.7 CI scheletro | ✅ `.github/workflows/ci.yml` | ⬜ si attiva con l'app in S1 |
 
 **Definition of Done S0** (parte infra): "repo + CI + ambiente staging raggiungibili" → richiede l'esecuzione del provisioning sopra.
+
+---
+
+## 6. Checklist di go-live (30 Set 2026)
+
+Raccolta delle voci «Per Marco» lasciate aperte dal giro multiagente di hardening S7 (21 Set 2026, security pass + isolamento + performance + GDPR — 🔗 Roadmap Sprint 7). Non sono difetti: sono decisioni, verifiche o accessi che solo Marco può chiudere. In ordine di urgenza.
+
+### 🔴 Prima di tutto
+
+- **`APP_ENV`/`APP_DEBUG` di staging e produzione su Laravel Cloud.** Sulla macchina di sviluppo `.env.prod` e `.env.staging` (ignorati da git) hanno `APP_ENV=local` e `APP_DEBUG=true`. Se sono le copie caricate su Laravel Cloud, staging e produzione mostrano stack trace, SQL e percorsi a chiunque provochi un 500 (un 404 non lo rivela: ha una vista propria anche in debug). Verificare le variabili **sul pannello**, non sui file locali: staging subito, produzione prima del go-live. `PagineErroreTest` lo pretende in locale ma si salta dove quei file non esistono (CI) — non è una rete per l'ambiente vero.
+
+### Fuori dal perimetro del giro S7 — Laravel Cloud, produzione
+
+- Creare l'**ambiente di produzione**: non eredita nulla da staging, ogni risorsa si crea per ambiente.
+- `APP_ENV`, `APP_DEBUG`, `APP_TIMEZONE` impostati per l'ambiente di produzione (🔗 sopra, e la migration del fuso orario su staging, ADR-041 — senza, i timestamp di staging restano UTC letti come italiani).
+- **Bucket di produzione** in giurisdizione UE con **cifratura a riposo** verificata (🔗 ADR-042: proprietà per bucket, non ereditata dallo storage precedente).
+- **Managed queue e worker** attivi anche in produzione (senza, gli inviti restano «in consegna» e non partono mai — 🔗 ADR-012). Una managed queue processa una coda sola (`default`).
+- **Scheduler acceso** anche in produzione (su staging è spento): senza, il digest scadenze non parte.
+- **Limite di spesa** impostato anche in produzione (su staging è a $30).
+- **Backup automatici** di DB e storage, con una **prova di restore** effettivamente eseguita, non solo configurata.
+
+### Primo run in produzione
+
+- `easylab:notifica-scadenze --senza-invio` **al primo lancio**, o parte un digest da ~1300 righe verso tutti i destinatari in una volta.
+
+### Stripe
+
+- Regola **Radar** attiva (verificarla, non presupporla).
+- Verifiche dei **Payment Link** con la carta di test `4242 4242 4242 4242` prima di considerarli pronti per clienti veri.
+- Conferma che `customer_details.business_name` arrivi valorizzato dal checkout (la ragione sociale del cliente ne dipende).
+- Dopo il deploy: rilanciare `cashier:webhook` oppure aggiungere l'evento **`checkout.session.async_payment_succeeded`** all'endpoint dalla dashboard Stripe — l'handler c'è già nel controller, manca solo la sottoscrizione all'evento (🔗 T3/A8).
+- Verificare se sono attivi **metodi di pagamento asincroni** (SEPA) o prove/coupon al 100% sui Payment Link: cambiano i tempi di conferma dell'account.
+- ⚠️ Residuo di prodotto, non bloccante: con `REGISTRAZIONE_APERTA` spento una registrazione già verificata può ancora aprire nuovi checkout (`versoStripe` non lo controlla — il docblock dichiara «spegne l'ingresso, non il percorso»). Decidere se chiudere anche questo varco.
+- ⚠️ La sessione Stripe precedente non viene fatta scadere in `versoStripe`: due schede aperte producono due checkout pagabili. Richiede un metodo nuovo su `PortaleCheckout`, non fatto in S7.
+
+### DNS e posta
+
+- **SPF, DKIM, DMARC, PTR** sul dominio di invio di produzione, con `MAIL_FROM_ADDRESS` allineato. *(Già verificato funzionante su staging il 21 Ago 2026 con Aruba: recapito in posta in arrivo, non in spam — da ripetere sul dominio di produzione se diverso.)*
+
+### Backblaze B2
+
+- **Smontaggio del vecchio bucket**: prima **la chiave**, poi il bucket (🔗 ADR-042 — l'ordine inverso lascia una finestra in cui la chiave esiste senza più un bucket da proteggere).
+
+### Guide video
+
+- I video delle guide **si caricano solo in produzione** (~498 MB, fuori da git): su staging il catalogo resta a indice vuoto, ed è voluto.
+- Apertura di `/guida`: oggi sta dietro `tenants.view_all`, da riconsiderare se il pubblico previsto è più largo del solo staff di piattaforma.
+
+### DB di sviluppo
+
+- `UPDATE` dei `qr_token` nulli sul database di sviluppo (dettaglio in `guide/DIFETTI-TROVATI.md`).
+
+### Legale / DPO
+
+- Retention e anonimizzazione delle **persone cestinate** (ADR-038: il cestino nega login e nuove assegnazioni, ma nome e storico restano leggibili con `withTrashed()`).
+- Retention della riga di **`registrazioni`** che resta dopo `EliminaCliente`, con `account_id` NULL ma nome ed email del referente ancora leggibili: cancellarla col cliente, anonimizzarla o tenerla N giorni come traccia di provenienza — nessuna regola scelta oggi.
+- Retention/troncamento degli **snapshot Livewire** salvati dall'error tracker interno: `ChiaviSensibili` non li ripulisce, quindi dati dei clienti (input di richiesta) finiscono nel tracker, visibile al solo Developer ma rilevante per il DPA.
+- **Informativa privacy**, in particolare la terza versione — quella di `/registrati`, superficie pubblica già online e senza informativa da mostrare (🔗 Privacy GDPR §5).
+- Comunicazione ai clienti dei **nomi dei tecnici EasyLab** presenti nel loro portafoglio (già mostrati in app, non ancora coperti da informativa/DPA — 🔗 ADR-038, Privacy GDPR §2 T1).
+- **Export GDPR** (`easylab:esporta-tenant`, 🔗 Privacy GDPR §4): decidere retention e canale di consegna dello zip (oggi resta su un disco effimero dell'istanza), se includere `activity_log`/`notifications` (oggi esclusi e dichiarati nel manifest), se offrire un export self-service all'Admin cliente (oggi negato, nessun permesso creato), e ratificare la riga di audit dell'export come quarta eccezione dichiarata ad ADR-027.
+
+### RBAC e permessi
+
+- Riseeding **mai per riflesso** dopo una modifica a `config/rbac.php`: `php artisan db:seed --class=RolesAndPermissionsSeeder` solo quando la matrice **deve** tornare a bootstrap, mai «per sicurezza» — cancella ogni personalizzazione fatta da `/piattaforma/ruoli` (dettaglio in CLAUDE.md).
+
+### Limiti di upload
+
+- Il limite **temporaneo** di Livewire (`max:12288`, 12 MB) è più basso di quello della regola dei documenti (`max:20480`, 20 MB): un PDF fra 12 e 20 MB è oggi rifiutato con un errore generico prima della regola. Decisione di prodotto su quale dei due tetti vale, più la verifica del limite reale di upload su Laravel Cloud (`upload_max_filesize`/`post_max_size`).
+
+### Verifiche dopo `route:cache`
+
+- `php artisan route:list --name=password` deve mostrare **un solo** `throttle:password-reset-link`/`throttle:password-reset` per rotta: il binding dei limiter alle rotte di Fortify passa da `$this->app->booted()` con `refreshNameLookups()`, e va confermato che la cache delle rotte non lo raddoppi né lo perda.
+
+### Indice parziale `forced_state`
+
+- Migration `2026_09_21_110100_add_indice_parziale_forced_state_to_strumenti_table.php` pronta (solo Postgres): guadagno reale (0,65→0,10 ms e 1,62→0,04 ms sui conteggi rossi a 20.000 strumenti) ma sotto il millisecondo a questo volume, costo trascurabile. Tenerla o toglierla prima di applicare le migration di T7.
+
+### Isolamento — dati esistenti
+
+- Admin retrocessi **prima** del fix di isolamento T2B-1 (commit `324a014`) restano membri del contratto e raggiungono ancora le altre sedi come Tenant. Query di verifica pronta (in sola lettura, incrocia `account_user` coi ruoli Admin correnti); rimuoverli è una decisione non ancora presa.
+
+### UAT e push
+
+- **UAT** con dati reali su staging, fix dei bug bloccanti.
+- Applicare al DB di sviluppo (`php artisan migrate`) le migration del giro: `2026_09_21_100000` (colonna `subscriptions.creazione_ultimo_evento_stripe`), `2026_09_21_110000` e `2026_09_21_110100` (indici `strumenti`, la seconda in attesa della decisione sopra).
+- Suite intera verde **prima** del push su `staging`: ogni push deploya, e la CI gira dopo (CLAUDE.md).

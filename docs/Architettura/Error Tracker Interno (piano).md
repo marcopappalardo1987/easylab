@@ -2,7 +2,35 @@
 
 *Specifica del sistema di error tracking **interno** (in-house, "stile Sentry") che sostituisce un servizio in abbonamento. Copre il task S1.11 (`[STRETCH]` error tracking) costruendolo invece di acquistarlo. Questo file è il riferimento durevole del piano: l'implementazione va completata **prima del deploy** (Sprint 1 · punti 8/9).*
 
-> **Stato:** pianificato — da implementare prima del go-live. Errori **backend/PHP**; la cattura di errori JS lato browser è un'estensione futura.
+> # ⛔️ **SUPERATO — non è più la specifica di niente.** *(24 Ago 2026)*
+>
+> **Il sistema è stato costruito, ma NON come questo file lo descrive.** La
+> decisione vive in **🔗 ADR-017**; questo documento si conserva come storia
+> di come ci si è arrivati, e va letto solo per quello.
+>
+> ⚠️ Sette file di codice lo citano ancora con un 🔗 in un docblock. Chi ci
+> arriva da lì deve sapere che **almeno otto punti dicono il falso** rispetto a
+> ciò che esiste davvero:
+>
+> | Qui c'è scritto | La realtà |
+> |---|---|
+> | tabelle `error_issues` / `error_occurrences` | `errori` / `occorrenze_errore` |
+> | `App\Support\ErrorTracker::capture()` | `App\Support\Errori\CatturaErrori::cattura()` |
+> | `config/errors.php` | il blocco `errori` di `config/easylab.php` |
+> | permesso **nuovo** `system.errors.view` («56→57, locked 9→10») | si riusa `system.logs.view`, che esisteva già ed era inutilizzato. **Nessun permesso nuovo**: il catalogo resta a 54 e il set bloccato a 7 |
+> | rotte `/system/errors` + voce di sidebar dedicata | `/piattaforma/errori`, quarta voce della sub-nav di piattaforma |
+> | fingerprint su **un** frame | **due** frame (origine + chiamante applicativo), o cento cause diverse collassano in una issue sola |
+> | alert **sincrona**, «no worker» | in coda, e dentro un job che **non lancia mai** — perché il worker riporta da sé l'eccezione del job, e un alert fallito diventava un errore nuovo |
+> | comando `errors:prune --days=90` «schedulazione al deploy» | **nessun comando nuovo**: si aggancia al `model:prune` già schedulato. Un comando da ricordarsi di attivare è precisamente il difetto T6 che l'ADR dichiara di evitare |
+>
+> 🔴 E soprattutto la verifica di §5 — **«Admin → 403; Superadmin → 200»** — è
+> il **contrario** della decisione centrale: la pagina è del **solo Developer**,
+> e il Superadmin ne è escluso. È la prima schermata del progetto che lui non
+> può aprire, e ciò che lo tiene informato è il registro di audit.
+
+*(Testo originale del piano S1, conservato sotto.)*
+
+> **Stato:** ~~pianificato — da implementare prima del go-live~~. Errori **backend/PHP**; la cattura di errori JS lato browser è un'estensione futura.
 
 ---
 

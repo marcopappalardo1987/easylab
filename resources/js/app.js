@@ -157,3 +157,203 @@ document.addEventListener('alpine:init', () => {
         },
     }))
 })
+
+/**
+ * Il selettore di tema `x-ui.selettore-tema` (🔗 ADR-034 — DS §8.3).
+ *
+ * Fa TRE cose in un click, e nessun'altra: scrive `data-theme` sull'`<html>`,
+ * scrive `localStorage`, e **anticipa** `aria-pressed` sui tre bottoni.
+ *
+ * **Non decide il tema.** La verità è `users.tema`, e a scriverla è il
+ * `wire:click` reso dal server, che parte nello stesso click. Qui si compra
+ * solo l'immediatezza: un morph di Livewire ridisegna il componente ma **non
+ * l'`<html>`**, quindi senza questa riga il colore cambierebbe soltanto al
+ * ricaricamento successivo — l'interruttore sembrerebbe rotto pur avendo
+ * salvato.
+ *
+ * ⚠️ **`aria-pressed` è anticipato, non posseduto.** È la regola già imparata
+ * dal combobox letta dal lato giusto: lo stato Alpine non può *aggiungere* nulla
+ * a ciò che il server ha deciso. Qui non tiene nemmeno uno stato — scrive
+ * direttamente sull'attributo, e il morph successivo riporta i tre bottoni a ciò
+ * che dice il database. Se il server rifiutasse il valore, l'evidenziazione
+ * tornerebbe indietro da sé senza che questo file sappia che è successo.
+ *
+ * ⚠️ **In `localStorage` va il valore di DOMINIO** (`sistema|chiaro|scuro`), non
+ * `light|dark`: «seguo il sistema» dev'essere **scrivibile**, non esprimibile
+ * solo cancellando la chiave — cioè con un gesto indistinguibile da una pulizia
+ * del browser. La traduzione verso le due stringhe che `app.css` cerca nei
+ * propri selettori è la stessa che fa `TemaUtente::attributoHtml()` sul server e
+ * lo script d'ospite nel `<head>`: `sistema` **non scrive l'attributo affatto**,
+ * perché è l'assenza a far decidere il sistema operativo (ADR-034 punto 2).
+ *
+ * ⚠️ **La chiave arriva dal Blade**, che la rende da `TemaUtente::CHIAVE_LOCALSTORAGE`:
+ * questo file è un asset statico e non può leggere una costante PHP, quindi
+ * riscriverla qui vorrebbe dire tenerne allineate due copie a mano.
+ *
+ * ⚠️ Il `try/catch` non è cautela generica: in navigazione privata, e coi cookie
+ * di terze parti bloccati, il solo `localStorage.setItem` **lancia**. Senza
+ * cache il tema continua a funzionare — l'autenticato lo riceve dal server —
+ * e si perde soltanto l'anticipo sulla pagina di accesso.
+ */
+document.addEventListener('alpine:init', () => {
+    // I tre stati di dominio, e il valore che ciascuno scrive sull'`<html>`.
+    // `null` = **nessun attributo**: non esiste un `data-theme="system"`, e un
+    // valore terzo inciamperebbe nel `:not([data-theme="light"])` di `app.css`
+    // spegnendo in silenzio la media query, cioè proprio la preferenza di
+    // sistema che si voleva rispettare.
+    const ATTRIBUTO = { chiaro: 'light', scuro: 'dark', sistema: null }
+
+    window.Alpine.data('selettoreTema', (chiave) => ({
+        /**
+         * Il database ha ragione, e questa è la riga che glielo lascia dire.
+         *
+         * `data-tema-utente` porta **sempre** il valore di dominio dell'utente
+         * autenticato, i tre stati distinti (lo rende il layout). Se
+         * `localStorage` dice un'altra cosa — perché il tema è stato cambiato
+         * da un altro dispositivo — la copia locale è vecchia: si riallinea, e
+         * la prossima pagina di accesso su QUESTO browser nascerà del colore
+         * giusto invece che di quello di ieri. È il costo dichiarato di ADR-034
+         * («uno schermo già aperto altrove non si aggiorna da solo»), pagato al
+         * primo caricamento utile.
+         */
+        riallinea() {
+            const dominio = document.documentElement.dataset.temaUtente
+
+            if (!(dominio in ATTRIBUTO)) return
+
+            try {
+                if (localStorage.getItem(chiave) !== dominio) {
+                    localStorage.setItem(chiave, dominio)
+                }
+            } catch (e) {
+                // Senza cache leggibile non si perde niente di essenziale.
+            }
+        },
+
+        applica(tema) {
+            // Un valore che non è uno dei tre non scrive NULLA: né attributo né
+            // cache. È la stessa postura dello script d'ospite, e vale anche
+            // qui dove i tre bottoni li rende il server — perché è l'unico modo
+            // in cui questo file non può mettere l'`<html>` in uno stato che
+            // `app.css` non sa leggere.
+            if (!(tema in ATTRIBUTO)) return
+
+            const radice = document.documentElement
+            const attributo = ATTRIBUTO[tema]
+
+            radice.setAttribute('data-tema-utente', tema)
+
+            if (attributo === null) {
+                radice.removeAttribute('data-theme')
+            } else {
+                radice.setAttribute('data-theme', attributo)
+            }
+
+            try {
+                localStorage.setItem(chiave, tema)
+            } catch (e) {
+                // Vedi sopra: la cache è un anticipo, non la verità.
+            }
+
+            // L'anticipo dell'evidenziazione, dentro il solo gruppo che ha
+            // ricevuto il click: due selettori sulla stessa pagina (la pagina
+            // Preferenze e la scorciatoia in top bar) non si scrivono l'uno
+            // addosso all'altro — a rimetterli d'accordo ci pensa comunque il
+            // render del server.
+            //
+            // ⛔ **`$root` e non `$el`, ed è una trappola che costa un'ora.**
+            // `$el` è l'elemento che sta **valutando l'espressione**, non la
+            // radice del componente: chiamato da `x-on:click` su un bottone,
+            // `this.$el` È il bottone, e `button.querySelectorAll('[data-tema]')`
+            // non trova niente. Non dà errore — l'attributo semplicemente non si
+            // muove, e l'evidenziazione resta indietro fino alla risposta del
+            // server. Trovato guidando il componente in un browser vero: nessun
+            // test Livewire poteva vederlo, perché Alpine lì non gira.
+            this.$root.querySelectorAll('[data-tema]').forEach((bottone) => {
+                bottone.setAttribute('aria-pressed', String(bottone.dataset.tema === tema))
+            })
+        },
+    }))
+})
+
+/**
+ * Mostra/nascondi la password (🔗 `x-ui.input`, prop `rivelabile`; DS §5.1, §5.6).
+ *
+ * ⛔ **Non è Alpine, e non è una scelta di stile.** `guest-layout` non carica
+ * `@livewireScripts`, e Alpine arriva **da quel bundle**: su `/login` un
+ * `x-data` sarebbe **inerte** — nessun errore, semplicemente non succede
+ * niente. È la stessa trappola del `wire:click` fuori da Livewire già
+ * incontrata nel menù utente della top bar. Questo file invece lo carica
+ * `@vite`, cioè **entrambi** i layout.
+ *
+ * ⚠️ **Ascoltatore delegato su `document`**, non un listener per pulsante: il
+ * markup può essere rimpiazzato da un morph di Livewire dove Livewire c'è, e
+ * un listener agganciato al nodo morirebbe con lui.
+ *
+ * ⚠️ **Il fuoco NON si sposta sul campo.** È deliberato: chi ha premuto il
+ * pulsante deve restare sul pulsante, o con uno screen reader perderebbe
+ * l'annuncio di `aria-pressed` che ha appena provocato.
+ */
+document.addEventListener('click', (evento) => {
+    const bottone = evento.target.closest('[data-mostra-password]');
+
+    if (!bottone) {
+        return;
+    }
+
+    const campo = document.getElementById(bottone.getAttribute('aria-controls'));
+
+    if (!campo) {
+        return;
+    }
+
+    // `type === 'password'` è la **verità del DOM**, non un flag tenuto a parte:
+    // due copie dello stesso stato divergono, e quella che diverge è sempre
+    // quella che nessuno guarda.
+    const siRivela = campo.type === 'password';
+
+    campo.type = siRivela ? 'text' : 'password';
+    bottone.setAttribute('aria-pressed', String(siRivela));
+    bottone.setAttribute('aria-label', siRivela ? 'Nascondi la password' : 'Mostra la password');
+
+    // 🔴 **`toggleAttribute` e NON `icona.hidden = …`**, ed è un difetto pagato:
+    // `hidden` è una proprietà di `HTMLElement`, e un `<svg>` è un
+    // `SVGSVGElement` — **non ce l'ha**. `icona.hidden = true` crea quindi una
+    // proprietà JavaScript inerte: nessun errore, l'attributo non cambia, il
+    // `display` calcolato resta quello di prima e **l'icona non si scambia mai**.
+    // Misurato nel browser: `proprietaHidden` si ribaltava e `attributoHidden`
+    // no. Una sonda che avesse letto la proprietà avrebbe detto che funzionava.
+    bottone.querySelectorAll('[data-icona]').forEach((icona) => {
+        icona.toggleAttribute('hidden', (icona.dataset.icona === 'mostra') === siRivela);
+    });
+});
+
+/**
+ * ⚠️ **Il pulsante nasce `hidden` nel markup e lo rivela questo codice.**
+ *
+ * Senza JavaScript non comparirebbe affatto — invece di restare in pagina come
+ * un comando morto che non fa nulla quando lo si preme. È la stessa disciplina
+ * del combobox, che senza JS resta usabile a click.
+ *
+ * ⚠️ `@vite` carica questo file come **modulo**, quindi differito: al momento in
+ * cui gira, il documento può essere già pronto e `DOMContentLoaded` non
+ * arriverebbe più. Da qui il controllo su `readyState`.
+ */
+function rivelaPulsantiPassword() {
+    // Qui il bersaglio è un `<button>`, cioè un `HTMLElement`, quindi `.hidden`
+    // funzionerebbe — ma si usa la stessa forma di sopra: due modi di fare la
+    // stessa cosa nello stesso file sono un invito a copiare quello sbagliato.
+    document.querySelectorAll('[data-mostra-password][hidden]').forEach((bottone) => {
+        bottone.removeAttribute('hidden');
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', rivelaPulsantiPassword);
+} else {
+    rivelaPulsantiPassword();
+}
+
+// Dove Livewire c'è, un morph può reinserire il markup originale (quindi di
+// nuovo `hidden`): lo si rivela anche dopo una navigazione.
+document.addEventListener('livewire:navigated', rivelaPulsantiPassword);

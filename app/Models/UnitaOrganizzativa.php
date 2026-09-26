@@ -65,6 +65,12 @@ class UnitaOrganizzativa extends Model
      * appartiene l'Ente, e lo scrivono solo provisioning e backfill, mai un
      * form. Un Admin che potesse forgiarlo sposterebbe il proprio Ente sotto
      * l'abbonamento di qualcun altro.
+     *
+     * Fuori, infine, `marchio_logo_path` e `marchio_colore` (ADR-011): il primo
+     * è un percorso sul disco privato `documenti`, e forgiarlo per
+     * mass-assignment significherebbe far incorporare in un'email il file di un
+     * altro Ente. L'unica via è `fissaMarchioEmail()`, che riceve un percorso
+     * già costruito con l'id dell'Ente dentro.
      */
     protected function casts(): array
     {
@@ -78,6 +84,39 @@ class UnitaOrganizzativa extends Model
     }
 
     /**
+     * Radica il nodo come **Ente**: `tenant_id` = sé stesso, `account_id` = il
+     * rapporto commerciale (ADR-032). Si chiama subito dopo `create()`.
+     *
+     * ⚠️ **Il metodo esiste per rendere esplicito ciò che finora funzionava per
+     * effetto collaterale.** Il nodo radice non può nascere già timbrato: la FK
+     * `tenant_id` punta a sé stesso, e il proprio id non esiste prima
+     * dell'insert. Il problema è ciò che accade *in mezzo*: se chi provisiona è
+     * **autenticato** — cioè da UI, mai in console — `BelongsToTenant::creating`
+     * timbra il nodo nuovo col `tenant_id` di **chi sta scrivendo**. Il
+     * Superadmin è tenant-bound come chiunque (ADR-018 non concede bypass a
+     * nessuno), quindi l'Ente nuovo nascerebbe dentro l'Ente di EasyLab.
+     *
+     * `saveQuietly()` e non `save()`: `BelongsToTenant::updating` **rimette il
+     * valore originale** quando `tenant_id` è dirty e c'è un utente scopato —
+     * cioè annullerebbe questa correzione, ripristinando il timbro sbagliato.
+     * Sopprimere gli eventi è quindi la scelta, non la scorciatoia; e i due
+     * hook che si stanno scavalcando sono nominati qui sopra perché il giorno in
+     * cui cambiano, questa riga è la prima da rileggere.
+     *
+     * *Finora il codice era corretto senza dirlo: la stessa coppia
+     * `forceFill(...)->saveQuietly()` viveva dentro `ProvisionTenant`, dove
+     * nessun test l'ha mai esercitata con un utente autenticato. Funzionava per
+     * effetto collaterale, non per decisione.*
+     */
+    public function radicaComeEnte(Account $account): bool
+    {
+        return $this->forceFill([
+            'tenant_id' => $this->id,
+            'account_id' => $account->id,
+        ])->saveQuietly();
+    }
+
+    /**
      * Unica via per cambiare la visibilità delle garanzie ricambio (ADR-029).
      *
      * Il metodo esiste perché la colonna è fuori da `$fillable`: senza, il
@@ -88,6 +127,22 @@ class UnitaOrganizzativa extends Model
     public function fissaVisibilitaGaranzieRicambio(VisibilitaGaranzieRicambio $visibilita): bool
     {
         $precedente = $this->visibilita_garanzie_ricambio;
+
+        // Guardia di no-op, come `Account::blocca()` e `cambiaPiano()`. Finché
+        // questo gesto è arrivato da un form con un bottone Salva il caso era
+        // raro; dalla cabina di regia (S6) arriva da una `select` per sede, e un
+        // mis-click che rimette lo stesso valore scriverebbe una riga di audit
+        // con `da === a`. Sarebbe rumore in un registro che esiste per dire **chi
+        // ha deciso cosa**: dieci righe identiche non raccontano dieci decisioni,
+        // e la vera diventa più difficile da trovare, non più facile.
+        //
+        // Il `true` è deliberato: per chi chiama, «lo stato richiesto è quello
+        // sul DB» è un successo. Restituire `false` farebbe mostrare un errore
+        // per un'operazione che non aveva niente da fare.
+        if ($precedente === $visibilita) {
+            return true;
+        }
+
         $this->visibilita_garanzie_ricambio = $visibilita;
 
         $salvato = $this->save();
@@ -112,6 +167,45 @@ class UnitaOrganizzativa extends Model
             ->log('Visibilità garanzie ricambio modificata');
 
         return $salvato;
+    }
+
+    /**
+     * Unica via per fissare il **marchio email** dell'Ente (🔗 ADR-011).
+     *
+     * Le due colonne restano fuori da `$fillable` per la stessa ragione di
+     * `visibilita_garanzie_ricambio`: il form dell'anagrafica — dove si scrivono
+     * nome, note e soglia — passa per mass-assignment, e un `marchio_logo_path`
+     * forgiato lì dentro punterebbe a un percorso arbitrario sul disco privato
+     * `documenti`, cioè al logo (o al documento) di un altro Ente. Tenendole
+     * fuori, l'unica strada è questa, che è anche il punto in cui il percorso è
+     * già stato costruito con l'id dell'Ente dentro.
+     *
+     * ⚠️ **La guardia sul tipo è la stessa forma di
+     * `fissaVisibilitaGaranzieRicambio()`**, ma qui il motivo è più stretto: il
+     * marchio si legge solo dal nodo `tipo = ente` (`MarchioEmail::perEnte()`
+     * filtra su quello), quindi scriverlo su un dipartimento produrrebbe un dato
+     * che nessuno rileggerà mai — un'impostazione che si crede applicata e non
+     * lo è, che è il modo peggiore di sbagliare.
+     *
+     * **Nessuna riga di audit**, a differenza della visibilità delle garanzie:
+     * `UnitaOrganizzativa` è già esente in `AuditCoverageGuardrailTest` («logga
+     * a mano la sola scrittura che conta») e il marchio ricade nel «resto
+     * dell'anagrafica non tracciato» di ADR-027 §3. Là si traccia perché è una
+     * clausola del rapporto commerciale che decide EasyLab; qui è un dato che
+     * l'Ente governa da sé.
+     */
+    public function fissaMarchioEmail(?string $logoPath, ?string $colore): bool
+    {
+        if ($this->tipo !== TipoUnitaOrganizzativa::Ente) {
+            throw new RuntimeException(
+                "Il marchio email appartiene solo ai nodi ente (ADR-011): il nodo «{$this->nome}» è {$this->tipo->value}."
+            );
+        }
+
+        return $this->forceFill([
+            'marchio_logo_path' => $logoPath,
+            'marchio_colore' => $colore,
+        ])->save();
     }
 
     /**

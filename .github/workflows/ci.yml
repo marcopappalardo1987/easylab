@@ -1,15 +1,20 @@
 # CI — Easy Lab (scheletro S0.7)
-# Lint (Pint) + Test (Pest) ad ogni push/PR verso main.
+# Lint (Pint) + Test (Pest) ad ogni push/PR verso staging e main.
 # NOTA: questo workflow diventa operativo quando l'app Laravel viene inizializzata in S1
 # (prima non esistono composer.json / suite di test). Vedi docs/Architettura/Setup Repository e Ambienti.md §4.
+#
+# `staging` è entrato il 19 Ago 2026 come ramo di lavoro (main = produzione):
+# senza aggiungerlo qui, le PR verso staging sarebbero passate SENZA rete —
+# e il segnale della CI arriverebbe solo alla promozione in produzione, cioè
+# quando è tardi. Restano entrambi: main lo tiene per i merge di promozione.
 
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
   pull_request:
-    branches: [main]
+    branches: [main, staging]
 
 jobs:
   test:

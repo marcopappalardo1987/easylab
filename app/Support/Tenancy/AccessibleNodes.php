@@ -23,13 +23,25 @@ class AccessibleNodes
      * loro discendenti nel proprio Ente. Senza assegnazioni → [] (fail-safe:
      * non vede nulla).
      *
+     * Memoizzata per richiesta/job in `AccessibleNodesMemo` (S7): lì il perché
+     * della durata, della chiave e dell'invalidamento. Il controllo del ruolo
+     * resta fuori dalla memo, di proposito.
+     *
      * @return list<int>|null
      */
     public static function forCurrentUser(): ?array
     {
         $user = Auth::user();
 
-        return $user instanceof User ? self::forUser($user) : null;
+        if (! $user instanceof User || ! $user->isDepartmentScoped()) {
+            return null;
+        }
+
+        return app(AccessibleNodesMemo::class)->ricorda(
+            $user,
+            CurrentTenant::id(),
+            fn (): array => self::forUser($user) ?? [],
+        );
     }
 
     /**
@@ -81,15 +93,20 @@ class AccessibleNodes
     protected static function expandSubtrees(array $roots, int $tenantId): array
     {
         $childrenByParent = [];
+        $delTenant = [];
         UnitaOrganizzativa::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->get(['id', 'parent_id'])
-            ->each(function ($node) use (&$childrenByParent) {
+            ->each(function ($node) use (&$childrenByParent, &$delTenant) {
                 $childrenByParent[$node->parent_id][] = (int) $node->id;
+                $delTenant[(int) $node->id] = true;
             });
 
+        // D-T2-2: una radice di `responsabile_unita` fuori dal tenant (dato
+        // corrotto o scritto da fuori Eloquent) non diventa accessibile. Prima
+        // lo impediva solo il TenantScope applicato insieme.
         $accessible = [];
-        $queue = $roots;
+        $queue = array_values(array_filter($roots, fn ($root) => isset($delTenant[(int) $root])));
         while ($queue !== []) {
             $id = (int) array_shift($queue);
             if (isset($accessible[$id])) {

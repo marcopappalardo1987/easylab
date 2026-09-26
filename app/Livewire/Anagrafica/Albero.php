@@ -6,13 +6,20 @@ use App\Enums\TipoSpostamento;
 use App\Enums\TipoUnitaOrganizzativa;
 use App\Enums\VisibilitaGaranzieRicambio;
 use App\Livewire\Concerns\ManagesStrumentoForm;
+use App\Models\Account;
 use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
+use App\Support\Notifiche\AvvisiObsolescenza;
+use App\Support\Piani;
+use App\Support\Provisioning\ProvisionaEnte;
+use App\Support\Tenancy\CurrentTenant;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Lab404\Impersonate\Services\ImpersonateManager;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -65,6 +72,11 @@ class Albero extends Component
 
     public ?string $notice = null;
 
+    /** Modale «aggiungi una sede», il gesto del cliente su sé stesso. */
+    public bool $showSedeForm = false;
+
+    public string $nomeSede = '';
+
     public function mount(): void
     {
         // Se l'utente ha un'unica radice visibile (es. Admin con un Ente,
@@ -102,6 +114,180 @@ class Albero extends Component
         return $nodes->filter(
             fn (UnitaOrganizzativa $n) => $n->parent_id === null || ! in_array($n->parent_id, $ids, true)
         )->values();
+    }
+
+    // --- Aggiungere una sede al proprio account (ADR-032) ---
+
+    /**
+     * 🔴 L'Account di chi guarda, se ne ha uno.
+     *
+     * Si deriva dall'Ente dell'utente e **mai** da un id che arriva dal
+     * browser: è ciò che rende impossibile, per costruzione, aggiungere una
+     * sede al contratto di qualcun altro.
+     */
+    private function mioAccount(): ?Account
+    {
+        return Auth::user()?->ente?->account;
+    }
+
+    /**
+     * 🔴 **Nessun permesso nuovo, e la scelta è la parte importante.**
+     *
+     * Aggiungere una sede **consuma uno slot del piano**, cioè tocca il
+     * contratto: la domanda giusta non è «sai amministrare l'anagrafica» ma
+     * «questo account è tuo». È esattamente l'ability `manage` di
+     * `AccountPolicy`, quella che la cabina già pretende quando aggancia una
+     * sede a un cliente esistente — qui il cliente è sé stesso.
+     *
+     * ⛔ `tenants.provision` NON si allarga all'Admin, e non è pigrizia: è nel
+     * **set bloccato** (🔗 ADR-016) e per definizione è cross-tenant, quindi
+     * darglielo significherebbe dargli la piattaforma. E un permesso nuovo
+     * costerebbe un riseeding, che cancella le personalizzazioni di runtime.
+     */
+    public function puoAggiungereSede(): bool
+    {
+        $account = $this->mioAccount();
+
+        return $account !== null
+            && Gate::allows('manage', $account)
+            && $account->puoAggiungereEnte();
+    }
+
+    /**
+     * Il tetto è pieno: la pagina lo dice invece di nascondere il bottone e
+     * lasciare che il cliente si chieda perché.
+     */
+    public function tettoPieno(): bool
+    {
+        $account = $this->mioAccount();
+
+        return $account !== null
+            && Gate::allows('manage', $account)
+            && ! $account->puoAggiungereEnte();
+    }
+
+    public function slotResidui(): ?int
+    {
+        return $this->mioAccount()?->slotEntiResidui();
+    }
+
+    /**
+     * Le altre sedi dello stesso contratto, per nome.
+     *
+     * 🔴 Esiste perché senza di essa una sede appena creata **non si vede da
+     * nessuna parte**: l'albero è scopato al proprio Ente (ADR-018), e le altre
+     * sedi vivono solo dentro la tendina dello switcher — che durante
+     * un'impersonazione è soppressa. Segnalato da Marco il 28 Ago 2026, subito
+     * dopo aver creato la prima sede.
+     *
+     * ⚠️ Sono NOMI e non link: raggiungerle è un gesto dello switcher, con le
+     * sue guardie. Qui si risponde alla domanda «esiste?», non «portami».
+     *
+     * @return Collection<int,string>
+     */
+    public function altreSediDelContratto(): Collection
+    {
+        $account = $this->mioAccount();
+
+        if ($account === null || ! Gate::allows('manage', $account)) {
+            return collect();
+        }
+
+        return $account->enti()
+            // ⚠️ `CurrentTenant::id()` e non `tenant_id`: durante
+            // un'impersonazione lo spostamento fra sedi è effimero e la colonna
+            // resta ferma sulla sede di partenza. Leggendola, questa riga
+            // elencava fra le «altre» proprio la sede che si sta guardando.
+            ->where('id', '!=', CurrentTenant::id())
+            ->orderBy('nome')
+            ->pluck('nome');
+    }
+
+    /**
+     * I numeri del tetto, per dirlo invece di limitarsi a negare.
+     *
+     * ⚠️ `puoVedereAbbonamento` è una domanda a parte da `tettoPieno()`: la
+     * pagina dell'abbonamento vuole `manage` sull'account **e** non deve essere
+     * offerta durante un'impersonazione, dove il portale di fatturazione è
+     * chiuso apposta (aprirebbe la sessione sul customer di un altro).
+     *
+     * @return array{piano: string, max: int|null, puoVedereAbbonamento: bool}
+     */
+    public function tettoDelPiano(): array
+    {
+        $account = $this->mioAccount();
+
+        return [
+            'piano' => $account === null ? '—' : Piani::etichetta($account->piano),
+            'max' => $account === null ? null : Piani::maxEnti($account->piano),
+            'puoVedereAbbonamento' => $account !== null
+                && Gate::allows('manage', $account)
+                && ! app(ImpersonateManager::class)->isImpersonating(),
+        ];
+    }
+
+    public function apriNuovaSede(): void
+    {
+        abort_unless($this->puoAggiungereSede(), 403);
+
+        $this->resetForm();
+        $this->nomeSede = '';
+        $this->resetValidation();
+        $this->showSedeForm = true;
+    }
+
+    public function chiudiNuovaSede(): void
+    {
+        $this->showSedeForm = false;
+        $this->nomeSede = '';
+        $this->resetValidation();
+    }
+
+    /**
+     * ⛔ Ricontrolla TUTTO nell'azione, e non solo all'apertura: le property di
+     * un componente Livewire sono pubbliche e `set` + `call` è a un `$wire` di
+     * distanza. Il tetto in particolare va riletto qui — fra l'apertura della
+     * modale e il salvataggio una sede può essere nata da un'altra scheda.
+     */
+    public function creaSede(): void
+    {
+        $account = $this->mioAccount();
+
+        abort_if($account === null, 403);
+        Gate::authorize('manage', $account);
+        abort_unless($account->puoAggiungereEnte(), 403);
+
+        $this->validate([
+            'nomeSede' => ['required', 'string', 'max:255'],
+        ]);
+
+        $utente = Auth::user();
+
+        // Si riusa `ProvisionaEnte`, la stessa classe del comando di console e
+        // della cabina: la transazione «Ente + aggancio all'account + membro»
+        // esiste già, e riscriverla qui vorrebbe dire tenerne due allineate.
+        //
+        // ⚠️ L'email è quella di chi sta chiedendo: l'utente esiste già,
+        // quindi non ne nasce uno nuovo — resta sul proprio Ente e raggiunge
+        // quello appena creato con lo switcher in testata.
+        $esito = new ProvisionaEnte(
+            nome: $this->nomeSede,
+            adminEmail: $utente->email,
+            adminName: $utente->name,
+            accountId: $account->id,
+        );
+
+        $esito->esegui();
+
+        $this->showSedeForm = false;
+        $this->nomeSede = '';
+
+        // ⛔ Un solo messaggio, e parla al CLIENTE. La prima stesura ne aveva
+        // una seconda versione per chi impersona: è l'area del cliente, e non
+        // ci si stampano avvisi di servizio per l'operatore (Marco, 28 Ago
+        // 2026). Era anche diventata falsa — lo switcher funziona durante
+        // l'impersonazione.
+        $this->notice = 'Sede creata. La raggiungi dallo switcher in alto, accanto al nome dell\'Ente.';
     }
 
     // --- Navigazione ---
@@ -200,6 +386,32 @@ class Albero extends Component
                 $node->fissaVisibilitaGaranzieRicambio(
                     VisibilitaGaranzieRicambio::from($validated['visibilitaGaranzieRicambio'])
                 );
+            }
+
+            // 🔔 ADR-014: abbassare la soglia fa attraversare la linea dell'età
+            // a delle macchine, e l'avviso parte **subito** invece di aspettare
+            // il giro delle 06:15. Il comando notturno resta la garanzia — se la
+            // soglia cambiasse da un altro punto (un tinker, una futura
+            // schermata di piattaforma) l'invariante si ricompone comunque entro
+            // ventiquattr'ore: questo è un acceleratore, non l'unica strada.
+            //
+            // `wasChanged` e NON `isDirty`: dopo `update()` gli attributi non
+            // sono più dirty, quindi `isDirty` sarebbe sempre falso — una
+            // guardia che sembra proteggere e in realtà spegne la funzione.
+            //
+            // Sincrono e non in coda, per `PermessiInCodaGuardrailTest`: la
+            // scelta dei destinatari legge ruoli, e nel worker la cache dei
+            // permessi può essere quella di un altro processo. Le email partono
+            // comunque in coda, perché la Notification è `ShouldQueue`.
+            //
+            // ⚠️ E qui i global scope sono ATTIVI, al contrario di quando lo
+            // stesso servizio gira da console: chi salva potrebbe essere
+            // department-scoped e non vedere metà del parco. `AvvisiObsolescenza`
+            // è scritto per reggere entrambi i contesti — il suo reset cancella
+            // solo le righe di macchine che ha positivamente letto — e chi lo
+            // modifica deve saperlo prima di accorciarlo.
+            if ($isEnte && $node->wasChanged('soglia_obsolescenza_anni')) {
+                AvvisiObsolescenza::perEnte($node);
             }
         } else {
             $this->authorize('unita_organizzativa.create');
@@ -319,10 +531,16 @@ class Albero extends Component
         $node = UnitaOrganizzativa::findOrFail($this->currentId);
         abort_if($node->tipo === TipoUnitaOrganizzativa::Ente, 422);
 
-        $this->validate([
-            ...$this->strumentoFormRules($node->tenant_id),
-            'provenienza' => ['nullable', 'string', 'max:255'],
-        ]);
+        $this->validate(
+            [
+                ...$this->strumentoFormRules($node->tenant_id),
+                'provenienza' => ['nullable', 'string', 'max:255'],
+            ],
+            attributes: [
+                ...$this->strumentoFormAttributi(),
+                'provenienza' => 'provenienza',
+            ],
+        );
 
         DB::transaction(function () use ($node) {
             $strumento = Strumento::create([

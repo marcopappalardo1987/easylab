@@ -123,6 +123,11 @@ it('forbids a Tenant from every garanzia action', function () {
 
 it('lets a Tecnico read garanzie but never manage them', function () {
     $tecnico = ($this->conRuolo)('Tecnico');
+    // S7 (T1a): la scheda rilegge la macchina con gli scope a ogni richiesta, e
+    // il Tecnico la vede solo da portafoglio o assegnazione (ADR-007/030) —
+    // senza, anche via HTTP prende 404. Col portafoglio il 403 misura il
+    // permesso e non lo scope, che è ciò che questo caso vuole.
+    $tecnico->portafoglioClienti()->attach($this->ente->id);
 
     scheda($tecnico, $this->strumento)->assertSee('Scadenza effettiva');
 

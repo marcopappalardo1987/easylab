@@ -1,0 +1,1066 @@
+@php
+    use App\Support\Piani;
+
+    [$ordinatoPer, $direzione] = $this->ordinamentoEffettivo();
+@endphp
+
+<div class="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6">
+
+    <x-piattaforma.nav />
+
+    <div class="mt-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-bold tracking-tight text-ink">Piattaforma</h1>
+            <p class="mt-1 text-sm text-ink-2">
+                I clienti di EasyLab, le loro sedi e lo stato dei contratti.
+            </p>
+        </div>
+
+        @can('tenants.provision')
+            <button type="button" wire:click="apriProvisioning"
+                    title="Crea il cliente insieme al suo primo Ente"
+                    class="rounded-md bg-brand px-3 py-2 text-sm font-medium text-brand-ink hover:bg-brand-hover">
+                <span aria-hidden="true">＋</span> Nuovo cliente
+            </button>
+        @endcan
+    </div>
+
+    @if (session('provisioning'))
+        <div class="mt-4 rounded-md border border-ok-dot bg-ok-soft px-4 py-3 text-sm text-ok-soft-ink">
+            {{ session('provisioning') }}
+        </div>
+    @endif
+
+    {{-- I quattro numeri. Ognuno porta il proprio contesto sotto: un totale
+         senza «di cui» è la cifra che poi viene citata da sola.
+
+         ⚠️ Sono **totali di piattaforma e non seguono i filtri** — filtrare su
+         «Attivi» con tutti bloccati mostrerebbe «Clienti 37» sopra un «Nessun
+         cliente con questi filtri». È una scelta (i KPI sono la fotografia
+         dell'azienda, non della ricerca in corso), quindi va detta invece che
+         lasciata dedurre da chi legge due numeri in disaccordo. --}}
+    <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+        <x-ui.stat-tile
+            label="Ricavo mensile"
+            :valore="number_format($riepilogo->mrrEuro(), 0, ',', '.').' €'"
+            :dettaglio="$riepilogo->mrrBloccatoCent > 0
+                ? 'a listino · '.number_format($riepilogo->mrrBloccatoEuro(), 0, ',', '.').' € fermi per insoluto'
+                : 'a listino'" />
+
+        <x-ui.stat-tile
+            label="Clienti"
+            :valore="$riepilogo->clienti"
+            :dettaglio="$riepilogo->dettaglioClienti()
+                .($riepilogo->clientiBloccati > 0 ? ' · '.$riepilogo->clientiBloccati.' 🔒' : '')" />
+
+        <x-ui.stat-tile
+            label="Sedi"
+            :valore="$riepilogo->sedi"
+            dettaglio="Enti dei clienti" />
+
+        <x-ui.stat-tile
+            label="Strumenti"
+            :valore="$riepilogo->strumenti"
+            dettaglio="Macchine di tutti i clienti" />
+
+    </div>
+
+    <p class="mt-2 text-xs text-ink-3">
+        I quattro numeri sono totali di piattaforma: non cambiano con i filtri qui sotto.
+    </p>
+
+    {{-- Un piano fuori catalogo non fa esplodere la pagina, ma non si nasconde
+         nemmeno: chi legge deve poterlo riparare, e questa è l'unica schermata
+         da cui si ripara. Il link al filtro è parte della riparazione — un
+         avviso che segnala un problema senza dare la strada per raggiungerlo,
+         su trecento clienti, è peggio che tacere. --}}
+    @if ($riepilogo->pianiSconosciuti > 0)
+        <x-ui.card class="mt-4 border-warn-dot bg-warn-soft">
+            <p class="text-sm text-warn-soft-ink">
+                <span aria-hidden="true">⚠️</span>
+                {{ $riepilogo->pianiSconosciuti }}
+                {{ $riepilogo->pianiSconosciuti === 1 ? 'account ha un piano' : 'account hanno un piano' }}
+                che non è più a catalogo: {{ $riepilogo->pianiSconosciuti === 1 ? 'vale' : 'valgono' }}
+                0 € nel ricavo qui sopra.
+                {{-- ⚠️ L'hover **toglie** la sottolineatura invece di scurire il
+                     testo, e non è un vezzo: il colore di riposo è già
+                     `warning-800`, cioè il gradino più scuro che l'ambra abbia
+                     nel Design System (§2.3/§6). Qui c'era `hover:text-warning-900`,
+                     un token che il DS non ha mai avuto e che quindi non generava
+                     nessuna regola — un hover che non faceva niente. Il rimedio
+                     non è inventare un nono gradino nella palette: è dare al
+                     bottone un'affordance che i token esistenti sanno esprimere. --}}
+                <button type="button" wire:click="$set('piano', '{{ $this::FUORI_CATALOGO }}')"
+                        class="font-medium underline hover:no-underline">Mostra{{ $riepilogo->pianiSconosciuti === 1 ? 'lo' : 'li' }}</button>
+                {{-- ⛔ Il filtro mostra CHI, il listino è dove si RIPARA: da qui il
+                     piano dismesso si ricrea o si riassegna, e senza questa strada
+                     l'avviso resta una diagnosi senza cura — chi lo legge in cabina
+                     non ha da lì nessun modo di arrivare all'unica schermata che
+                     può chiudere il problema (🔗 ADR-035).
+
+                     Gatato su `billing.manage_global` e non lasciato aperto: chi
+                     legge l'avviso non è detto che possa toccare il listino, e un
+                     link che porta a un 403 è peggio dell'assenza del link. --}}
+                @can('billing.manage_global')
+                    <a href="{{ route('piattaforma.piani') }}"
+                       class="font-medium underline hover:no-underline">Vai al listino</a>
+                @endcan
+            </p>
+        </x-ui.card>
+    @endif
+
+    {{-- EasyLab stessa, e solo per impersonarla. La tabella qui sotto elenca i
+         CLIENTI e l'account di piattaforma ne e' escluso apposta: «Clienti: 13»
+         quando sono 12 e' un numero che qualcuno riporterebbe a un socio. Ma
+         senza questa striscia il Developer non ha nessun modo di impersonare il
+         Superadmin dall'interfaccia, che e' una cosa che deve poter fare
+         (ADR-018: l'unico account protetto e' il Developer).
+
+         Sta FUORI dalla tabella e non dentro: rimetterlo fra le righe lo
+         rimetterebbe nei conteggi da cui e' stato tolto.
+
+         Le tre condizioni si calcolano QUI e non nel markup: il paragrafo
+         portava @if annidati e il compilatore Blade ne mangiava un pezzo,
+         lasciando un @else orfano e la pagina in 500. Forma piana, un flag per
+         caso, nessun ramo dentro il testo. --}}
+    @php
+        $piattaforma = $this->piattaformaImpersonabile();
+        $accountPiattaforma = $piattaforma['account'] ?? null;
+        $candidatiPiattaforma = $piattaforma['candidati'] ?? collect();
+        $unicoCandidato = $candidatiPiattaforma->count() === 1 ? $candidatiPiattaforma->first() : null;
+    @endphp
+
+    @if ($piattaforma)
+        <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-sunken px-4 py-3">
+
+            @if ($accountPiattaforma === null)
+                {{-- Non si tace. Un'assenza muta costringe chi guarda a chiedersi
+                     se sia un difetto — ed e' esattamente la domanda che Marco ha
+                     fatto il 29 Ago 2026. Qui si dice cos'e' e cosa fare. --}}
+                <p class="text-sm text-ink-2">
+                    <span class="font-medium text-ink">Nessun account di piattaforma.</span>
+                    Il deploy esegue le migration, non i seeder: se
+                    <code class="text-xs">SuperadminSeeder</code> non e' mai stato lanciato su
+                    questo ambiente, il Superadmin non esiste. Si crea con
+                    <code class="text-xs">php artisan db:seed --class=SuperadminSeeder --force</code>,
+                    con <code class="text-xs">SUPERADMIN_EMAIL</code> e
+                    <code class="text-xs">SUPERADMIN_PASSWORD</code> valorizzate.
+                </p>
+                {{-- ⛔ Il comando e' nominato PER CLASSE, e la riga qui sotto dice
+                     perche': un `db:seed` nudo passa da `DatabaseSeeder`, che
+                     chiama `RolesAndPermissionsSeeder`, il cui `syncPermissions()`
+                     DETACHA e riattacca dalla config — cancellando ogni
+                     personalizzazione fatta da /piattaforma/ruoli, in entrambe le
+                     direzioni. Un avviso che dicesse solo «riseminalo» inviterebbe
+                     proprio al gesto distruttivo. --}}
+                <p class="mt-1 text-xs text-warn-soft-ink">
+                    ⚠️ Solo quella classe: un <code class="text-xs">db:seed</code> senza
+                    <code class="text-xs">--class</code> rilancia anche il seeder dei permessi, che
+                    riazzera la matrice dei ruoli sulle impostazioni di partenza.
+                </p>
+            @else
+                <p class="text-sm text-ink-2">
+                    <span class="font-medium text-ink">{{ $accountPiattaforma->ragione_sociale }}</span>
+                    — la piattaforma stessa. Non e' un cliente e non entra nei numeri qui sopra.
+                </p>
+            @endif
+
+            @if ($unicoCandidato)
+                <a href="{{ route('impersonate', $unicoCandidato) }}"
+                   class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-2 hover:bg-surface hover:text-ink"
+                   title="Impersona {{ $unicoCandidato->name }}">
+                    <span aria-hidden="true">👁</span> Impersona {{ $unicoCandidato->name }}
+                </a>
+            @elseif ($candidatiPiattaforma->isNotEmpty())
+                <button type="button" wire:click="apriScelta({{ $accountPiattaforma->id }})"
+                        class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-2 hover:bg-surface hover:text-ink">
+                    <span aria-hidden="true">👁</span> Impersona ({{ $candidatiPiattaforma->count() }})
+                </button>
+            @elseif ($accountPiattaforma !== null)
+                <span class="text-xs text-ink-3">Nessun membro impersonabile: il Developer non lo e' mai, e te stesso nemmeno.</span>
+            @endif
+        </div>
+    @endif
+
+    {{-- ── Gli andamenti ────────────────────────────────────────────────────
+         Gli stessi dati dei quattro numeri qui sopra, letti nel tempo: stessa
+         porta (`tenants.view_all`), stesso `PerimetroClienti`, tre query
+         costanti. Stanno **dopo** l'avviso sui piani fuori catalogo perché
+         quell'avviso è un'azione da fare, e i grafici sono una lettura.
+
+         🔴 **Il ricavo non riceve un andamento, e la pagina lo dice.**
+         `accounts.piano` è lo stato di oggi: ricostruire l'MRR di sei mesi fa
+         applicando il piano attuale alle date d'ingresso darebbe una curva
+         plausibile e falsa. Al suo posto c'è la composizione **al presente**,
+         che è vera. --}}
+    <div class="mt-6 grid gap-4 lg:grid-cols-3">
+
+        <x-ui.card class="lg:col-span-2">
+            <x-ui.grafico-barre
+                :serie="$andamento->nuoviClienti"
+                titolo="Nuovi clienti per mese"
+                sottotitolo="Ultimi 12 mesi, per data di ingresso; il mese in corso è parziale. Un cliente cestinato sparisce da tutta la serie: la curva racconta chi c'è oggi, non chi c'era allora."
+                unita="clienti" />
+        </x-ui.card>
+
+        <div class="grid gap-4">
+
+            @php
+                use App\Support\Piattaforma\AndamentoPiattaforma;
+
+                // ⛔ Le classi di colore sono stringhe LETTERALI e complete, e
+                // arrivano da una costante PHP: `'bg-chart-'.$codice` non
+                // genererebbe nulla (Tailwind scansiona il sorgente, non valuta
+                // PHP) e il sintomo sarebbe un segmento invisibile su una pagina
+                // che risponde 200. Il glifo accanto al colore non è decorazione:
+                // in tema scuro verde↔arancione scendono a ΔE 6,9 (DS §2.5).
+                $vociPiano = [];
+
+                foreach (array_values($riepilogo->perPiano) as $i => $quanti) {
+                    [$classe, $glifo] = AndamentoPiattaforma::coloreDelPiano($i);
+
+                    $vociPiano[] = [
+                        'etichetta' => Piani::etichetta(array_keys($riepilogo->perPiano)[$i]),
+                        'valore' => $quanti,
+                        'classe' => $classe,
+                        'glifo' => $glifo,
+                    ];
+                }
+
+                if ($riepilogo->pianiSconosciuti > 0) {
+                    [$classe, $glifo] = AndamentoPiattaforma::COLORE_FUORI_CATALOGO;
+
+                    $vociPiano[] = [
+                        'etichetta' => 'Fuori catalogo',
+                        'valore' => $riepilogo->pianiSconosciuti,
+                        'classe' => $classe,
+                        'glifo' => $glifo,
+                    ];
+                }
+            @endphp
+
+            <x-ui.card>
+                <x-ui.barra-composizione
+                    :voci="$vociPiano"
+                    titolo="Clienti per piano"
+                    sottotitolo="Il ricavo non ha un andamento: il piano di oggi non dice quale fosse allora."
+                    unita="clienti" />
+            </x-ui.card>
+
+            {{-- ⚠️ Le sparkline sono `aria-hidden`: l'informazione sta nella
+                 riga di testo accanto («+7 in 12 mesi»), non nell'SVG. È la
+                 stessa disciplina di `x-ui.semaforo` — mai il solo colore, mai
+                 la sola forma.
+
+                 ⛔ **Una serie tutta a zero non riceve una sparkline.**
+                 `GeometriaGrafico` fa cadere la serie piatta a metà altezza per
+                 non dividere per zero, quindi dodici mesi a zero disegnerebbero
+                 la stessa identica linea che si vedrebbe con 5.000 strumenti
+                 fermi da un anno: un'assenza di dato che si legge come un dato.
+                 `eVuota()` è la distinzione, e va **chiamata** — scritta e non
+                 collegata varrebbe quanto il commento che la descrive. --}}
+            <x-ui.card>
+                <p class="text-sm font-semibold text-ink">Andamento a 12 mesi</p>
+                <p class="mt-0.5 text-xs text-ink-3">
+                    Cumulato per data di inserimento in EasyLab, non per data di installazione.
+                </p>
+
+                <dl class="mt-3 space-y-3">
+                    @foreach ([
+                        ['Clienti', $andamento->clientiCumulati],
+                        ['Sedi', $andamento->sediCumulate],
+                        ['Strumenti', $andamento->strumentiCumulati],
+                    ] as [$titoloSerie, $serie])
+                        <div>
+                            <div class="flex items-baseline justify-between gap-2">
+                                <dt class="text-sm text-ink-2">{{ $titoloSerie }}</dt>
+                                <dd class="text-xs tabular-nums text-ink-3">
+                                    @if ($serie->eVuota())
+                                        Nessun dato in 12 mesi
+                                    @else
+                                        {{ $serie->variazioneConSegno() }} in 12 mesi
+                                    @endif
+                                </dd>
+                            </div>
+
+                            @unless ($serie->eVuota())
+                                <x-ui.sparkline :valori="$serie->valori" />
+                            @endunless
+                        </div>
+                    @endforeach
+                </dl>
+            </x-ui.card>
+
+        </div>
+    </div>
+
+    {{-- Filtri. Ogni valore è in query string, quindi una vista filtrata si
+         manda a qualcuno per link — che è come si chiede aiuto su un cliente.
+
+         ⚠️ **I campi di questa pagina portano `border` e `focus:ring-2` scritti
+         a mano, e non è ridondanza.** Il progetto non monta `@tailwindcss/forms`
+         e la preflight di Tailwind v4 azzera la larghezza dei bordi e rende
+         **trasparenti** i controlli di form: il `border-neutral-300` e il
+         `focus:ring-primary-500` di prima erano token che non coloravano
+         niente — un contorno spesso zero e un anello largo zero — e il campo
+         era un rettangolo invisibile posato sulla card. Sul fondo scuro il
+         difetto diventava anche una perdita di leggibilità, perché il testo
+         digitato ereditava il fondo della pagina. La forma è quella di
+         `x-ui.input` (DS §5.6/§8.2): contorno forte, `bg-surface` dichiarato,
+         placeholder a `text-ink-3` e un solo anello di fuoco. --}}
+    {{-- `id` e non solo una classe: è il bersaglio del link «Gestisci i preferiti
+         nell'elenco Clienti» delle tre schede del Parco. Senza, quel link
+         atterrava in cima alla pagina — sopra quattro KPI e tre grafici — e chi
+         lo seguiva doveva cercare da sé la tabella con le ★, che è a circa
+         mille pixel di scorrimento. Il bersaglio è la **barra dei filtri** e non
+         la tabella, così la riga che spiega la ★ resta a schermo. --}}
+    <div id="elenco-clienti" class="mt-8 flex flex-wrap items-end gap-3 scroll-mt-6">
+        <div class="min-w-56 flex-1">
+            <label for="cerca-cliente" class="block text-sm font-medium text-ink">Cerca</label>
+            <input id="cerca-cliente" type="search" wire:model.live.debounce.300ms="search"
+                   placeholder="Ragione sociale, P.IVA o nome della sede"
+                   class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+        </div>
+
+        <div>
+            <label for="filtro-piano" class="block text-sm font-medium text-ink">Piano</label>
+            <select id="filtro-piano" wire:model.live="piano"
+                    class="mt-1 block rounded-md border border-border-strong bg-surface px-2 py-2 text-sm text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                <option value="">Tutti</option>
+                @foreach (Piani::codici() as $codice)
+                    <option value="{{ $codice }}">{{ Piani::etichetta($codice) }}</option>
+                @endforeach
+                <option value="{{ $this::FUORI_CATALOGO }}">Fuori catalogo</option>
+            </select>
+        </div>
+
+        <div>
+            <label for="filtro-stato" class="block text-sm font-medium text-ink">Stato</label>
+            <select id="filtro-stato" wire:model.live="stato"
+                    class="mt-1 block rounded-md border border-border-strong bg-surface px-2 py-2 text-sm text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                <option value="">Tutti</option>
+                <option value="attivo">Attivi</option>
+                {{-- Due voci e non una: fondere le sorgenti nel filtro rifà in
+                     ricerca il difetto che ADR-013 evita nei dati. --}}
+                <option value="bloccato_manuale">Bloccati a mano</option>
+                <option value="bloccato_stripe">Bloccati da Stripe</option>
+            </select>
+        </div>
+
+        <div>
+            <label for="per-pagina" class="block text-sm font-medium text-ink">Per pagina</label>
+            <select id="per-pagina" wire:model.live="perPage"
+                    class="mt-1 block rounded-md border border-border-strong bg-surface px-2 py-2 text-sm text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                @foreach ($this->opzioniPerPage() as $taglia)
+                    <option value="{{ $taglia }}">{{ $taglia }}</option>
+                @endforeach
+            </select>
+        </div>
+
+        {{-- Le due esportazioni. Nessun `@can`: il permesso di questa pagina
+             (`tenants.view_all`) È già quello dell'export, e aggiungerne un
+             secondo lo renderebbe revocabile a runtime dall'editor ruoli —
+             vedi il docblock di `EsportaClienti`.
+
+             `wire:loading.attr="disabled"` perché il file si costruisce tutto
+             in memoria e su molte righe la risposta non è istantanea: senza,
+             il secondo clic parte mentre il primo sta ancora generando. --}}
+        <div class="ml-auto flex items-end gap-2">
+            <x-ui.button variant="secondary" wire:click="esportaCsv" wire:loading.attr="disabled"
+                         title="Scarica in CSV i clienti che corrispondono ai filtri">CSV</x-ui.button>
+            <x-ui.button variant="secondary" wire:click="esportaPdf" wire:loading.attr="disabled"
+                         title="Scarica in PDF i clienti che corrispondono ai filtri">PDF</x-ui.button>
+        </div>
+    </div>
+
+    {{-- L'invariante dichiarata a chi la usa, e non solo nel codice: il file
+         segue i filtri (chi non vede una riga a schermo non la trova dentro) ma
+         NON si ferma alla pagina corrente — la paginazione non è un filtro di
+         privacy, perché chi vede la prima pagina può sfogliare fino all'ultima.
+         Senza questa riga qualcuno esporterebbe credendo di aver preso 20
+         clienti, o crederebbe di averli presi tutti mentre un filtro è acceso. --}}
+    <p class="mt-2 text-xs text-ink-3">
+        L'esportazione segue i filtri e copre tutti i {{ number_format($clienti->total(), 0, ',', '.') }}
+        clienti che vi corrispondono, non solo la pagina.
+    </p>
+
+    {{-- Il rimando alla vista che consuma la ★. Una riga e non un paragrafo: chi
+         guarda questo elenco deve sapere che la stella **serve altrove**, o la
+         segnerebbe senza capire cosa cambia. «Tuoi» al singolare di persona,
+         perché il pivot lega l'utente e non l'account. --}}
+    <p class="mt-1 text-xs text-ink-3">
+        La ★ mette un cliente fra i tuoi preferiti — solo tuoi — e alimenta il filtro
+        «I miei preferiti» delle tre schede del Parco clienti.
+    </p>
+
+    {{-- ⚠️ **Deviazione dichiarata dalla checklist §7 del Design System**, che
+         vuole `tabella-a-card` con i `data-etichetta` su ogni vista nuova: qui
+         la tabella resta a scorrimento orizzontale sotto i 640px. La ragione è
+         che questa pagina si guarda da scrivania — è la cabina di regia di chi
+         amministra la piattaforma, non una vista da campo — e le righe hanno
+         una seconda riga espandibile che in modalità card non ha una forma
+         ovvia. Precedente nella stessa direzione: `elenco-strumenti`. Se un
+         giorno si volesse chiudere, i `<td>` hanno già **un solo figlio
+         diretto** ciascuno, che è la condizione che la checklist pone. --}}
+    <x-ui.card class="mt-4 !p-0">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                {{-- La freccia legge l'ordinamento **effettivo** e non le property:
+                     `sortBy` può valere `password` mentre la query ha usato il
+                     fallback, e una freccia che indica una colonna diversa da
+                     quella applicata è una bugia piccola e quindi credibile. --}}
+                <thead class="border-b border-border bg-surface-sunken text-left text-xs uppercase tracking-wide text-ink-3">
+                    <tr>
+                        {{-- La colonna della ★ non è ordinabile, ed è una scelta:
+                             ordinare per «preferito» rimescolerebbe l'elenco in
+                             base a un dato che vale solo per chi guarda, e la
+                             riga sarebbe in un posto diverso per ogni collega
+                             davanti allo stesso schermo. I preferiti si guardano
+                             da soli dal Parco clienti, che ha il filtro apposta. --}}
+                        <th scope="col" class="py-3 pl-4 pr-0"><span class="sr-only">Preferito</span></th>
+
+                        @foreach ([
+                            'ragione_sociale' => ['Cliente', 'py-3 pl-2 pr-3'],
+                            'piano' => ['Piano', 'px-3 py-3'],
+                        ] as $colonna => [$etichetta, $classi])
+                            <th scope="col" class="{{ $classi }}"
+                                aria-sort="{{ $ordinatoPer === $colonna ? ($direzione === 'asc' ? 'ascending' : 'descending') : 'none' }}">
+                                <button type="button" wire:click="ordina('{{ $colonna }}')"
+                                        class="uppercase tracking-wide hover:text-ink">
+                                    {{ $etichetta }}
+                                    @if ($ordinatoPer === $colonna)
+                                        <span aria-hidden="true">{{ $direzione === 'asc' ? '▲' : '▼' }}</span>
+                                    @endif
+                                </button>
+                            </th>
+                        @endforeach
+
+                        <th scope="col" class="px-3 py-3">Stato</th>
+                        <th scope="col" class="px-3 py-3 text-right">Sedi</th>
+                        <th scope="col" class="px-3 py-3 text-right">Strumenti</th>
+
+                        <th scope="col" class="px-3 py-3"
+                            aria-sort="{{ $ordinatoPer === 'created_at' ? ($direzione === 'asc' ? 'ascending' : 'descending') : 'none' }}">
+                            <button type="button" wire:click="ordina('created_at')"
+                                    class="uppercase tracking-wide hover:text-ink">
+                                Cliente dal
+                                @if ($ordinatoPer === 'created_at')
+                                    <span aria-hidden="true">{{ $direzione === 'asc' ? '▲' : '▼' }}</span>
+                                @endif
+                            </button>
+                        </th>
+
+                        <th scope="col" class="py-3 pl-3 pr-4"><span class="sr-only">Azioni</span></th>
+                    </tr>
+                </thead>
+
+                <tbody class="divide-y divide-border">
+                    @forelse ($clienti as $cliente)
+                        @php
+                            $sue = $sediPerAccount[$cliente->id] ?? collect();
+                            $aCatalogo = Piani::esiste($cliente->piano);
+                            $max = $aCatalogo ? Piani::maxEnti($cliente->piano) : null;
+                        @endphp
+
+                        <tr wire:key="cliente-{{ $cliente->id }}" class="align-top hover:bg-surface-sunken">
+                            {{-- 🔴 **La stella è di chi guarda, non del cliente**
+                                 (🔗 ADR-037): la riga vive su `clienti_preferiti`,
+                                 che lega una PERSONA a un Account. Due Superadmin
+                                 davanti a questa pagina vedono stelle diverse —
+                                 quindi qui non si stampa mai «segnato da N» né da
+                                 chi, che farebbe del preferito un attributo del
+                                 rapporto commerciale.
+
+                                 Pieno/vuoto si legge **senza colore**: ★ e ☆ sono
+                                 due glifi diversi, e `aria-pressed` dice lo stesso
+                                 a chi la pagina non la vede affatto. Il colore
+                                 accompagna, non informa. --}}
+                            <td class="py-3 pl-4 pr-0">
+                                @php
+                                    $preferito = $this->ePreferito($cliente->id);
+                                    $azioneStella = ($preferito ? 'Togli dai preferiti' : 'Aggiungi ai preferiti')
+                                        .': '.$cliente->ragione_sociale;
+                                @endphp
+
+                                <button type="button" wire:key="preferito-{{ $cliente->id }}"
+                                        wire:click="alternaPreferito({{ $cliente->id }})"
+                                        aria-pressed="{{ $preferito ? 'true' : 'false' }}"
+                                        aria-label="{{ $azioneStella }}"
+                                        title="{{ $azioneStella }}"
+                                        {{-- ⚠️ Il bersaglio è dichiarato `h-6 w-6` (24×24 CSS px), che è il
+                                             minimo di WCAG 2.2 §2.5.8: con la sola spaziatura `px-1 py-0.5`
+                                             misurava 24×20 e mancava il bersaglio in altezza. Ventiquattro e
+                                             non di più perché il `td` porta già `py-3`: la riga resta alta
+                                             49px come prima, cioè la colonna nuova non ha diradato la tabella.
+                                             ⚠️ E l'evidenziazione del passaggio del mouse è `bg-brand-soft` e
+                                             non `bg-surface-sunken`: la riga si colora **di quello** al
+                                             passaggio, quindi il vecchio valore era un feedback invisibile
+                                             esattamente nel momento in cui serviva. --}}
+                                        class="inline-flex h-6 w-6 items-center justify-center rounded-md text-base leading-none {{ $preferito ? 'text-brand' : 'text-ink-3' }} hover:bg-brand-soft hover:text-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                                    <span aria-hidden="true">{{ $preferito ? '★' : '☆' }}</span>
+                                </button>
+                            </td>
+
+                            <td class="py-3 pl-2 pr-3">
+                                {{-- Un solo figlio diretto: la checklist §7 del Design
+                                     System avverte che in modalità card i figli del
+                                     `<td>` finirebbero affiancati. --}}
+                                <div>
+                                    <button type="button" wire:click="espandi({{ $cliente->id }})"
+                                            class="text-left font-medium text-ink hover:text-brand"
+                                            aria-expanded="{{ $espanso === $cliente->id ? 'true' : 'false' }}"
+                                            aria-controls="sedi-{{ $cliente->id }}">
+                                        <span aria-hidden="true">{{ $espanso === $cliente->id ? '▾' : '▸' }}</span>
+                                        {{ $cliente->ragione_sociale }}
+                                    </button>
+                                    @if ($cliente->partita_iva)
+                                        <p class="mt-0.5 text-xs text-ink-3">P.IVA {{ $cliente->partita_iva }}</p>
+                                    @else
+                                        {{-- ⚠️ **Detto, non taciuto** (ADR-039).
+                                             Un cliente arrivato da un Payment
+                                             Link può non aver dichiarato la
+                                             partita IVA: la raccolta in checkout
+                                             è facoltativa apposta, perché
+                                             imporla bloccherebbe una vendita
+                                             già decisa. Ma senza questa riga
+                                             «non ce l'ha» e «non gliel'ha
+                                             chiesta nessuno» hanno la stessa
+                                             faccia — cioè un dato che serve per
+                                             fatturare non si sa che manca
+                                             finché non serve.
+
+                                             ⚠️ Nessun `di_piattaforma` nella
+                                             condizione: l'account di EasyLab da
+                                             questo elenco è **già escluso dalla
+                                             query**, e ripetere qui quella
+                                             regola darebbe una guardia che
+                                             nessun test può rendere rossa —
+                                             cioè una rassicurazione, non una
+                                             difesa (provato: la mutazione
+                                             restava verde). --}}
+                                        <p class="mt-0.5 text-xs text-warn-soft-ink" data-senza-piva>
+                                            P.IVA non dichiarata
+                                        </p>
+                                    @endif
+                                </div>
+                            </td>
+
+                            <td class="px-3 py-3">
+                                @if ($aCatalogo)
+                                    <x-ui.badge :variant="$cliente->piano === 'free' ? 'neutral' : 'primary'">
+                                        {{ Piani::etichetta($cliente->piano) }}
+                                    </x-ui.badge>
+                                @else
+                                    {{-- Un piano dismesso non si nasconde: questa è la schermata da cui si ripara. --}}
+                                    <x-ui.badge variant="warning">{{ $cliente->piano }} — fuori catalogo</x-ui.badge>
+                                @endif
+                            </td>
+
+                            {{-- Due badge distinti e mai uno solo: `is_locked` significa
+                                 «almeno una sorgente accesa», e fonderle in UI ricrea il
+                                 difetto che la separazione esiste per impedire (ADR-013). --}}
+                            <td class="space-y-1 px-3 py-3">
+                                @if ($cliente->locked_at)
+                                    <x-ui.badge variant="danger">🔒 A mano</x-ui.badge>
+                                @endif
+                                @if ($cliente->stripe_locked_at)
+                                    <x-ui.badge variant="danger">🔒 Insoluto</x-ui.badge>
+                                @endif
+                                @unless ($cliente->is_locked)
+                                    <x-ui.badge variant="success">Attivo</x-ui.badge>
+                                @endunless
+                            </td>
+
+                            {{-- ⚠️ `?` e non `∞` sul piano fuori catalogo: `maxEnti()`
+                                 restituisce `null` per «illimitato», e il ternario lo
+                                 produce anche per «non lo so». Fonderli farebbe leggere
+                                 il caso corrotto come il più permissivo dei due —
+                                 proprio sulla riga che la pagina invita a riparare. --}}
+                            <td class="px-3 py-3 text-right tabular-nums">
+                                {{ $sue->count() }}<span class="text-ink-3"> / {{ $aCatalogo ? ($max ?? '∞') : '?' }}</span>
+                            </td>
+
+                            <td class="px-3 py-3 text-right tabular-nums">
+                                {{ number_format($strumentiPerAccount[$cliente->id] ?? 0, 0, ',', '.') }}
+                            </td>
+
+                            <td class="whitespace-nowrap px-3 py-3 text-ink-2 tabular-nums">
+                                {{ $cliente->created_at?->format('d/m/Y') }}
+                            </td>
+
+                            <td class="py-3 pl-3 pr-4 text-right">
+                                {{-- Si impersona una **persona**, non un contratto: l'Account
+                                     non ha sessione né permessi. Un candidato → link diretto;
+                                     più d'uno → si sceglie, perché «il primo» sarebbe una
+                                     decisione presa dall'ordinamento di una query. --}}
+                                @php
+                                    $candidati = $candidatiPerAccount[$cliente->id] ?? collect();
+                                    // Il trattino vale per la **cella**, non per una sola leva:
+                                    // dentro il ramo dell'impersonazione finiva accanto ai due
+                                    // pulsanti delle altre, dicendo «niente da fare qui» proprio
+                                    // dove c'erano due cose da fare.
+                                    $qualcosaDaFare = ($candidati->isNotEmpty() && auth()->user()->can('utenti.impersonate'))
+                                        || auth()->user()->can('lockout', $cliente)
+                                        || auth()->user()->can('manage', $cliente);
+                                @endphp
+
+                                @unless ($qualcosaDaFare)
+                                    <span class="text-xs text-ink-3" title="Nessuna leva disponibile">—</span>
+                                @endunless
+
+                                @can('utenti.impersonate')
+
+                                    @if ($candidati->count() === 1)
+                                        {{-- `<a href>` GET e non un'azione Livewire: `take()`
+                                             sostituisce l'utente in sessione, e una risposta
+                                             Livewire lascerebbe in pagina un componente montato
+                                             per l'utente precedente, col suo scope. --}}
+                                        <a href="{{ route('impersonate', $candidati->first()) }}"
+                                           class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-brand hover:bg-brand-soft"
+                                           title="Impersona {{ $candidati->first()->name }}">
+                                            <span aria-hidden="true">👁</span> Impersona
+                                        </a>
+                                    @elseif ($candidati->count() > 1)
+                                        <button type="button" wire:click="apriScelta({{ $cliente->id }})"
+                                                class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-brand hover:bg-brand-soft">
+                                            <span aria-hidden="true">👁</span> Impersona ({{ $candidati->count() }})
+                                        </button>
+                                    @else
+                                        {{-- Nessuno: o l'account non ha membri, o l'unico è chi
+                                             sta guardando. Si dice, invece di lasciare una cella
+                                             vuota che si legge come «funzione non disponibile». --}}
+                                        <span class="text-xs text-ink-3" title="Nessun membro impersonabile">—</span>
+                                    @endif
+                                @else
+                                    {{-- Una cella vuota si legge come «manca qualcosa»; il
+                                         trattino dice «niente da fare qui», che è la verità
+                                         anche per chi non ha il permesso. --}}
+                                    <span class="text-xs text-ink-3">—</span>
+                                @endcan
+
+                                @can('lockout', $cliente)
+                                    <button type="button" wire:click="apriLockout({{ $cliente->id }})"
+                                            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-2 hover:bg-surface-sunken hover:text-ink"
+                                            title="{{ $cliente->locked_at ? 'Riapri la porta' : 'Blocca per insoluto' }}">
+                                        <span aria-hidden="true">🔒</span> Lockout
+                                    </button>
+                                @endcan
+
+                                @can('tenants.provision')
+                                    <button type="button" wire:click="apriProvisioning({{ $cliente->id }})"
+                                            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-2 hover:bg-surface-sunken hover:text-ink"
+                                            title="Aggiungi un Ente (una sede) a questo cliente">
+                                        <span aria-hidden="true">＋</span> Ente
+                                    </button>
+                                @endcan
+
+                                @can('manage', $cliente)
+                                    <button type="button" wire:click="apriFiscali({{ $cliente->id }})"
+                                            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-2 hover:bg-surface-sunken hover:text-ink"
+                                            title="Dati fiscali">
+                                        <span aria-hidden="true">🧾</span> Dati
+                                    </button>
+                                @endcan
+
+                                {{-- ⚠️ **Ultimo e distinto dagli altri** (🔗 ADR-040):
+                                     è il solo gesto di questa riga da cui non si
+                                     torna indietro, e metterlo in mezzo agli altri
+                                     con lo stesso aspetto lo renderebbe raggiungibile
+                                     per errore quanto «Dati». Il colore è l'unica
+                                     differenza che si nota prima del click. --}}
+                                @can('elimina', $cliente)
+                                    <button type="button" wire:click="apriEliminazione({{ $cliente->id }})"
+                                            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-bad-soft-ink hover:bg-bad-soft"
+                                            data-apri-eliminazione="{{ $cliente->id }}"
+                                            title="Elimina definitivamente questo cliente e tutti i suoi dati">
+                                        <span aria-hidden="true">🗑</span> Elimina
+                                    </button>
+                                @endcan
+                            </td>
+                        </tr>
+
+                        @if ($espanso === $cliente->id)
+                            <tr wire:key="sedi-{{ $cliente->id }}" class="bg-surface-sunken">
+                                <td colspan="8" class="px-4 py-3" id="sedi-{{ $cliente->id }}">
+                                    {{-- `$sue` e non `$sediPerAccount` intero: la riga
+                                         aperta mostra le sedi di QUESTO cliente, e la
+                                         differenza fra le due espressioni è la sola cosa
+                                         che tiene i clienti separati in pagina. --}}
+                                    @forelse ($sue as $sede)
+                                        <div wire:key="sede-{{ $sede->id }}"
+                                             class="flex flex-wrap items-center justify-between gap-2 border-b border-border py-2 last:border-0">
+                                            <span class="text-sm text-ink">{{ $sede->nome }}</span>
+                                            <span class="flex flex-wrap items-center gap-3">
+                                                <span class="text-xs tabular-nums text-ink-3">
+                                                    {{ number_format($strumentiPerSede[$sede->id] ?? 0, 0, ',', '.') }} strumenti
+                                                </span>
+
+                                                {{-- Clausola di contratto, non impostazione di
+                                                     anagrafica: il gate è `roles.manage`, che
+                                                     l'Admin dell'Ente non ha (ADR-029). --}}
+                                                @can('roles.manage')
+                                                    <label class="flex items-center gap-2 text-xs text-ink-2">
+                                                        <span>Garanzie ricambio</span>
+                                                        <select wire:change="fissaVisibilita({{ $sede->id }}, $event.target.value)"
+                                                                class="rounded-md border border-border-strong bg-surface px-2 py-1 text-xs text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                                                            @foreach ($this->statiVisibilita() as $stato)
+                                                                <option value="{{ $stato->value }}" @selected($sede->visibilita_garanzie_ricambio === $stato)>{{ $stato->label() }}</option>
+                                                            @endforeach
+                                                        </select>
+                                                    </label>
+                                                @endcan
+                                            </span>
+                                        </div>
+                                    @empty
+                                        <p class="text-sm text-ink-3">Nessuna sede: il cliente esiste ma non ha ancora un Ente.</p>
+                                    @endforelse
+                                </td>
+                            </tr>
+                        @endif
+                    @empty
+                        <tr>
+                            <td colspan="8" class="px-4 py-8 text-center text-sm text-ink-3">
+                                Nessun cliente con questi filtri.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </x-ui.card>
+
+    {{-- La scelta del membro, gatata **tre volte**, e non per abbondanza: la
+         prima è `apriScelta()`/`updatingSceltaImpersonazione()`, che chiedono
+         `utenti.impersonate` perché la property arriva dal browser; la seconda è
+         `clienteScelto()`, che rilegge dalla porta e restituisce `null` senza
+         quel permesso; questo `@can` è la terza e la più debole — da sola non
+         reggerebbe nulla, ma toglie il markup a chi non deve vederlo. Un test le
+         toglie tutte e tre insieme e diventa rosso. --}}
+    @can('utenti.impersonate')
+        @if ($sceltaImpersonazione !== null)
+            @php
+                // Riletti dalla porta e non pescati dalla pagina: filtrare o
+                // paginare con la modale aperta lascerebbe a schermo un guscio
+                // col titolo troncato e la lista vuota.
+                $scelto = $this->clienteScelto();
+                $suoi = $this->candidatiScelti();
+            @endphp
+
+            @if ($scelto)
+            <x-ui.modal :title="'Impersona un membro di '.$scelto->ragione_sociale" close="chiudiScelta">
+                <p class="text-sm text-ink-2">
+                    Si entra come una persona: permessi, Ente attivo e visibilità saranno i suoi.
+                    L'ingresso è registrato e resta un banner in cima a ogni pagina.
+                </p>
+
+                <ul class="mt-4 divide-y divide-border">
+                    @foreach ($suoi as $membro)
+                        <li wire:key="candidato-{{ $membro->id }}" class="flex items-center justify-between gap-3 py-2">
+                            <span>
+                                <span class="block text-sm font-medium text-ink">{{ $membro->name }}</span>
+                                <span class="block text-xs text-ink-3">{{ $membro->email }}</span>
+                            </span>
+                            <a href="{{ route('impersonate', $membro) }}"
+                               class="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-ink hover:bg-brand-hover">
+                                <span aria-hidden="true">👁</span> Entra
+                            </a>
+                        </li>
+                    @endforeach
+                </ul>
+            </x-ui.modal>
+            @endif
+        @endif
+    @endcan
+
+    @if ($provisioningAperto)
+        @php $perCliente = $this->clienteDelProvisioning(); @endphp
+
+        <x-ui.modal :title="$perCliente ? 'Nuovo Ente (sede) — '.$perCliente->ragione_sociale : 'Nuovo cliente e prima sede (Ente)'" close="chiudiProvisioning">
+            @if ($perCliente)
+                <p class="text-sm text-ink-2">
+                    L'Ente — la sede — si aggiunge al contratto di <strong>{{ $perCliente->ragione_sociale }}</strong>
+                    (piano {{ App\Support\Piani::esiste($perCliente->piano) ? App\Support\Piani::etichetta($perCliente->piano) : $perCliente->piano }},
+                    sedi {{ $this->slotDelPiano($perCliente) }}).
+                </p>
+            @else
+                {{-- ⚠️ Nessun select dei piani: i piani a pagamento passano da
+                     Stripe, e un menù offrirebbe un'opzione che fallisce al
+                     salvataggio — o peggio creerebbe un account marcato «saas»
+                     senza subscription, cioè un cliente che risulta pagante e non
+                     paga. Si dice come stanno le cose, invece di offrire una
+                     scelta che non esiste. --}}
+                <p class="text-sm text-ink-2">
+                    Nascono insieme il cliente, il suo primo <strong>Ente</strong> e l'amministratore che lo governa.
+                    Il cliente nasce sul piano <strong>Free</strong>. Il passaggio a un piano a pagamento
+                    si fa da Stripe (<code class="text-xs">easylab:abbona</code>), non da qui.
+                </p>
+            @endif
+
+            {{-- ⚠️ **`nome` non chiede la stessa cosa nei due rami**, e le
+                 etichette lo devono dire: creando un cliente nuovo è la
+                 **ragione sociale** dell'Account e la prima sede si nomina a
+                 parte (facoltativo: assente, si chiama come il cliente — che è
+                 l'imposizione che il Parco clienti rendeva visibile, la colonna
+                 SEDE che ripeteva la ragione sociale). Agganciando una sede a un
+                 account esistente, invece, `nome` È il nome della sede: un
+                 secondo campo chiederebbe due volte la stessa cosa. --}}
+            <div class="mt-4 space-y-3">
+                @php
+                    $campiProvisioning = $perCliente
+                        ? ['nome' => ['Nome dell\'Ente (la sede)', 'Ospedale San Giovanni']]
+                        : [
+                            'nome' => ['Ragione sociale del cliente', 'Gruppo Ospedaliero San Giovanni SpA'],
+                            'nomeSede' => ['Nome della prima sede (facoltativo)', 'Come la ragione sociale'],
+                        ];
+
+                    $campiProvisioning += [
+                        'adminName' => ['Nome dell\'amministratore', 'Anna Bianchi'],
+                        'adminEmail' => ['Email dell\'amministratore', 'anna.bianchi@sangiovanni.it'],
+                    ];
+                @endphp
+
+                @foreach ($campiProvisioning as $campo => [$etichetta, $esempio])
+                    <div wire:key="prov-{{ $campo }}">
+                        <label for="prov-{{ $campo }}" class="block text-sm font-medium text-ink">{{ $etichetta }}</label>
+                        <input id="prov-{{ $campo }}" type="text" wire:model="nuovo.{{ $campo }}"
+                               placeholder="{{ $esempio }}"
+                               class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                        @error('nuovo.'.$campo)
+                            <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
+                        @enderror
+                    </div>
+                @endforeach
+            </div>
+
+            <p class="mt-3 text-xs text-ink-3">
+                All'amministratore non si consegna una password: riceve un invito con un link firmato
+                e la sceglie lui (ADR-012). Se l'indirizzo esiste già, resta sul suo Ente e raggiunge
+                il nuovo con lo switcher.
+            </p>
+
+            <div class="mt-4 flex justify-end gap-2">
+                <button type="button" wire:click="chiudiProvisioning"
+                        class="rounded-md px-3 py-1.5 text-sm font-medium text-ink-2 hover:bg-surface-sunken hover:text-ink">Annulla</button>
+                <button type="button" wire:click="creaCliente"
+                        class="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-brand-ink hover:bg-brand-hover">Crea e invita</button>
+            </div>
+        </x-ui.modal>
+    @endif
+
+    @php $inLavorazione = $this->accountAperto(); @endphp
+
+    @if ($inLavorazione && $pannello === 'lockout')
+        <x-ui.modal :title="'Lockout — '.$inLavorazione->ragione_sociale" close="chiudiPannello">
+            {{-- ⚠️ **Due interruttori e mai uno.** Quello di Stripe è in sola
+                 lettura: il suo inverso è un evento di pagamento, e un umano che
+                 dichiarasse «ha pagato» verrebbe smentito dal webhook successivo
+                 — nel frattempo il cliente sarebbe rientrato senza pagare
+                 (ADR-013). Il gesto inverso non è esposto in nessuna forma, e un
+                 test cerca la chiamata sui token del sorgente. --}}
+            <div class="rounded-md border border-border p-3">
+                <p class="text-sm font-medium text-ink">Blocco automatico (Stripe)</p>
+                @if ($inLavorazione->stripe_locked_at)
+                    <p class="mt-1 text-sm text-bad-soft-ink">
+                        Chiuso dal webhook il {{ $inLavorazione->stripe_locked_at->format('d/m/Y H:i') }}@if ($inLavorazione->stripe_lock_reason) — {{ $inLavorazione->stripe_lock_reason }}@endif
+                    </p>
+                    <p class="mt-1 text-xs text-ink-3">
+                        Si riapre da sé al primo pagamento riuscito. Non c'è un pulsante, ed è voluto.
+                    </p>
+                @else
+                    <p class="mt-1 text-sm text-ink-2">Nessun insoluto in corso.</p>
+                @endif
+            </div>
+
+            <div class="mt-4 rounded-md border border-border p-3">
+                <p class="text-sm font-medium text-ink">Blocco manuale</p>
+
+                @if ($inLavorazione->locked_at)
+                    {{-- Il motivo si legge **qui**: `/bloccato` è muta di proposito,
+                         quindi questo è il solo posto dove ritrovarlo fra sei mesi. --}}
+                    <p class="mt-1 text-sm text-bad-soft-ink">
+                        Chiuso il {{ $inLavorazione->locked_at->format('d/m/Y H:i') }}@if ($inLavorazione->locked_reason) — {{ $inLavorazione->locked_reason }}@endif
+                    </p>
+
+                    <button type="button" wire:click="sbloccaAccount"
+                            class="mt-3 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-brand-ink hover:bg-brand-hover">
+                        Riapri la porta
+                    </button>
+
+                    @if ($inLavorazione->stripe_locked_at)
+                        <p class="mt-2 text-xs text-warn-soft-ink">
+                            ⚠️ L'insoluto Stripe resta acceso: l'account resterà chiuso comunque.
+                        </p>
+                    @endif
+                @else
+                    <label for="motivo-lockout" class="mt-3 block text-sm font-medium text-ink">Motivo</label>
+                    <input id="motivo-lockout" type="text" wire:model="motivoLockout"
+                           placeholder="Fattura 2026/114 scaduta da 60 giorni"
+                           class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                    @error('motivoLockout')
+                        <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
+                    @enderror
+                    <p class="mt-1 text-xs text-ink-3">
+                        Non lo vedrà il cliente: la pagina di blocco è muta. Lo leggerà chi riapre questo caso fra sei mesi.
+                    </p>
+
+                    <button type="button" wire:click="bloccaAccount"
+                            class="mt-3 rounded-md bg-bad-dot px-3 py-1.5 text-sm font-medium text-ink-inverse hover:brightness-90">
+                        Chiudi la porta
+                    </button>
+                @endif
+            </div>
+        </x-ui.modal>
+    @endif
+
+    @if ($inLavorazione && $pannello === 'fiscali')
+        <x-ui.modal :title="'Dati fiscali — '.$inLavorazione->ragione_sociale" close="chiudiPannello">
+            <div class="space-y-3">
+                @foreach ([
+                    'ragione_sociale' => 'Ragione sociale',
+                    'partita_iva' => 'Partita IVA',
+                    'codice_fiscale' => 'Codice fiscale',
+                    'pec' => 'PEC',
+                    'codice_destinatario_sdi' => 'Codice destinatario SDI',
+                ] as $campo => $etichetta)
+                    <div wire:key="fisc-{{ $campo }}">
+                        <label for="fisc-{{ $campo }}" class="block text-sm font-medium text-ink">{{ $etichetta }}</label>
+                        <input id="fisc-{{ $campo }}" type="text" wire:model="fiscali.{{ $campo }}"
+                               class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                        @error('fiscali.'.$campo)
+                            <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
+                        @enderror
+                    </div>
+                @endforeach
+            </div>
+
+            <p class="mt-3 text-xs text-ink-3">
+                Il codice destinatario è di 6 caratteri per la Pubblica Amministrazione, 7 per i privati.
+                I dati si riallineano a Stripe alla prossima operazione di fatturazione, non da qui.
+            </p>
+
+            <div class="mt-4 flex justify-end gap-2">
+                <button type="button" wire:click="chiudiPannello"
+                        class="rounded-md px-3 py-1.5 text-sm font-medium text-ink-2 hover:bg-surface-sunken hover:text-ink">Annulla</button>
+                <button type="button" wire:click="salvaFiscali"
+                        class="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-brand-ink hover:bg-brand-hover">Salva</button>
+            </div>
+        </x-ui.modal>
+    @endif
+
+    {{-- ─── L'eliminazione definitiva (🔗 ADR-040) ────────────────────────── --}}
+    @if ($inLavorazione && $pannello === 'eliminazione')
+        @php
+            $conseguenze = \App\Support\Piattaforma\EliminaCliente::conseguenze($inLavorazione);
+            $parola = \App\Livewire\Piattaforma\Concerns\AmministraAccount::parolaDiConferma($inLavorazione);
+        @endphp
+
+        <x-ui.modal :title="'Eliminare '.($inLavorazione->ragione_sociale ?: 'questo cliente').'?'" close="chiudiPannello">
+            {{-- 🔴 **Cosa sparisce, contato — non «i dati».** È il pattern che
+                 `easylab:lockout` porta già in console: stampare la portata del
+                 gesto prima di compierlo. Qui vale il doppio, perché di qui non
+                 si torna indietro. --}}
+            <div class="rounded-md border border-border bg-bad-soft p-3">
+                <p class="text-sm font-medium text-bad-soft-ink">Questa operazione non è reversibile.</p>
+
+                {{-- ⚠️ Le voci a **zero non si stampano**: un elenco che dice
+                     «0 strumenti, 0 interventi» su un tenant di prova allarma
+                     per uno storico che non esiste, e chi legge smette di
+                     leggere davvero l'elenco la volta in cui conta. --}}
+                @php
+                    $voci = collect([
+                        [$conseguenze->sedi, 'sede', 'sedi'],
+                        [$conseguenze->strumenti, 'strumento', 'strumenti'],
+                        [$conseguenze->interventi, 'intervento', 'interventi'],
+                        [$conseguenze->documenti, 'documento', 'documenti'],
+                    ])->filter(fn ($v) => $v[0] > 0)
+                      ->map(fn ($v) => number_format($v[0], 0, ',', '.').' '.($v[0] === 1 ? $v[1] : $v[2]));
+                @endphp
+
+                <p class="mt-2 text-sm text-ink-2">
+                    @if ($voci->isEmpty())
+                        Questo cliente non ha ancora nessun dato: non si perde niente.
+                    @else
+                        Vengono eliminati definitivamente
+                        <strong>{{ $voci->join(', ', ' e ') }}</strong>{{ $conseguenze->documenti > 0 ? ', insieme ai file caricati' : '' }}.
+                    @endif
+                </p>
+
+                @if ($conseguenze->personeSenzaAltriContratti > 0)
+                    <p class="mt-2 text-sm text-ink-2">
+                        <strong>{{ $conseguenze->personeSenzaAltriContratti }}</strong>
+                        {{ $conseguenze->personeSenzaAltriContratti === 1 ? 'persona resta' : 'persone restano' }}
+                        senza contratto e {{ $conseguenze->personeSenzaAltriContratti === 1 ? 'viene eliminata' : 'vengono eliminate' }} insieme al cliente.
+                        {{-- ⚠️ Detto, perché è la ragione per cui l'indirizzo
+                             torna libero: `users.email` è unique senza
+                             condizione, quindi una persona viva senza contratto
+                             bloccherebbe per sempre ogni nuova registrazione con
+                             quella casella. --}}
+                        @if ($conseguenze->membri > $conseguenze->personeSenzaAltriContratti)
+                            Chi appartiene anche ad altri clienti resta.
+                        @endif
+                    </p>
+                @endif
+
+                @if ($conseguenze->abbonamentoAttivo)
+                    <p class="mt-2 text-sm text-ink-2">
+                        L'abbonamento su Stripe viene <strong>chiuso subito</strong>, senza rimborso del periodo in corso.
+                    </p>
+                @endif
+
+                <p class="mt-2 text-xs text-ink-3">
+                    Chi aveva accesso riceve un'email di avviso. La riga nel registro di audit resta.
+                </p>
+            </div>
+
+            {{-- ⚠️ Il nome si **mostra** ed è selezionabile: nasconderlo
+                 renderebbe il gesto una caccia al dato senza renderlo più
+                 sicuro. Ciò da cui la riscrittura protegge è il click sulla riga
+                 sbagliata e il doppio invio, non la disattenzione di chi ha già
+                 letto l'elenco qui sopra. --}}
+            <label for="conferma-eliminazione" class="mt-4 block text-sm font-medium text-ink">
+                Per confermare, riscrivi <span class="select-all font-mono text-ink">{{ $parola }}</span>
+            </label>
+
+            <input id="conferma-eliminazione" type="text" wire:model="confermaEliminazione"
+                   autocomplete="off" spellcheck="false"
+                   class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+
+            @error('confermaEliminazione')
+                <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
+            @enderror
+
+            <div class="mt-4 flex justify-end gap-2">
+                <button type="button" wire:click="chiudiPannello"
+                        class="rounded-md px-3 py-1.5 text-sm font-medium text-ink-2 hover:bg-surface-sunken hover:text-ink">Annulla</button>
+                <button type="button" wire:click="eliminaAccount" data-elimina
+                        class="rounded-md bg-bad-dot px-3 py-1.5 text-sm font-medium text-ink-inverse hover:brightness-90">
+                    Elimina definitivamente
+                </button>
+            </div>
+        </x-ui.modal>
+    @endif
+
+    {{-- ⚠️ **Fuori dalla modale**, che a questo punto è chiusa: Stripe o
+         Backblaze possono aver fallito senza impedire l'eliminazione, e questa è
+         la sola riga che dice cosa resta da chiudere a mano. --}}
+    @if ($erroreEliminazione)
+        <div class="mt-4 rounded-md border border-border bg-warn-soft p-3" data-errore-eliminazione>
+            <p class="text-sm text-warn-soft-ink">
+                Il cliente è stato eliminato, ma qualcosa fuori da Easy Lab non ha risposto:
+                {{ $erroreEliminazione }}
+            </p>
+        </div>
+    @endif
+
+    <div class="mt-4 flex flex-wrap items-center justify-between gap-2">
+        <p class="text-xs text-ink-3">
+            @if ($clienti->total() > 0)
+                {{ $clienti->firstItem() }}–{{ $clienti->lastItem() }} di {{ number_format($clienti->total(), 0, ',', '.') }} clienti
+            @endif
+        </p>
+
+        {{ $clienti->links() }}
+    </div>
+
+</div>

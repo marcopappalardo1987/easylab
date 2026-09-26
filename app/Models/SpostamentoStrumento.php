@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\TipoSpostamento;
 use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\SerializzaGiorniCivili;
 use App\Models\Contracts\ReachesStrumento;
 use Database\Factories\SpostamentoStrumentoFactory;
 use Illuminate\Contracts\Database\Query\Builder as BuilderContract;
@@ -39,7 +40,7 @@ use RuntimeException;
 class SpostamentoStrumento extends Model implements ReachesStrumento
 {
     /** @use HasFactory<SpostamentoStrumentoFactory> */
-    use AuditsDomainWrites, BelongsToTenant, HasFactory;
+    use AuditsDomainWrites, BelongsToTenant, HasFactory, SerializzaGiorniCivili;
 
     protected $table = 'spostamenti_strumento';
 
@@ -128,7 +129,11 @@ class SpostamentoStrumento extends Model implements ReachesStrumento
 
     public function eseguitoBy(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'eseguito_da');
+        // ⚠️ `withTrashed()`: da 🔗 ADR-038 una persona si cestina, e senza
+        // questa riga l'attribuzione storica tornerebbe `null` — la pagina
+        // direbbe «—» dove prima diceva un nome. Chi ha fatto una cosa l'ha
+        // fatta anche dopo essersene andato.
+        return $this->belongsTo(User::class, 'eseguito_da')->withTrashed();
     }
 
     public function origineLabel(): string

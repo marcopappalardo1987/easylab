@@ -42,6 +42,17 @@ class Campanella extends Component
         $this->aperta = true;
     }
 
+    /** Il pannello è reso da un `@if`: aprire e chiudere passano dal server. */
+    public function alterna(): void
+    {
+        $this->aperta = ! $this->aperta;
+    }
+
+    public function chiudi(): void
+    {
+        $this->aperta = false;
+    }
+
     public function segnaTutteLette(): void
     {
         auth()->user()->unreadNotifications->markAsRead();
@@ -59,6 +70,10 @@ class Campanella extends Component
      */
     public function ultime(): Collection
     {
+        // Torna pigro: il pannello è reso da un `@if ($aperta)`, quindi il giro
+        // sul server c'è comunque nel gesto di aprire. Il tentativo del 28 Ago
+        // di caricarle su ogni pagina è stato annullato — era un costo pagato
+        // per una cura che non curava.
         if (! $this->aperta) {
             return new Collection;
         }

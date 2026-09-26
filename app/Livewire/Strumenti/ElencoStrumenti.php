@@ -10,7 +10,6 @@ use App\Models\Intervento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Support\Semaforo;
-use App\Support\Tenancy\CurrentTenant;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -125,6 +124,34 @@ class ElencoStrumenti extends Component
         $this->resetPage();
     }
 
+    /**
+     * Almeno un filtro è attivo, cioè l'elenco che si sta guardando è un
+     * SOTTOINSIEME e non il parco.
+     *
+     * 🔴 **Esiste come metodo perché la vista non deve riscrivere questa lista.**
+     * La condizione del messaggio di vuoto viveva in Blade e nominava due filtri
+     * su cinque: era la terza forma della stessa regola, e infatti divergeva —
+     * `?ubicazioneId=0` mostrava «Nessuno strumento.» su un elenco filtrato (lo
+     * zero è falsy), `?enteId=` non era nominato affatto, e `?stato=giallo`
+     * mostrava «Nessun risultato per i filtri applicati» su un elenco **non**
+     * filtrato, mandando a togliere un filtro che il componente aveva già
+     * scartato. Una lista scritta a mano diverge di nuovo alla prossima
+     * `#[Url]`.
+     *
+     * ⚠️ Ogni ramo usa **lo stesso predicato con cui il filtro viene applicato**
+     * in `render()`: `!== null` dove là c'è `!== null`, la whitelist dove là
+     * c'è la whitelist. È ciò che rende «filtro applicato» e «filtro annunciato»
+     * la stessa cosa invece che due cose che si somigliano.
+     */
+    public function haFiltriAttivi(): bool
+    {
+        return filled($this->search)
+            || $this->enteId !== null
+            || $this->ubicazioneId !== null
+            || $this->soloObsoleti
+            || in_array($this->stato, array_map(fn (StatoSemaforo $c) => $c->value, StatoSemaforo::cases()), true);
+    }
+
     /** Opzioni del select, esposte alla view. @return list<int> */
     public function opzioniPerPage(): array
     {
@@ -220,37 +247,17 @@ class ElencoStrumenti extends Component
 
     /**
      * Garanzie dei pezzi montati sullo strumento della riga corrente (ADR-020),
-     * pronta per essere correlata: chi chiama aggiunge select e confine.
+     * pronta per essere aggregata: chi chiama aggiunge la sola select.
      *
-     * Il doppio salto e il bypass del privacy scope vivono in
-     * `Garanzia::scopeDeiPezziMontati()` — qui non si riscrive nulla di quella
-     * regola, si aggiunge solo la correlazione con `strumenti`.
+     * Doppio salto, bypass del privacy scope e correlazione vivono tutti in
+     * `Garanzia::scopeDeiPezziMontatiSullaRiga()` — qui non si riscrive nulla
+     * di quella regola.
      *
      * @return Builder<Garanzia>
      */
     private function garanzieRicambiDellaRiga(): Builder
     {
-        return Garanzia::query()->deiPezziMontati()
-            ->whereColumn('ricambio_utilizzo.strumento_id', 'strumenti.id');
-    }
-
-    /**
-     * Id degli strumenti su cui è montato un pezzo con garanzia scaduta o in
-     * scadenza (ADR-020): la terza fonte dell'arancione, per il filtro.
-     *
-     * `whereNotIn` (ramo verde) è sicuro solo perché
-     * `ricambio_utilizzo.strumento_id` è NOT NULL: un solo NULL nella lista
-     * renderebbe UNKNOWN l'intero predicato e il verde non troverebbe più nulla
-     * (è il motivo per cui la gemella sulle garanzie macchina porta un
-     * `whereNotNull` esplicito, dove la colonna è nullable).
-     *
-     * @return Builder<Garanzia>
-     */
-    private function conGaranzieRicambioRilevanti(): Builder
-    {
-        return Garanzia::query()->deiPezziMontati()
-            ->entroSoglia()
-            ->select('ricambio_utilizzo.strumento_id');
+        return Garanzia::query()->deiPezziMontatiSullaRiga();
     }
 
     /**
@@ -263,9 +270,35 @@ class ElencoStrumenti extends Component
      * regola), e `prossima_scadenza` lo stesso criterio "aperti, scadenza
      * minima" del calcolo per-model.
      *
+     * 🔴 **Ogni ordinamento finisce con un tie-break sull'id, e non è
+     * pignoleria: senza, la paginazione PERDE righe.** A parità di chiave
+     * l'ordine fra due pagine è una proprietà del motore — su SQLite la
+     * scansione è stabile, su Postgres i pari possono riordinarsi fra la query
+     * di pagina 1 e quella di pagina 2, e una riga esce da entrambe. È lo stesso
+     * difetto già pagato sul registro di audit, e qui pesa di più: la colonna
+     * `stato` ha **tre** valori distinti su tutto il parco, quindi i pari sono
+     * quasi tutte le righe.
+     *
+     * Trovato il 25 Ago 2026 girando la suite su Postgres: 46 righe raccolte su
+     * 47, con SQLite verde. Nessun dato di prova l'avrebbe mostrato in locale.
+     *
      * @param  Builder<Strumento>  $query
      */
     protected function applicaOrdinamento($query, string $sortBy, string $sortDir): void
+    {
+        $this->applicaCriterio($query, $sortBy, $sortDir);
+
+        // L'ultimo criterio, sempre e per ogni colonna: l'id è unico, quindi da
+        // qui in poi l'ordine è totale e la pagina 2 comincia dove finisce la 1.
+        $query->orderBy('strumenti.id');
+    }
+
+    /**
+     * Il criterio scelto dall'utente, senza il tie-break.
+     *
+     * @param  Builder<Strumento>  $query
+     */
+    private function applicaCriterio($query, string $sortBy, string $sortDir): void
     {
         if ($sortBy === 'ubicazione') {
             // Per l'utente "ubicazione" è il nodo in cui sta lo strumento:
@@ -280,42 +313,10 @@ class ElencoStrumenti extends Component
         }
 
         if ($sortBy === 'stato') {
-            // Ordinale dello stato EFFETTIVO: 0 = verde, 1 = arancione,
-            // 2 = rosso (solo forzato). Il forzato vince, quindi il CASE guarda
-            // prima `forced_state` e solo se è NULL ricade sugli interventi —
-            // stessa regola di Strumento::statoSemaforoEffettivo().
-            //
-            // L'EXISTS è inlineato dentro il CASE e non estratto come alias:
-            // Postgres non ammette alias di select nelle espressioni dell'ORDER
-            // BY (SQLite sì, quindi divergerebbe solo in CI).
-            $aperti = Intervento::query()->select(DB::raw('1'))
-                ->whereColumn('strumento_id', 'strumenti.id')
-                ->apertiEntroSoglia();
-            // Anche una garanzia scaduta o in scadenza accende l'arancione.
-            $garanzie = Garanzia::query()->select(DB::raw('1'))
-                ->whereColumn('strumento_id', 'strumenti.id')
-                ->entroSoglia();
-            // ...e quella di un pezzo montato, con la stessa soglia (ADR-020).
-            $garanzieRicambio = $this->garanzieRicambiDellaRiga()
-                ->select(DB::raw('1'))
-                ->entroSoglia();
-
-            $query->orderByRaw(
-                'case'
-                .' when strumenti.forced_state = ? then 2'
-                .' when strumenti.forced_state = ? then 1'
-                .' when strumenti.forced_state = ? then 0'
-                .' when exists ('.$aperti->toSql().') then 1'
-                .' when exists ('.$garanzie->toSql().') then 1'
-                .' when exists ('.$garanzieRicambio->toSql().') then 1'
-                .' else 0 end '.$sortDir,
-                array_merge(
-                    [StatoSemaforo::Rosso->value, StatoSemaforo::Arancione->value, StatoSemaforo::Verde->value],
-                    $aperti->getBindings(),
-                    $garanzie->getBindings(),
-                    $garanzieRicambio->getBindings(),
-                ),
-            );
+            // Stessa regola del filtro, in forma ordinale: entrambe passano da
+            // `Strumento::fontiArancione()`, quindi non possono dire cose
+            // diverse sulla stessa riga.
+            $query->ordinaPerStato($sortDir);
 
             return;
         }
@@ -386,14 +387,15 @@ class ElencoStrumenti extends Component
         $sortBy = in_array($this->sortBy, self::SORTABLE, true) ? $this->sortBy : 'nome';
         $sortDir = $this->sortDir === 'desc' ? 'desc' : 'asc';
 
-        $query = Strumento::query()->select('strumenti.*')->with(['unita', 'forcedBy', 'tenant']);
+        $query = Strumento::query()->select('strumenti.*')->with(['forcedBy', 'tenant']);
 
         if (filled($this->search)) {
-            $like = '%'.strtolower(trim($this->search)).'%';
+            // `%` e `_` scritti dall'utente sono letterali, come nelle altre ricerche (ESCAPE).
+            $like = '%'.addcslashes(mb_strtolower(trim($this->search)), '%_\\').'%';
             $query->where(function ($q) use ($like) {
-                $q->whereRaw('LOWER(nome) LIKE ?', [$like])
-                    ->orWhereRaw('LOWER(COALESCE(modello, \'\')) LIKE ?', [$like])
-                    ->orWhereRaw('LOWER(COALESCE(matricola, \'\')) LIKE ?', [$like]);
+                $q->whereRaw("LOWER(nome) LIKE ? ESCAPE '\\'", [$like])
+                    ->orWhereRaw("LOWER(COALESCE(modello, '')) LIKE ? ESCAPE '\\'", [$like])
+                    ->orWhereRaw("LOWER(COALESCE(matricola, '')) LIKE ? ESCAPE '\\'", [$like]);
             });
         }
 
@@ -405,50 +407,21 @@ class ElencoStrumenti extends Component
             $query->whereIn('unita_organizzativa_id', $this->sottoAlbero($this->ubicazioneId));
         }
 
-        // Filtro obsolescenza (ADR-014). La soglia è una sola per tutte le righe
-        // visibili: oggi ogni utente vede un solo Ente (ADR-018) — da rivedere
-        // quando il filtro Ente diventerà operativo (Rivenditori, V1.1).
-        // Confine `< limite+1` e MAI `<=`: su SQLite le date sono stringhe
-        // (vedi Intervento::scopeApertiEntroSoglia).
+        // Filtro obsolescenza (ADR-014): la forma SQL vive su `Strumento`, dove
+        // la soglia è letta PER ENTE — qui c'era una soglia sola per tutte le
+        // righe, che per un Tecnico esterno contraddiceva il badge ⏳ della
+        // riga accanto.
         if ($this->soloObsoleti) {
-            $soglia = (int) (UnitaOrganizzativa::withoutGlobalScopes()
-                ->whereKey(CurrentTenant::id())->value('soglia_obsolescenza_anni') ?? 10);
-
-            $query->whereNotNull('data_installazione')
-                ->where('data_installazione', '<', today()->subYears($soglia)->addDay()->toDateString());
+            $query->obsoleti();
         }
 
-        // Filtro semaforo: arancione = ha almeno un intervento aperto scaduto o
-        // entro la soglia (scopeApertiEntroSoglia, forma SQL della regola di
-        // Semaforo::calcola). Verde = il complemento. Filtrare qui e non dopo la
-        // paginazione è l'unico modo di avere pagine e conteggi corretti.
+        // Filtro semaforo (ADR-005): la forma SQL della regola vive in
+        // `Strumento::scopeConStato()`, unica nel progetto. Filtrare qui e non
+        // dopo la paginazione è l'unico modo di avere pagine e conteggi
+        // corretti; il forzato vince, e il verde è il complemento di tutte e
+        // tre le fonti dell'arancione.
         if (in_array($this->stato, array_map(fn (StatoSemaforo $c) => $c->value, StatoSemaforo::cases()), true)) {
-            $conScadenzeRilevanti = Intervento::query()->apertiEntroSoglia()->select('strumento_id');
-            $conGaranzieRilevanti = Garanzia::query()->entroSoglia()
-                ->whereNotNull('strumento_id')->select('strumento_id');
-            $conGaranzieRicambioRilevanti = $this->conGaranzieRicambioRilevanti();
-
-            // "Forzato se c'è, altrimenti calcolato" anche in SQL: senza il
-            // ramo su `forced_state` uno strumento forzato comparirebbe sotto
-            // lo stato calcolato, contraddicendo il pallino della sua riga.
-            // L'arancione può venire da un intervento, da una garanzia macchina
-            // (ADR-004/005) O dalla garanzia di un pezzo montato (ADR-020),
-            // quindi il verde è il complemento di TUTTE E TRE.
-            match ($this->stato) {
-                StatoSemaforo::Rosso->value => $query->where('forced_state', StatoSemaforo::Rosso->value),
-                StatoSemaforo::Arancione->value => $query->where(fn ($q) => $q
-                    ->where('forced_state', StatoSemaforo::Arancione->value)
-                    ->orWhere(fn ($q) => $q->whereNull('forced_state')
-                        ->where(fn ($q) => $q->whereIn('id', $conScadenzeRilevanti)
-                            ->orWhereIn('id', $conGaranzieRilevanti)
-                            ->orWhereIn('id', $conGaranzieRicambioRilevanti)))),
-                StatoSemaforo::Verde->value => $query->where(fn ($q) => $q
-                    ->where('forced_state', StatoSemaforo::Verde->value)
-                    ->orWhere(fn ($q) => $q->whereNull('forced_state')
-                        ->whereNotIn('id', $conScadenzeRilevanti)
-                        ->whereNotIn('id', $conGaranzieRilevanti)
-                        ->whereNotIn('id', $conGaranzieRicambioRilevanti))),
-            };
+            $query->conStato(StatoSemaforo::from($this->stato));
         }
 
         $this->applicaOrdinamento($query, $sortBy, $sortDir);

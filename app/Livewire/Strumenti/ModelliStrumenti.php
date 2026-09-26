@@ -28,8 +28,9 @@ class ModelliStrumenti extends Component
             ->groupBy('modello', 'unita_organizzativa_id');
 
         if (filled($this->search)) {
-            $like = '%'.strtolower(trim($this->search)).'%';
-            $query->whereRaw('LOWER(COALESCE(modello, \'\')) LIKE ?', [$like]);
+            // `%` e `_` scritti dall'utente sono letterali, come nelle altre ricerche (ESCAPE).
+            $like = '%'.addcslashes(mb_strtolower(trim($this->search)), '%_\\').'%';
+            $query->whereRaw("LOWER(COALESCE(modello, '')) LIKE ? ESCAPE '\\'", [$like]);
         }
 
         $righe = $query->get();

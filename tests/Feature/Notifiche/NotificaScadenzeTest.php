@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\TipoMotivoSemaforo;
+use App\Enums\VisibilitaGaranzieRicambio;
 use App\Models\Account;
 use App\Models\AvvisoScadenza;
 use App\Models\Garanzia;
@@ -183,7 +185,10 @@ it('ignores interventi already done', function () {
 
 it('ignores a ricambio that is not mounted yet', function () {
     $ricambio = Ricambio::factory()->forTenant($this->ente)->create();
-    $intervento = Intervento::factory()->forStrumento($this->strumento)->create();
+    // `->pianificato()` e non la scadenza di default: quella è `addMonth()`,
+    // che in un mese da 30 giorni cade ESATTAMENTE sulla soglia e fa partire
+    // un digest per l'intervento — 5 mesi l'anno il caso misurava altro.
+    $intervento = Intervento::factory()->forStrumento($this->strumento)->pianificato()->create();
     $utilizzo = RicambioUtilizzo::factory()
         ->forStrumento($this->strumento)->forRicambio($ricambio)->forIntervento($intervento)
         ->nonMontato()->create();
@@ -239,6 +244,77 @@ it('warns again after the account is unlocked', function () {
     scheduler();
 
     Notification::assertSentTo($admin, DigestScadenze::class);
+});
+
+it('warns a Tenant about the machines of their own Ente', function () {
+    // 🔴 Il Tenant è entrato fra i destinatari il 25 Ago 2026. Prima non
+    // riceveva NULLA — né email né notifica in-app, perché `via()` scrive
+    // `database` solo per chi `destinatari()` sceglie — mentre §4 gli promette
+    // le notifiche programmate e `/settings/notifiche` una preferenza per
+    // un'email che nessuno gli mandava.
+    $tenant = User::factory()->create(['tenant_id' => $this->ente->id]);
+    $tenant->assignRole('Tenant');
+
+    Intervento::factory()->forStrumento($this->strumento)->scaduto()
+        ->create(['descrizione' => 'Taratura annuale']);
+
+    Notification::fake();
+    $this->artisan('easylab:notifica-scadenze')->assertOk();
+
+    Notification::assertSentTo($tenant, DigestScadenze::class);
+});
+
+it('never puts a ricambio row in a Tenant digest when their Ente hides them', function () {
+    // 🔴 **La conseguenza dell'ingresso del Tenant**, e la ragione per cui il
+    // filtro ADR-029 è nato con lui: fino a ieri il docblock del comando poteva
+    // dire «nessun destinatario è il ruolo che quella regola protegge», e da
+    // oggi sarebbe falso.
+    //
+    // In console i global scope non filtrano, quindi `GaranziaRicambioPrivacyScope`
+    // qui non gira: fra quelle righe e la casella di posta c'è solo questo
+    // filtro.
+    $this->ente->fissaVisibilitaGaranzieRicambio(VisibilitaGaranzieRicambio::Nascosta);
+
+    $tenant = User::factory()->create(['tenant_id' => $this->ente->id]);
+    $tenant->assignRole('Tenant');
+
+    $ricambio = Ricambio::factory()->forTenant($this->ente)->create(['nome' => 'Lampada UV']);
+    $utilizzo = RicambioUtilizzo::factory()
+        ->forStrumento($this->strumento)->forRicambio($ricambio)
+        ->create(['data' => today()->subMonths(2)->toDateString()]);
+    Garanzia::factory()->scadenzaDichiarata(today()->addDays(5)->toDateString())
+        ->forRicambio($utilizzo)->create();
+
+    Notification::fake();
+    $this->artisan('easylab:notifica-scadenze')->assertOk();
+
+    // Nessun digest affatto: quella era l'unica riga in scadenza dell'Ente, e
+    // per lui non esiste.
+    Notification::assertNotSentTo($tenant, DigestScadenze::class);
+});
+
+it('does send that same row to a Tenant whose Ente shows them', function () {
+    // Il complementare, senza cui il test qui sopra sarebbe verde anche con il
+    // digest rotto per tutti.
+    $this->ente->fissaVisibilitaGaranzieRicambio(VisibilitaGaranzieRicambio::Lettura);
+
+    $tenant = User::factory()->create(['tenant_id' => $this->ente->id]);
+    $tenant->assignRole('Tenant');
+
+    $ricambio = Ricambio::factory()->forTenant($this->ente)->create(['nome' => 'Lampada UV']);
+    $utilizzo = RicambioUtilizzo::factory()
+        ->forStrumento($this->strumento)->forRicambio($ricambio)
+        ->create(['data' => today()->subMonths(2)->toDateString()]);
+    Garanzia::factory()->scadenzaDichiarata(today()->addDays(5)->toDateString())
+        ->forRicambio($utilizzo)->create();
+
+    Notification::fake();
+    $this->artisan('easylab:notifica-scadenze')->assertOk();
+
+    Notification::assertSentTo($tenant, DigestScadenze::class, function (DigestScadenze $digest) {
+        return collect($digest->righe)
+            ->contains(fn ($riga) => $riga->tipo === TipoMotivoSemaforo::GaranziaRicambio);
+    });
 });
 
 it('never puts rows of another Ente in a digest', function () {

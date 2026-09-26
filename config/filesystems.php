@@ -17,6 +17,27 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Da quale disco eredita il disco `documenti`
+    |--------------------------------------------------------------------------
+    |
+    | ⚠️ **Su Laravel Cloud le credenziali di un bucket NON arrivano come
+    | `AWS_*`** (🔗 ADR-042, e la stessa nota in `config/guide.php`): la
+    | piattaforma inietta `LARAVEL_CLOUD_DISK_CONFIG` e
+    | `Illuminate\Foundation\Cloud::configureDisks()` registra al boot un disco
+    | col nome del bucket. Un disco scritto a mano con `env('AWS_ACCESS_KEY_ID')`
+    | nascerebbe quindi **senza credenziali** in cloud.
+    |
+    | Qui si nomina quel disco, e `AppServiceProvider` ne copia la
+    | configurazione dentro `documenti` rimettendoci `throw => true`. Il default
+    | segue il disco dell'ambiente: `local` in sviluppo, il bucket attaccato in
+    | cloud. `DOCUMENTI_DISK` serve solo per puntare altrove.
+    |
+    */
+
+    'documenti_sorgente' => env('DOCUMENTI_DISK', env('FILESYSTEM_DISK', 'local')),
+
+    /*
+    |--------------------------------------------------------------------------
     | Filesystem Disks
     |--------------------------------------------------------------------------
     |
@@ -80,6 +101,13 @@ return [
          *
          * `root` distinto perché in locale (`FILESYSTEM_DISK=local`) i
          * documenti non finiscano mescolati al resto di `storage/app/private`.
+         *
+         * ⚠️ **In cloud questa definizione viene sostituita** da
+         * `AppServiceProvider::ereditaIlDiscoDocumentiDallAmbiente()`, che copia
+         * qui la configurazione del disco iniettato da Laravel Cloud e ci
+         * rimette `throw => true` — che la piattaforma impone a `false`. Le
+         * chiavi `AWS_*` qui sotto servono quindi al solo caso in cui si punti
+         * un bucket **a mano** (🔗 ADR-042).
          */
         'documenti' => [
             'driver' => env('DOCUMENTI_DISK_DRIVER', 'local'),
@@ -96,21 +124,34 @@ return [
             'report' => false,
         ],
 
-    ],
+        /*
+         * Il bucket di un ambiente Laravel Cloud, raggiunto DA FUORI.
+         *
+         * Serve solo a `easylab:pubblica-guide`, che gira sulla macchina dove
+         * stanno gli mp4 — in cloud non ci sono, perché non sono in git.
+         *
+         * ⚠️ **Non si può riusare il meccanismo di Laravel Cloud da qui.** Il
+         * framework registra i dischi iniettati solo se `laravel_cloud()` è
+         * vero, cioè con `LARAVEL_CLOUD=1` in `$_ENV`/`$_SERVER`; e accenderlo
+         * su una macchina di sviluppo attiverebbe anche code gestite, logging
+         * su socket e connessione Postgres non poolata. Le quattro credenziali
+         * si copiano a mano da `LARAVEL_CLOUD_DISK_CONFIG` del pannello.
+         *
+         * Uso: `GUIDE_DISK=guide_remoto php artisan easylab:pubblica-guide`
+         */
+        'guide_remoto' => [
+            'driver' => 's3',
+            'key' => env('GUIDE_REMOTO_KEY'),
+            'secret' => env('GUIDE_REMOTO_SECRET'),
+            'bucket' => env('GUIDE_REMOTO_BUCKET'),
+            'endpoint' => env('GUIDE_REMOTO_ENDPOINT'),
+            'region' => env('GUIDE_REMOTO_REGION', 'auto'),
+            'use_path_style_endpoint' => false,
+            'visibility' => 'private',
+            'throw' => true,
+            'report' => false,
+        ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Symbolic Links
-    |--------------------------------------------------------------------------
-    |
-    | Here you may configure the symbolic links that will be created when the
-    | `storage:link` Artisan command is executed. The array keys should be
-    | the locations of the links and the values should be their targets.
-    |
-    */
-
-    'links' => [
-        public_path('storage') => storage_path('app/public'),
     ],
 
 ];

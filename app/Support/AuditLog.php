@@ -14,6 +14,27 @@ class AuditLog
     public const NAME = 'audit';
 
     /**
+     * Da quando l'attribuzione delle righe è affidabile durante un'impersonazione.
+     *
+     * Prima di questa data `causedBy()` scriveva l'**impersonato**: lab404
+     * sostituisce l'utente della guard e `CauserResolver` legge quello, quindi un
+     * gesto di EasyLab compiuto dentro l'impersonazione risulta del cliente. Da
+     * qui in poi ogni riga scritta **dentro una richiesta** porta anche
+     * `properties.impersonato_da`.
+     *
+     * ⚠️ È una **costante e non un dato derivato**, e non per pigrizia:
+     * `min(created_at)` sulle righe che hanno la chiave darebbe la prima
+     * scrittura *in impersonazione*, che può arrivare settimane dopo o non
+     * arrivare mai — cioè una data più recente del vero, nella direzione che fa
+     * diffidare di righe affidabili.
+     *
+     * Vale per **staging e sviluppo**, che hanno storico precedente. La
+     * produzione non esiste ancora: quando nascerà, il suo registro sarà
+     * interamente successivo a questa data.
+     */
+    public const ATTRIBUZIONE_AFFIDABILE_DA = '22 Ago 2026';
+
+    /**
      * Verbi degli eventi CRUD tracciati dal trait `AuditsDomainWrites` (ADR-027).
      */
     public const VERBI = [

@@ -57,11 +57,13 @@ beforeEach(function () {
 // --- Le quattro superfici ---
 
 it('records the creation of an intervento, with who did it', function () {
+    $tecnico = ($this->utente)('Tecnico');
+
     Livewire::actingAs($this->admin)->test(SchedaStrumento::class, ['strumento' => $this->strumento])
         ->call('openNuovoIntervento')
         ->set('interventoForm.descrizione', 'Sanificazione camera interna')
         ->set('interventoForm.data_scadenza', today()->addMonths(3)->toDateString())
-        ->set('interventoForm.tecnico_id', $this->admin->id)
+        ->set('interventoForm.tecnico_id', $tecnico->id)
         ->call('saveIntervento')
         ->assertHasNoErrors();
 
@@ -139,13 +141,15 @@ it('records the deletion, with the snapshot in old and not in attributes', funct
 // --- La regola «o il trait o le esplicite», resa verificabile ---
 
 it('never writes two rows for one gesture', function () {
+    $tecnico = ($this->utente)('Tecnico');
+
     $this->actingAs($this->admin);
 
     Livewire::actingAs($this->admin)->test(SchedaStrumento::class, ['strumento' => $this->strumento])
         ->call('openNuovoIntervento')
         ->set('interventoForm.descrizione', 'Sostituzione lampada UV')
         ->set('interventoForm.data_scadenza', today()->addMonth()->toDateString())
-        ->set('interventoForm.tecnico_id', $this->admin->id)
+        ->set('interventoForm.tecnico_id', $tecnico->id)
         ->set('ricambiEffettuati', true)
         ->call('addRicambio')
         ->set('ricambiNuovi.0.nome', 'Lampada UV')

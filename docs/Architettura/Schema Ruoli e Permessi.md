@@ -2,7 +2,7 @@
 
 *Definisce i 6 ruoli applicativi e la **matrice permessi per risorsa** che li governa. Traduce in permessi nominati (stile `spatie/laravel-permission`) le decisioni di accesso degli ADR-006/007 e i vincoli di privacy/tracciamento di ADR-004/005/013. Questo documento è il **contratto** per il seeder ruoli/permessi dello Sprint 1 (task "Installare spatie/laravel-permission; definire ruoli/permessi base da S0"). In caso di conflitto fra questo file e un ADR, vince l'ADR (e questo file va corretto).*
 
-> **Stato:** implementato in Sprint 1 · punto 5 — `config/rbac.php` + `RolesAndPermissionsSeeder` (**54** permessi, 6 ruoli, set bloccato di 9). Erano 56 fino a S3-bis: ADR-019 ha rimosso `letture_contaore.*`. Dopo il seeding la fonte di verità è il DB (ADR-016 §7) — quindi **una modifica a `config/rbac.php` non arriva da sola sui database già seminati**: va riseminata, e nessun test se ne accorge (la suite ricrea il DB dalla config).
+> **Stato:** implementato in Sprint 1 · punto 5 — `config/rbac.php` + `RolesAndPermissionsSeeder` (**54** permessi, 6 ruoli, set bloccato di **7**). Erano 56 permessi fino a S3-bis: ADR-019 ha rimosso `letture_contaore.*`; e il set bloccato era di 9 fino ad ADR-029 (15 Ago 2026), che ne ha liberate due — *l'intestazione ha continuato a dire 9 per una settimana mentre la §7 diceva già 7: allineata il 22 Ago 2026*. Dopo il seeding la fonte di verità è il DB (ADR-016 §7) — quindi **una modifica a `config/rbac.php` non arriva da sola sui database già seminati**: va riseminata, e nessun test se ne accorge (la suite ricrea il DB dalla config).
 
 ---
 
@@ -27,15 +27,15 @@ Nomi ruolo **identici** a ERD §3.1 (usati così come stringa spatie).
 
 | Ruolo (spatie) | Livello | `users.tenant_id` | Bypass Global Scope | Sintesi |
 |---|---|---|---|---|
-| `Developer` | Piattaforma | NULL | ✅ | Accesso tecnico totale: codice, log di sistema, impersonation. |
-| `Superadmin` | Piattaforma | NULL | ✅ | Cabina di regia EasyLab. ⊇ tutte le funzionalità di `Admin` + gestione globale (clienti, MRR, billing, provisioning, lockout). |
+| `Developer` | Piattaforma | NULL | ❌ | Accesso tecnico totale: codice, log di sistema, impersonation. |
+| `Superadmin` | Piattaforma | valorizzato (Ente di piattaforma) | ❌ | Cabina di regia EasyLab. ⊇ tutte le funzionalità di `Admin` + gestione globale (clienti, MRR, billing, provisioning, lockout). |
 | `Admin` | Tenant-bound | valorizzato | ❌ | "Piccolo EasyLab" sul proprio Ente: anagrafica, interventi, garanzie (incl. ricambio), fornitori, forzatura semaforo, abbonamento proprio. |
 | `Responsabile Reparto` | Tenant-bound | valorizzato | ❌ | Come Admin sull'operatività, ma ristretto al **sotto-albero** assegnato (pivot `responsabile_unita`); niente billing/audit/provisioning. |
-| `Tenant` | Tenant-bound | valorizzato | ❌ | Laboratorio/Ente finale: vista semaforo, interventi, documenti, garanzia **macchina**. Mai garanzie ricambio (privacy). |
+| `Tenant` | Tenant-bound | valorizzato | ❌ | Laboratorio/Ente finale: vista semaforo, interventi, documenti, garanzia **macchina**. Garanzie ricambio secondo l'impostazione del **proprio Ente** (🔗 ADR-029), non secondo la matrice. |
 | `Tecnico` | Piattaforma **o** Ente | NULL (esterno) **o** valorizzato (interno) | ❌ (accesso derivato) | Personale sul campo: accesso a strumenti = **portafoglio ∪ assegnazione** (ADR-007/030) per **entrambe** le forme, ogni accesso loggato. Per l'interno il `tenant_id` è difesa in profondità (in AND), non un criterio: appartenere all'Ente non dà accesso alle sue macchine. |
 
 **Note sulla gerarchia.**
-- `Developer` e `Superadmin` bypassano il Global Scope (vedono tutti i tenant) — indispensabile per dashboard globali e assistenza (🔗 ADR-001).
+- 🔴 **Nessun ruolo bypassa il Global Scope**, Developer e Superadmin compresi. *Questa riga diceva il contrario fino al 26 Ago 2026 — «vedono tutti i tenant, indispensabile per le dashboard globali» — ed era la premessa che 🔗 **ADR-018** ha scartato: un bypass per ruolo è un secondo percorso di accesso, e il giorno che sbaglia non lo dice.* Ciò che rende possibili le viste globali è **una porta unica e non-scopata** (`App\Support\Tenancy\VistaPiattaforma`), che toglie gli scope **per nome** e chiede `tenants.view_all`; l'accesso ai dati di un cliente passa invece dall'**impersonazione**, tracciata. Il Superadmin è a tutti gli effetti tenant-bound su un proprio Ente di piattaforma (`SuperadminSeeder`), e il Developer **non ha `tenant_id`**: per `TenantScope` questo è fail-closed, quindi vede **zero righe** di dominio — non tutte. È il motivo per cui la dashboard per ruolo gli mostra «Nessuno strumento visibile.» e non quattro zeri.
 - `Superadmin` eredita *funzionalmente* tutti i permessi di `Admin` (Funzionalità per Ruolo §2: "tutte le funzionalità dell'Admin sono integrate nel superadmin").
 - `Tecnico` è un ruolo con accesso **derivato** (non bypassa lo scope, ma ne ha uno proprio come unione di due insiemi — §6, ADR-007/030). Ne esistono **due forme**: l'**esterno** (staff EasyLab, `tenant_id` NULL, con portafoglio clienti) e l'**interno** (dipendente del laboratorio, `tenant_id` valorizzato). La regola di visibilità è la stessa per entrambi: la forma cambia solo *da dove* arriva l'accesso, non *quanto* se ne ottiene.
 
@@ -87,7 +87,10 @@ Risorse derivate dall'ERD §3–§9. Questo è l'elenco canonico che il seeder S
 
 ### 4.6 Billing & tenancy (piattaforma)
 - `billing.manage_own` — portale Stripe del proprio abbonamento.
+
+> 🔒 **`billing.manage_own` non si usa mai nudo** (dal 21 Ago 2026): è la condizione *necessaria*, e la condizione «membro dell'account» vive in `App\Policies\AccountPolicy::manage` (🔗 ADR-032). Con `teams = false` i permessi sono globali, quindi `authorize('billing.manage_own')` concederebbe a qualunque Admin su **qualunque** account. L'ability ha nome diverso dal permesso perché il `Gate::before` di spatie concede appena il permesso esiste sul ruolo — un'ability omonima non verrebbe mai raggiunta. Un guardrail nei test vieta la stringa nuda fuori dalla Policy.
 - `billing.manage_global` — gestione piani/abbonamenti di tutti i clienti (🔗 ADR-002).
+  - 🗓️ **Dal 27 Ago 2026 è anche il permesso della creazione dei piani** (🔗 **ADR-035**), e non ne serve uno nuovo: lo tengono già **solo Developer e Superadmin** — l'Admin lo ha in `except`, nessuna lista `only` lo nomina — ed è nel **set bloccato**, quindi l'editor permessi di runtime non può concederlo a un ruolo cliente. Un permesso dedicato sarebbe l'**ottavo** bloccato e imporrebbe un riseeding per dire la stessa cosa.
 - `billing.lockout` — blocco/sblocco insoluti (🔗 ADR-013).
 - `tenants.view_all` — dashboard globale clienti + MRR.
 - `tenants.provision` — onboarding/erogazione Free "chiavi in mano" (🔗 ADR-002/012).
@@ -96,10 +99,16 @@ Risorse derivate dall'ERD §3–§9. Questo è l'elenco canonico che il seeder S
 - `utenti.view` · `.create` · `.update` · `.delete`
 - `utenti.impersonate` — impersonation con banner + log (lab404/laravel-impersonate).
 - `audit.view` — consultazione activity log (filtri impersonation/forzature).
-- `system.logs.view` — log di sistema globali (solo Developer).
+- `system.logs.view` — log di sistema globali (solo Developer). ✅ **Ha un consumatore dal 24 Ago 2026** (🔗 ADR-017): gata `/piattaforma/errori` e `/piattaforma/errori/{errore}`, l'**error tracker interno** — cioè gli errori catturati dall'applicazione, non un visore di `laravel.log`, che su Cloud vive su un disco effimero. Fino a quel giorno il permesso esisteva a catalogo, era bloccato, ed era assegnato al Developer **senza gatare niente**.
+  - 🔴 **È il primo permesso del progetto in cui le due partizioni di piattaforma non coincidono**: il Superadmin ha ogni altro permesso di piattaforma, questa pagina non la può nemmeno aprire. Il registro di audit sta invece dietro `tenants.view_all`, che ce l'hanno entrambi — da cui il vincolo che ne discende, e che nessuno indovinerebbe: l'etichetta del soggetto di una riga «Errore risolto» è la **classe**, mai il **messaggio**, o quest'ultimo filtrerebbe attraverso un gate che agli errori non dà accesso.
+  - ⚠️ **Nessun conteggio cambia**: restano **54** permessi e **7** bloccati. Il piano dell'error tracker prevedeva un `system.errors.view` nuovo — sarebbe stato un ottavo bloccato, un riseeding e un secondo nome per la stessa cosa; si è riusato questo, che era già a catalogo, già bloccato e già del solo Developer.
 - `roles.manage` — gestione della matrice ruolo→permesso dalla UI Superadmin (🔗 ADR-016).
 
 ---
+
+🔗 **ADR-038 usa il catalogo esistente.** `/utenti` richiede `utenti.view` alla rotta e riautorizza `utenti.create`, `.update` o `.delete` in ogni azione. Conferisce solo Admin, Responsabile Reparto, Tenant e Tecnico interno; Admin impone il 2FA. `/piattaforma/tecnici` usa invece **`tenants.view_all`**, mai `utenti.view`, perché crea tecnici EasyLab e scrive un portafoglio cross-cliente. Developer e Superadmin non sono amministrabili da `/utenti`.
+
+**Nessun permesso nuovo:** il catalogo resta a **54**, il set bloccato a **7**, quindi ADR-038 non richiede alcun riseeding.
 
 ## 5. Matrice ruolo × permesso
 
@@ -121,8 +130,8 @@ Risorse derivate dall'ERD §3–§9. Questo è l'elenco canonico che il seeder S
 | `semaforo.force` | ✅ | ✅ | ✅ | ✅ ¹ | ❌ | ❌ |
 | `garanzie.macchina.view` | ✅ | ✅ | ✅ | ✅ ¹ | ✅ | ✅ ² |
 | `garanzie.macchina.manage` | ✅ | ✅ | ✅ | ✅ ¹ | ❌ | ❌ |
-| `garanzie.ricambio.view` 🔒 | ✅ | ✅ | ✅ | ✅ ¹ | ❌ **mai** | ✅ ² ⁶ |
-| `garanzie.ricambio.manage` 🔒 | ✅ | ✅ | ✅ | ✅ ¹ | ❌ **mai** | ✅ ² ⁶ |
+| `garanzie.ricambio.view` | ✅ | ✅ | ✅ | ✅ ¹ | ✅ ³ | ✅ ² ⁶ |
+| `garanzie.ricambio.manage` | ✅ | ✅ | ✅ | ✅ ¹ | ✅ ³ ⁷ | ✅ ² ⁶ |
 | ~~`letture_contaore.view`~~ | — | — | — | — | — | — |
 | ~~`letture_contaore.create`~~ | — | — | — | — | — | — |
 | `ricambi.view` | ✅ | ✅ | ✅ | ✅ ¹ | ✅ ³ | ✅ ² |
@@ -154,9 +163,10 @@ Risorse derivate dall'ERD §3–§9. Questo è l'elenco canonico che il seeder S
 **Note di scope (livello "su quali righe", vedi ERD §10):**
 - ¹ **Responsabile Reparto / Admin:** limitato al proprio Ente; il Responsabile è ulteriormente ristretto al **sotto-albero** assegnato (`responsabile_unita`, 🔗 ADR-006). `Admin.utenti.*` e `audit.view` valgono solo per il proprio Ente.
 - ² **Tecnico:** solo strumenti in **portafoglio ∪ assegnazione** (🔗 ADR-007, esteso da 🔗 **ADR-030** il 17 Ago 2026); ogni accesso loggato — e dal 17 Ago **per tutti i tecnici**, non solo per quelli esterni, perché distinguerli richiederebbe di fidarsi di un `tenant_id` che ADR-030 declassa da criterio a difesa. È la seconda eccezione al perimetro di ADR-027 «si tracciano le scritture, non le letture», dopo il download documenti (ADR-026).
-- ³ **Tenant:** vede ricambi/utilizzi montati sulle proprie macchine, **ma non** la garanzia del pezzo (`garanzie.ricambio.*` = ❌, 🔗 ADR-004). Vede però il **pallino arancione** che quella garanzia accende (🔗 ADR-020): il divieto è sul dato, non sul suo effetto.
+- ³ **Tenant — riscritta il 22 Ago 2026, e va letta come una correzione, non come un aggiornamento.** Diceva «`garanzie.ricambio.*` = ❌ (ADR-004)», cioè il **contrario** di ciò che `config/rbac.php` produce dal 15 Ago 2026: ADR-029 ha dato al Tenant entrambi i permessi e ha tolto le due voci dal set 🔒. Ciò che restringe il Tenant non è più la matrice ma l'**Ente**, con l'impostazione a tre stati `nascosta`/`lettura`/`modifica` (default **modifica**), che *restringe e non allarga mai*. Resta vero il resto: vede il **pallino arancione** che quella garanzia accende (🔗 ADR-020) anche quando l'Ente è su `nascosta` — il limite è sul dato, non sul suo effetto.
 - ⁶ **Tecnico — modifica approvata l'8 Ago 2026** (🔗 ADR-027). Gestisce le garanzie dei ricambi che monta: è la fonte del dato, e negargliela costringeva a farla compilare a chi il pezzo non l'ha visto. Il controllo non è il divieto ma la **traccia**: ogni scrittura finisce nel canale `audit` con chi/cosa/quando. ⚠️ Cambia un default del seeder S1 e **richiede di riscrivere il test** `never grants spare-part warranties to Tenant or Tecnico`, che congelava la regola sbagliata.
 - ⁵ **Tenant — approvata il 3 Ago 2026, APPLICATA il 15 Ago 2026** (🔗 ADR-023): fra le due date il documento affermava un default che `config/rbac.php` non produceva, e il riseeding non l'avrebbe aggiunto da solo. `fornitori.view` passa da ❌ a ✅ **in sola lettura**: il fornitore è ora un campo della scheda strumento e della Panoramica, e l'anagrafica è popolata *dall'Ente stesso* — nascondere al cliente da chi ha comprato la propria macchina non protegge nulla e lascerebbe un campo vuoto inspiegabile. Creazione/modifica restano all'Admin. ⚠ **Cambia un default del seeder S1** (`config/rbac.php`), quindi va con un test che asserisca il nuovo default: è l'unico modo perché una riga di matrice non torni indietro da sola al prossimo riseed.
+- ⁷ **Il `manage` del Tenant è oggi teorico**, ed è annotato invece che risolto: il Tenant ha `garanzie.ricambio.manage` ma non `ricambio_utilizzo.update`, quindi nel tab non ha nessuna azione. Il comportamento è congelato da un test che dichiara di **congelarlo e non approvarlo**; la decisione sulla matrice va presa a parte.
 - ⁴ **Tecnico:** ha **solo `ricambi.create`** — può creare voci di catalogo "al volo" durante l'intervento (autocomplete, 🔗 ADR-008/022); **aggiornare/cancellare il catalogo resta operazione di Admin** (`ricambi.update/delete` = ❌). Risolto in S1 a favore di questa nota (seeder coerente).
 
 ---
@@ -165,16 +175,21 @@ Risorse derivate dall'ERD §3–§9. Questo è l'elenco canonico che il seeder S
 
 Questi vincoli non si esauriscono in un permesso sì/no e vanno implementati in **Policy + Global Scope** (non solo in spatie):
 
-- **Privacy garanzie ricambio** (🔗 ADR-004/027): `garanzie.ricambio.*` mai al `Tenant`. Applicato via Policy + Global Scope sul ruolo, non via colonna. Il **Tecnico le gestisce**, con ogni scrittura tracciata.
+- **Visibilità garanzie ricambio** (🔗 ADR-004/027/**029**): ⚠️ **non è più «mai al `Tenant`»** — la riga diceva così fino al 22 Ago 2026, quando la matrice era già cambiata da una settimana. Dal 15 Ago è un'impostazione **dell'Ente** a tre stati (`nascosta`/`lettura`/`modifica`, default *modifica*), applicata da `GaranziaRicambioPrivacyScope` + Policy: **restringe, non allarga**, e un Ente su `modifica` non concede nulla a chi il permesso non ce l'ha. Il **Tecnico le gestisce**, con ogni scrittura tracciata.
   - **Eccezione esplicita e unica** (🔗 ADR-020): la query che calcola il semaforo legge le garanzie ricambio **senza** il privacy scope, perché il pallino è un aggregato dovuto a tutti. È l'unico punto del codice autorizzato a fare `withoutGlobalScope(GaranziaRicambioPrivacyScope::class)`, e va accompagnato da un test negativo che verifichi che dal risultato **non trapeli** il nome del pezzo.
 - **Scope Responsabile Reparto** (🔗 ADR-006): filtro applicativo sul sotto-albero dei nodi in `responsabile_unita`, in aggiunta al Global Scope per `tenant_id`.
 - **Accesso Tecnico** (🔗 ADR-007): insieme visibile = `strumento.tenant_id ∈ portafoglio` **OR** `strumento.id ∈ strumenti con intervento assegnato`. Ogni accesso a scheda strumento → log in `activity_log`.
 - **Forzatura semaforo** (🔗 ADR-005): chi ha `semaforo.force` traccia `forced_by` / `forced_at` / `forced_reason`; lo stato forzato vince sul calcolato.
-- **Viste di sintesi** (🔗 ADR-024): una schermata che compone dati di aree diverse — la Panoramica, domani la dashboard S6 — applica il permesso **di ciascuna area, blocco per blocco**. Un solo `@can` in testa alla vista è l'errore da non fare: mostrerebbe a chi entra tutto ciò che la vista sa, aggirando i controlli delle aree d'origine.
+- **Viste di sintesi** (🔗 ADR-024): una schermata che compone dati di aree diverse — la Panoramica della scheda e, dal 25 Ago 2026, la **dashboard per ruolo** (`/dashboard`) — applica il permesso **di ciascuna area, blocco per blocco**. Un solo `@can` in testa alla vista è l'errore da non fare: mostrerebbe a chi entra tutto ciò che la vista sa, aggirando i controlli delle aree d'origine.
+  - ⚠️ **Sulla dashboard non è una raccomandazione di stile: è l'unica guardia che esista.** È l'unica pagina del progetto **senza `can:` di rotta**, perché ci atterra ogni utente autenticato — Fortify dopo il login, lo switcher di sede a ogni cambio, la fuga da lockout. Il permesso del blocco parco (`strumenti.view`) si chiede **due volte**: nel `render()` per decidere se *calcolare*, nel template per decidere se *mostrare*; senza la prima, chi non ce l'ha pagherebbe comunque quattro aggregati. E il caso è reale, non teorico: `strumenti.view` **non è nel set bloccato**, quindi `/piattaforma/ruoli` può revocarlo a runtime.
+  - ⚠️ **E regge finché quel componente non ha AZIONI**: una con `skipRender()` non arriverebbe mai a `render()`, e non c'è un `can:` di rotta a raccoglierla. Chi aggiunge un pulsante lì deve portarsi dietro il proprio `Gate::authorize()` in testa all'azione.
+  - ⛔ **Un aggregato non è esente dalla privacy per il fatto di essere un numero.** La dashboard **non scompone** i propri conteggi per causa: 🔗 ADR-020 legittima il *pallino* come aggregato dovuto a tutti, non la sua scomposizione, e un «di cui N da garanzie ricambio» direbbe a un Ente su `visibilita_garanzie_ricambio = nascosta` quanti pezzi sostituiti ha — **senza passare da nessuno scope**, perché un numero non è una riga.
 - **Impersonation** (🔗 Tech Stack, lab404): chi ha `utenti.impersonate` agisce con banner persistente di ripristino; ogni impersonation loggata.
 - **Lockout insoluto** (🔗 ADR-013): chi ha `billing.lockout` blocca totalmente il tenant; i dati restano consultabili solo lato Superadmin.
 
 ---
+
+🔗 **Persone e portafoglio (ADR-038).** La matrice dice *quale gesto* è ammesso; il perimetro resta nel codice: persone del solo Ente corrente su `/utenti`, tecnici `tenant_id IS NULL` con ruolo Tecnico su `/piattaforma/tecnici`, sole sedi consegnate dalla porta cross-cliente nel portafoglio. La whitelist dell'assegnatario contiene soltanto utenti col ruolo Tecnico: tecnici interni della sede ∪ tecnici EasyLab nel portafoglio di quella sede. Ogni azione mutante riautorizza e rilegge l'id nel proprio perimetro.
 
 ## 7. Gestione runtime dei permessi (UI Superadmin) — 🔗 ADR-016
 
@@ -191,6 +206,10 @@ I permessi della matrice §5 sono dei **default**, non una configurazione fissa:
 **Regole della UI** (Dashboard Superadmin, S6):
 - **Ambito globale:** un'unica matrice per tutta la piattaforma (no modalità "teams" in V1; personalizzazione per-Ente → V1.1).
 - **Accesso:** solo chi ha `roles.manage` (Developer/Superadmin) — esso stesso bloccato per evitare auto-delega.
+- ✅ **In costruzione da S6 (22 Ago 2026)**, `App\Support\Rbac\MatriceRuoli`. Tre cose che la lettura di questo paragrafo non rendeva ovvie e che l'attuazione ha dovuto decidere:
+  - **«bloccato» è una proprietà del permesso, non della coppia**: una voce 🔒 non è né revocabile né **concedibile**, a nessun ruolo. L'argomento decisivo non sta in questo documento ma nel middleware: il 2FA obbligatorio si gata **per nome di ruolo** (`two_factor_required_roles`), quindi sotto la lettura per coppia `roles.manage` sarebbe concedibile al `Tenant` — un editor della matrice raggiungibile senza secondo fattore;
+  - **la riga del `Developer` è inerte in entrambe le direzioni**: è la chiave di riserva della piattaforma, e non esiste un `Gate::before` da super-admin che la rimpiazzi se la si svuota;
+  - **un permesso fuori catalogo non si riassegna**: `permissions` conserva le righe tolte dalla config (il seeder usa `firstOrCreate`), e senza guardia la UI legittimerebbe un orfano — la forma dell'incidente `letture_contaore.*`.
 - **Set bloccato (V1):** ~~`garanzie.ricambio.*`~~ (*uscite dal set il 15 Ago 2026 con ADR-029, che le rende configurabili per Ente: il set passa da 9 a 7 voci*. Erano lì per ADR-004 — mai al **Tenant**; *corretto l'8 Ago 2026 da ADR-027: qui c'era scritto «mai a Tenant/Tecnico», ed è la stessa citazione allargata oltre la fonte che §4.3 portava. Il Tecnico le gestisce*), `utenti.impersonate`, `system.logs.view`, `billing.manage_global`, `billing.lockout`, `tenants.view_all`, `tenants.provision`, `roles.manage`. Le righe 🔒 della matrice §5.
 - **Confine invariabile:** la UI modifica solo il *cosa* (permesso), **mai** il *su quali righe* (scope). Isolamento `tenant_id`, sotto-albero Responsabile e unione Tecnico restano nel codice (Global Scope/Policy) e non sono configurabili (🔗 ADR-001/006/007).
 - **Audit:** ogni modifica alla matrice è loggata in `activity_log` (chi/cosa/quando).
@@ -207,7 +226,7 @@ Indicazioni operative per il task S1 "definire ruoli/permessi base da S0" — il
 1. **`RolesAndPermissionsSeeder`** (spatie): creare tutti i permessi del catalogo §4, poi i 6 ruoli di §2, infine assegnare i permessi seguendo la matrice §5. Questi sono **default** (bootstrap/reset): dopo il seeding la fonte di verità è il DB, modificabile da UI (§7, 🔗 ADR-016).
 2. **Cosa va in spatie:** la coppia ruolo→permesso (§5), cioè il *cosa*.
 3. **Cosa NON va in spatie ma in Policy/Global Scope:** il *su quali righe* (§6) — scope `tenant_id` (ADR-001), sotto-albero Responsabile (ADR-006), unione Tecnico (ADR-007), privacy garanzie ricambio (ADR-004). La matrice spatie da sola **non** garantisce l'isolamento: serve la suite test di isolamento prevista in S2.
-4. **Set bloccato come costante** (config/codice, non DB): la guard che impedisce di modificare i permessi 🔒 dalla UI va con test negativi (es. "il Superadmin non può concedere `garanzie.ricambio.view` al Tenant"). La UI di gestione è un task di S6.
+4. **Set bloccato come costante** (config/codice, non DB): la guard che impedisce di modificare i permessi 🔒 dalla UI va con test negativi. ⚠️ **L'esempio che stava qui — «il Superadmin non può concedere `garanzie.ricambio.view` al Tenant» — è falso dal 15 Ago 2026** (ADR-029 ha liberato quelle voci) e va sostituito, non conservato: gli esempi giusti sono «non può concedere `roles.manage` all'Admin» e «non può revocare `tenants.view_all` al Superadmin». ⚠️ E il set è bloccato **per permesso, non per coppia**: una voce 🔒 non è né revocabile né concedibile, a **nessun** ruolo — vedi §7. Attuato il 22 Ago 2026 in `App\Support\Rbac\MatriceRuoli` (S6, blocco 1).
 5. **Verifica incrociata:** ogni voce di `Funzionalità per Ruolo.md` deve trovare un permesso corrispondente qui; ogni risorsa con permessi deve avere una tabella nell'ERD.
 
 ---
@@ -235,3 +254,4 @@ Indicazioni operative per il task S1 "definire ruoli/permessi base da S0" — il
 | **ADR-027** Tracciabilità | `garanzie.ricambio.*` al Tecnico; il set bloccato torna a significare "mai al Tenant". Ogni scrittura di dominio tracciata su `audit`. |
 | **ADR-023** Fornitore 1-N | `fornitori.*` scopati per tenant; `fornitori.view` **concesso al Tenant** in lettura (nota ⁵, approvato 3 Ago 2026) — cambia un default del seeder S1. |
 | **ADR-024** Tab Panoramica | Nessun permesso nuovo: **ogni blocco resta gated dal permesso della propria area**. La vista di sintesi non deve diventare la scorciatoia che aggira i `@can` degli altri tab — vale come regola di §6. |
+| **ADR-038** Persone e portafoglio | Riusa i quattro `utenti.*` per `/utenti` e `tenants.view_all` per `/piattaforma/tecnici`. Ruoli cliente conferibili: Admin, Responsabile Reparto, Tenant, Tecnico; 2FA obbligatorio per Admin. Catalogo 54 / bloccati 7 invariati, nessun seeding. |

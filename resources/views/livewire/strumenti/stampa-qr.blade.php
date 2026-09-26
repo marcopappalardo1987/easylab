@@ -19,12 +19,12 @@
          è la ragione per cui non serve un layout di stampa separato. --}}
     <div class="print:hidden">
         <a href="{{ route('strumenti.show', $strumento) }}" wire:navigate
-            class="text-sm text-neutral-500 hover:text-neutral-800">‹ Torna alla scheda</a>
+            class="text-sm text-ink-3 hover:text-ink">‹ Torna alla scheda</a>
 
         <div class="mt-3 flex flex-wrap items-start justify-between gap-3">
             <div>
-                <h1 class="text-2xl font-bold tracking-tight text-neutral-900">Etichetta QR</h1>
-                <p class="mt-1 text-sm text-neutral-600">
+                <h1 class="text-2xl font-bold tracking-tight text-ink">Etichetta QR</h1>
+                <p class="mt-1 text-sm text-ink-2">
                     Stampa e applica sulla macchina. Chi la inquadra apre la scheda
                     dopo aver fatto accesso: il codice non mostra dati da solo.
                 </p>
@@ -41,20 +41,20 @@
     {{-- L'etichetta. Il bordo tratteggiato è la linea di taglio: si vede a
          schermo e in stampa, perché serve a chi ritaglia. --}}
     <div class="mt-6 flex justify-center print:mt-0 print:justify-start">
-        <div class="w-[85mm] rounded-lg border-2 border-dashed border-neutral-300 bg-white p-6 text-center">
+        <div class="w-[85mm] rounded-lg border-2 border-dashed border-border-strong bg-surface p-6 text-center">
             <div class="mx-auto w-[55mm]">{!! $svg !!}</div>
 
-            <p class="mt-3 text-base leading-tight font-bold text-neutral-900">{{ $strumento->nome }}</p>
+            <p class="mt-3 text-base leading-tight font-bold text-ink">{{ $strumento->nome }}</p>
 
             @if ($strumento->modello)
-                <p class="text-sm text-neutral-600">{{ $strumento->modello }}</p>
+                <p class="text-sm text-ink-2">{{ $strumento->modello }}</p>
             @endif
 
             @if ($strumento->matricola)
-                <p class="mt-1 font-mono text-xs tracking-wide text-neutral-500">{{ $strumento->matricola }}</p>
+                <p class="mt-1 font-mono text-xs tracking-wide text-ink-3">{{ $strumento->matricola }}</p>
             @endif
 
-            <p class="mt-2 border-t border-neutral-200 pt-2 text-[10px] leading-snug text-neutral-500">
+            <p class="mt-2 border-t border-border pt-2 text-[10px] leading-snug text-ink-3">
                 {{ $percorso }}
             </p>
         </div>
@@ -64,9 +64,9 @@
          rovinato, e capire dove porta il codice senza doverlo inquadrare. --}}
     <div class="mt-6 print:hidden">
         <x-ui.card>
-            <p class="text-sm font-medium text-neutral-600">Indirizzo contenuto nel codice</p>
-            <p class="mt-1 font-mono text-xs break-all text-neutral-500">{{ $url }}</p>
-            <p class="mt-3 border-t border-neutral-100 pt-3 text-xs text-neutral-400">
+            <p class="text-sm font-medium text-ink-2">Indirizzo contenuto nel codice</p>
+            <p class="mt-1 font-mono text-xs break-all text-ink-3">{{ $url }}</p>
+            <p class="mt-3 border-t border-border pt-3 text-xs text-ink-3">
                 Il collegamento è firmato e non scade: un'etichetta vale quanto la macchina.
                 Per invalidarla — per esempio se la macchina esce dall'Ente — si rigenera il codice,
                 e da quel momento le etichette stampate prima non funzionano più.
@@ -78,7 +78,7 @@
          dal gesto (le etichette già applicate smettono di funzionare). --}}
     @if ($showRigeneraForm)
         <x-ui.modal title="Rigenerare il codice QR?" close="closeRigenera">
-            <p class="text-sm text-neutral-600">
+            <p class="text-sm text-ink-2">
                 Il codice attuale smetterà di funzionare: le etichette già stampate e applicate
                 sulla macchina andranno sostituite. L'operazione resta registrata nel log.
             </p>
