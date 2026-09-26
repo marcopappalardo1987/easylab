@@ -293,3 +293,36 @@ function radioMarcata(string $html): ?string
 
     return null;
 }
+
+// ─── Indirizzi web nei campi liberi ──────────────────────────────────────────
+
+/**
+ * 🔴 Il modulo è PUBBLICO e anonimo, e i due campi liberi finiscono nell'email
+ * di verifica spedita dal dominio di Easy Lab a un indirizzo scelto da chi
+ * compila. `TestoMarkdown::sicuro()` toglie il markdown, quindi la destinazione
+ * non si nasconde più dietro una parola; ma su Gmail un URL NUDO viene reso
+ * cliccabile dal client (verificato su staging il 26 Set 2026), e quel pezzo
+ * dalla vista non si governa. Si chiude all'ingresso: 🔗 App\Rules\SenzaIndirizziWeb.
+ */
+it('refuses a web address in the two free fields of the public form', function (string $campo, string $valore) {
+    $this->post(route('registrazione.avvia'), datiModulo([$campo => $valore]))
+        ->assertSessionHasErrors($campo);
+
+    expect(Registrazione::withoutGlobalScopes()->count())->toBe(0);
+})->with([
+    'ente con schema' => ['nome_ente', 'Laboratorio [clicca](https://evil.example)'],
+    'ente con www' => ['nome_ente', 'Laboratorio www.evil.example'],
+    'referente con schema' => ['nome_referente', 'Mario Rossi https://evil.example'],
+    'referente con WWW maiuscolo' => ['nome_referente', 'Mario Rossi WWW.Evil.Example'],
+]);
+
+it('still accepts an ordinary name with accents, an ampersand and a dot', function () {
+    // Controprova: la regola non deve rifiutare i nomi veri, dove il punto
+    // abbonda (S.r.l., Sant'Anna) ma non c'è nessun indirizzo web.
+    $this->post(route('registrazione.avvia'), datiModulo([
+        'nome_ente' => "Unità d'Igiene Sant'Anna & C. S.r.l.",
+        'nome_referente' => 'Niccolò Sant\'Elia',
+    ]))->assertSessionHasNoErrors();
+
+    expect(Registrazione::withoutGlobalScopes()->count())->toBe(1);
+});

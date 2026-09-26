@@ -7,6 +7,7 @@ use App\Models\Registrazione;
 use App\Models\User;
 use App\Notifications\AccountGiaEsistente;
 use App\Notifications\VerificaEmailRegistrazione;
+use App\Rules\SenzaIndirizziWeb;
 use App\Support\Registrazione\CompletaRegistrazione;
 use App\Support\Registrazione\PianiRegistrabili;
 use App\Support\Registrazione\PortaleCheckout;
@@ -141,8 +142,10 @@ class RegistrazionePubblica extends Controller
         }
 
         $validati = $request->validate([
-            'nome_ente' => ['required', 'string', 'max:255'],
-            'nome_referente' => ['required', 'string', 'max:255'],
+            // `SenzaIndirizziWeb`: questi due campi finiscono nell'email di
+            // verifica, che parte dal nostro dominio su richiesta di un anonimo.
+            'nome_ente' => ['required', 'string', 'max:255', new SenzaIndirizziWeb],
+            'nome_referente' => ['required', 'string', 'max:255', new SenzaIndirizziWeb],
             // `email:filter` e non il solo `email`: la regola nuda accetta
             // indirizzi che nessun MTA consegnerebbe, e qui la casella è
             // l'unica prova d'identità dell'intero percorso.
