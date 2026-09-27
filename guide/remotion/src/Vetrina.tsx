@@ -371,9 +371,10 @@ const Apertura: React.FC<{ scena: Extract<Scena, { tipo: 'apertura' }>; t: numbe
   const uscita = 1 - conAgio(t, scena.durata - 0.5, scena.durata);
   // Il lockup del marchio scrive già «EasyLab»: ripeterlo sotto a caratteri
   // cubitali è la stessa parola due volte, e la seconda non aggiunge niente.
-  // Quando il titolo È il nome, il posto grande va al sottotitolo, che dice
-  // di che cosa parla il video.
-  const gliLoDiceIlMarchio = /^easy\s*lab$/i.test(scena.titolo.trim());
+  // Quando il titolo COMINCIA col nome, il posto grande va al sottotitolo, che
+  // dice di che cosa parla il video. Il titolo per esteso serve lo stesso —
+  // è il nome della guida in catalogo — ma vive nel manifest, non a schermo.
+  const gliLoDiceIlMarchio = /^easy\s*lab\b/i.test(scena.titolo.trim());
 
   return (
     <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center', opacity: uscita }}>
@@ -476,7 +477,24 @@ const Cartello: React.FC<{ scena: Extract<Scena, { tipo: 'cartello' }>; t: numbe
   );
 };
 
-const Chiusura: React.FC<{ scena: Extract<Scena, { tipo: 'chiusura' }>; t: number }> = ({ scena, t }) => (
+/**
+ * La scheda finale.
+ *
+ * ⚠️ I punti NON entrano tutti insieme: la voce li LEGGE (🔗 `@punti` in
+ * bin/voce.mjs), e tre righe già tutte in pagina mentre se ne sente una sola
+ * mandano l'occhio avanti al parlato. Ognuno compare quando la voce ci arriva,
+ * e il momento si stima dai CARATTERI che lo precedono — il parlato va a
+ * velocità quasi costante, quindi la proporzione è una buona misura del tempo
+ * senza dover tagliare l'audio in tre pezzi.
+ */
+const Chiusura: React.FC<{ scena: Extract<Scena, { tipo: 'chiusura' }>; t: number }> = ({ scena, t }) => {
+  const lunghezze = scena.punti.map((p) => p.length);
+  const totale = Math.max(1, lunghezze.reduce((a, b) => a + b, 0));
+  // Un secondo per il titolo, e l'ultimo punto deve avere il tempo di entrare.
+  const quando = (i: number) =>
+    1 + (lunghezze.slice(0, i).reduce((a, b) => a + b, 0) / totale) * Math.max(0, scena.durata - 2.4);
+
+  return (
   <AbsoluteFill style={{ justifyContent: 'center', paddingLeft: 210, paddingRight: 160 }}>
     <Parole
       testo={scena.titolo}
@@ -485,7 +503,7 @@ const Chiusura: React.FC<{ scena: Extract<Scena, { tipo: 'chiusura' }>; t: numbe
     />
     <div style={{ height: 46 }} />
     {scena.punti.map((punto, i) => {
-      const e = molla(t - 0.4 - i * 0.28);
+      const e = molla(t - quando(i));
 
       return (
         <div
@@ -508,7 +526,8 @@ const Chiusura: React.FC<{ scena: Extract<Scena, { tipo: 'chiusura' }>; t: numbe
       <Marchio larghezza={230} />
     </div>
   </AbsoluteFill>
-);
+  );
+};
 
 /* ─────────────────────── le scene con la pagina ─────────────────────── */
 

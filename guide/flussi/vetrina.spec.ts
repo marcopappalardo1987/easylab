@@ -14,7 +14,16 @@ import { accedi } from '../lib/accesso';
  * Girata con l'Admin: vede l'intera sede, quindi i numeri raccontano qualcosa.
  */
 test('vetrina', async ({ page }) => {
-  const s = new Scenografo(page, 'vetrina', 'Easy Lab', 'Il parco strumenti, come si tiene in ordine');
+  // ⚠️ Il titolo è anche il NOME IN CATALOGO (la pagina della guida lo legge dal
+  // manifest): «Easy Lab» da solo, in un elenco di guide che parlano tutte di
+  // Easy Lab, non distingue niente. Nel video però non si stampa — ci pensa il
+  // marchio in apertura — e di quello si occupa `Vetrina.tsx`.
+  const s = new Scenografo(
+    page,
+    'vetrina',
+    'Easy Lab in un minuto',
+    'Il parco strumenti, come si tiene in ordine',
+  );
 
   await accedi(page, 'maria.conti@aurora.test');
   await s.avvia();

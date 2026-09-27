@@ -51,7 +51,7 @@ bucket attaccato in cloud — dove Laravel Cloud imposta `FILESYSTEM_DISK`
 al nome che registra lui. **In cloud non serve configurare niente.**
 
 ⚠️ **Per caricare da qui verso un ambiente remoto** servono le quattro
-`GUIDE_REMOTO_*` nel proprio `.env`, copiate a mano da
+`GUIDE_STAGING_*` / `GUIDE_PRODUZIONE_*` nel proprio `.env`, copiate a mano da
 `LARAVEL_CLOUD_DISK_CONFIG` del pannello. Non è pigrizia: il framework registra
 i dischi iniettati da Cloud solo se `LARAVEL_CLOUD=1`, e accendere quel flag su
 una macchina di sviluppo porta con sé code gestite, logging su socket e

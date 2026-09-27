@@ -97,7 +97,10 @@ export class Scenografo {
   }
 
   /** Dettaglio fermo: si inquadra un elemento e si tiene, come oggi. */
-  async scatto(didascalia: string, opzioni: { su?: Locator; zoom?: number; durata?: number } = {}): Promise<void> {
+  async scatto(
+    didascalia: string,
+    opzioni: { su?: Locator; zoom?: number; durata?: number; alone?: boolean } = {},
+  ): Promise<void> {
     const file = `s${String(++this.scatti).padStart(2, '0')}.png`;
     let fuoco: Fuoco | null = null;
     let elemento: Fuoco | null = null;
@@ -114,7 +117,12 @@ export class Scenografo {
       if (!box) throw new Error(`Scatto ${file}: elemento senza riquadro`);
       elemento = await this.riquadroVisibile(opzioni.su);
       fuoco = this.allarga(elemento, opzioni.zoom ?? 1.6);
-      if (!this.staInFinestra(elemento)) elemento = null;
+      // ⚠️ `alone: false` tiene l'inquadratura e toglie la luce. Serve quando la
+      // frase parla di PIÙ cose — «verde, giallo e rosso» — e accenderne una
+      // sola dice il contrario di quello che si sta dicendo. Inquadrarle tutte
+      // e tre senza alone è onesto; un contorno intorno al gruppo comprenderebbe
+      // anche quello che nel gruppo non c'è.
+      if (opzioni.alone === false || !this.staInFinestra(elemento)) elemento = null;
       // Il cursore resta sull'elemento VERO, non sulla scheda: è lì che
       // Playwright ha cliccato, e un puntatore che indica il centro di un
       // riquadro grande mentre il click è avvenuto su una riga dentro di esso
@@ -204,6 +212,7 @@ export class Scenografo {
     }
     await this.quiete();
 
+    const indirizzoPrima = this.indirizzo();
     const durata = await this.ripresa.clip(
       file,
       azione,
@@ -236,6 +245,17 @@ export class Scenografo {
 
     const vp = this.page.viewportSize()!;
 
+    /*
+     * ⚠️ L'indirizzo nella barra è UNO, la clip può attraversare più pagine.
+     * Scrivendoci quello finale, per tutta la durata si legge un percorso che
+     * non corrisponde a ciò che si vede — nel giro delle voci del menù si
+     * leggeva «/campo» mentre a schermo c'erano i fornitori. Quando l'indirizzo
+     * cambia durante la ripresa resta quindi il solo dominio: meno dettaglio,
+     * ma niente che contraddica l'immagine.
+     */
+    const indirizzo = this.indirizzo();
+    const url = indirizzo === indirizzoPrima ? indirizzo : 'easylab.technology';
+
     this.scene.push({
       tipo: 'ripresa',
       file,
@@ -249,7 +269,7 @@ export class Scenografo {
       // Dove c'è un elemento c'è stato un click vero: è il caso normale, e
       // dirlo ogni volta nel copione sarebbe rumore.
       suono: opzioni.suono === undefined ? (opzioni.su ? 'click' : null) : opzioni.suono,
-      url: this.indirizzo(),
+      url,
     });
   }
 
@@ -328,7 +348,11 @@ export class Scenografo {
   private staInFinestra(f: Fuoco): boolean {
     const vp = this.page.viewportSize()!;
 
-    return f.w <= vp.width * 0.92 && f.h <= vp.height * 0.88;
+    // 0,95 e non 0,88: la barra laterale è alta 844 su 900, cioè quasi tutta la
+    // finestra ma dentro — e senza alone il passo che parla del menù non
+    // illuminava niente. Sopra questa soglia l'elemento non ci sta più, e un
+    // contorno coi lati fuori campo non si legge come una luce su qualcosa.
+    return f.w <= vp.width * 0.95 && f.h <= vp.height * 0.95;
   }
 
   /** Quanto in basso arriva il contenuto vero, ignorando il bianco sotto. */

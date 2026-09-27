@@ -159,6 +159,21 @@ const main = async () => {
 
     const i = indici[k];
     const file = path.join(cartella, 'voce', `${String(i).padStart(2, '0')}.wav`);
+
+    /*
+     * `@punti` sulla scheda finale: la voce LEGGE i tre punti scritti, invece
+     * di raccontarli con parole sue.
+     *
+     * ⚠️ Non è una comodità, è una garanzia: due testi che dicono la stessa
+     * cosa con parole diverse divergono alla prima correzione, e chi guarda
+     * sente una frase mentre ne legge un'altra. Generandolo dal copione, la
+     * scheda e il parlato restano lo stesso testo per costruzione.
+     */
+    if (testi[i] === '@punti') {
+      const c = copione.scene[i]?.chiusura ?? copione.scene[i];
+      if (!c?.punti) throw new Error(`La scena ${i} non ha punti da leggere.`);
+      testi[i] = `${c.titolo}. ${c.punti.join(' ')}`;
+    }
     const gia = riusa && fs.existsSync(file);
     const durata = gia
       ? Number(
