@@ -137,15 +137,34 @@ return [
          * su socket e connessione Postgres non poolata. Le quattro credenziali
          * si copiano a mano da `LARAVEL_CLOUD_DISK_CONFIG` del pannello.
          *
-         * Uso: `GUIDE_DISK=guide_remoto php artisan easylab:pubblica-guide`
+         * ⛔ **Un disco per ambiente, col suo nome.** Fino al 27 Set 2026 ce
+         * n'era uno solo, `guide_remoto`, e il nome non diceva DOVE porta: due
+         * guide sono finite sul bucket di staging credendo di pubblicarle in
+         * produzione, e il difetto si è visto solo dall'indice vuoto del sito
+         * vero. Un bucket sbagliato non dà errore — accetta i file e tace.
+         *
+         * Uso: `GUIDE_DISK=guide_produzione php artisan easylab:pubblica-guide`
          */
-        'guide_remoto' => [
+        'guide_staging' => [
             'driver' => 's3',
-            'key' => env('GUIDE_REMOTO_KEY'),
-            'secret' => env('GUIDE_REMOTO_SECRET'),
-            'bucket' => env('GUIDE_REMOTO_BUCKET'),
-            'endpoint' => env('GUIDE_REMOTO_ENDPOINT'),
-            'region' => env('GUIDE_REMOTO_REGION', 'auto'),
+            'key' => env('GUIDE_STAGING_KEY'),
+            'secret' => env('GUIDE_STAGING_SECRET'),
+            'bucket' => env('GUIDE_STAGING_BUCKET'),
+            'endpoint' => env('GUIDE_STAGING_ENDPOINT'),
+            'region' => env('GUIDE_STAGING_REGION', 'auto'),
+            'use_path_style_endpoint' => false,
+            'visibility' => 'private',
+            'throw' => true,
+            'report' => false,
+        ],
+
+        'guide_produzione' => [
+            'driver' => 's3',
+            'key' => env('GUIDE_PRODUZIONE_KEY'),
+            'secret' => env('GUIDE_PRODUZIONE_SECRET'),
+            'bucket' => env('GUIDE_PRODUZIONE_BUCKET'),
+            'endpoint' => env('GUIDE_PRODUZIONE_ENDPOINT'),
+            'region' => env('GUIDE_PRODUZIONE_REGION', 'auto'),
             'use_path_style_endpoint' => false,
             'visibility' => 'private',
             'throw' => true,
