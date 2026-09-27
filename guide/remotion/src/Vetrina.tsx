@@ -371,9 +371,10 @@ const Apertura: React.FC<{ scena: Extract<Scena, { tipo: 'apertura' }>; t: numbe
   const uscita = 1 - conAgio(t, scena.durata - 0.5, scena.durata);
   // Il lockup del marchio scrive già «EasyLab»: ripeterlo sotto a caratteri
   // cubitali è la stessa parola due volte, e la seconda non aggiunge niente.
-  // Quando il titolo È il nome, il posto grande va al sottotitolo, che dice
-  // di che cosa parla il video.
-  const gliLoDiceIlMarchio = /^easy\s*lab$/i.test(scena.titolo.trim());
+  // Quando il titolo COMINCIA col nome, il posto grande va al sottotitolo, che
+  // dice di che cosa parla il video. Il titolo per esteso serve lo stesso —
+  // è il nome della guida in catalogo — ma vive nel manifest, non a schermo.
+  const gliLoDiceIlMarchio = /^easy\s*lab\b/i.test(scena.titolo.trim());
 
   return (
     <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center', opacity: uscita }}>
