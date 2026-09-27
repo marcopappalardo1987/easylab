@@ -73,12 +73,23 @@ l'esplorazione dal perdersi.
 
 ## 9
 
+Le altre voci portano agli elenchi che userai davvero. **Strumenti** è il parco
+completo, con la ricerca e i filtri; **Documenti** l'archivio dei file allegati
+alle macchine e agli interventi; **Fornitori** la rubrica di chi vende e di chi
+ripara, con i contatti che servono quando una macchina si ferma; **Ricambi** il
+catalogo dei pezzi e di dove sono montati. **Campo** è a parte: è la versione
+pensata per il telefono, quella che si apre davanti alla macchina con il QR.
+Ognuna di queste ha la sua guida in questo manuale, e qui non si fa altro che
+dire dove stanno.
+
+## 10
+
 Lo «Scadenzario» ribalta il punto di vista: invece di partire dalla macchina e
 guardarne le scadenze, parte dalle scadenze e le raccoglie tutte in un elenco
 solo, di tutte le macchine insieme. È la vista con cui si pianifica la
 settimana.
 
-## 10
+## 11
 
 Il colore delle date dice quanto manca: **rosse** quelle già passate,
 **gialle** quelle che stanno arrivando. È la stessa logica del semaforo della
@@ -89,22 +100,23 @@ due pagine non possono raccontarti cose diverse.
 
 In alto a destra sta tutto ciò che riguarda te e non il laboratorio: quello che ti arriva, come vedi l'applicazione, e chi sei per Easy Lab.
 
-## 11
+## 12
 
 La campanella porta le stesse scadenze dentro l'applicazione. Non aggiunge
 informazioni che non siano già altrove: è una comodità per chi tiene Easy Lab
 aperto tutto il giorno e non vuole passare dalla Dashboard per accorgersi che è
 cambiato qualcosa.
 
-## 12
+## 13
 
 Il menù col tuo nome raccoglie tutto ciò che riguarda te e non il laboratorio:
 il tema chiaro o scuro, le preferenze sulle email, la password e l'uscita. È
 l'unico posto in cui le modifiche che fai valgono solo per te.
 
-## 13
+## 14
 
 Sotto il nome è sempre scritto il tuo ruolo, ed è l'informazione che spiega
 tutto il resto della schermata: quali voci di menù esistono, quali pulsanti
 compaiono nelle schede, quali macchine rientrano nei tuoi elenchi. Quando
 qualcosa «non c'è», la prima cosa da guardare è quella riga.
+

@@ -212,6 +212,7 @@ export class Scenografo {
     }
     await this.quiete();
 
+    const indirizzoPrima = this.indirizzo();
     const durata = await this.ripresa.clip(
       file,
       azione,
@@ -244,6 +245,17 @@ export class Scenografo {
 
     const vp = this.page.viewportSize()!;
 
+    /*
+     * ⚠️ L'indirizzo nella barra è UNO, la clip può attraversare più pagine.
+     * Scrivendoci quello finale, per tutta la durata si legge un percorso che
+     * non corrisponde a ciò che si vede — nel giro delle voci del menù si
+     * leggeva «/campo» mentre a schermo c'erano i fornitori. Quando l'indirizzo
+     * cambia durante la ripresa resta quindi il solo dominio: meno dettaglio,
+     * ma niente che contraddica l'immagine.
+     */
+    const indirizzo = this.indirizzo();
+    const url = indirizzo === indirizzoPrima ? indirizzo : 'easylab.technology';
+
     this.scene.push({
       tipo: 'ripresa',
       file,
@@ -257,7 +269,7 @@ export class Scenografo {
       // Dove c'è un elemento c'è stato un click vero: è il caso normale, e
       // dirlo ogni volta nel copione sarebbe rumore.
       suono: opzioni.suono === undefined ? (opzioni.su ? 'click' : null) : opzioni.suono,
-      url: this.indirizzo(),
+      url,
     });
   }
 

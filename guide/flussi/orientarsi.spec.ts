@@ -88,6 +88,25 @@ test('orientarsi', async ({ page }) => {
 
   await s.panoramica('Si scende un nodo alla volta, e il percorso in alto dice sempre dove sei.', 6);
 
+  /*
+   * ⚠️ Il giro delle ALTRE voci. Senza, il capitolo sul menù ne mostrava due su
+   * otto e sembrava che le altre non esistessero — in una guida che si chiama
+   * «Orientarsi» è proprio la cosa da non fare. Una clip sola che le apre in
+   * fila costa otto secondi e le copre tutte; ognuna ha poi la sua guida, e
+   * fermarsi a spiegarle qui sarebbe raccontare sei volte la stessa cosa.
+   */
+  await s.movimento(
+    'Le altre voci sono gli elenchi veri: strumenti, documenti, fornitori, ricambi, e «Campo» per il telefono.',
+    async () => {
+      for (const voce of ['Strumenti', 'Documenti', 'Fornitori', 'Ricambi', 'Campo']) {
+        await page.getByRole('link', { name: voce, exact: true }).click();
+        await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {});
+        await page.waitForTimeout(850);
+      }
+    },
+    { coda: 0.8 },
+  );
+
   await s.movimento(
     '«Scadenzario» raccoglie in un elenco solo tutto ciò che è aperto su tutte le macchine.',
     async () => {

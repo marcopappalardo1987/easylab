@@ -8,10 +8,11 @@
   "8": "Il menù di sinistra resta sempre al suo posto, e cambia con quello che il tuo ruolo può fare: due colleghi possono vedere due menù diversi.",
   "9": "«Anagrafica» è l'albero della sede: i dipartimenti, i laboratori, e dentro le macchine.",
   "10": "Si scende un nodo alla volta, e il percorso in alto dice sempre dove sei.",
-  "11": "«Scadenzario», invece, mette in un elenco solo tutto quello che è aperto, su tutte le macchine insieme.",
-  "12": "Le date rosse sono già passate, le gialle stanno arrivando. È da qui che si pianifica la settimana.",
-  "14": "La campanella porta le stesse scadenze dentro l'applicazione, senza aspettare l'email.",
-  "15": "Il tuo nome apre il menù personale: il tema, le preferenze delle notifiche, e l'uscita.",
-  "16": "E sotto il nome c'è sempre scritto il tuo ruolo. È quello che decide che cosa vedi, in ogni pagina.",
-  "17": "Tre cose da portarsi via. La Dashboard riassume e ogni riquadro è un filtro. Il menù mostra solo ciò che il tuo ruolo può fare. E il percorso in alto dice sempre dove sei."
+  "11": "Le altre voci del menù sono gli elenchi veri: gli strumenti, i documenti, i fornitori, i ricambi, e «Campo», che è la versione da telefono.",
+  "12": "«Scadenzario», invece, mette in un elenco solo tutto quello che è aperto, su tutte le macchine insieme.",
+  "13": "Le date rosse sono già passate, le gialle stanno arrivando. È da qui che si pianifica la settimana.",
+  "15": "La campanella porta le stesse scadenze dentro l'applicazione, senza aspettare l'email.",
+  "16": "Il tuo nome apre il menù personale: il tema, le preferenze delle notifiche, e l'uscita.",
+  "17": "E sotto il nome c'è sempre scritto il tuo ruolo. È quello che decide che cosa vedi, in ogni pagina.",
+  "18": "@punti"
 }
