@@ -51,3 +51,13 @@ $invitato = User::updateOrCreate(
 $invitato->forceFill(["tenant_id"=>$ente->id])->save();
 $invitato->syncRoles(["Tecnico"]);
 '
+
+# ⚠️ Le notifiche in campanella devono ESISTERE, o la guida «Orientarsi» dice
+# «la campanella porta le stesse scadenze» sopra un pannello che risponde
+# «Nessuna notifica». Il digest scrive sul canale `database`, quindi basta
+# lanciarlo: qui MAIL_MAILER=log, non parte niente verso nessuno.
+#
+# ⛔ Senza `--senza-invio`, apposta: è quel passaggio che crea le notifiche.
+# In PRODUZIONE vale la regola opposta (primo avvio con `--senza-invio`, o
+# parte un digest da migliaia di righe) — 🔗 CLAUDE.md.
+php artisan easylab:notifica-scadenze
