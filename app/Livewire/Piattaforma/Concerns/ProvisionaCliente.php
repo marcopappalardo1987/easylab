@@ -3,11 +3,16 @@
 namespace App\Livewire\Piattaforma\Concerns;
 
 use App\Models\Account;
+use App\Notifications\PropostaPiano;
 use App\Support\Piani;
+use App\Support\Provisioning\EsitoProvisioning;
+use App\Support\Provisioning\PianiDiNascita;
 use App\Support\Provisioning\ProvisionaEnte;
 use App\Support\Provisioning\ProvisioningRifiutato;
 use App\Support\Tenancy\VistaPiattaforma;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
+use Throwable;
 
 /**
  * La quarta leva: creare un cliente, o una sede in più (S6 — ADR-012, ADR-032).
@@ -22,20 +27,24 @@ use Illuminate\Support\Facades\Gate;
  * precedente e già coperta dai test del comando. Qui c'è un form e la
  * traduzione dei rifiuti in errori di campo.
  *
- * ⚠️ **Nessun select dei piani, ed è una decisione.** I piani a pagamento
- * passano da Stripe (`easylab:abbona`), quindi un menù a tendina offrirebbe
- * un'opzione che fallirebbe al salvataggio — o, peggio, creerebbe un account
- * marcato `saas` senza subscription, cioè un cliente che risulta pagante e non
- * paga. Nasce **Free**, e la pagina lo dice invece di lasciarlo scoprire.
+ * ## 🔴 Il select dei piani c'è dal 3 Ott 2026, e NON marca nessuno pagante
  *
- * *Aggiornato il 27 Ago 2026 (ADR-035).* Il listino ora si governa da
- * `/piattaforma/piani` e `Piani::offribili()` saprebbe quali piani proporre —
- * cioè la metà «non c'è un listino governabile» di questa motivazione è
- * superata. **L'esito però non cambia**, perché a reggere è l'altra metà, che
- * questa feature non tocca: finché «piano a pagamento» non implica una
- * subscription vera creata nello stesso gesto, un select produrrebbe comunque
- * un account marcato pagante e senza addebito. Il select arriva col flusso di
- * sottoscrizione, non col listino.
+ * Fino ad allora la modale non offriva scelta, e la ragione era scritta qui:
+ * un menù avrebbe creato un account marcato `saas` senza subscription, cioè un
+ * cliente che risulta pagante e non paga — «il select arriva col flusso di
+ * sottoscrizione, non col listino». Il flusso ora esiste (ADR-045: il cliente
+ * attiva il piano dalla propria pagina «Abbonamento»), e il select è arrivato
+ * con lui. **La ragione però regge ancora, ed è ciò che il select rispetta**:
+ *
+ * - un piano **gratuito** si assegna, e il cliente nasce su quello;
+ * - un piano **a pagamento** si **propone**: il cliente nasce sul piano
+ *   predefinito, `accounts.piano_proposto` dice cosa gli è stato chiesto di
+ *   attivare, e una mail lo porta a pagarlo. `accounts.piano` lo scrive il
+ *   webhook quando Stripe conferma l'incasso, come per ogni altro pagamento.
+ *
+ * Quali piani si possono scegliere lo decide `PianiDiNascita`, e solo sul
+ * **cliente nuovo**: aggiungendo una sede a un account esistente il piano è
+ * già quello del contratto, e un campo qui lo cambierebbe di nascosto.
  *
  * ⚠️ **Due ability e non una.** `tenants.provision` apre il gesto; se si
  * aggancia una sede a un **account esistente** serve anche `manage` su
@@ -65,9 +74,11 @@ trait ProvisionaCliente
         'nomeSede' => '',
         'adminEmail' => '',
         'adminName' => '',
+        // Vuoto = il piano predefinito. Vale solo sul cliente nuovo (ADR-045).
+        'piano' => '',
     ];
 
-    private const CAMPI_NUOVO = ['nome', 'nomeSede', 'adminEmail', 'adminName'];
+    private const CAMPI_NUOVO = ['nome', 'nomeSede', 'adminEmail', 'adminName', 'piano'];
 
     public function apriProvisioning(?int $accountId = null): void
     {
@@ -153,12 +164,28 @@ trait ProvisionaCliente
         $sede = $pulito('nomeSede');
         $this->nuovo['nomeSede'] = $sede !== '' ? $sede : null;
 
+        // 🔴 **Il piano si legge SOLO sul cliente nuovo.** Agganciando una sede a
+        // un account esistente la modale non mostra il campo, ma `nuovo` è un
+        // array pubblico: onorare qui un valore che l'operatore non ha visto
+        // cambierebbe il piano di un contratto in essere. Si azzera prima di
+        // validare, così non è nemmeno un errore: semplicemente non conta.
+        //
+        // Vuoto = non scelto = piano predefinito, come per la sede.
+        $piano = $account === null ? $pulito('piano') : '';
+        $this->nuovo['piano'] = $piano !== '' ? $piano : null;
+
         $dati = $this->validate([
             'nuovo.nome' => ['required', 'string', 'min:2', 'max:255'],
             'nuovo.nomeSede' => ['nullable', 'string', 'min:2', 'max:255'],
             'nuovo.adminEmail' => ['required', 'email', 'max:255'],
             'nuovo.adminName' => ['required', 'string', 'min:2', 'max:255'],
-        ], [], [
+            // ⛔ `Rule::in` sulle voci di `PianiDiNascita`, rilette ora: fra
+            // l'apertura della modale e l'invio un piano può essere archiviato,
+            // e un codice forgiato non è passato da nessuna tendina.
+            'nuovo.piano' => ['nullable', 'string', Rule::in(PianiDiNascita::codici())],
+        ], [
+            'nuovo.piano.in' => 'Il piano scelto non è più fra quelli disponibili: riapri la tendina e scegline uno.',
+        ], [
             // L'etichetta dice il vero **nel ramo in cui si sta**: sul cliente
             // nuovo `nome` è la ragione sociale, e chiamarlo «nome della sede»
             // manderebbe l'operatore a correggere il campo sbagliato — accanto
@@ -167,6 +194,7 @@ trait ProvisionaCliente
             'nuovo.nomeSede' => 'nome della prima sede',
             'nuovo.adminEmail' => 'email dell\'amministratore',
             'nuovo.adminName' => 'nome dell\'amministratore',
+            'nuovo.piano' => 'piano',
         ])['nuovo'];
 
         try {
@@ -195,6 +223,11 @@ trait ProvisionaCliente
 
             return;
         }
+
+        // ⚠️ **DOPO `esegui()` e non prima**, come fa il self-signup pubblico:
+        // l'account deve esistere, e il limite di piano del provisioning gira
+        // su un account che ancora non c'è.
+        $notaPiano = $this->applicaIlPianoScelto($esito, $dati['piano'] ?? null);
 
         $this->chiudiProvisioning();
 
@@ -230,9 +263,73 @@ trait ProvisionaCliente
             // parte lascia una riga nell'audit — `InvitoUtente::failed()`.
             $esito->invitoAccodato => "{$cosa}. Invito in consegna a {$esito->admin->email}.",
             default => "{$cosa} per {$esito->admin->email}, che ha già un accesso attivo.",
-        });
+        }.$notaPiano);
 
         session()->flash('provisioningFallito', $esito->invitoFallito !== null);
+    }
+
+    /**
+     * Il piano scelto nella modale, applicato al cliente appena nato (ADR-045).
+     * Restituisce la frase da accodare al messaggio per l'operatore, o `''`.
+     *
+     * 🔴 **Un piano a pagamento NON si scrive su `accounts.piano`.** Si propone:
+     * il cliente resta sul piano con cui è nato finché Stripe non conferma
+     * l'incasso, e a scrivere il piano vero è il webhook. È la riga che tiene
+     * vera la regola di sempre — nessun account pagante senza subscription.
+     *
+     * ⚠️ **La mail è dentro un `try`, e l'esito si dice**, come per l'invito: il
+     * cliente esiste e la proposta è scritta, quindi un SMTP giù non deve
+     * trasformare un gesto riuscito in una pagina di errore — ma nemmeno in un
+     * «in consegna» che non è vero. Con la coda attiva questo `try` vede solo
+     * il fallimento della consegna alla coda; quello successivo lo racconta
+     * `PropostaPiano::failed()`, sul registro di audit.
+     */
+    private function applicaIlPianoScelto(EsitoProvisioning $esito, ?string $piano): string
+    {
+        // Solo su un account NATO da questo gesto: con `esigiAccountNuovo` è
+        // sempre così, ma il piano di un contratto in essere non si tocca
+        // nemmeno per errore.
+        if ($piano === null || ! $esito->accountNuovo || $piano === $esito->account->piano) {
+            return '';
+        }
+
+        if (Piani::eGratuito($piano)) {
+            $esito->account->cambiaPiano($piano);
+
+            return ' Piano: «'.Piani::etichetta($piano).'».';
+        }
+
+        $esito->account->proponiPiano($piano);
+
+        try {
+            $esito->admin->notify(new PropostaPiano(
+                ragioneSociale: $esito->account->ragione_sociale,
+                etichettaPiano: Piani::etichetta($piano),
+                importoCent: (int) Piani::importoCorrenteCent($piano),
+                destinatario: $esito->admin->email,
+            ));
+
+            // ⚠️ «In consegna» e non «inviata», per la stessa ragione dell'invito.
+            $consegna = 'in consegna via email';
+        } catch (Throwable) {
+            $consegna = 'ma la mail che glielo dice NON è partita';
+        }
+
+        return ' Piano «'.Piani::etichetta($piano)."» proposto, {$consegna}: il cliente resta su «"
+            .Piani::etichetta($esito->account->piano).'» finché non lo attiva dalla sua pagina Abbonamento.';
+    }
+
+    /**
+     * Le voci del select dei piani, per la modale del cliente nuovo.
+     *
+     * Dietro la **stessa** ability dell'azione: a chi non può creare clienti
+     * non serve sapere cosa si potrebbe scegliere.
+     *
+     * @return list<array{codice: string, etichetta: string, gratuito: bool, predefinito: bool, importoCent: int|null}>
+     */
+    public function pianiDiNascita(): array
+    {
+        return Gate::allows('tenants.provision') ? PianiDiNascita::opzioni() : [];
     }
 
     /** Il cliente a cui si sta aggiungendo una sede, per il titolo della modale. */

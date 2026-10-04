@@ -3,6 +3,8 @@
 namespace App\Livewire\Billing;
 
 use App\Models\Account;
+use App\Models\Piano;
+use App\Support\Billing\PianiAcquistabili;
 use App\Support\Piani;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Layout;
@@ -38,10 +40,10 @@ use Livewire\Component;
  * ridondanza decorativa: `mount()` copre il caricamento iniziale, `render()`
  * ogni giro successivo. Il buco che resta è quello che routes/web.php documenta
  * due volte — un'azione con `skipRender()` non arriverebbe a `render()`. Oggi
- * questo componente **non ha azioni** (il portale si apre con un form POST
- * classico verso un controller, che riscrive la propria guardia), e chi ne
- * aggiungesse una deve autorizzarla nel proprio metodo: qui non c'è un `can:`
- * di rotta sotto a fare da rete.
+ * questo componente **non ha azioni** (il portale e la scelta del piano sono
+ * form POST classici verso due controller, che riscrivono la propria guardia),
+ * e chi ne aggiungesse una deve autorizzarla nel proprio metodo: qui non c'è un
+ * `can:` di rotta sotto a fare da rete.
  *
  * ## Cosa la pagina NON mostra, e perché
  *
@@ -52,11 +54,24 @@ use Livewire\Component;
  * da un account bloccato con l'oggetto Account in mano. Un test negativo lo
  * presidia.
  *
- * ⛔ **Nessun prezzo.** `prezzo_mensile_cent` in `config/easylab.php` è
- * dichiarato «a LISTINO, non incassato», i 4900 sono un segnaposto del 21 Ago
- * 2026 e **nulla in questo repository può accorgersi** se divergono dal Price
- * su Stripe. Stamparlo su una pagina rivolta al cliente pagante significa
- * affermare quanto paga senza saperlo. Le cifre vere sono nel portale.
+ * ⛔ **Nessuna cifra su ciò che il cliente PAGA.** `prezzo_mensile_cent` è
+ * dichiarato «a LISTINO, non incassato», e chi è rimasto su un prezzo storico
+ * paga un importo che il listino non dice: stamparlo accanto al suo piano
+ * significherebbe affermare quanto paga senza saperlo. Le cifre vere sono nel
+ * portale.
+ *
+ * ⚠️ **Il prezzo dei piani che la pagina VENDE invece c'è** (ADR-045), e non è
+ * un'eccezione alla riga sopra: è un'altra domanda. Chi sceglie un piano deve
+ * sapere quanto costa prima di pagarlo, e la cifra è l'importo del Price
+ * **corrente** (`Piani::importoCorrenteCent()`), cioè quello che il checkout
+ * addebiterà — non il listino, che può essere un passo avanti.
+ *
+ * ## Cosa la pagina OFFRE, e chi lo decide
+ *
+ * I piani mostrati sono quelli di `PianiAcquistabili`: mai uno gratuito, mai
+ * uno che costa meno di ciò che l'account ha o ha avuto. La stessa domanda la
+ * rifà `SceltaPianoAbbonamento` sul POST — qui si decide cosa far vedere, là
+ * cosa accettare, e sono un oggetto solo.
  *
  * ## 🔴 Il layout NON è quello dell'applicazione, ed è una decisione di sicurezza
  *
@@ -114,7 +129,22 @@ class PaginaAbbonamento extends Component
         // un'eccezione sulla pagina da cui il cliente sta cercando di pagare.
         $pianoNoto = Piani::esiste($account->piano);
 
+        $impersonazione = app('impersonate')->isImpersonating();
+        $offerta = PianiAcquistabili::per($account);
+
         return view('livewire.billing.pagina-abbonamento', [
+            'offerta' => $offerta,
+            'pianiOfferti' => $this->pianiOfferti($offerta->piani, $account),
+            // 🔴 Le stesse due condizioni che `SceltaPianoAbbonamento` rifiuta
+            // prima della rete: offrire un bottone che il controller respinge
+            // sarebbe un vicolo cieco.
+            'puoComprare' => ! $impersonazione && filled(config('cashier.secret')),
+            // ⚠️ Un CARTELLO, non una prova: il parametro lo scrive il ritorno
+            // da Stripe ma chiunque può digitarlo. La pagina non ne deduce nulla
+            // — il piano lo cambia il webhook, e la copy lo dice al condizionale.
+            'ritornoCheckout' => in_array(request()->query('checkout'), ['ok', 'annullato'], true)
+                ? request()->query('checkout')
+                : null,
             'ragioneSociale' => $account->ragione_sociale,
             'etichettaPiano' => $pianoNoto ? Piani::etichetta($account->piano) : $account->piano,
             // ⛔ `null` NON è il ripiego del piano ignoto, ed è la riga che
@@ -139,12 +169,36 @@ class PaginaAbbonamento extends Component
             // il bottone perché offrire ciò che il controller rifiuta sarebbe
             // un vicolo cieco — e la copy lo dice per nome, invece di far
             // credere che l'account non abbia un portale.
-            'impersonazione' => app('impersonate')->isImpersonating(),
+            'impersonazione' => $impersonazione,
             // Le due condizioni insieme: un customer che non c'è (Free, ADR-002)
             // e un ambiente senza chiavi darebbero entrambi un bottone che
             // porta a un errore. Meglio non offrirlo.
             'haPortale' => $account->hasStripeId() && filled(config('cashier.secret')),
         ]);
+    }
+
+    /**
+     * I piani in vendita nella forma che la vista stampa: etichetta, importo
+     * del price corrente e limite di sedi. Il piano **proposto dalla cabina**
+     * (ADR-045) va in cima, perché è quello per cui il cliente è arrivato qui.
+     *
+     * @param  list<Piano>  $piani
+     * @return list<array{codice: string, etichetta: string, importoCent: int, maxEnti: int|null, proposto: bool}>
+     */
+    private function pianiOfferti(array $piani, Account $account): array
+    {
+        $righe = array_map(fn (Piano $piano) => [
+            'codice' => $piano->codice,
+            'etichetta' => $piano->etichetta,
+            'importoCent' => (int) Piani::importoCorrenteCent($piano->codice),
+            'maxEnti' => $piano->max_enti,
+            'proposto' => $piano->codice === $account->piano_proposto,
+        ], $piani);
+
+        // `usort` è stabile: fra pari resta l'ordine del listino.
+        usort($righe, fn (array $a, array $b) => (int) $b['proposto'] <=> (int) $a['proposto']);
+
+        return $righe;
     }
 
     /**

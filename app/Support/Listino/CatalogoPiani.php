@@ -41,6 +41,9 @@ final class CatalogoPiani
     /** @var array<string, string>|null price id (anche STORICO) → codice del piano */
     private ?array $perPrice = null;
 
+    /** @var array<string, int>|null price id (anche STORICO) → importo in centesimi */
+    private ?array $importoPerPrice = null;
+
     /**
      * Tutti i piani, **archiviati compresi**, nell'ordine `ordine, id`.
      *
@@ -85,11 +88,32 @@ final class CatalogoPiani
         return $this->perPrice[$priceId] ?? null;
     }
 
+    /**
+     * Quanto addebita un price id, **anche se storico**, o `null` se non è a
+     * listino (🔗 ADR-045).
+     *
+     * Serve a sapere quanto paga chi è rimasto su un prezzo vecchio: è la
+     * soglia sotto la quale un cambio di piano sarebbe un passo indietro. Come
+     * per `codicePerPrice()`, `null` è un esito legittimo — un price creato a
+     * mano in dashboard — e chi chiama decide cosa farne.
+     */
+    public function importoPerPrice(?string $priceId): ?int
+    {
+        if ($priceId === null || $priceId === '') {
+            return null;
+        }
+
+        $this->carica();
+
+        return $this->importoPerPrice[$priceId] ?? null;
+    }
+
     /** Svuota il memo. Da chiamare dopo ogni scrittura, nella stessa richiesta. */
     public function dimentica(): void
     {
         $this->perCodice = null;
         $this->perPrice = null;
+        $this->importoPerPrice = null;
     }
 
     private function carica(): void
@@ -105,16 +129,19 @@ final class CatalogoPiani
 
         $perCodice = [];
         $perPrice = [];
+        $importoPerPrice = [];
 
         foreach ($piani as $piano) {
             $perCodice[$piano->codice] = $piano;
 
             foreach ($piano->prezzi as $prezzo) {
                 $perPrice[$prezzo->stripe_price_id] = $piano->codice;
+                $importoPerPrice[$prezzo->stripe_price_id] = (int) $prezzo->importo_cent;
             }
         }
 
         $this->perCodice = $perCodice;
         $this->perPrice = $perPrice;
+        $this->importoPerPrice = $importoPerPrice;
     }
 }

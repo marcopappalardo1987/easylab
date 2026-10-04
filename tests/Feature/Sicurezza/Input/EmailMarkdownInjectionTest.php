@@ -44,6 +44,7 @@ function datiEmail(string $vista, string $t): array
         'mail.benvenuto-registrazione' => ['ente' => $t, 'email' => $t, 'url' => 'https://easylab.test/login'],
         'mail.invito-utente' => ['destinatario' => $utente, 'ente' => $t, 'url' => 'https://easylab.test/invito', 'giorni' => 7],
         'mail.verifica-registrazione' => ['nome' => $t, 'ente' => $t, 'url' => 'https://easylab.test/verifica', 'ore' => 24],
+        'mail.proposta-piano' => ['ragioneSociale' => $t, 'piano' => $t, 'prezzo' => '49,00', 'url' => 'https://easylab.test/abbonamento'],
         'mail.avviso-obsolescenza' => [
             'ente' => $t, 'soglia' => 10, 'destinatario' => $utente,
             'righe' => [RigaObsolescenza::daStrumento(Strumento::factory()->make([
@@ -70,6 +71,7 @@ dataset('viste email', [
     'mail.benvenuto-registrazione',
     'mail.invito-utente',
     'mail.verifica-registrazione',
+    'mail.proposta-piano',
     'mail.avviso-obsolescenza',
     'mail.digest-scadenze',
 ]);

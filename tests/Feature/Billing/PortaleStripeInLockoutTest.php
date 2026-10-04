@@ -101,7 +101,9 @@ it('keeps both routes out of the lockout and the 2FA groups, by position', funct
     // update Livewire, dove la rotta è sempre /livewire/update.
     $middleware = fn (string $nome) => collect(Route::getRoutes()->getByName($nome)->gatherMiddleware());
 
-    foreach (['abbonamento.index', 'abbonamento.portale'] as $nome) {
+    // `abbonamento.piano` (ADR-045) sta nello stesso ciclo per la stessa
+    // ragione: chi è chiuso per disdetta riattiva da lì.
+    foreach (['abbonamento.index', 'abbonamento.portale', 'abbonamento.piano'] as $nome) {
         expect($middleware($nome))->toContain('auth')
             ->and($middleware($nome))->not->toContain('account.lockout')
             ->and($middleware($nome))->not->toContain('two-factor.enforce');

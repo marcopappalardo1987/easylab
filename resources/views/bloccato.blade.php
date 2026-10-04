@@ -101,6 +101,28 @@
                     </p>
                 @endif
 
+                {{-- 🔗 ADR-045 — l'altra metà dello scatto di rilascio. Il
+                     portale salda un insoluto; dopo una DISDETTA non c'è più
+                     niente da saldare, c'è un piano da riattivare, e quello si
+                     fa dalla pagina Abbonamento. Senza questo link chi ha
+                     disdetto e ci ripensa resterebbe davanti a una porta che
+                     non sa di poter aprire.
+
+                     ⛔ Un LINK, non un componente: questa pagina non monta
+                     nulla di Livewire, ed è un guardrail a dirlo. --}}
+                @if ($puoGestireAbbonamento)
+                    @unless ($puoPagare)
+                        <hr class="my-6 border-border">
+                    @endunless
+                    <a href="{{ route('abbonamento.index') }}"
+                       class="mt-4 block text-center text-sm font-medium text-ink-2 underline hover:text-ink">
+                        Vai alla pagina Abbonamento
+                    </a>
+                    <p class="mt-1 text-center text-xs text-ink-3">
+                        Da lì si riattiva un piano dopo una disdetta.
+                    </p>
+                @endif
+
                 {{-- La VIA D'USCITA: le sedi sane sopra, e qui il logout. Stesso
                      bordo forte e stesso hover incassato dei bottoni "sede", per
                      restare il più leggibile possibile in entrambi i temi. --}}

@@ -22,7 +22,8 @@ use Symfony\Component\HttpFoundation\Response;
  * ciò che questa politica già prova è che **nessuno script arriva da fuori**.
  *
  * `form-action` ammette Stripe perché checkout e portale di fatturazione sono un
- * redirect dopo un POST (`registrazione.verso-stripe`, `abbonamento.portale`).
+ * redirect dopo un POST (`registrazione.verso-stripe`, `abbonamento.portale`,
+ * `abbonamento.piano`).
  * `camera=(self)` perché lo scanner QR del Campo usa `getUserMedia`.
  *
  * ## HSTS solo fuori da `local` e `testing`

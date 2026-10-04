@@ -5,10 +5,14 @@ use App\Models\Account;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Notifications\InvitoUtente;
+use App\Notifications\PropostaPiano;
+use App\Support\Provisioning\PianiDiNascita;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
+use Tests\Support\BancoAbbonamento;
 
 /**
  * La quarta leva: creare un cliente, o una sede in più (S6 — ADR-012, ADR-032).
@@ -166,14 +170,242 @@ it('turns the plan limit into an error beside the form, and writes nothing', fun
         ->and(Account::count())->toBe($prima['account']);
 });
 
-it('never offers a plan to choose from', function () {
-    // I piani a pagamento passano da Stripe: un menù offrirebbe un'opzione che
-    // fallisce al salvataggio, o creerebbe un account marcato «saas» senza
-    // subscription — un cliente che risulta pagante e non paga.
+// --- Il piano scelto alla nascita (ADR-045) ---
+//
+// Fino al 3 Ott 2026 qui c'era un solo test, «never offers a plan to choose
+// from»: un menù avrebbe creato un account marcato «saas» senza subscription,
+// cioè un cliente che risulta pagante e non paga. Il select ora c'è — e il primo
+// test qui sotto è quella stessa regola, tenuta vera in un altro modo.
+
+it('never marks the customer as paying when a paid plan is chosen', function () {
+    // 🔴 La regola di sempre: nessun account pagante senza subscription. Un
+    // piano a pagamento si PROPONE — il cliente nasce sul predefinito, e il
+    // piano vero lo scrive il webhook quando Stripe conferma l'incasso.
+    BancoAbbonamento::piano('saas', 4900);
+
     Livewire::test(Cabina::class)
         ->call('apriProvisioning')
-        ->assertSee('nasce sul piano')
-        ->assertDontSeeHtml('wire:model="nuovo.piano"');
+        ->set('nuovo', [
+            'nome' => 'Laboratorio Aurora',
+            'adminEmail' => 'marta@aurora.test',
+            'adminName' => 'Marta Neri',
+            'piano' => 'saas',
+        ])
+        ->call('creaCliente')
+        ->assertHasNoErrors()
+        ->assertSee('Piano «SaaS» proposto')
+        ->assertSee('resta su «Free»');
+
+    $account = Account::query()->where('ragione_sociale', 'Laboratorio Aurora')->sole();
+
+    expect($account->piano)->toBe('free')
+        ->and($account->piano_proposto)->toBe('saas')
+        ->and($account->stripe_id)->toBeNull()
+        ->and(DB::table('subscriptions')->where('account_id', $account->id)->count())->toBe(0);
+});
+
+it('sends the proposal to the administrator, with the plan and what it costs', function () {
+    BancoAbbonamento::piano('saas', 4900);
+
+    Livewire::test(Cabina::class)
+        ->call('apriProvisioning')
+        ->set('nuovo', ['nome' => 'Laboratorio Aurora', 'adminEmail' => 'marta@aurora.test', 'adminName' => 'Marta Neri', 'piano' => 'saas'])
+        ->call('creaCliente');
+
+    $admin = User::where('email', 'marta@aurora.test')->sole();
+
+    Notification::assertSentTo($admin, PropostaPiano::class, function (PropostaPiano $proposta) use ($admin) {
+        $html = (string) $proposta->toMail($admin)->render();
+
+        return $proposta->ragioneSociale === 'Laboratorio Aurora'
+            && $proposta->etichettaPiano === 'SaaS'
+            && $proposta->importoCent === 4900
+            && str_contains($html, '49,00')
+            && str_contains($html, route('abbonamento.index'));
+    });
+
+    // L'invito resta com'era: sono due email, e la seconda nomina la prima.
+    Notification::assertSentTo($admin, InvitoUtente::class);
+});
+
+it('says so when the proposal mail did not leave, and keeps the proposal', function () {
+    // Come per l'invito: «in consegna» detto di una mail che non è partita è
+    // una bugia che nessuno può smentire guardando la pagina. La proposta
+    // però resta scritta — il cliente la trova nella sua pagina Abbonamento.
+    BancoAbbonamento::piano('saas', 4900);
+    Notification::shouldReceive('send')->andThrow(new RuntimeException('SMTP irraggiungibile'));
+
+    Livewire::test(Cabina::class)
+        ->call('apriProvisioning')
+        ->set('nuovo', ['nome' => 'Laboratorio Aurora', 'adminEmail' => 'marta@aurora.test', 'adminName' => 'Marta Neri', 'piano' => 'saas'])
+        ->call('creaCliente')
+        ->assertHasNoErrors()
+        ->assertSee('la mail che glielo dice NON è partita')
+        ->assertDontSee('in consegna via email');
+
+    expect(Account::query()->where('ragione_sociale', 'Laboratorio Aurora')->sole()->piano_proposto)->toBe('saas');
+});
+
+it('creates the customer directly on another free plan, with nothing to pay', function () {
+    // Un piano gratuito si assegna: non c'è nessun pagamento da aspettare.
+    BancoAbbonamento::pianoSenzaPrice('omaggio', 0, ['gratuito' => true, 'etichetta' => 'Omaggio', 'max_enti' => 3]);
+
+    Livewire::test(Cabina::class)
+        ->call('apriProvisioning')
+        ->set('nuovo', ['nome' => 'Studio Verdi', 'adminEmail' => 'luca@verdi.test', 'adminName' => 'Luca Verdi', 'piano' => 'omaggio'])
+        ->call('creaCliente')
+        ->assertHasNoErrors()
+        ->assertSee('Piano: «Omaggio»');
+
+    $account = Account::query()->where('ragione_sociale', 'Studio Verdi')->sole();
+
+    expect($account->piano)->toBe('omaggio')
+        ->and($account->piano_proposto)->toBeNull();
+
+    Notification::assertNotSentTo(User::where('email', 'luca@verdi.test')->sole(), PropostaPiano::class);
+});
+
+it('keeps the default plan, and proposes nothing, when the select is left alone', function () {
+    BancoAbbonamento::piano('saas', 4900);
+
+    Livewire::test(Cabina::class)
+        ->call('apriProvisioning')
+        ->set('nuovo', ['nome' => 'Studio Bianchi', 'adminEmail' => 'ada@bianchi.test', 'adminName' => 'Ada Bianchi', 'piano' => ''])
+        ->call('creaCliente')
+        ->assertHasNoErrors()
+        ->assertDontSee('proposto');
+
+    $account = Account::query()->where('ragione_sociale', 'Studio Bianchi')->sole();
+
+    expect($account->piano)->toBe('free')
+        ->and($account->piano_proposto)->toBeNull();
+
+    Notification::assertNotSentTo(User::where('email', 'ada@bianchi.test')->sole(), PropostaPiano::class);
+});
+
+it('refuses a plan that is not among the offered ones, and writes nothing', function (mixed $piano) {
+    // Il codice arriva da una property pubblica: non è passato da nessuna
+    // tendina. Archiviato, senza price su Stripe, inesistente o non scalare —
+    // nessuno di questi fa nascere un cliente.
+    BancoAbbonamento::piano('saas', 4900);
+    BancoAbbonamento::piano('ritirato', 14900, ['attivo' => false]);
+    BancoAbbonamento::pianoSenzaPrice('bozza', 12900);
+
+    $prima = ['account' => Account::count(), 'utenti' => User::count()];
+
+    Livewire::test(Cabina::class)
+        ->call('apriProvisioning')
+        ->set('nuovo', ['nome' => 'Cliente Forgiato', 'adminEmail' => 'x@forgiato.test', 'adminName' => 'Ics Ipsilon', 'piano' => $piano])
+        ->call('creaCliente')
+        ->assertHasErrors(['nuovo.piano']);
+
+    expect(Account::count())->toBe($prima['account'])
+        ->and(User::count())->toBe($prima['utenti']);
+
+    Notification::assertNothingSent();
+})->with([
+    'archiviato' => 'ritirato',
+    'senza price su Stripe' => 'bozza',
+    'inesistente' => 'platino',
+]);
+
+it('does not blow up on a plan that is not a string', function () {
+    // `nuovo` è un array pubblico: un valore annidato non deve diventare un
+    // `TypeError`. Non scalare = non scelto, come per gli altri campi.
+    Livewire::test(Cabina::class)
+        ->call('apriProvisioning')
+        ->set('nuovo', ['nome' => 'Cliente Annidato', 'adminEmail' => 'y@annidato.test', 'adminName' => 'Ipsilon Zeta', 'piano' => ['saas']])
+        ->call('creaCliente')
+        ->assertHasNoErrors();
+
+    expect(Account::query()->where('ragione_sociale', 'Cliente Annidato')->sole()->piano)->toBe('free');
+});
+
+it('never touches the plan of an existing customer when a sede is added', function () {
+    // 🔴 La modale della sede non mostra il campo, ma la property è pubblica:
+    // onorarla cambierebbe il piano di un contratto in essere.
+    BancoAbbonamento::piano('saas', 4900);
+    BancoAbbonamento::pianoSenzaPrice('omaggio', 0, ['gratuito' => true]);
+
+    $cliente = Account::factory()->saas()->create(['ragione_sociale' => 'Gruppo Rossi']);
+    UnitaOrganizzativa::factory()->ente()->perAccount($cliente)->create(['nome' => 'Sede di Milano']);
+
+    foreach (['omaggio', 'saas', 'platino'] as $indice => $forgiato) {
+        Livewire::test(Cabina::class)
+            ->call('apriProvisioning', $cliente->id)
+            ->assertDontSeeHtml('wire:model="nuovo.piano"')
+            ->set('nuovo', ['nome' => "Sede {$indice}", 'adminEmail' => "sede{$indice}@rossi.test", 'adminName' => 'Carla Verdi', 'piano' => $forgiato])
+            ->call('creaCliente')
+            ->assertHasNoErrors();
+    }
+
+    expect($cliente->fresh()->piano)->toBe('saas')
+        ->and($cliente->fresh()->piano_proposto)->toBeNull();
+
+    Notification::assertNotSentTo(User::where('email', 'like', 'sede%@rossi.test')->get(), PropostaPiano::class);
+});
+
+it('offers the plan select only where a brand-new customer is born', function () {
+    BancoAbbonamento::piano('saas', 4900);
+
+    $html = Livewire::test(Cabina::class)
+        ->call('apriProvisioning')
+        ->assertSeeHtml('wire:model="nuovo.piano"')
+        // La copy dice la sola cosa che conta: scegliere un piano a pagamento
+        // non lo fa partire.
+        ->assertSee('il piano parte quando lo paga, non prima')
+        ->html();
+
+    // ⚠️ Si guarda DENTRO la tendina della modale, non nella pagina: i filtri
+    // dell'elenco hanno il loro `<option value="">Tutti</option>`, e cercare
+    // quella stringa nell'HTML intero sarebbe verde qualunque cosa stampi la
+    // modale (provato: la mutazione sopravviveva).
+    expect(preg_match('/<select id="prov-piano".*?<\/select>/s', $html, $tendina))->toBe(1);
+
+    // Il valore vuoto È il predefinito; un piano a pagamento porta il suo
+    // codice, e dice quanto costa.
+    expect($tendina[0])->toContain('<option value="">Free — gratuito (predefinito)</option>')
+        ->and($tendina[0])->toContain('<option value="saas">SaaS — 49,00 € al mese, da proporre al cliente</option>');
+});
+
+it('lists the default plan first, then the free ones, then the paid ones on sale', function () {
+    BancoAbbonamento::piano('saas', 4900);
+    BancoAbbonamento::piano('pro', 9900);
+    BancoAbbonamento::pianoSenzaPrice('omaggio', 0, ['gratuito' => true]);
+    // Quattro piani che NON devono comparire: un gratuito archiviato, un
+    // pagamento archiviato, uno senza price su Stripe, uno a 0 €.
+    BancoAbbonamento::pianoSenzaPrice('omaggio-vecchio', 0, ['gratuito' => true, 'attivo' => false]);
+    BancoAbbonamento::piano('ritirato', 14900, ['attivo' => false]);
+    BancoAbbonamento::pianoSenzaPrice('bozza', 12900);
+    BancoAbbonamento::piano('zero', 0);
+
+    expect(PianiDiNascita::codici())->toBe(['free', 'omaggio', 'saas', 'pro'])
+        // Una sola voce vale «non scelto», ed è marcata per nome: non è «la
+        // prima della lista».
+        ->and(collect(PianiDiNascita::opzioni())->where('predefinito', true)->pluck('codice')->all())->toBe(['free']);
+});
+
+it('shows in the plan column who is still waiting to pay', function () {
+    BancoAbbonamento::piano('saas', 4900);
+
+    $inAttesa = Account::factory()->create(['ragione_sociale' => 'Laboratorio Aurora']);
+    $inAttesa->proponiPiano('saas');
+    Account::factory()->create(['ragione_sociale' => 'Studio Bianchi']);
+
+    $html = Livewire::test(Cabina::class)->html();
+
+    expect(substr_count($html, 'data-piano-proposto'))->toBe(1)
+        ->and($html)->toContain('In attesa di pagamento:');
+});
+
+it('refuses the plan options to whoever may see the page but not provision', function () {
+    BancoAbbonamento::piano('saas', 4900);
+
+    $soloVista = User::factory()->create(['tenant_id' => $this->suoEnte->id, 'two_factor_confirmed_at' => now()]);
+    $soloVista->givePermissionTo('tenants.view_all');
+    $this->actingAs($soloVista->fresh());
+
+    expect(Livewire::test(Cabina::class)->instance()->pianiDiNascita())->toBe([]);
 });
 
 it('refuses an incomplete form without touching the database', function () {

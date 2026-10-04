@@ -224,11 +224,13 @@ it('never counts the reset link and the reset form in the same bucket', function
 });
 
 it('keeps every domain page behind the two factor gate, except the declared escapes', function () {
-    // Le uscite dichiarate: il lockout (per pagare bisogna poterci arrivare),
-    // il QR (redirige su una scheda che il gate ce l'ha), le pagine di Fortify
-    // che servono a configurare il 2FA stesso, e l'uscita dall'impersonazione.
+    // Le uscite dichiarate: il lockout (per pagare bisogna poterci arrivare —
+    // e dal 3 Ott 2026 anche per riattivare un piano dopo una disdetta,
+    // ADR-045), il QR (redirige su una scheda che il gate ce l'ha), le pagine
+    // di Fortify che servono a configurare il 2FA stesso, e l'uscita
+    // dall'impersonazione.
     $uscite = [
-        'abbonamento.index', 'abbonamento.portale', 'bloccato', 'bloccato.passa',
+        'abbonamento.index', 'abbonamento.portale', 'abbonamento.piano', 'bloccato', 'bloccato.passa',
         'qr.strumento', 'logout', 'impersonate.leave',
         'verification.notice', 'verification.verify', 'verification.send',
         'password.confirm', 'password.confirm.store', 'password.confirmation',

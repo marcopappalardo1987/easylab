@@ -13,11 +13,15 @@ use Throwable;
 /**
  * Attiva su Stripe l'abbonamento di un Account (ADR-002, ADR-032).
  *
- * È la leva con cui un piano a pagamento comincia davvero: crea il customer,
- * gli attacca un metodo di pagamento e apre la subscription, poi scrive il
- * piano sull'account. In V1 è l'**unico** percorso di sottoscrizione — il
- * self-signup pubblico arriva col blocco successivo (ADR-012), e la sua
- * condizione d'ingresso è proprio la verifica del pagamento.
+ * È la leva **da console** con cui un piano a pagamento comincia: crea il
+ * customer, gli attacca un metodo di pagamento e apre la subscription, poi
+ * scrive il piano sull'account.
+ *
+ * ⚠️ *Non è più l'unico percorso.* Alla nascita lo era; poi sono arrivati il
+ * self-signup pubblico (ADR-012, ADR-039) e, dal 3 Ott 2026, l'attivazione e il
+ * cambio di piano dalla pagina «Abbonamento» del cliente (ADR-045). Questo
+ * comando resta per ciò che una persona decide al posto del cliente: una
+ * prova, un price su misura, un rientro concordato.
  *
  * Sta in console e non in una UI per la stessa ragione per cui ci sta
  * `easylab:lockout`: l'amministrazione degli account è cross-tenant per natura

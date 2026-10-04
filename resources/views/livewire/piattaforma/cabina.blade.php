@@ -555,6 +555,19 @@
                                     {{-- Un piano dismesso non si nasconde: questa è la schermata da cui si ripara. --}}
                                     <x-ui.badge variant="warning">{{ $cliente->piano }} — fuori catalogo</x-ui.badge>
                                 @endif
+
+                                {{-- 🔗 ADR-045 — il piano a pagamento PROPOSTO e non
+                                     ancora pagato. Sta sotto il piano vero e non al
+                                     suo posto: il badge sopra dice cosa il cliente
+                                     ha, questa riga cosa gli è stato chiesto. Chi
+                                     guarda la colonna vede chi deve ancora pagare
+                                     senza doversi ricordare a chi l'aveva proposto. --}}
+                                @if ($cliente->piano_proposto)
+                                    <p class="mt-1 text-xs text-warn-soft-ink" data-piano-proposto>
+                                        In attesa di pagamento:
+                                        {{ Piani::esiste($cliente->piano_proposto) ? Piani::etichetta($cliente->piano_proposto) : $cliente->piano_proposto }}
+                                    </p>
+                                @endif
                             </td>
 
                             {{-- Due badge distinti e mai uno solo: `is_locked` significa
@@ -784,16 +797,17 @@
                     sedi {{ $this->slotDelPiano($perCliente) }}).
                 </p>
             @else
-                {{-- ⚠️ Nessun select dei piani: i piani a pagamento passano da
-                     Stripe, e un menù offrirebbe un'opzione che fallisce al
-                     salvataggio — o peggio creerebbe un account marcato «saas»
-                     senza subscription, cioè un cliente che risulta pagante e non
-                     paga. Si dice come stanno le cose, invece di offrire una
-                     scelta che non esiste. --}}
+                {{-- 🔗 ADR-045 — il select dei piani c'è dal 3 Ott 2026, e la copy
+                     dice la sola cosa che conta: scegliere un piano a pagamento
+                     NON marca il cliente come pagante. Nasce sul piano
+                     predefinito e riceve la proposta; il piano parte quando
+                     Stripe conferma l'incasso. Un account marcato «saas» senza
+                     subscription resta ciò che questa modale non produce. --}}
                 <p class="text-sm text-ink-2">
                     Nascono insieme il cliente, il suo primo <strong>Ente</strong> e l'amministratore che lo governa.
-                    Il cliente nasce sul piano <strong>Free</strong>. Il passaggio a un piano a pagamento
-                    si fa da Stripe (<code class="text-xs">easylab:abbona</code>), non da qui.
+                    Con un piano gratuito il cliente nasce su quel piano. Con un piano a pagamento
+                    nasce sul piano <strong>{{ App\Support\Piani::esiste(App\Support\Piani::predefinito()) ? App\Support\Piani::etichetta(App\Support\Piani::predefinito()) : App\Support\Piani::predefinito() }}</strong>
+                    e riceve la proposta via email: il piano parte quando lo paga, non prima.
                 </p>
             @endif
 
@@ -831,6 +845,35 @@
                         @enderror
                     </div>
                 @endforeach
+
+                {{-- ⚠️ Solo sul cliente NUOVO: aggiungendo una sede il piano è già
+                     quello del contratto, e l'azione ignora comunque il campo
+                     (`nuovo` è un array pubblico: la vista non è la guardia).
+
+                     Il valore vuoto È il piano predefinito, così chi non tocca
+                     la tendina ottiene ciò che la modale ha sempre fatto. --}}
+                @unless ($perCliente)
+                    @php $pianiDiNascita = $this->pianiDiNascita(); @endphp
+                    <div wire:key="prov-piano">
+                        <label for="prov-piano" class="block text-sm font-medium text-ink">Piano</label>
+                        <select id="prov-piano" wire:model="nuovo.piano"
+                                class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                            {{-- ⚠️ Un'espressione sola e nessun `@if` dentro
+                                 l'<option>: Livewire avvolge ogni condizionale
+                                 Blade in commenti-marcatore, e dentro una voce di
+                                 tendina non c'è niente che debba starci oltre al
+                                 testo. --}}
+                            @foreach ($pianiDiNascita as $opzione)
+                                <option value="{{ $opzione['predefinito'] ? '' : $opzione['codice'] }}">{{ $opzione['etichetta'] }} — {{ $opzione['gratuito']
+                                    ? 'gratuito'.($opzione['predefinito'] ? ' (predefinito)' : '')
+                                    : number_format((int) $opzione['importoCent'] / 100, 2, ',', '.').' € al mese, da proporre al cliente' }}</option>
+                            @endforeach
+                        </select>
+                        @error('nuovo.piano')
+                            <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
+                        @enderror
+                    </div>
+                @endunless
             </div>
 
             <p class="mt-3 text-xs text-ink-3">

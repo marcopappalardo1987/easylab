@@ -52,9 +52,17 @@ class AppServiceProvider extends ServiceProvider
         //
         // `GET {path}/payment/{id}`: pubblica e non autenticata (il suo
         // controller monta il solo `VerifyRedirectUrl`), serve alla conferma
-        // 3-D Secure di un flusso on-session che in V1 non esiste — l'unica
-        // sottoscrizione passa da `easylab:abbona`, in console. Una superficie
+        // 3-D Secure di un flusso on-session che qui non esiste. Una superficie
         // che non serve non si tiene aperta.
+        //
+        // ⚠️ Dal 3 Ott 2026 il cliente attiva e cambia piano da `/abbonamento`
+        // (ADR-045), e questa riga è la ragione di due scelte fatte là:
+        // l'attivazione passa dal Checkout **ospitato**, dove il 3-D Secure lo
+        // gestisce Stripe; il cambio usa `swap()` senza fattura immediata, che
+        // non tenta nessun addebito dentro la richiesta. Chi introducesse un
+        // addebito on-session (`swapAndInvoice()`, `create()` con una carta)
+        // deve prima riaprire questa rotta — o lascia un pagamento senza un
+        // posto in cui confermarlo.
         Cashier::ignoreRoutes();
 
         // ⛔ **`singleton` e non `Cache::`** — ADR-035. Il listino si legge una
