@@ -289,10 +289,15 @@ it('never lets an interface confer a platform role', function (string $ruolo) {
         ->and(RuoliAssegnabili::ammesso($ruolo, piattaforma: true))->toBeFalse();
 })->with(['Superadmin', 'Developer']);
 
-it('offers the four client roles, and only the tecnico on the platform side', function () {
+it('offers the four client roles, and only tecnico and gestore on the platform side', function () {
+    // 🔗 ADR-046: il Gestore è di sola piattaforma. Un cliente non lo può
+    // conferire — aprirebbe a un proprio utente un ruolo che lavora su più
+    // clienti.
     expect(RuoliAssegnabili::perCliente())
         ->toEqualCanonicalizing(['Admin', 'Responsabile Reparto', 'Tenant', 'Tecnico'])
-        ->and(RuoliAssegnabili::perPiattaforma())->toBe(['Tecnico']);
+        ->and(RuoliAssegnabili::perPiattaforma())->toBe(['Tecnico', 'Gestore'])
+        ->and(RuoliAssegnabili::ammesso('Gestore'))->toBeFalse()
+        ->and(RuoliAssegnabili::ammesso('Gestore', piattaforma: true))->toBeTrue();
 });
 
 it('warns about the second factor exactly for the roles that impose it', function () {
@@ -300,7 +305,9 @@ it('warns about the second factor exactly for the roles that impose it', functio
     // due liste, e questa serve a dire il vero a chi conferisce il ruolo.
     expect(RuoliAssegnabili::imponeSecondoFattore('Admin'))->toBeTrue()
         ->and(RuoliAssegnabili::imponeSecondoFattore('Tenant'))->toBeFalse()
-        ->and(RuoliAssegnabili::imponeSecondoFattore('Tecnico'))->toBeFalse();
+        ->and(RuoliAssegnabili::imponeSecondoFattore('Tecnico'))->toBeFalse()
+        // 🔗 ADR-046: scrive sui dati di più clienti, quindi sì.
+        ->and(RuoliAssegnabili::imponeSecondoFattore('Gestore'))->toBeTrue();
 });
 
 // ─── 5. La tendina: ruolo Tecnico e portafoglio ─────────────────────────────

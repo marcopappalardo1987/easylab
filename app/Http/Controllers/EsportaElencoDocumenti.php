@@ -3,11 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Documento;
-use App\Models\Scopes\DepartmentScope;
 use App\Models\Strumento;
-use App\Models\UnitaOrganizzativa;
 use App\Support\Documenti\FiltroDocumenti;
-use App\Support\Tenancy\CurrentTenant;
+use App\Support\Tenancy\SediSeguite;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -130,8 +128,10 @@ class EsportaElencoDocumenti extends Controller
             'generatoDa' => $utente?->name,
             // Il nome della sede CORRENTE, non di `users.tenant_id`: impersonando,
             // lo switcher sposta il contesto in sessione e le righe sono di
-            // quella sede (D-T2-3, security pass S7).
-            'ente' => UnitaOrganizzativa::withoutGlobalScope(DepartmentScope::class)->whereKey(CurrentTenant::id())->value('nome'),
+            // quella sede (D-T2-3, security pass S7). E `null` per chi ha in
+            // elenco i documenti di più clienti (ADR-046): il titolo non nomina
+            // una sede sola sopra un foglio che ne contiene diverse.
+            'ente' => SediSeguite::sedeUnica(),
         ])->setPaper('a4');
 
         // `stream` e non `download`, come sullo storico macchina: si vuole

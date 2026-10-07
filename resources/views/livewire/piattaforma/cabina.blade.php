@@ -583,6 +583,13 @@
                                 @unless ($cliente->is_locked)
                                     <x-ui.badge variant="success">Attivo</x-ui.badge>
                                 @endunless
+                                {{-- 🔗 ADR-046: non è uno stato commerciale, ma è la
+                                     cosa da sapere prima di aprire i dati di un
+                                     cliente — su questi il Superadmin lavora
+                                     senza impersonare. --}}
+                                @if ($cliente->manutenzione_gestita)
+                                    <x-ui.badge variant="primary" data-gestita="{{ $cliente->id }}">🛠 Gestita da EasyLab</x-ui.badge>
+                                @endif
                             </td>
 
                             {{-- ⚠️ `?` e non `∞` sul piano fuori catalogo: `maxEnti()`
@@ -665,6 +672,14 @@
                                             class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-2 hover:bg-surface-sunken hover:text-ink"
                                             title="Aggiungi un Ente (una sede) a questo cliente">
                                         <span aria-hidden="true">＋</span> Ente
+                                    </button>
+                                @endcan
+
+                                @can('affidaManutenzione', $cliente)
+                                    <button type="button" wire:click="apriManutenzione({{ $cliente->id }})"
+                                            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-2 hover:bg-surface-sunken hover:text-ink"
+                                            title="{{ $cliente->manutenzione_gestita ? 'La manutenzione è gestita da EasyLab' : 'Affida a EasyLab la manutenzione di questo cliente' }}">
+                                        <span aria-hidden="true">🛠</span> Gestione
                                     </button>
                                 @endcan
 
@@ -873,6 +888,17 @@
                             <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
                         @enderror
                     </div>
+
+                    {{-- 🔗 ADR-046. Solo sul cliente nuovo, come il piano: su uno
+                         che c'è già il gesto ha il suo pannello («Gestione»). --}}
+                    <label wire:key="prov-gestita" class="flex items-start gap-2 text-sm text-ink-2">
+                        <input type="checkbox" wire:model="nuovo.gestita" value="1"
+                               class="mt-0.5 rounded border border-border-strong text-brand focus:ring-ring" />
+                        <span>
+                            <span class="font-medium text-ink">Manutenzione gestita da EasyLab</span><br>
+                            Il Superadmin lavora sui dati di questo cliente senza impersonare. Si può cambiare dopo.
+                        </span>
+                    </label>
                 @endunless
             </div>
 
@@ -953,6 +979,44 @@
                     </button>
                 @endif
             </div>
+        </x-ui.modal>
+    @endif
+
+    @if ($inLavorazione && $pannello === 'manutenzione')
+        <x-ui.modal :title="'Manutenzione — '.$inLavorazione->ragione_sociale" close="chiudiPannello">
+            {{-- 🔗 ADR-046. Si dice **cosa apre**, prima del bottone: è il gesto
+                 di questa pagina che cambia chi legge i dati di un cliente. --}}
+            @if ($inLavorazione->manutenzione_gestita)
+                <p class="text-sm text-ink-2">
+                    La manutenzione di questo cliente è <strong class="text-ink">gestita da EasyLab</strong>:
+                    il Superadmin vede e modifica macchine, interventi, ricambi e documenti di tutte le sue sedi,
+                    senza impersonare nessuno.
+                </p>
+                <p class="mt-2 text-sm text-ink-2">
+                    Ritirandola il cliente torna a gestirsi da sé: i suoi dati restano dove sono, ma da qui si
+                    raggiungono solo dal Parco, in sola lettura, o impersonando. I gestori a cui hai assegnato
+                    le sue sedi continuano a lavorarci finché non gliele togli da «Tecnici».
+                </p>
+                <div class="mt-4 flex justify-end gap-3">
+                    <x-ui.button variant="secondary" wire:click="chiudiPannello">Annulla</x-ui.button>
+                    <x-ui.button variant="secondary" wire:click="ritiraManutenzione">Ritira la gestione</x-ui.button>
+                </div>
+            @else
+                <p class="text-sm text-ink-2">
+                    Affidando a EasyLab la manutenzione di questo cliente, il <strong class="text-ink">Superadmin</strong>
+                    vede e modifica macchine, interventi, ricambi e documenti di tutte le sue sedi dalle pagine di
+                    sempre, senza impersonare nessuno. Il cliente continua a vedere i propri dati, con il nome di chi
+                    ha lavorato per lui.
+                </p>
+                <p class="mt-2 text-sm text-ink-2">
+                    Per farci lavorare un <strong class="text-ink">gestore</strong> assegnagli le sedi da «Tecnici»:
+                    questo segno non gliele apre da solo.
+                </p>
+                <div class="mt-4 flex justify-end gap-3">
+                    <x-ui.button variant="secondary" wire:click="chiudiPannello">Annulla</x-ui.button>
+                    <x-ui.button wire:click="affidaManutenzione">Affida a EasyLab</x-ui.button>
+                </div>
+            @endif
         </x-ui.modal>
     @endif
 

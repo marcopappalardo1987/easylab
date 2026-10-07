@@ -81,6 +81,7 @@ class Account extends Model
         // «escludi i di_piattaforma» si comporterebbe in modo diverso a
         // seconda che il model venga dal DB o dalla memoria.
         'di_piattaforma' => false,
+        'manutenzione_gestita' => false,
     ];
 
     protected $fillable = [
@@ -96,6 +97,7 @@ class Account extends Model
         return [
             'is_locked' => 'boolean',
             'di_piattaforma' => 'boolean',
+            'manutenzione_gestita' => 'boolean',
             'locked_at' => 'datetime',
             'stripe_locked_at' => 'datetime',
             // Non decorativo: `ManagesSubscriptions::onGenericTrial()` fa
@@ -137,6 +139,10 @@ class Account extends Model
             // quell'effetto senza traccia sarebbe l'unica del gruppo. Oggi la
             // scrive solo il seeder; domani una leva di console o una UI.
             'di_piattaforma',
+            // Apre i dati del cliente al Superadmin (ADR-046): è la colonna di
+            // questo elenco con l'effetto più largo sulla lettura, e chi l'ha
+            // accesa e quando deve restare scritto.
+            'manutenzione_gestita',
         ];
     }
 
@@ -285,6 +291,36 @@ class Account extends Model
         }
 
         $this->forceFill(['piano_proposto' => $piano])->save();
+    }
+
+    /**
+     * Affida a EasyLab la manutenzione di questo cliente (ADR-046).
+     *
+     * 🔴 **Apre i dati**: da qui in poi il Superadmin vede e scrive le sedi
+     * dell'account senza impersonare (`ClientiGestiti`). È una clausola del
+     * rapporto e non una preferenza, quindi sta fuori da `$fillable` e ha il
+     * suo metodo, come il lockout.
+     *
+     * ⛔ L'account di piattaforma non è un cliente: non si affida a sé stesso.
+     *
+     * Ripetere il gesto non scrive nulla e non lascia una seconda riga di
+     * audit: il modello non è sporco, e Eloquent non salva.
+     */
+    public function affidaManutenzione(): void
+    {
+        if ($this->di_piattaforma) {
+            throw new RuntimeException(
+                "«{$this->ragione_sociale}» è l'account di EasyLab: non è un cliente a cui gestire la manutenzione."
+            );
+        }
+
+        $this->forceFill(['manutenzione_gestita' => true])->save();
+    }
+
+    /** Il cliente torna a gestirsi da sé: il Superadmin smette di vederne i dati. */
+    public function ritiraManutenzione(): void
+    {
+        $this->forceFill(['manutenzione_gestita' => false])->save();
     }
 
     /**

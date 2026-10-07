@@ -7,10 +7,12 @@ use App\Enums\TipoUnitaOrganizzativa;
 use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
+use App\Support\Tenancy\SediSeguite;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -36,6 +38,23 @@ class ImportStrumenti extends Component
     public const COLONNE = ['nome', 'modello', 'matricola', 'data_installazione', 'ubicazione', 'provenienza'];
 
     public $file;
+
+    /**
+     * La sede in cui si importa, per chi ne segue più di una (🔗 ADR-046).
+     *
+     * 🔴 L'ubicazione di una riga si risolve **per nome** fra i reparti in
+     * vista: con i reparti di più clienti insieme, «Ematologia» di un cliente
+     * finirebbe scambiata con quella di un altro, e il percorso esplicito
+     * prenderebbe in silenzio l'ultimo dei due. L'import lavora quindi su una
+     * sede alla volta, dichiarata prima dell'analisi.
+     *
+     * `mixed` perché arriva dal browser; non è `#[Locked]` perché è un campo.
+     * A proteggere `importa()` è il lucchetto su `$righe`: i `nodoId` sono
+     * stati risolti dentro la sede validata, e dopo non si possono riscrivere.
+     */
+    public mixed $sedeId = null;
+
+    private ?Collection $sediCache = null;
 
     /*
      * `#[Locked]` sull'esito dell'analisi (S7, T1c): `importa()` si fida di
@@ -82,9 +101,15 @@ class ImportStrumenti extends Component
     {
         $this->authorize('strumenti.create');
 
-        $this->validate([
-            'file' => ['required', 'file', 'max:2048', 'extensions:csv,txt'],
-        ]);
+        $regole = ['file' => ['required', 'file', 'max:2048', 'extensions:csv,txt']];
+
+        $vaScelta = $this->sedi()->count() > 1;
+
+        if ($vaScelta) {
+            $regole['sedeId'] = ['required', Rule::in($this->sedi()->modelKeys())];
+        }
+
+        $this->validate($regole, attributes: ['sedeId' => 'sede']);
 
         // Un CSV è testo: un byte NUL vuol dire un binario rinominato, e le sue
         // "righe" finirebbero nell'anteprima e nel database come spazzatura.
@@ -103,7 +128,7 @@ class ImportStrumenti extends Component
         $this->reset(['righe', 'importate', 'scartate', 'troncato', 'analizzato']);
 
         $lette = $this->leggiCsv($this->inUtf8($contenuto));
-        [$perNome, $perPercorso] = $this->mappeNodi();
+        [$perNome, $perPercorso] = $this->mappeNodi($vaScelta ? (int) $this->sedeId : null);
 
         foreach ($lette as $i => $dati) {
             $this->righe[] = $this->valutaRiga($i + 2, $dati, $perNome, $perPercorso); // +2: riga 1 = intestazione
@@ -156,7 +181,7 @@ class ImportStrumenti extends Component
 
     public function ricarica(): void
     {
-        $this->reset(['file', 'righe', 'analizzato', 'importate', 'scartate', 'troncato']);
+        $this->reset(['file', 'righe', 'analizzato', 'importate', 'scartate', 'troncato', 'sedeId']);
     }
 
     // --- Parsing ---
@@ -240,9 +265,13 @@ class ImportStrumenti extends Component
      *
      * @return array{0: array<string, Collection>, 1: array<string, UnitaOrganizzativa>}
      */
-    protected function mappeNodi(): array
+    protected function mappeNodi(?int $sede = null): array
     {
-        $nodi = UnitaOrganizzativa::get();
+        // `$sede` valorizzata solo per chi segue più sedi (ADR-046): per tutti
+        // gli altri lo scope contiene già una sede sola.
+        $nodi = UnitaOrganizzativa::query()
+            ->when($sede !== null, fn ($q) => $q->where('tenant_id', $sede))
+            ->get();
         $byId = $nodi->keyBy('id');
 
         $nonEnte = $nodi->reject(fn ($n) => $n->tipo === TipoUnitaOrganizzativa::Ente);
@@ -358,6 +387,20 @@ class ImportStrumenti extends Component
         return view('livewire.strumenti.import-strumenti', [
             'valide' => $valide,
             'conErrori' => count($this->righe) - $valide,
+            // Vuota per chi lavora su una sede sola: niente tendina.
+            'sedi' => $this->sedi()->count() > 1 ? $this->sedi() : collect(),
         ]);
+    }
+
+    /**
+     * Le sedi in vista, una volta per richiesta e solo per chi può seguirne più
+     * di una: per tutti gli altri nessuna query (stessa forma di
+     * `ElencoFornitori::sedi()`).
+     *
+     * @return Collection<int,UnitaOrganizzativa>
+     */
+    private function sedi(): Collection
+    {
+        return $this->sediCache ??= SediSeguite::piuClienti() ? SediSeguite::elenco() : collect();
     }
 }

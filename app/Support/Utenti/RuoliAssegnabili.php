@@ -53,15 +53,16 @@ final class RuoliAssegnabili
     /**
      * I ruoli che l'interfaccia di **piattaforma** può conferire.
      *
-     * Uno solo, e non è una semplificazione temporanea: quella schermata crea
-     * i tecnici di EasyLab, cioè la figura che 🔗 ADR-007/030 ha progettato per
-     * lavorare su più clienti. Superadmin e Developer restano di console.
+     * Le due figure che lavorano **per portafoglio** (`tecnico_cliente`), cioè
+     * su più clienti senza appartenere a nessuno: il Tecnico (🔗 ADR-007/030) e,
+     * dal 6 Ott 2026, il Gestore (🔗 ADR-046), che sulle stesse sedi può anche
+     * scrivere. Superadmin e Developer restano di console.
      *
      * @return list<string>
      */
     public static function perPiattaforma(): array
     {
-        return [User::TECNICO_ROLE];
+        return [User::TECNICO_ROLE, User::GESTORE_ROLE];
     }
 
     /**

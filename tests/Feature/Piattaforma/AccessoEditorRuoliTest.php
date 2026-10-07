@@ -45,7 +45,7 @@ use Spatie\Permission\Models\Role;
  * significato, che regge da sé.*
  */
 const RUOLI_CON_EDITOR = ['Developer', 'Superadmin'];
-const RUOLI_SENZA_EDITOR = ['Admin', 'Responsabile Reparto', 'Tenant', 'Tecnico'];
+const RUOLI_SENZA_EDITOR = ['Admin', 'Responsabile Reparto', 'Tenant', 'Tecnico', 'Gestore'];
 
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);

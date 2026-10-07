@@ -5,7 +5,9 @@ namespace App\Livewire\Dashboard;
 use App\Models\Scopes\DepartmentScope;
 use App\Models\UnitaOrganizzativa;
 use App\Support\Parco\MetricheParco;
+use App\Support\Tenancy\ClientiGestiti;
 use App\Support\Tenancy\CurrentTenant;
+use App\Support\Tenancy\SediSeguite;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Layout;
@@ -85,6 +87,21 @@ use Livewire\Component;
 #[Title('Dashboard — Easy Lab')]
 class Home extends Component
 {
+    /**
+     * Chi non ha dati su cui lavorare ma governa la piattaforma parte da lì
+     * (🔗 ADR-046): per il Developer senza Ente questa pagina sarebbe vuota, e
+     * il suo lavoro comincia dalla cabina.
+     *
+     * ⚠️ Solo con `tenants.view_all`: chi non può aprire la piattaforma resta
+     * qui, a leggere che non ha ancora nulla da seguire.
+     */
+    public function mount(): void
+    {
+        if (! SediSeguite::haDoveLavorare() && Gate::allows('tenants.view_all')) {
+            $this->redirectRoute('piattaforma.index');
+        }
+    }
+
     public function render(): View
     {
         // D-T2-3 (S7): il nome dal contesto, non da `users.tenant_id`: impersonando,
@@ -105,9 +122,17 @@ class Home extends Component
             // riunione fa il danno che `x-ui.stat-tile` descrive nel proprio
             // docblock. Chi non ha un Ente (Tecnico esterno) legge l'altra
             // frase, perché «le macchine di —» non sarebbe una frase.
-            'perimetro' => $nomeEnte !== null
-                ? 'Lo stato delle macchine di '.$nomeEnte.'.'
-                : 'Lo stato delle macchine che segui.',
+            //
+            // Dal 6 Ott 2026 (ADR-046) il Superadmin conta anche i clienti con
+            // manutenzione gestita: dirgli «le macchine di EasyLab» sopra un
+            // totale che ne contiene altre sarebbe il danno di cui sopra.
+            'perimetro' => match (true) {
+                ClientiGestiti::siApplica() && ClientiGestiti::esistono() => $nomeEnte !== null
+                    ? 'Lo stato delle macchine di '.$nomeEnte.' e dei clienti con manutenzione gestita da EasyLab.'
+                    : 'Lo stato delle macchine dei clienti con manutenzione gestita da EasyLab.',
+                $nomeEnte !== null => 'Lo stato delle macchine di '.$nomeEnte.'.',
+                default => 'Lo stato delle macchine che segui.',
+            },
         ]);
     }
 }

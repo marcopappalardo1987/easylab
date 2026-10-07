@@ -44,6 +44,22 @@ Incubatrice INC-9;INC-9;SN-0002;01/07/2020;Neonatologia &gt; Terapia intensiva;O
     {{-- Upload --}}
     @unless ($analizzato)
         <x-ui.card class="mt-4">
+            {{-- 🔗 ADR-046: l'ubicazione si risolve per nome, quindi chi segue
+                 più sedi dichiara prima in quale sta importando. --}}
+            @if ($sedi->isNotEmpty())
+                <div class="mb-4">
+                    <label for="sede-import" class="block text-sm font-medium text-ink">Sede in cui importare</label>
+                    <select id="sede-import" wire:model="sedeId"
+                            class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-sm text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                        <option value="">Scegli la sede…</option>
+                        @foreach ($sedi as $sede)
+                            <option value="{{ $sede->id }}">{{ \App\Support\Tenancy\SediSeguite::etichetta($sede) }}</option>
+                        @endforeach
+                    </select>
+                    <p class="mt-1 text-xs text-ink-3">Le ubicazioni del file vengono cercate fra i reparti di questa sede.</p>
+                    @error('sedeId') <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p> @enderror
+                </div>
+            @endif
             <label for="file" class="block text-sm font-medium text-ink">File CSV</label>
             <input id="file" type="file" wire:model="file" accept=".csv,text/csv,text/plain"
                 class="mt-2 block w-full text-sm text-ink-2 file:mr-3 file:rounded-md file:border-0 file:bg-brand-soft file:px-4 file:py-2 file:text-sm file:font-medium file:text-brand-soft-ink hover:file:bg-brand-soft-strong">

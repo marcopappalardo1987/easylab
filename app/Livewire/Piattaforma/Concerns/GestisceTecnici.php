@@ -96,15 +96,12 @@ trait GestisceTecnici
     public array $nuovo = ['nome' => '', 'email' => ''];
 
     /**
-     * 🔴 Il ruolo è una **property pubblica** benché la modale non lo chieda.
+     * 🔴 Il ruolo scelto nella modale: **arriva dal browser**.
      *
-     * Non è una svista né una preparazione a un select futuro: `perPiattaforma()`
-     * dà un ruolo solo, e una tendina con un'opzione sarebbe rumore. Sta qui
-     * perché il rifiuto di 🔗 ADR-038 dev'essere **dimostrabile**: «Superadmin
-     * non è conferibile» non si prova su una `<select>` che non lo mostra — si
-     * prova forzando il valore e vedendo che l'azione lo respinge. Un valore
-     * che il browser non può cambiare non ha guardia da provare, e la guardia
-     * qui è il punto.
+     * Dal 6 Ott 2026 (🔗 ADR-046) le figure sono due — Tecnico e Gestore — e la
+     * tendina le offre entrambe. Ciò che la tendina non offre resta rifiutato
+     * dall'azione che scrive (🔗 ADR-038): «Superadmin non è conferibile» non si
+     * prova su una `<select>` che non lo mostra, si prova forzando il valore.
      */
     public string $nuovoRuolo = User::TECNICO_ROLE;
 
@@ -199,7 +196,7 @@ trait GestisceTecnici
         // piattaforma (🔗 ADR-016) — quindi il rifiuto è del codice, non
         // dell'assenza da una tendina.
         if (! RuoliAssegnabili::ammesso($this->nuovoRuolo, piattaforma: true)) {
-            $this->addError('nuovoRuolo', "Da questa pagina si crea solo la figura del tecnico di EasyLab: «{$this->nuovoRuolo}» non è conferibile da nessuna interfaccia.");
+            $this->addError('nuovoRuolo', "Da questa pagina si creano solo tecnici e gestori di EasyLab: «{$this->nuovoRuolo}» non è conferibile da nessuna interfaccia.");
 
             return;
         }
@@ -232,8 +229,6 @@ trait GestisceTecnici
             return;
         }
 
-        $this->chiudiInvito();
-
         // La riga nuova si va a **cercare**, non si spera: con l'ordinamento per
         // nome il tecnico appena creato cade dove capita, e tornare a pagina 1
         // lo rende meno probabile da vedere, non più.
@@ -243,9 +238,13 @@ trait GestisceTecnici
         // ⚠️ «In consegna» e non «inviato»: la notifica è accodata, e affermare
         // che è partita sarebbe una bugia che da questa pagina nessuno può più
         // smentire.
+        $figura = $this->nuovoRuolo;
+
+        $this->chiudiInvito();
+
         $this->annuncia(match (true) {
-            $esito->invitoFallito !== null => "Tecnico «{$esito->utente->name}» creato, ma l'invito a {$esito->utente->email} NON è partito ({$esito->invitoFallito}): ripetere il gesto per riprovare.",
-            default => "Tecnico «{$esito->utente->name}» creato. Invito in consegna a {$esito->utente->email}.",
+            $esito->invitoFallito !== null => "{$figura} «{$esito->utente->name}» creato, ma l'invito a {$esito->utente->email} NON è partito ({$esito->invitoFallito}): ripetere il gesto per riprovare.",
+            default => "{$figura} «{$esito->utente->name}» creato. Invito in consegna a {$esito->utente->email}.",
         }, fallito: $esito->invitoFallito !== null);
     }
 
@@ -414,13 +413,17 @@ trait GestisceTecnici
     // ─── Letture condivise ───────────────────────────────────────────────────
 
     /**
-     * Il confine «tecnici di EasyLab», in **un posto solo**.
+     * Il confine «personale di EasyLab che lavora per portafoglio», in **un
+     * posto solo**: tecnici e, dal 6 Ott 2026, gestori (🔗 ADR-046).
      *
      * ⛔ `users` non ha global scope di tenancy (🔗 ADR-018 la esenta): ciò che
      * questo metodo non esclude, **entra**. Le due condizioni sono la
      * definizione stessa della figura — `tenant_id IS NULL` la rende «esterna»,
-     * il ruolo la rende un tecnico — e sono le stesse che `Assegnabili::perSede()`
-     * usa dall'altro lato per proporla.
+     * il ruolo le dà un portafoglio — e sono le stesse che
+     * `Assegnabili::perSede()` usa dall'altro lato per proporla.
+     *
+     * I ruoli vengono da `RuoliAssegnabili::perPiattaforma()`: la pagina
+     * amministra esattamente le figure che può creare, e non una di più.
      *
      * @return Builder<User>
      */
@@ -429,7 +432,23 @@ trait GestisceTecnici
         return User::query()
             ->when($conCestinati, fn (Builder $q) => $q->withTrashed())
             ->whereNull('tenant_id')
-            ->whereHas('roles', fn ($q) => $q->where('name', User::TECNICO_ROLE));
+            ->whereHas('roles', fn ($q) => $q->whereIn('name', RuoliAssegnabili::perPiattaforma()));
+    }
+
+    /**
+     * Le figure che la modale d'invito offre.
+     *
+     * @return list<string>
+     */
+    public function ruoliConferibili(): array
+    {
+        return RuoliAssegnabili::perPiattaforma();
+    }
+
+    /** True se quel ruolo, al primo accesso, deve configurare il secondo fattore. */
+    public function imponeSecondoFattore(mixed $ruolo): bool
+    {
+        return is_string($ruolo) && RuoliAssegnabili::imponeSecondoFattore($ruolo);
     }
 
     /**

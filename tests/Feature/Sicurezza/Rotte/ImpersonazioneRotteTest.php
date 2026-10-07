@@ -112,6 +112,34 @@ it('never lets a superadmin without two factor enter somebody else\'s tenant', f
     expect(app('impersonate')->isImpersonating())->toBeFalse();
 });
 
+it('lets the developer start an impersonation without a second factor', function () {
+    // 🔗 ADR-046, decisione di Marco del 6 Ott 2026: il Developer è l'account
+    // con cui si fa debug, e dal 6 Ott non è più fra i
+    // `two_factor_required_roles`. È il SOLO ruolo di piattaforma esentato: il
+    // test qui sopra resta la prova che per il Superadmin non è cambiato nulla.
+    $developer = User::factory()->create(['two_factor_confirmed_at' => null]);
+    $developer->assignRole('Developer');
+
+    $this->actingAs($developer)
+        ->get(route('impersonate', $this->cliente), ['Sec-Fetch-Site' => 'same-origin'])
+        ->assertRedirect('/');
+
+    expect(app('impersonate')->isImpersonating())->toBeTrue();
+});
+
+it('still refuses the developer an impersonation started from another site', function () {
+    // L'esenzione tocca il secondo fattore, non l'altra guardia della rotta:
+    // un link su un altro sito non deve far entrare nessuno in un tenant.
+    $developer = User::factory()->create(['two_factor_confirmed_at' => null]);
+    $developer->assignRole('Developer');
+
+    $this->actingAs($developer)
+        ->get(route('impersonate', $this->cliente), ['Sec-Fetch-Site' => 'cross-site'])
+        ->assertForbidden();
+
+    expect(app('impersonate')->isImpersonating())->toBeFalse();
+});
+
 it('keeps the exit from an impersonation open, whatever the two factor state of the client', function () {
     $clienteSenza2fa = User::factory()->create(['tenant_id' => $this->ente->id, 'two_factor_confirmed_at' => null]);
     $clienteSenza2fa->assignRole('Admin');

@@ -157,6 +157,36 @@ return [
             'documenti.view', 'documenti.upload', 'documenti.download',
             'qr.scan',
         ]],
+
+        // Gestore (🔗 ADR-046, 6 Ott 2026): personale EasyLab che **gestisce la
+        // manutenzione** dei clienti che gli sono assegnati. Senza Ente
+        // (`tenant_id` NULL) e con lo stesso portafoglio del Tecnico
+        // (`tecnico_cliente`): vede e scrive solo le sedi che il Superadmin gli
+        // ha dato — quello è livello 2, e sta in `AccessoTecnico`.
+        //
+        // Cosa NON ha, ed è deciso:
+        // - `unita_organizzativa.delete`: reparti e sotto-laboratori li crea e
+        //   li rinomina, non li elimina (Marco, 6 Ott 2026). Il nodo Ente non lo
+        //   tocca affatto: lo rifiuta `Albero`, non la matrice.
+        // - `strumenti.delete`, `ricambi.delete`, `ricambi.merge`,
+        //   `fornitori.delete`: i gesti che tolgono dati al cliente restano a
+        //   chi del cliente risponde.
+        // - utenti, billing, audit e tutta la piattaforma: lavora sui dati, non
+        //   sul rapporto.
+        'Gestore' => ['only' => [
+            'unita_organizzativa.view', 'unita_organizzativa.create', 'unita_organizzativa.update',
+            'strumenti.view', 'strumenti.create', 'strumenti.update', 'strumenti.move', 'strumenti.qr_generate',
+            'spostamenti.view',
+            'interventi.view', 'interventi.create', 'interventi.update', 'interventi.delete', 'interventi.complete', 'interventi.assign',
+            'semaforo.force',
+            'garanzie.macchina.view', 'garanzie.macchina.manage',
+            'garanzie.ricambio.view', 'garanzie.ricambio.manage',
+            'ricambi.view', 'ricambi.create', 'ricambi.update',
+            'ricambio_utilizzo.view', 'ricambio_utilizzo.create', 'ricambio_utilizzo.update', 'ricambio_utilizzo.delete',
+            'fornitori.view', 'fornitori.create', 'fornitori.update',
+            'documenti.view', 'documenti.upload', 'documenti.download', 'documenti.delete', 'documenti.export_pdf',
+            'qr.scan',
+        ]],
     ],
 
     // Set bloccato 🔒 (§7) — non modificabile dalla UI Superadmin.
@@ -211,6 +241,23 @@ return [
     'protected_roles' => ['Developer'],
 
     // Ruoli per cui il 2FA è obbligatorio (roadmap kickoff §2FA).
-    'two_factor_required_roles' => ['Developer', 'Superadmin', 'Admin'],
+    //
+    // ⚠️ **Il Developer NON c'è più, dal 6 Ott 2026, ed è una decisione di
+    // Marco** (🔗 ADR-046): è l'account con cui si fa debug, e deve poter
+    // impersonare senza un secondo fattore. Resta facoltativo — chi lo attiva
+    // se lo vede chiedere al login come tutti.
+    //
+    // 🔴 Il costo va tenuto presente, perché è il più alto della lista: il
+    // Developer ha ogni permesso, impersona chiunque e non è impersonabile.
+    // Senza secondo fattore la sua password è l'unica cosa fra un estraneo e i
+    // dati di tutti i clienti: deve essere lunga, casuale e non riusata, e
+    // `DEVELOPER_PASSWORD` non deve vivere fuori dall'ambiente.
+    //
+    // ⚠️ Come per `protected_roles`: questa chiave non è nella matrice e il
+    // seeder non la legge. Cambiarla **non richiede** un riseeding.
+    //
+    // Il Gestore c'è (ADR-046): scrive sui dati di più clienti insieme, cioè più
+    // di quanto possa un Admin, che il secondo fattore lo ha già obbligatorio.
+    'two_factor_required_roles' => ['Superadmin', 'Admin', 'Gestore'],
 
 ];

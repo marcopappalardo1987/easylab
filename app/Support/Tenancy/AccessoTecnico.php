@@ -17,6 +17,14 @@ use Illuminate\Support\Facades\DB;
  * L'accesso del Tecnico (ADR-007, esteso da ADR-030) — **l'unico posto** in cui
  * la regola è scritta. Sibling di CurrentTenant e AccessibleNodes.
  *
+ * ⚠️ **Dal 6 Ott 2026 vale anche per il Gestore** (🔗 ADR-046), e il nome della
+ * classe è rimasto quello: la regola di lettura è *la stessa*, riga per riga,
+ * e una seconda classe l'avrebbe copiata. Ciò che distingue i due ruoli è cosa
+ * possono **scrivere**, e quello lo decide la matrice dei permessi. Dove qui
+ * sotto si legge «tecnico» si intende «chi lavora per portafoglio»
+ * (`User::lavoraPerPortafoglio()`); il solo punto che resta del Tecnico e basta
+ * è la traccia delle aperture, in fondo.
+ *
  * La regola è UNA SOLA e vale sia per il tecnico interno (dipendente del
  * laboratorio, `users.tenant_id` valorizzato) sia per quello esterno (staff
  * EasyLab, `tenant_id` NULL):
@@ -59,10 +67,24 @@ class AccessoTecnico
         return $user instanceof User && $user->isTecnico() ? $user : null;
     }
 
+    /**
+     * Utente corrente se lavora per portafoglio: Tecnico o Gestore (ADR-046).
+     *
+     * ⛔ Non il Superadmin: il suo perimetro non è un portafoglio che qualcuno
+     * gli assegna, sono i clienti con manutenzione gestita — un'altra regola,
+     * in `ClientiGestiti`.
+     */
+    public static function titolare(): ?User
+    {
+        $user = Auth::user();
+
+        return $user instanceof User && $user->lavoraPerPortafoglio() ? $user : null;
+    }
+
     /** True quando la regola di ADR-030 sostituisce il normale confine Ente. */
     public static function siApplica(): bool
     {
-        return self::tecnico() !== null;
+        return self::titolare() !== null;
     }
 
     /**
@@ -81,7 +103,7 @@ class AccessoTecnico
      */
     public static function applica(Builder $builder, Model $model): void
     {
-        $tecnico = self::tecnico();
+        $tecnico = self::titolare();
 
         if ($tecnico === null) {
             return;

@@ -108,4 +108,16 @@ class AccountPolicy
     {
         return $user->can('billing.lockout');
     }
+
+    /**
+     * Affidare a EasyLab la manutenzione di un cliente, o ritirarla (ADR-046).
+     *
+     * 🔴 Apre — o chiude — i dati di quel cliente al Superadmin: è una clausola
+     * del rapporto, come la sua nascita. Per questo chiede `tenants.provision`,
+     * che è nel set bloccato: nessun editor di ruoli lo può dare a un cliente.
+     */
+    public function affidaManutenzione(User $user, Account $account): bool
+    {
+        return $user->can('tenants.provision');
+    }
 }

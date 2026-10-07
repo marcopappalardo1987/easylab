@@ -49,7 +49,7 @@ use Spatie\Permission\Models\Role;
  * scarterebbe i test in silenzio (`DatasetMissing`).
  */
 const RUOLI_CON_LISTINO = ['Developer', 'Superadmin'];
-const RUOLI_SENZA_LISTINO = ['Admin', 'Responsabile Reparto', 'Tenant', 'Tecnico'];
+const RUOLI_SENZA_LISTINO = ['Admin', 'Responsabile Reparto', 'Tenant', 'Tecnico', 'Gestore'];
 
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);

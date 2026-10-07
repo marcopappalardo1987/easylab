@@ -3,6 +3,11 @@
 namespace App\Livewire\Fornitori;
 
 use App\Models\Fornitore;
+use App\Models\UnitaOrganizzativa;
+use App\Support\Tenancy\CurrentTenant;
+use App\Support\Tenancy\SediSeguite;
+use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use RuntimeException;
@@ -29,6 +34,16 @@ class ElencoFornitori extends Component
 
     /** @var array{ragione_sociale:string,email:?string,telefono:?string,note:?string} */
     public array $form = ['ragione_sociale' => '', 'email' => null, 'telefono' => null, 'note' => null];
+
+    /**
+     * La sede del fornitore **nuovo**, per chi ne segue più di una (🔗 ADR-046).
+     *
+     * `mixed` perché arriva dal browser: la valida `save()` contro le sedi
+     * davvero in vista, e fuori da quelle non scrive.
+     */
+    public mixed $sedeId = null;
+
+    private ?Collection $sediCache = null;
 
     public ?int $deletingId = null;
 
@@ -60,19 +75,32 @@ class ElencoFornitori extends Component
     {
         $this->authorize($this->editingId === null ? 'fornitori.create' : 'fornitori.update');
 
-        $validato = $this->validate([
+        $regole = [
             'form.ragione_sociale' => ['required', 'string', 'max:255'],
             'form.email' => ['nullable', 'email', 'max:255'],
             'form.telefono' => ['nullable', 'string', 'max:50'],
             'form.note' => ['nullable', 'string', 'max:1000'],
-        ])['form'];
+        ];
+
+        // 🔴 ADR-046: il catalogo fornitori è per sede, e un fornitore nuovo non
+        // ha un genitore da cui ereditarla. Chi ne segue più di una la dichiara;
+        // la regola si aggiunge solo allora, così per tutti gli altri `sedeId`
+        // resta una property che nessuno legge.
+        $vaScelta = $this->editingId === null && $this->sedi()->count() > 1;
+
+        if ($vaScelta) {
+            $regole['sedeId'] = ['required', Rule::in($this->sedi()->modelKeys())];
+        }
+
+        $validato = $this->validate($regole, attributes: ['sedeId' => 'sede'])['form'];
 
         if ($this->editingId !== null) {
             Fornitore::findOrFail($this->editingId)->update($validato);
         } else {
-            // `tenant_id` lo scrive BelongsToTenant in `creating`: passarlo dal
-            // form significherebbe fidarsi di un valore che arriva dal browser.
-            Fornitore::create($validato);
+            // Per chi ha un Ente proprio `tenant_id` lo scrive BelongsToTenant
+            // in `creating`, e ciò che arriva dal browser non conta. Per chi
+            // segue più sedi è quella scelta, già validata qui sopra.
+            Fornitore::create($validato + $this->sedeDelNuovo($vaScelta));
         }
 
         $this->closeForm();
@@ -108,8 +136,45 @@ class ElencoFornitori extends Component
 
     protected function resetForm(): void
     {
-        $this->reset(['editingId', 'form']);
+        $this->reset(['editingId', 'form', 'sedeId']);
         $this->resetValidation();
+    }
+
+    /**
+     * Le sedi in vista, lette una volta per richiesta — e **solo** per chi può
+     * seguirne più di una. Per tutti gli altri è una collezione vuota e zero
+     * query: lo tiene fermo il budget di `QueryAltrePagineTest`.
+     *
+     * @return Collection<int,UnitaOrganizzativa>
+     */
+    private function sedi(): Collection
+    {
+        return $this->sediCache ??= SediSeguite::piuClienti() ? SediSeguite::elenco() : collect();
+    }
+
+    /**
+     * Il `tenant_id` del fornitore nuovo, o nulla se lo fissa `BelongsToTenant`.
+     *
+     * - più sedi in vista → quella scelta (già validata);
+     * - un Ente proprio → vuoto: lo scrive il trait, come sempre;
+     * - nessun Ente e una sede sola in vista (il Gestore) → quella;
+     * - nessun Ente e nessuna sede → 403: non c'è un catalogo in cui scrivere.
+     *
+     * @return array{tenant_id?: int}
+     */
+    private function sedeDelNuovo(bool $scelta): array
+    {
+        if ($scelta) {
+            return ['tenant_id' => (int) $this->sedeId];
+        }
+
+        if (CurrentTenant::id() !== null) {
+            return [];
+        }
+
+        abort_if($this->sedi()->count() !== 1, 403);
+
+        return ['tenant_id' => (int) $this->sedi()->first()->id];
     }
 
     public function render()
@@ -118,6 +183,8 @@ class ElencoFornitori extends Component
             // `withCount`: la colonna «macchine» serve a capire perché un
             // fornitore non si può cancellare, senza una query per riga.
             'fornitori' => Fornitore::withCount('strumenti')->orderBy('ragione_sociale')->get(),
+            // Vuota per chi lavora su una sede sola: niente colonna, niente tendina.
+            'sedi' => $this->sedi()->count() > 1 ? $this->sedi()->keyBy('id') : collect(),
         ]);
     }
 }

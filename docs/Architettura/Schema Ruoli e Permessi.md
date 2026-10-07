@@ -1,6 +1,6 @@
 🔐 Schema Ruoli e Permessi (RBAC) — Easy Lab
 
-*Definisce i 6 ruoli applicativi e la **matrice permessi per risorsa** che li governa. Traduce in permessi nominati (stile `spatie/laravel-permission`) le decisioni di accesso degli ADR-006/007 e i vincoli di privacy/tracciamento di ADR-004/005/013. Questo documento è il **contratto** per il seeder ruoli/permessi dello Sprint 1 (task "Installare spatie/laravel-permission; definire ruoli/permessi base da S0"). In caso di conflitto fra questo file e un ADR, vince l'ADR (e questo file va corretto).*
+*Definisce i 7 ruoli applicativi (6 fino al 6 Ott 2026: 🔗 ADR-046 ha aggiunto il `Gestore`) e la **matrice permessi per risorsa** che li governa. Traduce in permessi nominati (stile `spatie/laravel-permission`) le decisioni di accesso degli ADR-006/007 e i vincoli di privacy/tracciamento di ADR-004/005/013. Questo documento è il **contratto** per il seeder ruoli/permessi dello Sprint 1 (task "Installare spatie/laravel-permission; definire ruoli/permessi base da S0"). In caso di conflitto fra questo file e un ADR, vince l'ADR (e questo file va corretto).*
 
 > **Stato:** implementato in Sprint 1 · punto 5 — `config/rbac.php` + `RolesAndPermissionsSeeder` (**54** permessi, 6 ruoli, set bloccato di **7**). Erano 56 permessi fino a S3-bis: ADR-019 ha rimosso `letture_contaore.*`; e il set bloccato era di 9 fino ad ADR-029 (15 Ago 2026), che ne ha liberate due — *l'intestazione ha continuato a dire 9 per una settimana mentre la §7 diceva già 7: allineata il 22 Ago 2026*. Dopo il seeding la fonte di verità è il DB (ADR-016 §7) — quindi **una modifica a `config/rbac.php` non arriva da sola sui database già seminati**: va riseminata, e nessun test se ne accorge (la suite ricrea il DB dalla config).
 
@@ -21,7 +21,7 @@ La matrice di §6 definisce **il primo livello** (permesso sì/no per ruolo). Il
 
 ---
 
-## 2. I 6 ruoli
+## 2. I 7 ruoli
 
 Nomi ruolo **identici** a ERD §3.1 (usati così come stringa spatie).
 
@@ -33,8 +33,11 @@ Nomi ruolo **identici** a ERD §3.1 (usati così come stringa spatie).
 | `Responsabile Reparto` | Tenant-bound | valorizzato | ❌ | Come Admin sull'operatività, ma ristretto al **sotto-albero** assegnato (pivot `responsabile_unita`); niente billing/audit/provisioning. |
 | `Tenant` | Tenant-bound | valorizzato | ❌ | Laboratorio/Ente finale: vista semaforo, interventi, documenti, garanzia **macchina**. Garanzie ricambio secondo l'impostazione del **proprio Ente** (🔗 ADR-029), non secondo la matrice. |
 | `Tecnico` | Piattaforma **o** Ente | NULL (esterno) **o** valorizzato (interno) | ❌ (accesso derivato) | Personale sul campo: accesso a strumenti = **portafoglio ∪ assegnazione** (ADR-007/030) per **entrambe** le forme, ogni accesso loggato. Per l'interno il `tenant_id` è difesa in profondità (in AND), non un criterio: appartenere all'Ente non dà accesso alle sue macchine. |
+| `Gestore` | Piattaforma | NULL | ❌ (accesso derivato) | Personale EasyLab che **gestisce la manutenzione** dei clienti assegnati (🔗 ADR-046). Stesso portafoglio e stessa regola di lettura del `Tecnico`; a differenza sua **scrive**: macchine, interventi (crea, assegna, chiude), garanzie, ricambi, documenti, fornitori, reparti e sotto-laboratori (crea e rinomina, **non elimina**). Niente utenti, billing, audit, piattaforma. 2FA obbligatorio. |
 
 **Note sulla gerarchia.**
+- 🆕 **Il Superadmin sui clienti con manutenzione gestita** (🔗 ADR-046, 6 Ott 2026): oltre al proprio Ente vede e scrive le sedi degli account con `manutenzione_gestita`. Non è un bypass: l'insieme è nominato cliente per cliente (`ClientiGestiti`), e sui clienti che si gestiscono da sé resta il Parco in sola lettura e l'impersonazione.
+- 🆕 **Il `Developer` non ha più il secondo fattore obbligatorio** (🔗 ADR-046): è l'account di debug. Obbligatorio per `Superadmin`, `Admin`, `Gestore`.
 - 🔴 **Nessun ruolo bypassa il Global Scope**, Developer e Superadmin compresi. *Questa riga diceva il contrario fino al 26 Ago 2026 — «vedono tutti i tenant, indispensabile per le dashboard globali» — ed era la premessa che 🔗 **ADR-018** ha scartato: un bypass per ruolo è un secondo percorso di accesso, e il giorno che sbaglia non lo dice.* Ciò che rende possibili le viste globali è **una porta unica e non-scopata** (`App\Support\Tenancy\VistaPiattaforma`), che toglie gli scope **per nome** e chiede `tenants.view_all`; l'accesso ai dati di un cliente passa invece dall'**impersonazione**, tracciata. Il Superadmin è a tutti gli effetti tenant-bound su un proprio Ente di piattaforma (`SuperadminSeeder`), e il Developer **non ha `tenant_id`**: per `TenantScope` questo è fail-closed, quindi vede **zero righe** di dominio — non tutte. È il motivo per cui la dashboard per ruolo gli mostra «Nessuno strumento visibile.» e non quattro zeri.
 - `Superadmin` eredita *funzionalmente* tutti i permessi di `Admin` (Funzionalità per Ruolo §2: "tutte le funzionalità dell'Admin sono integrate nel superadmin").
 - `Tecnico` è un ruolo con accesso **derivato** (non bypassa lo scope, ma ne ha uno proprio come unione di due insiemi — §6, ADR-007/030). Ne esistono **due forme**: l'**esterno** (staff EasyLab, `tenant_id` NULL, con portafoglio clienti) e l'**interno** (dipendente del laboratorio, `tenant_id` valorizzato). La regola di visibilità è la stessa per entrambi: la forma cambia solo *da dove* arriva l'accesso, non *quanto* se ne ottiene.
@@ -168,6 +171,25 @@ Risorse derivate dall'ERD §3–§9. Questo è l'elenco canonico che il seeder S
 - ⁵ **Tenant — approvata il 3 Ago 2026, APPLICATA il 15 Ago 2026** (🔗 ADR-023): fra le due date il documento affermava un default che `config/rbac.php` non produceva, e il riseeding non l'avrebbe aggiunto da solo. `fornitori.view` passa da ❌ a ✅ **in sola lettura**: il fornitore è ora un campo della scheda strumento e della Panoramica, e l'anagrafica è popolata *dall'Ente stesso* — nascondere al cliente da chi ha comprato la propria macchina non protegge nulla e lascerebbe un campo vuoto inspiegabile. Creazione/modifica restano all'Admin. ⚠ **Cambia un default del seeder S1** (`config/rbac.php`), quindi va con un test che asserisca il nuovo default: è l'unico modo perché una riga di matrice non torni indietro da sola al prossimo riseed.
 - ⁷ **Il `manage` del Tenant è oggi teorico**, ed è annotato invece che risolto: il Tenant ha `garanzie.ricambio.manage` ma non `ricambio_utilizzo.update`, quindi nel tab non ha nessuna azione. Il comportamento è congelato da un test che dichiara di **congelarlo e non approvarlo**; la decisione sulla matrice va presa a parte.
 - ⁴ **Tecnico:** ha **solo `ricambi.create`** — può creare voci di catalogo "al volo" durante l'intervento (autocomplete, 🔗 ADR-008/022); **aggiornare/cancellare il catalogo resta operazione di Admin** (`ricambi.update/delete` = ❌). Risolto in S1 a favore di questa nota (seeder coerente).
+
+---
+
+### 5-bis. La colonna che manca: `Gestore` (🔗 ADR-046)
+
+La tabella qui sopra ha sei colonne. I permessi del settimo ruolo, dal default di `config/rbac.php` (la matrice viva si legge e si modifica da `/piattaforma/ruoli`):
+
+- ✅ `unita_organizzativa.view/create/update` · ❌ `unita_organizzativa.delete`
+- ✅ `strumenti.view/create/update/move/qr_generate` · ❌ `strumenti.delete`
+- ✅ `spostamenti.view`
+- ✅ `interventi.view/create/update/delete/complete/assign` · ✅ `semaforo.force`
+- ✅ `garanzie.macchina.view/manage` · ✅ `garanzie.ricambio.view/manage`
+- ✅ `ricambi.view/create/update` · ❌ `ricambi.delete`, `ricambi.merge`
+- ✅ `ricambio_utilizzo.view/create/update/delete`
+- ✅ `fornitori.view/create/update` · ❌ `fornitori.delete`
+- ✅ `documenti.view/upload/download/delete/export_pdf` · ✅ `qr.scan`
+- ❌ tutto il resto: `utenti.*`, `billing.*`, `tenants.*`, `audit.view`, `roles.manage`, `system.logs.view`
+
+Tutti limitati dallo scope: le sole sedi in portafoglio (`tecnico_cliente`). Due vincoli non stanno nella matrice: il **nodo Ente** non lo modifica (lo rifiuta `Albero`), e uno **spostamento** resta dentro la sede della macchina.
 
 ---
 

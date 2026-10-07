@@ -6,8 +6,11 @@ use App\Enums\StatoIntervento;
 use App\Enums\TipoIntervento;
 use App\Models\Intervento;
 use App\Models\Strumento;
+use App\Models\UnitaOrganizzativa;
 use App\Support\Semaforo;
+use App\Support\Tenancy\SediSeguite;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
@@ -106,6 +109,19 @@ class Scadenzario extends Component
     #[Url]
     public bool $soloMiei = false;
 
+    /**
+     * La sede su cui restringere, per chi ne segue più di una (🔗 ADR-046).
+     *
+     * `mixed` perché arriva dalla query string: `?sede[]=1` su una property
+     * tipizzata sarebbe un `TypeError`, cioè un 500 al posto di un filtro
+     * ignorato. Vale solo se è una sede **in vista** (`sedeValida()`): qualunque
+     * altro valore non filtra e non si annuncia.
+     */
+    #[Url]
+    public mixed $sede = null;
+
+    private ?Collection $sediCache = null;
+
     #[Url]
     public string $sortDir = 'asc';
 
@@ -139,6 +155,11 @@ class Scadenzario extends Component
     }
 
     public function updatingTipo(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingSede(): void
     {
         $this->resetPage();
     }
@@ -225,8 +246,38 @@ class Scadenzario extends Component
     {
         return filled($this->search)
             || $this->tipoValido() !== null
+            || $this->sedeValida() !== null
             || $this->soloMiei
             || in_array($this->stato, self::STATI, true);
+    }
+
+    /**
+     * Le sedi fra cui filtrare, una volta per richiesta: `base()` gira quattro
+     * volte per render. Vuota per chi lavora su una sede sola — niente tendina.
+     *
+     * `piuClienti()` è solo un risparmio: per chi ha un Ente proprio l'elenco
+     * avrebbe comunque una riga e finirebbe vuoto qui sotto. Evita due query a
+     * ogni render sulla pagina più usata dai clienti.
+     *
+     * @return Collection<int,UnitaOrganizzativa>
+     */
+    private function sedi(): Collection
+    {
+        if ($this->sediCache === null) {
+            $sedi = SediSeguite::piuClienti() ? SediSeguite::elenco() : collect();
+
+            $this->sediCache = $sedi->count() > 1 ? $sedi : collect();
+        }
+
+        return $this->sediCache;
+    }
+
+    /** La sede del filtro, se è una di quelle in vista; altrimenti nessuna. */
+    private function sedeValida(): ?int
+    {
+        return is_numeric($this->sede) && $this->sedi()->contains('id', (int) $this->sede)
+            ? (int) $this->sede
+            : null;
     }
 
     /** Opzioni del select, esposte alla view. @return list<int> */
@@ -334,6 +385,13 @@ class Scadenzario extends Component
 
         if ($this->soloMiei) {
             $query->where('interventi.tecnico_id', auth()->id());
+        }
+
+        // Restringe dentro ciò che lo scope già concede: una sede non in vista
+        // non arriva fin qui (`sedeValida()`), quindi non c'è modo di usarlo
+        // per chiedere i dati di un altro cliente.
+        if (($sede = $this->sedeValida()) !== null) {
+            $query->where('interventi.tenant_id', $sede);
         }
 
         return $query;
@@ -455,6 +513,7 @@ class Scadenzario extends Component
             // `Semaforo`, cioè dallo stesso posto da cui la legge la query.
             'soglia' => Semaforo::giorniImminente(),
             'tipi' => TipoIntervento::cases(),
+            'sedi' => $this->sedi(),
         ]);
     }
 }

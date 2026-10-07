@@ -143,7 +143,10 @@
     @if ($unendoId)
         @php
             $sorgente = $risultati->firstWhere('id', $unendoId);
-            $altre = $risultati->reject(fn ($x) => $x['id'] === $unendoId);
+            // Solo le voci della STESSA sede (🔗 ADR-046): per chi segue più
+            // clienti la ricerca trova anche i cataloghi degli altri, e due
+            // cataloghi non si uniscono. L'azione lo rifiuta comunque.
+            $altre = $risultati->reject(fn ($x) => $x['id'] === $unendoId || $x['sede'] !== ($sorgente['sede'] ?? null));
         @endphp
         <x-ui.modal title="Unisci voce di catalogo" close="chiudiUnione">
             <form wire:submit="unisci" class="space-y-5">

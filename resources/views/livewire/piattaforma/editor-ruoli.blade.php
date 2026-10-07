@@ -13,7 +13,7 @@
     rifiuta esattamente quei tre gesti, e una seconda copia della condizione
     scritta qui divergerebbe dalla prima senza che nulla lo dica.
 
-    ⚠️ **Orientamento**: 6 ruoli in colonna, 54 permessi in riga — lo stesso di
+    ⚠️ **Orientamento**: 7 ruoli in colonna, 54 permessi in riga — lo stesso di
     `Schema Ruoli §5`, perché questa pagina si affianca a quel documento e chi
     confronta i due non deve trasporre a mente. Attrito di vocabolario che ne
     segue: il «set bloccato è una colonna» dei documenti (un permesso attraverso
@@ -266,7 +266,14 @@
                                           title="La chiave di riserva della piattaforma: non esiste un Gate::before da super-admin, quindi il Developer dipende davvero da questa riga.">
                                         <span aria-hidden="true">🔑</span> sola lettura
                                     </span>
-                                @elseif (isset($senzaDueFattori[$ruolo]))
+                                @endif
+                                {{-- ⚠️ `@if` a sé e non `@elseif`, dal 6 Ott 2026
+                                     (🔗 ADR-046): il Developer è protetto **e**
+                                     senza secondo fattore obbligatorio, e le due
+                                     cose vanno dette entrambe. Con l'`@elseif` la
+                                     colonna che ha ogni permesso era l'unica a
+                                     tacere di non avere il 2FA. --}}
+                                @if (isset($senzaDueFattori[$ruolo]))
                                     {{-- 🔴 La colonna dice **da sé** che non ha il
                                          secondo fattore obbligatorio. Il pannello
                                          in cima lo dichiara una volta, ma è qui —

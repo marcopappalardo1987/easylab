@@ -9,11 +9,11 @@ beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
 });
 
-it('creates the full catalog and the six roles', function () {
+it('creates the full catalog and the seven roles', function () {
     expect(Permission::count())->toBe(54);
-    expect(Role::count())->toBe(6);
+    expect(Role::count())->toBe(7);
 
-    foreach (['Developer', 'Superadmin', 'Admin', 'Responsabile Reparto', 'Tenant', 'Tecnico'] as $role) {
+    foreach (['Developer', 'Superadmin', 'Admin', 'Responsabile Reparto', 'Tenant', 'Tecnico', 'Gestore'] as $role) {
         expect(Role::where('name', $role)->exists())->toBeTrue();
     }
 });

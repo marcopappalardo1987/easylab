@@ -76,9 +76,11 @@ trait ProvisionaCliente
         'adminName' => '',
         // Vuoto = il piano predefinito. Vale solo sul cliente nuovo (ADR-045).
         'piano' => '',
+        // Spuntato = manutenzione gestita da EasyLab. Solo sul cliente nuovo (ADR-046).
+        'gestita' => '',
     ];
 
-    private const CAMPI_NUOVO = ['nome', 'nomeSede', 'adminEmail', 'adminName', 'piano'];
+    private const CAMPI_NUOVO = ['nome', 'nomeSede', 'adminEmail', 'adminName', 'piano', 'gestita'];
 
     public function apriProvisioning(?int $accountId = null): void
     {
@@ -174,6 +176,16 @@ trait ProvisionaCliente
         $piano = $account === null ? $pulito('piano') : '';
         $this->nuovo['piano'] = $piano !== '' ? $piano : null;
 
+        // 🔴 **Il segno «gestita da EasyLab» si legge SOLO sul cliente nuovo**
+        // (ADR-046), per la stessa ragione del piano: agganciando una sede la
+        // modale non lo mostra, e onorarlo aprirebbe i dati di un cliente in
+        // essere con un valore che l'operatore non ha visto. Sul cliente che
+        // c'è già il gesto ha il suo pannello.
+        //
+        // Confronto stretto su ciò che una casella spuntata consegna: `nuovo` è
+        // un array pubblico, e un array annidato non deve valere «sì».
+        $gestita = $account === null && in_array($this->nuovo['gestita'] ?? null, [true, 1, '1', 'on'], true);
+
         $dati = $this->validate([
             'nuovo.nome' => ['required', 'string', 'min:2', 'max:255'],
             'nuovo.nomeSede' => ['nullable', 'string', 'min:2', 'max:255'],
@@ -228,6 +240,13 @@ trait ProvisionaCliente
         // l'account deve esistere, e il limite di piano del provisioning gira
         // su un account che ancora non c'è.
         $notaPiano = $this->applicaIlPianoScelto($esito, $dati['piano'] ?? null);
+
+        // `$gestita` è vero solo sul cliente nuovo, e lì `esigiAccountNuovo`
+        // garantisce che l'account sia nato adesso: non serve richiederlo.
+        if ($gestita) {
+            $esito->account->affidaManutenzione();
+            $notaPiano .= ' La manutenzione è gestita da EasyLab.';
+        }
 
         $this->chiudiProvisioning();
 

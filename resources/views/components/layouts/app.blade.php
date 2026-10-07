@@ -3,6 +3,11 @@
     $user = auth()->user();
     $role = $user?->getRoleNames()->first();
     $haEnteCorrente = \App\Support\Tenancy\CurrentTenant::id() !== null;
+    // 🔗 ADR-046: le voci operative (anagrafica, strumenti, scadenzario…) hanno
+    // senso solo per chi ha dati su cui lavorare — un Ente proprio, o dei
+    // clienti da seguire. Il Developer senza Ente non ha né l'uno né gli altri:
+    // gli restano Piattaforma e Guida, invece di otto pagine vuote.
+    $haDatiOperativi = \App\Support\Tenancy\SediSeguite::haDoveLavorare();
     $initials = \Illuminate\Support\Str::of($user?->name ?? '')
         ->explode(' ')->filter()->map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)))->take(2)->implode('');
 
@@ -126,6 +131,11 @@
                     </div>
 
                     <nav aria-label="Menù principale" class="flex-1 space-y-1 overflow-y-auto p-3">
+                        {{-- 🔗 ADR-046: dashboard compresa. A chi non ha dati su
+                             cui lavorare (il Developer senza Ente) la dashboard
+                             rimanda alla Piattaforma, e una voce che porta
+                             altrove da dove dice è peggio di una voce assente. --}}
+                        @if ($haDatiOperativi)
                         <x-app.nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                             <svg class="h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>
                             Dashboard
@@ -200,6 +210,8 @@
                                 Ricambi
                             </x-app.nav-link>
                         @endcan
+
+                        @endif
 
                         {{-- 🔴 Cabina di regia (S6): l'unica voce che porta fuori dal proprio
                              Ente. Gatata sul permesso di piattaforma e non sul ruolo, come tutte
