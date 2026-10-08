@@ -127,7 +127,7 @@ function snapshotDa(string $html, ?string $componente = null): string
  * nascerebbe vuoto), e un test per suite li tiene onesti contro la matrice RBAC:
  * elencare a mano senza quella rete lascia scoperto il Developer per omissione.
  */
-const RUOLI_SENZA_PIATTAFORMA = ['Admin', 'Responsabile Reparto', 'Tenant', 'Tecnico'];
+const RUOLI_SENZA_PIATTAFORMA = ['Admin', 'Responsabile Reparto', 'Tenant', 'Tecnico', 'Gestore'];
 const RUOLI_CON_PIATTAFORMA = ['Developer', 'Superadmin'];
 
 /** Un utente del ruolo dato, con 2FA già confermata (Admin e i due di piattaforma la richiedono). */

@@ -48,7 +48,7 @@ use Livewire\Livewire;
  * matrice c'è `keeps the hand-written role lists honest against the matrix`.
  */
 const RUOLI_CON_ERRORI = ['Developer'];
-const RUOLI_SENZA_ERRORI = ['Superadmin', 'Admin', 'Responsabile Reparto', 'Tenant', 'Tecnico'];
+const RUOLI_SENZA_ERRORI = ['Superadmin', 'Admin', 'Responsabile Reparto', 'Tenant', 'Tecnico', 'Gestore'];
 
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);

@@ -57,6 +57,14 @@ class PaginaBloccato extends Controller
                 && filled(config('cashier.secret'))
                 && ! app('impersonate')->isImpersonating()
                 && Gate::forUser($user)->allows('manage', $account),
+            // 🔗 ADR-045 — il portale salda un insoluto, ma non riattiva un
+            // piano dopo una **disdetta**: quello si fa da `/abbonamento`, e
+            // chi è chiuso fuori vede solo questa pagina. Stesse due condizioni
+            // di sopra sul CHI (membro del contratto, non in impersonazione);
+            // nessuna sul customer, perché la pagina di arrivo sa già dire da
+            // sé quando non c'è niente da comprare.
+            'puoGestireAbbonamento' => ! app('impersonate')->isImpersonating()
+                && Gate::forUser($user)->allows('manage', $account),
         ]);
     }
 }

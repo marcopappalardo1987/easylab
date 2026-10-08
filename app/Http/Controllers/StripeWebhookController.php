@@ -302,7 +302,16 @@ class StripeWebhookController extends CashierWebhookController
             // Il plink non è nostro: qualcuno l'ha creato a mano dalla
             // dashboard. Caso legittimo, stessa risposta del `registrazione_id`
             // assente — un checkout che non ci riguarda.
+            //
+            // 🔗 ADR-045 — oppure non c'è nessun plink, ed è il checkout di
+            // ATTIVAZIONE aperto da `/abbonamento`: lì non nasce nessun
+            // account (esiste già, e il piano glielo porta l'evento della
+            // subscription), ma il cliente ha appena scritto la sua partita
+            // IVA. Dentro questo `try` di proposito: una scrittura che
+            // fallisse qui non deve costare l'endpoint.
             if ($registrazione === null) {
+                $this->annotaLaPartitaIva($sessione);
+
                 return $this->successMethod();
             }
 
@@ -349,6 +358,55 @@ class StripeWebhookController extends CashierWebhookController
         }
 
         return $this->successMethod();
+    }
+
+    /**
+     * La partita IVA dichiarata al checkout di **attivazione**, scritta
+     * sull'Account che esisteva già (🔗 ADR-045, ADR-010 i dati fiscali,
+     * ADR-032 l'Account intestatario).
+     *
+     * Nel self-signup la scrive `CompletaRegistrazione`, perché là l'account
+     * nasce in quel momento. Qui l'account c'è da prima, e senza questo metodo
+     * il dato resterebbe sul customer di Stripe: la cabina continuerebbe a
+     * dire «P.IVA non dichiarata» di un cliente che l'ha appena scritta.
+     *
+     * ## Chi è l'account, e perché basta il customer
+     *
+     * L'**unico** filtro è l'uguaglianza su `stripe_id`, che è UNIQUE — lo
+     * stesso che protegge `accountDa()`. Non si guardano i metadata: si
+     * riscrivono dalla dashboard, e qui non servono. Un customer che non è di
+     * nessun account (chiavi incrociate, un checkout aperto a mano) non scrive
+     * niente; uno cestinato nemmeno.
+     *
+     * ## 🔴 Solo se manca
+     *
+     * È la direzione che `CompletaRegistrazione` ha già scritto: in cabina il
+     * dato fiscale l'ha messo una persona che risponde di quel contratto, in
+     * checkout l'ha digitato chi stava pagando. Il secondo riempie un vuoto,
+     * non corregge il primo. Ne discende l'idempotenza: una seconda consegna
+     * trova il campo pieno.
+     *
+     * ⚠️ Niente log e niente `report()` sui rami che non scrivono: sono casi
+     * normali, e il chiamante risponde comunque 200.
+     *
+     * @param  array<string, mixed>  $sessione
+     */
+    private function annotaLaPartitaIva(array $sessione): void
+    {
+        $esito = EsitoCheckout::daSessioneStripe($sessione);
+
+        if ($esito->partitaIva === null || $esito->customerId === null) {
+            return;
+        }
+
+        /** @var Account|null $account */
+        $account = $this->getUserByStripeId($esito->customerId);
+
+        if ($account === null || $account->trashed() || filled($account->partita_iva)) {
+            return;
+        }
+
+        $account->forceFill(['partita_iva' => $esito->partitaIva])->save();
     }
 
     /**

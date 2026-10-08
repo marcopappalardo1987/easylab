@@ -46,14 +46,17 @@ final class PianiRegistrabili
     /**
      * I codici acquistabili dal modulo pubblico, nell'ordine del listino.
      *
+     * I tre filtri sono scritti una volta sola, in `Piani::vendibili()`: dal 3
+     * Ott 2026 (ADR-045) li chiedono anche la proposta della cabina e il cambio
+     * di piano del cliente, e tre copie della stessa regola sono tre regole.
+     * Le ragioni per cui il **modulo pubblico** li vuole restano quelle del
+     * docblock di classe.
+     *
      * @return list<string>
      */
     public static function codici(): array
     {
-        return collect(Piani::offribili())
-            ->reject(fn (string $codice) => Piani::eGratuito($codice))
-            ->filter(fn (string $codice) => filled(Piani::stripePrice($codice)))
-            ->values()->all();
+        return Piani::vendibili();
     }
 
     /**

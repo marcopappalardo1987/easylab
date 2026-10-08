@@ -63,6 +63,18 @@
                 @endforeach
             </select>
 
+            {{-- 🔗 ADR-046: solo per chi segue più sedi. Per tutti gli altri
+                 `$sedi` è vuota e la tendina non esiste. --}}
+            @if ($sedi->isNotEmpty())
+                <select wire:model.live="sede" aria-label="Sede"
+                    class="block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none sm:w-64">
+                    <option value="">Tutte le sedi</option>
+                    @foreach ($sedi as $s)
+                        <option value="{{ $s->id }}">{{ \App\Support\Tenancy\SediSeguite::etichetta($s) }}</option>
+                    @endforeach
+                </select>
+            @endif
+
             <label class="flex items-center gap-2 text-sm whitespace-nowrap text-ink-2">
                 {{-- ⚠️ `border` esplicito accanto al colore: senza, la preflight
                      di Tailwind v4 (`border: 0 solid` su `*`) rende il contorno

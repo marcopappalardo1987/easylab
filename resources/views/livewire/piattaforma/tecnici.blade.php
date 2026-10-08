@@ -17,13 +17,14 @@
 
     <div class="mt-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-            <h1 class="text-2xl font-bold tracking-tight text-ink">I miei tecnici</h1>
+            <h1 class="text-2xl font-bold tracking-tight text-ink">Tecnici e gestori</h1>
             <p class="mt-1 text-sm text-ink-2">
                 Le persone di EasyLab che lavorano sulle macchine dei clienti, e su quali clienti lavora ciascuna.
+                Il tecnico esegue gli interventi; il gestore tiene anche l'anagrafica e la pianificazione.
             </p>
         </div>
 
-        <x-ui.button wire:click="apriInvito">+ Invita un tecnico</x-ui.button>
+        <x-ui.button wire:click="apriInvito">+ Invita una persona</x-ui.button>
     </div>
 
     @if (session('tecnici'))
@@ -90,6 +91,11 @@
                             <td class="py-3 pl-4 pr-3" data-etichetta="Persona">
                                 <div>
                                     <span class="font-medium text-ink">{{ $tecnico->name }}</span>
+                                    {{-- Il ruolo accanto al nome (🔗 ADR-046): le
+                                         due figure hanno lo stesso portafoglio e
+                                         poteri diversi, e chi assegna una sede
+                                         deve vedere a chi la sta aprendo. --}}
+                                    <span class="ml-1 text-xs text-ink-2" data-ruolo-persona="{{ $tecnico->id }}">{{ $tecnico->getRoleNames()->implode(', ') }}</span>
                                     <span class="mt-0.5 block text-xs text-ink-3">{{ $tecnico->email }}</span>
                                 </div>
                             </td>
@@ -145,7 +151,7 @@
                                 @if (trim($search) !== '')
                                     Nessun tecnico con questa ricerca.
                                 @else
-                                    Nessun tecnico di EasyLab. Il primo si crea da «+ Invita un tecnico».
+                                    Nessun tecnico o gestore di EasyLab. Il primo si crea da «+ Invita una persona».
                                 @endif
                             </td>
                         </tr>
@@ -161,16 +167,13 @@
 
     {{-- ─── Modale: invita un tecnico ──────────────────────────────────── --}}
     @if ($invitoAperto)
-        <x-ui.modal title="Invita un tecnico di EasyLab" close="chiudiInvito">
-            {{-- Il ruolo non si sceglie: da questa pagina nasce una figura sola,
-                 e chi sta per crearla deve saperlo **prima** dei campi, non dopo
-                 averli riempiti. Stesso ordine della modale d'invito di
-                 `/utenti`: cosa succede, poi i campi, poi la conferma. --}}
+        <x-ui.modal title="Invita una persona di EasyLab" close="chiudiInvito">
+            {{-- Stesso ordine della modale d'invito di `/utenti`: cosa succede,
+                 poi i campi, poi la conferma. --}}
             <p class="text-sm text-ink-2">
                 Riceverà un'email con un link valido sette giorni, da cui sceglie la propria password.
-                Nasce con ruolo <strong class="text-ink">Tecnico</strong> e <strong class="text-ink">nessun Ente</strong>:
-                è la forma che gli permette di lavorare su più clienti. Non ha ancora accesso a nulla —
-                i clienti si scelgono dopo, con «Clienti e accessi».
+                Nasce con <strong class="text-ink">nessun Ente</strong>: è la forma che le permette di lavorare
+                su più clienti. Non ha ancora accesso a nulla — i clienti si scelgono dopo, con «Clienti e accessi».
             </p>
 
             <form wire:submit="invitaTecnico" class="mt-4 space-y-4">
@@ -178,6 +181,35 @@
                             placeholder="Giulia Verdi" />
                 <x-ui.input label="Indirizzo email" name="nuovo.email" type="email" wire:model="nuovo.email"
                             placeholder="giulia.verdi@easylab.it" />
+
+                <div>
+                    <label for="figura" class="block text-sm font-medium text-ink">Figura</label>
+                    <select id="figura" wire:model.live="nuovoRuolo"
+                            class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-sm text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                        @foreach ($this->ruoliConferibili() as $conferibile)
+                            <option value="{{ $conferibile }}">{{ $conferibile }}</option>
+                        @endforeach
+                    </select>
+                    {{-- Cosa cambia fra le due, detto **prima** del gesto: hanno lo
+                         stesso portafoglio, e la differenza non si vede dal nome. --}}
+                    <p class="mt-2 text-sm text-ink-2" data-figura="{{ $nuovoRuolo }}">
+                        @if ($nuovoRuolo === \App\Models\User::GESTORE_ROLE)
+                            Il <strong class="text-ink">Gestore</strong> lavora sui clienti che gli assegni come farebbe il loro
+                            responsabile: registra macchine, crea reparti, pianifica, assegna e chiude interventi.
+                            Non elimina reparti e non vede utenti, abbonamento e piattaforma.
+                        @else
+                            Il <strong class="text-ink">Tecnico</strong> vede le macchine dei clienti che gli assegni e chiude
+                            gli interventi: non registra macchine e non pianifica.
+                        @endif
+                    </p>
+                    @if ($this->imponeSecondoFattore($nuovoRuolo))
+                        <p class="mt-2 rounded-md border border-warn-dot bg-warn-soft px-3 py-2 text-sm text-warn-soft-ink">
+                            Questo ruolo richiede il secondo fattore. Al primo accesso le sarà chiesto di
+                            configurarlo e non potrà fare altro finché non l'avrà fatto: avvisala, e assicurati
+                            che abbia con sé il telefono con cui lo userà.
+                        </p>
+                    @endif
+                </div>
 
                 {{-- L'errore su un ruolo forzato dal browser (🔗 ADR-038) ha un
                      posto in cui leggersi, invece di sembrare un invio riuscito. --}}

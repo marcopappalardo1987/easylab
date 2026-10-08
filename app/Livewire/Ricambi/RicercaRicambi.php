@@ -221,6 +221,9 @@ class RicercaRicambi extends Component
 
         return [
             'id' => $ricambio->id,
+            // La sede del catalogo (🔗 ADR-046): due voci si uniscono solo se è
+            // la stessa, e la modale lo deve sapere per non offrire le altre.
+            'sede' => (int) $ricambio->tenant_id,
             'nome' => $ricambio->nome,
             'codice' => $ricambio->codice,
             'macchine' => $macchine,
@@ -285,6 +288,15 @@ class RicercaRicambi extends Component
 
         $sorgente = Ricambio::findOrFail($this->unendoId);
         $destinazione = Ricambio::findOrFail($this->destinazioneId);
+
+        // 🔴 ADR-046: il catalogo è per sede, e chi segue più clienti ha in
+        // vista quelli di tutti. `unisciIn()` lo rifiuterebbe con un'eccezione,
+        // cioè una pagina di errore: qui diventa una frase accanto al campo.
+        if ((int) $sorgente->tenant_id !== (int) $destinazione->tenant_id) {
+            $this->addError('destinazioneId', 'Le due voci sono di due sedi diverse: ogni sede ha il suo catalogo, e non si uniscono.');
+
+            return;
+        }
 
         $spostati = $sorgente->unisciIn($destinazione);
 

@@ -55,7 +55,7 @@ it('refuses to open without the platform permission', function (string $ruolo) {
         ->and(fn () => VistaPiattaforma::enti())->toThrow(AuthorizationException::class)
         ->and(fn () => VistaPiattaforma::strumenti())->toThrow(AuthorizationException::class)
         ->and(fn () => VistaPiattaforma::audit())->toThrow(AuthorizationException::class);
-})->with(['Admin', 'Responsabile Reparto', 'Tenant', 'Tecnico']);
+})->with(['Admin', 'Responsabile Reparto', 'Tenant', 'Tecnico', 'Gestore']);
 
 it('refuses to open for a guest', function () {
     expect(fn () => VistaPiattaforma::accounts())->toThrow(AuthorizationException::class)

@@ -555,6 +555,19 @@
                                     {{-- Un piano dismesso non si nasconde: questa è la schermata da cui si ripara. --}}
                                     <x-ui.badge variant="warning">{{ $cliente->piano }} — fuori catalogo</x-ui.badge>
                                 @endif
+
+                                {{-- 🔗 ADR-045 — il piano a pagamento PROPOSTO e non
+                                     ancora pagato. Sta sotto il piano vero e non al
+                                     suo posto: il badge sopra dice cosa il cliente
+                                     ha, questa riga cosa gli è stato chiesto. Chi
+                                     guarda la colonna vede chi deve ancora pagare
+                                     senza doversi ricordare a chi l'aveva proposto. --}}
+                                @if ($cliente->piano_proposto)
+                                    <p class="mt-1 text-xs text-warn-soft-ink" data-piano-proposto>
+                                        In attesa di pagamento:
+                                        {{ Piani::esiste($cliente->piano_proposto) ? Piani::etichetta($cliente->piano_proposto) : $cliente->piano_proposto }}
+                                    </p>
+                                @endif
                             </td>
 
                             {{-- Due badge distinti e mai uno solo: `is_locked` significa
@@ -570,6 +583,13 @@
                                 @unless ($cliente->is_locked)
                                     <x-ui.badge variant="success">Attivo</x-ui.badge>
                                 @endunless
+                                {{-- 🔗 ADR-046: non è uno stato commerciale, ma è la
+                                     cosa da sapere prima di aprire i dati di un
+                                     cliente — su questi il Superadmin lavora
+                                     senza impersonare. --}}
+                                @if ($cliente->manutenzione_gestita)
+                                    <x-ui.badge variant="primary" data-gestita="{{ $cliente->id }}">🛠 Gestita da EasyLab</x-ui.badge>
+                                @endif
                             </td>
 
                             {{-- ⚠️ `?` e non `∞` sul piano fuori catalogo: `maxEnti()`
@@ -652,6 +672,14 @@
                                             class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-2 hover:bg-surface-sunken hover:text-ink"
                                             title="Aggiungi un Ente (una sede) a questo cliente">
                                         <span aria-hidden="true">＋</span> Ente
+                                    </button>
+                                @endcan
+
+                                @can('affidaManutenzione', $cliente)
+                                    <button type="button" wire:click="apriManutenzione({{ $cliente->id }})"
+                                            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-2 hover:bg-surface-sunken hover:text-ink"
+                                            title="{{ $cliente->manutenzione_gestita ? 'La manutenzione è gestita da EasyLab' : 'Affida a EasyLab la manutenzione di questo cliente' }}">
+                                        <span aria-hidden="true">🛠</span> Gestione
                                     </button>
                                 @endcan
 
@@ -784,16 +812,17 @@
                     sedi {{ $this->slotDelPiano($perCliente) }}).
                 </p>
             @else
-                {{-- ⚠️ Nessun select dei piani: i piani a pagamento passano da
-                     Stripe, e un menù offrirebbe un'opzione che fallisce al
-                     salvataggio — o peggio creerebbe un account marcato «saas»
-                     senza subscription, cioè un cliente che risulta pagante e non
-                     paga. Si dice come stanno le cose, invece di offrire una
-                     scelta che non esiste. --}}
+                {{-- 🔗 ADR-045 — il select dei piani c'è dal 3 Ott 2026, e la copy
+                     dice la sola cosa che conta: scegliere un piano a pagamento
+                     NON marca il cliente come pagante. Nasce sul piano
+                     predefinito e riceve la proposta; il piano parte quando
+                     Stripe conferma l'incasso. Un account marcato «saas» senza
+                     subscription resta ciò che questa modale non produce. --}}
                 <p class="text-sm text-ink-2">
                     Nascono insieme il cliente, il suo primo <strong>Ente</strong> e l'amministratore che lo governa.
-                    Il cliente nasce sul piano <strong>Free</strong>. Il passaggio a un piano a pagamento
-                    si fa da Stripe (<code class="text-xs">easylab:abbona</code>), non da qui.
+                    Con un piano gratuito il cliente nasce su quel piano. Con un piano a pagamento
+                    nasce sul piano <strong>{{ App\Support\Piani::esiste(App\Support\Piani::predefinito()) ? App\Support\Piani::etichetta(App\Support\Piani::predefinito()) : App\Support\Piani::predefinito() }}</strong>
+                    e riceve la proposta via email: il piano parte quando lo paga, non prima.
                 </p>
             @endif
 
@@ -831,6 +860,46 @@
                         @enderror
                     </div>
                 @endforeach
+
+                {{-- ⚠️ Solo sul cliente NUOVO: aggiungendo una sede il piano è già
+                     quello del contratto, e l'azione ignora comunque il campo
+                     (`nuovo` è un array pubblico: la vista non è la guardia).
+
+                     Il valore vuoto È il piano predefinito, così chi non tocca
+                     la tendina ottiene ciò che la modale ha sempre fatto. --}}
+                @unless ($perCliente)
+                    @php $pianiDiNascita = $this->pianiDiNascita(); @endphp
+                    <div wire:key="prov-piano">
+                        <label for="prov-piano" class="block text-sm font-medium text-ink">Piano</label>
+                        <select id="prov-piano" wire:model="nuovo.piano"
+                                class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                            {{-- ⚠️ Un'espressione sola e nessun `@if` dentro
+                                 l'<option>: Livewire avvolge ogni condizionale
+                                 Blade in commenti-marcatore, e dentro una voce di
+                                 tendina non c'è niente che debba starci oltre al
+                                 testo. --}}
+                            @foreach ($pianiDiNascita as $opzione)
+                                <option value="{{ $opzione['predefinito'] ? '' : $opzione['codice'] }}">{{ $opzione['etichetta'] }} — {{ $opzione['gratuito']
+                                    ? 'gratuito'.($opzione['predefinito'] ? ' (predefinito)' : '')
+                                    : number_format((int) $opzione['importoCent'] / 100, 2, ',', '.').' € al mese, da proporre al cliente' }}</option>
+                            @endforeach
+                        </select>
+                        @error('nuovo.piano')
+                            <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    {{-- 🔗 ADR-046. Solo sul cliente nuovo, come il piano: su uno
+                         che c'è già il gesto ha il suo pannello («Gestione»). --}}
+                    <label wire:key="prov-gestita" class="flex items-start gap-2 text-sm text-ink-2">
+                        <input type="checkbox" wire:model="nuovo.gestita" value="1"
+                               class="mt-0.5 rounded border border-border-strong text-brand focus:ring-ring" />
+                        <span>
+                            <span class="font-medium text-ink">Manutenzione gestita da EasyLab</span><br>
+                            Il Superadmin lavora sui dati di questo cliente senza impersonare. Si può cambiare dopo.
+                        </span>
+                    </label>
+                @endunless
             </div>
 
             <p class="mt-3 text-xs text-ink-3">
@@ -910,6 +979,44 @@
                     </button>
                 @endif
             </div>
+        </x-ui.modal>
+    @endif
+
+    @if ($inLavorazione && $pannello === 'manutenzione')
+        <x-ui.modal :title="'Manutenzione — '.$inLavorazione->ragione_sociale" close="chiudiPannello">
+            {{-- 🔗 ADR-046. Si dice **cosa apre**, prima del bottone: è il gesto
+                 di questa pagina che cambia chi legge i dati di un cliente. --}}
+            @if ($inLavorazione->manutenzione_gestita)
+                <p class="text-sm text-ink-2">
+                    La manutenzione di questo cliente è <strong class="text-ink">gestita da EasyLab</strong>:
+                    il Superadmin vede e modifica macchine, interventi, ricambi e documenti di tutte le sue sedi,
+                    senza impersonare nessuno.
+                </p>
+                <p class="mt-2 text-sm text-ink-2">
+                    Ritirandola il cliente torna a gestirsi da sé: i suoi dati restano dove sono, ma da qui si
+                    raggiungono solo dal Parco, in sola lettura, o impersonando. I gestori a cui hai assegnato
+                    le sue sedi continuano a lavorarci finché non gliele togli da «Tecnici».
+                </p>
+                <div class="mt-4 flex justify-end gap-3">
+                    <x-ui.button variant="secondary" wire:click="chiudiPannello">Annulla</x-ui.button>
+                    <x-ui.button variant="secondary" wire:click="ritiraManutenzione">Ritira la gestione</x-ui.button>
+                </div>
+            @else
+                <p class="text-sm text-ink-2">
+                    Affidando a EasyLab la manutenzione di questo cliente, il <strong class="text-ink">Superadmin</strong>
+                    vede e modifica macchine, interventi, ricambi e documenti di tutte le sue sedi dalle pagine di
+                    sempre, senza impersonare nessuno. Il cliente continua a vedere i propri dati, con il nome di chi
+                    ha lavorato per lui.
+                </p>
+                <p class="mt-2 text-sm text-ink-2">
+                    Per farci lavorare un <strong class="text-ink">gestore</strong> assegnagli le sedi da «Tecnici»:
+                    questo segno non gliele apre da solo.
+                </p>
+                <div class="mt-4 flex justify-end gap-3">
+                    <x-ui.button variant="secondary" wire:click="chiudiPannello">Annulla</x-ui.button>
+                    <x-ui.button wire:click="affidaManutenzione">Affida a EasyLab</x-ui.button>
+                </div>
+            @endif
         </x-ui.modal>
     @endif
 

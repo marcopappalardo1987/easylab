@@ -18,6 +18,7 @@ use App\Notifications\AvvisoObsolescenza;
 use App\Notifications\BenvenutoRegistrazione;
 use App\Notifications\DigestScadenze;
 use App\Notifications\InvitoUtente;
+use App\Notifications\PropostaPiano;
 use App\Notifications\VerificaEmailRegistrazione;
 use Illuminate\Database\Eloquent\Model;
 
@@ -255,6 +256,7 @@ final class Matrice
             InvitoUtente::class => 't:Isolamento/CodeIsolationTest.php::delivers an invitation queued by A with the brand of A, whatever the context on the worker',
             VerificaEmailRegistrazione::class => $senzaEnte,
             BenvenutoRegistrazione::class => $senzaEnte,
+            PropostaPiano::class => $senzaEnte,
             InviaAllertaErrore::class => 't:Notifiche/MarchioEmailTest.php::never brands the platform alert with a tenant, by construction and not by convention',
         ];
     }

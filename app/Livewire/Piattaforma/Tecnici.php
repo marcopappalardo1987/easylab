@@ -84,6 +84,9 @@ class Tecnici extends Component
         $sedi = $this->sediSelezionabili();
 
         $tecnici = $this->tecniciDiPiattaforma($this->conCestinati)
+            // Il ruolo si legge accanto al nome (🔗 ADR-046): caricato qui, o
+            // sarebbe una query per riga.
+            ->with('roles:id,name')
             ->when(trim($this->search) !== '', function (Builder $q) {
                 // I jolly di LIKE si neutralizzano: senza, `%` da solo
                 // restituisce ogni riga. `ESCAPE` va dichiarato perché SQLite,

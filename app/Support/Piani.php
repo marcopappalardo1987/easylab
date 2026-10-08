@@ -67,6 +67,30 @@ class Piani
         return array_keys(array_filter(self::catalogo()->tutti(), fn (Piano $p) => $p->attivo));
     }
 
+    /**
+     * I piani che si possono **comprare** adesso: offribili, a pagamento e con
+     * un price di Stripe su cui aprire la subscription (🔗 ADR-045).
+     *
+     * È la domanda comune a ogni superficie che vende — il modulo pubblico, la
+     * proposta della cabina, il cambio di piano del cliente — e sta qui perché
+     * sia una sola: tre copie divergerebbero al primo piano «a pagamento ma non
+     * ancora sincronizzato», e una delle tre aprirebbe un checkout su niente.
+     *
+     * ⚠️ **`filled()` e non `!== null`**: `phpunit.xml` azzera
+     * `STRIPE_PRICE_SAAS`, quindi in suite `stripePrice()` può tornare la
+     * stringa vuota. Un confronto con `null` la lascerebbe passare fino alla
+     * chiamata di rete.
+     *
+     * @return list<string>
+     */
+    public static function vendibili(): array
+    {
+        return array_values(array_filter(
+            self::offribili(),
+            fn (string $codice) => ! self::eGratuito($codice) && filled(self::stripePrice($codice)),
+        ));
+    }
+
     public static function esiste(string $piano): bool
     {
         return self::catalogo()->perCodice($piano) !== null;
@@ -116,6 +140,33 @@ class Piani
     public static function stripePrice(string $piano): ?string
     {
         return self::risolvi($piano)->prezzi->firstWhere('corrente', true)?->stripe_price_id;
+    }
+
+    /**
+     * L'importo del price **corrente** del piano, in centesimi, o `null` se il
+     * piano non ne ha uno (gratuito, o a pagamento non ancora sincronizzato).
+     *
+     * ⚠️ **Non è `prezzoMensileCent()`**, e la differenza è ciò che Stripe
+     * addebita davvero: quello è il listino, questo è l'importo con cui il
+     * Price è stato creato — che su Stripe è immutabile. I due coincidono
+     * quando il piano è sincronizzato, e divergono per il tempo che passa fra un
+     * cambio di prezzo e la sua sincronizzazione. Chi mostra una cifra accanto
+     * a un bottone che apre un pagamento legge **questo** (🔗 ADR-045).
+     */
+    public static function importoCorrenteCent(string $piano): ?int
+    {
+        $importo = self::risolvi($piano)->prezzi->firstWhere('corrente', true)?->importo_cent;
+
+        return $importo === null ? null : (int) $importo;
+    }
+
+    /**
+     * Quanto addebita un price id, **anche se storico**, o `null` se quel price
+     * non è a listino. Vedi `CatalogoPiani::importoPerPrice()`.
+     */
+    public static function importoDelPrice(?string $priceId): ?int
+    {
+        return self::catalogo()->importoPerPrice($priceId);
     }
 
     /**

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Account;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -57,7 +58,13 @@ it('no longer promises a page nobody is writing', function () {
     // Reso per **due ruoli**: la sezione stava sotto le voci gatate, quindi con
     // un solo ruolo si proverebbe metà del layout.
     $sidebar = function (string $ruolo): string {
-        $u = User::factory()->create(['two_factor_confirmed_at' => now()]);
+        // ⚠️ Con un Ente (🔗 ADR-046): senza, e senza clienti da seguire, le
+        // voci operative non si disegnano affatto — e il positivo qui sotto
+        // misurerebbe una barra che nessun utente vero vede.
+        $u = User::factory()->create([
+            'tenant_id' => UnitaOrganizzativa::factory()->ente()->create()->id,
+            'two_factor_confirmed_at' => now(),
+        ]);
         $u->assignRole($ruolo);
 
         $html = $this->actingAs($u->fresh())->get(route('dashboard'))->assertOk()->getContent();
@@ -119,4 +126,89 @@ it('keeps the personal pages out of the sidebar, where only the Ente data lives'
     // …ma la pagina resta raggiungibile: togliere la voce non toglie la rotta,
     // ed è lì che il middleware manda chi deve ancora attivare il 2FA.
     expect($html)->toContain(route('settings.security'));
+});
+
+// ─── Chi vede quali voci (🔗 ADR-046) ────────────────────────────────────────
+
+/** Il blocco `<nav>` della barra laterale, per la pagina data. */
+function barraLaterale(string $html): string
+{
+    preg_match('/<nav[^>]*aria-label="Menù principale".*?<\/nav>/s', $html, $blocco);
+
+    expect($blocco)->not->toBeEmpty();
+
+    return $blocco[0];
+}
+
+it('leaves a developer without an ente with the platform and the guide only', function () {
+    // Non ha un Ente e non segue clienti: otto voci operative lo porterebbero a
+    // otto liste vuote. Il suo lavoro comincia dalla cabina, da cui impersona.
+    $developer = User::factory()->create(['tenant_id' => null]);
+    $developer->assignRole('Developer');
+
+    $nav = barraLaterale($this->actingAs($developer)->get(route('piattaforma.index'))->assertOk()->getContent());
+
+    expect($nav)->toContain('Piattaforma', 'Guida')
+        ->and($nav)->not->toContain('Dashboard', 'Anagrafica', 'Strumenti', 'Documenti', 'Fornitori', 'Scadenzario', 'Ricambi', 'Campo');
+});
+
+it('sends a developer without an ente from the dashboard to the platform', function () {
+    $developer = User::factory()->create(['tenant_id' => null]);
+    $developer->assignRole('Developer');
+
+    $this->actingAs($developer)->get(route('dashboard'))->assertRedirect(route('piattaforma.index'));
+});
+
+it('keeps the dashboard for whoever has an ente or clients to follow', function (string $ruolo, bool $conEnte) {
+    $utente = User::factory()->create([
+        'tenant_id' => $conEnte ? UnitaOrganizzativa::factory()->ente()->create()->id : null,
+        'two_factor_confirmed_at' => now(),
+    ]);
+    $utente->assignRole($ruolo);
+
+    $this->actingAs($utente)->get(route('dashboard'))->assertOk();
+})->with([
+    'Developer con un Ente' => ['Developer', true],
+    'Superadmin senza Ente' => ['Superadmin', false],
+    'Gestore' => ['Gestore', false],
+    'Tecnico esterno' => ['Tecnico', false],
+    'Admin' => ['Admin', true],
+]);
+
+it('never sends to the platform somebody who cannot open it', function () {
+    // Un Admin rimasto senza Ente non ha nulla da vedere, ma la piattaforma non
+    // è casa sua: resta sulla dashboard, e non in un giro di 403.
+    $admin = User::factory()->create(['tenant_id' => null, 'two_factor_confirmed_at' => now()]);
+    $admin->assignRole('Admin');
+
+    $this->actingAs($admin)->get(route('dashboard'))->assertOk();
+});
+
+it('gives a gestore the working pages, without people and without the platform', function () {
+    $gestore = User::factory()->create(['tenant_id' => null, 'two_factor_confirmed_at' => now()]);
+    $gestore->assignRole('Gestore');
+
+    $nav = barraLaterale($this->actingAs($gestore)->get(route('dashboard'))->assertOk()->getContent());
+
+    expect($nav)->toContain('Dashboard', 'Anagrafica', 'Strumenti', 'Documenti', 'Fornitori', 'Scadenzario', 'Ricambi')
+        ->and($nav)->not->toContain('Persone', 'Piattaforma', 'Guida');
+});
+
+it('names the managed clients in the perimeter of the superadmin dashboard', function () {
+    // Il totale conta anche loro: «le macchine di EasyLab» sopra quel numero
+    // sarebbe una frase falsa.
+    $ente = UnitaOrganizzativa::factory()->ente()->create(['nome' => 'EasyLab']);
+    $superadmin = User::factory()->create(['tenant_id' => $ente->id, 'two_factor_confirmed_at' => now()]);
+    $superadmin->assignRole('Superadmin');
+
+    $this->actingAs($superadmin)->get(route('dashboard'))
+        ->assertSee('Lo stato delle macchine di EasyLab.')
+        ->assertDontSee('manutenzione gestita');
+
+    $cliente = Account::factory()->create();
+    UnitaOrganizzativa::factory()->ente()->perAccount($cliente)->create();
+    $cliente->affidaManutenzione();
+
+    $this->actingAs($superadmin)->get(route('dashboard'))
+        ->assertSee('Lo stato delle macchine di EasyLab e dei clienti con manutenzione gestita da EasyLab.');
 });

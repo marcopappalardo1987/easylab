@@ -15,7 +15,7 @@ class Rbac
         return config('rbac.permissions', []);
     }
 
-    /** Nomi dei 6 ruoli. */
+    /** Nomi dei ruoli, nell'ordine di `config/rbac.php`. */
     public static function roleNames(): array
     {
         return array_keys(config('rbac.roles', []));

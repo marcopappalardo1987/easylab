@@ -90,6 +90,38 @@ trait AmministraAccount
         $this->pannello = 'lockout';
     }
 
+    /**
+     * Apre il pannello «manutenzione gestita da EasyLab» (🔗 ADR-046).
+     *
+     * Un pannello e non un interruttore sulla riga: il gesto apre i dati del
+     * cliente al Superadmin, e chi lo compie deve leggerlo prima di farlo.
+     */
+    public function apriManutenzione(int $accountId): void
+    {
+        $account = $this->accountAmministrabile($accountId, 'affidaManutenzione');
+
+        $this->resetValidation();
+        $this->chiudiOgniModale();
+
+        $this->accountInLavorazione = $account->id;
+        $this->pannello = 'manutenzione';
+    }
+
+    /** ⚠️ Riautorizza e rilegge: `accountInLavorazione` è una property pubblica. */
+    public function affidaManutenzione(): void
+    {
+        $this->accountAmministrabile($this->accountInLavorazione, 'affidaManutenzione')->affidaManutenzione();
+
+        $this->chiudiPannello();
+    }
+
+    public function ritiraManutenzione(): void
+    {
+        $this->accountAmministrabile($this->accountInLavorazione, 'affidaManutenzione')->ritiraManutenzione();
+
+        $this->chiudiPannello();
+    }
+
     public function apriFiscali(int $accountId): void
     {
         $account = $this->accountAmministrabile($accountId, 'manage');
@@ -321,6 +353,7 @@ trait AmministraAccount
             'lockout' => 'lockout',
             'fiscali' => 'manage',
             'eliminazione' => 'elimina',
+            'manutenzione' => 'affidaManutenzione',
             default => null,
         };
 

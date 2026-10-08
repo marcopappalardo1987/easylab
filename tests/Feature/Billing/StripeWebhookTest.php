@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Support\Listino\CatalogoPiani;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Testing\TestResponse;
 use Spatie\Activitylog\Models\Activity;
 
@@ -258,6 +259,171 @@ it('unlocks a returning customer who subscribes again', function () {
     expect($account->is_locked)->toBeFalse()
         ->and($account->stripe_locked_at)->toBeNull()
         ->and($account->piano)->toBe('saas');
+});
+
+it('puts an existing free account on the plan it paid for, and closes the proposal', function () {
+    // 🔗 ADR-045 — l'attivazione dalla pagina «Abbonamento». Il checkout nasce
+    // intestato al customer dell'Account, quindi la subscription arriva qui con
+    // uno `stripe_id` che il database conosce: nessun handler nuovo, è la stessa
+    // strada di chi disdice e torna. Il piano lo scrive QUESTO evento — aprire
+    // il checkout non lo aveva toccato.
+    prezzoSaas('price_saas_test');
+    $this->account->cambiaPiano('free');
+    $this->account->proponiPiano('saas');
+
+    consegna(evento('customer.subscription.created', 'active'))->assertOk();
+
+    $account = $this->account->fresh();
+
+    expect($account->piano)->toBe('saas')
+        ->and($account->piano_proposto)->toBeNull()
+        ->and(DB::table('subscriptions')->where('account_id', $account->id)->where('stripe_id', 'sub_easylab')->count())->toBe(1);
+});
+
+it('keeps the proposal while the subscription has not started', function () {
+    // `incomplete`: il checkout è aperto, l'incasso no. Il piano non si tocca
+    // e la proposta resta — è ancora vero che il cliente deve pagare.
+    prezzoSaas('price_saas_test');
+    $this->account->cambiaPiano('free');
+    $this->account->proponiPiano('saas');
+
+    consegna(evento('customer.subscription.created', 'incomplete'))->assertOk();
+
+    $account = $this->account->fresh();
+
+    expect($account->piano)->toBe('free')
+        ->and($account->piano_proposto)->toBe('saas');
+});
+
+it('ignores the completed session of an activation checkout, which is not a signup', function () {
+    // 🔗 ADR-045 — la sessione aperta da `/abbonamento` non porta né un
+    // `registrazione_id` né un Payment Link: per `checkout.session.completed`
+    // è un checkout che non lo riguarda. Nessun account nasce, e nessun
+    // allarme finisce nel tracker — l'account lo aggiorna l'evento della
+    // subscription.
+    Exceptions::fake();
+    $prima = Account::count();
+
+    consegna([
+        'id' => 'evt_attivazione',
+        'type' => 'checkout.session.completed',
+        'data' => ['object' => [
+            'id' => 'cs_test_attivazione',
+            'object' => 'checkout.session',
+            'status' => 'complete',
+            'payment_status' => 'paid',
+            'customer' => 'cus_easylab',
+            'subscription' => 'sub_easylab',
+            'payment_link' => null,
+            'metadata' => ['account_id' => (string) $this->account->id, 'piano' => 'saas'],
+        ]],
+    ])->assertOk();
+
+    Exceptions::assertNothingReported();
+
+    expect(Account::count())->toBe($prima);
+});
+
+/*
+ |--------------------------------------------------------------------------
+ | 🔗 ADR-045 — la partita IVA scritta al checkout di attivazione
+ |--------------------------------------------------------------------------
+ |
+ | Al checkout è obbligatoria, e Stripe la salva sul customer. Senza questo
+ | ramo resterebbe là: la cabina direbbe «P.IVA non dichiarata» di un cliente
+ | che l'ha appena scritta. L'account è quello col `stripe_id` della sessione,
+ | e il dato riempie un vuoto — non corregge ciò che la cabina ha già scritto.
+ */
+
+/** La sessione completata di un checkout di attivazione, come la manda Stripe. */
+function sessioneDiAttivazione(?string $partitaIva, string $customer = 'cus_easylab'): array
+{
+    return [
+        'id' => 'evt_'.fake()->numerify('##########'),
+        'type' => 'checkout.session.completed',
+        'data' => ['object' => [
+            'id' => 'cs_test_attivazione',
+            'object' => 'checkout.session',
+            'status' => 'complete',
+            'payment_status' => 'paid',
+            'customer' => $customer,
+            'subscription' => 'sub_easylab',
+            'payment_link' => null,
+            'metadata' => ['account_id' => '1', 'piano' => 'saas'],
+            'customer_details' => [
+                'email' => 'marta@rossi.test',
+                'tax_ids' => $partitaIva === null ? [] : [['type' => 'eu_vat', 'value' => $partitaIva]],
+            ],
+        ]],
+    ];
+}
+
+it('writes on the account the VAT number entered at the activation checkout', function () {
+    consegna(sessioneDiAttivazione('IT01234567890'))->assertOk();
+
+    expect($this->account->fresh()->partita_iva)->toBe('IT01234567890');
+});
+
+it('never overwrites a VAT number the cabina has already written', function () {
+    // In cabina il dato l'ha messo una persona che risponde di quel contratto;
+    // in checkout l'ha digitato chi stava pagando. Il secondo riempie un vuoto.
+    $this->account->update(['partita_iva' => 'IT99999999999']);
+
+    consegna(sessioneDiAttivazione('IT01234567890'))->assertOk();
+
+    expect($this->account->fresh()->partita_iva)->toBe('IT99999999999');
+});
+
+it('writes nothing when the session carries no VAT number', function () {
+    // ⚠️ Il campo parte da stringa VUOTA e non da `null`, apposta: «niente
+    // partita IVA» scritto sopra un `null` non si distingue dal non aver
+    // scritto. Sopra una stringa vuota sì — diventerebbe `null`, cioè una
+    // modifica all'account e una riga di audit per un dato che non è arrivato.
+    $this->account->forceFill(['partita_iva' => ''])->saveQuietly();
+
+    consegna(sessioneDiAttivazione(null))->assertOk();
+
+    expect($this->account->fresh()->partita_iva)->toBe('')
+        ->and(Activity::where('subject_type', Account::class)
+            ->where('subject_id', $this->account->id)
+            ->where('description', 'Modifica account')->count())->toBe(0);
+});
+
+it('never writes the VAT number on an account other than the one that paid', function () {
+    // 🔴 Nessuno scope protegge questo percorso: l'unico filtro è lo
+    // `stripe_id`. La sessione è di «cus_easylab», e l'altro account non deve
+    // muoversi di un bit — nemmeno se i metadata nominassero il suo id.
+    $altro = Account::factory()->conStripe('cus_altro')->create(['ragione_sociale' => 'Altro Cliente']);
+
+    $payload = sessioneDiAttivazione('IT01234567890');
+    $payload['data']['object']['metadata']['account_id'] = (string) $altro->id;
+
+    consegna($payload)->assertOk();
+
+    expect($altro->fresh()->partita_iva)->toBeNull()
+        ->and($this->account->fresh()->partita_iva)->toBe('IT01234567890');
+});
+
+it('ignores the VAT number of a customer that is nobody account, or of a trashed one', function () {
+    consegna(sessioneDiAttivazione('IT01234567890', 'cus_sconosciuto'))->assertOk();
+
+    expect(Account::query()->whereNotNull('partita_iva')->count())->toBe(0);
+
+    $this->account->delete();
+
+    consegna(sessioneDiAttivazione('IT01234567890'))->assertOk();
+
+    expect(Account::withTrashed()->find($this->account->id)->partita_iva)->toBeNull();
+});
+
+it('is idempotent on the VAT number when Stripe delivers the session twice', function () {
+    consegna(sessioneDiAttivazione('IT01234567890'))->assertOk();
+    consegna(sessioneDiAttivazione('IT01234567890'))->assertOk();
+
+    // Una riga di audit sola: la seconda consegna trova il campo pieno.
+    expect(Activity::where('subject_type', Account::class)
+        ->where('subject_id', $this->account->id)
+        ->where('description', 'Modifica account')->count())->toBe(1);
 });
 
 it('locks on a subscription that is born already unpaid', function () {

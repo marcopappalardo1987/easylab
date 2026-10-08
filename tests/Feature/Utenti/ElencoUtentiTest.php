@@ -122,11 +122,15 @@ it('shuts the page to anyone without utenti.view', function () {
 });
 
 it('does not show a platform user a link to the tenant-bound people page', function () {
+    // ⚠️ Superadmin e non più Developer (🔗 ADR-046): il Developer senza Ente
+    // non ha nessuna voce operativa, quindi «Persone» gli mancherebbe comunque
+    // e il test non proverebbe più la guardia sull'Ente corrente. Il
+    // Superadmin senza Ente le voci le ha, e questa no.
     $developer = User::factory()->create([
         'tenant_id' => null,
         'two_factor_confirmed_at' => now(),
     ]);
-    $developer->assignRole('Developer');
+    $developer->assignRole('Superadmin');
 
     $html = $this->actingAs($developer)->get(route('dashboard'))->assertOk()->getContent();
 

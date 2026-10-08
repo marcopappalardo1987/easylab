@@ -109,7 +109,9 @@ it('costs the same with 5 and 50 machines on the other list pages, and no more t
     'Tecnico elenco strumenti' => ['tecnico', '/strumenti', 10, 'Macchina 2'],
     'Superadmin parco scadenzario' => ['superadmin', '/piattaforma/parco/scadenzario', 13, 'Macchina 2'],
     'Superadmin parco ricambi' => ['superadmin', '/piattaforma/parco/ricambi', 10, 'Ricambio 2'],
-    'Superadmin tecnici' => ['superadmin', '/piattaforma/tecnici', 8, 'Esterno 1'],
+    // 9 e non più 8 dal 6 Ott 2026 (ADR-046): la pagina mostra il ruolo accanto
+    // al nome — Tecnico o Gestore — e lo carica in UNA query per tutta la pagina.
+    'Superadmin tecnici' => ['superadmin', '/piattaforma/tecnici', 9, 'Esterno 1'],
     'Superadmin audit' => ['superadmin', '/piattaforma/audit', 19, 'Macchina 4'],
 ]);
 

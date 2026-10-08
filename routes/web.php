@@ -11,6 +11,7 @@ use App\Http\Controllers\PagamentoRicevuto;
 use App\Http\Controllers\PaginaBloccato;
 use App\Http\Controllers\RegistrazionePubblica;
 use App\Http\Controllers\ScaricaDocumento;
+use App\Http\Controllers\SceltaPianoAbbonamento;
 use App\Http\Controllers\ServeFileGuida;
 use App\Http\Middleware\RequireSameOriginNavigation;
 use App\Livewire\Anagrafica\Albero;
@@ -503,6 +504,14 @@ Route::middleware('auth')->group(function () {
     Route::post('/abbonamento/portale', AperturaPortaleStripe::class)
         ->middleware('throttle:10,1')
         ->name('abbonamento.portale');
+    // 🔗 ADR-045 — attivare un piano o passare a uno più grande. Qui per la
+    // stessa ragione del portale: chi è chiuso fuori per disdetta deve poter
+    // **riattivare**, e dentro `account.lockout` non ci arriverebbe. Il
+    // `throttle` conta come quello sopra: ogni POST può aprire una sessione di
+    // Checkout su Stripe.
+    Route::post('/abbonamento/piano', SceltaPianoAbbonamento::class)
+        ->middleware('throttle:10,1')
+        ->name('abbonamento.piano');
     Route::get('/bloccato', PaginaBloccato::class)->name('bloccato');
     Route::post('/bloccato/passa/{ente}', FugaDaLockout::class)
         ->whereNumber('ente')->name('bloccato.passa');

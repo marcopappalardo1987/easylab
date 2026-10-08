@@ -205,6 +205,12 @@ class SchedaStrumento extends Component
 
         // In scope (tenant + eventuale sotto-albero); fuori scope → 404.
         $destinazione = UnitaOrganizzativa::findOrFail($this->destinazioneId);
+
+        // 🔴 ADR-046: «in scope» non basta più. Chi segue più clienti (Gestore,
+        // Superadmin sui clienti gestiti) ha in vista i reparti di tutti: senza
+        // questa riga la macchina di un cliente finirebbe nel reparto di un
+        // altro, col `tenant_id` del primo. Si sposta dentro la stessa sede.
+        abort_unless((int) $destinazione->tenant_id === (int) $this->strumento->tenant_id, 404);
         if ($destinazione->tipo === TipoUnitaOrganizzativa::Ente) {
             $this->addError('destinazioneId', 'Non puoi spostare uno strumento su un Ente.');
 
@@ -965,9 +971,11 @@ class SchedaStrumento extends Component
     public function render()
     {
 
-        // Destinazioni possibili: nodi non-Ente del proprio Ente (già scopati),
-        // escluso il nodo attuale.
+        // Destinazioni possibili: nodi non-Ente **della sede della macchina**,
+        // escluso il nodo attuale. Lo scope da solo non basta (ADR-046): per chi
+        // segue più clienti contiene i reparti di tutti.
         $nodiDestinazione = UnitaOrganizzativa::where('tipo', '!=', TipoUnitaOrganizzativa::Ente->value)
+            ->where('tenant_id', $this->strumento->tenant_id)
             ->where('id', '!=', $this->strumento->unita_organizzativa_id)
             ->orderBy('nome')
             ->get();

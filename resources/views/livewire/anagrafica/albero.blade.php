@@ -31,14 +31,22 @@
         @if ($current)
             <div class="flex shrink-0 items-center gap-2">
                 @can('unita_organizzativa.update')
-                    <x-ui.button variant="ghost" wire:click="edit({{ $current->id }})">Rinomina</x-ui.button>
+                    {{-- 🔗 ADR-046: il nodo Ente di un cliente non lo rinomina
+                         chi lo segue per portafoglio. Il bottone sparisce qui e
+                         l'azione rifiuta comunque (`rifiutaEnteAltrui`). --}}
+                    @if (! $isEnte || $this->puoModificareEnte())
+                        <x-ui.button variant="ghost" wire:click="edit({{ $current->id }})">Rinomina</x-ui.button>
+                    @endif
                     {{-- Il marchio email vive solo sull'Ente (ADR-011): su un
                          dipartimento il pulsante porterebbe a una pagina che
                          parla di un altro nodo. Nessuna voce di menù per
                          questa impostazione — si tocca una volta l'anno, e il
                          menù di primo livello è la superficie più contesa
                          dell'applicazione. --}}
-                    @if ($isEnte)
+                    {{-- ⚠️ Solo sulla **propria** sede (ADR-046): la pagina del
+                         marchio lavora sull'Ente di chi guarda, e offerta sul
+                         nodo di un cliente gestito aprirebbe quello di EasyLab. --}}
+                    @if ($isEnte && $current->id === $enteProprio)
                         <x-ui.button variant="secondary" href="{{ route('anagrafica.marchio') }}" wire:navigate>Marchio email</x-ui.button>
                     @endif
                 @endcan
@@ -176,8 +184,10 @@
 
                         <div class="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
                             @can('unita_organizzativa.update')
-                                <button type="button" wire:click="edit({{ $node->id }})" title="Rinomina"
-                                    class="flex h-8 w-8 items-center justify-center rounded text-ink-2 hover:bg-surface-sunken hover:text-ink">✎</button>
+                                @if ($node->tipo !== \App\Enums\TipoUnitaOrganizzativa::Ente || $this->puoModificareEnte())
+                                    <button type="button" wire:click="edit({{ $node->id }})" title="Rinomina"
+                                        class="flex h-8 w-8 items-center justify-center rounded text-ink-2 hover:bg-surface-sunken hover:text-ink">✎</button>
+                                @endif
                             @endcan
                             @can('unita_organizzativa.delete')
                                 <button type="button" wire:click="confirmDelete({{ $node->id }})" title="Elimina"

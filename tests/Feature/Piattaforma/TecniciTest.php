@@ -530,3 +530,101 @@ it('keeps the query count flat from two technicians to twelve', function () {
 
     expect($conta())->toBe($conDue);
 });
+
+// ─── Il Gestore (🔗 ADR-046) ─────────────────────────────────────────────────
+
+it('creates a gestore with no Ente when that figure is chosen', function () {
+    Livewire::test(Tecnici::class)
+        ->call('apriInvito')
+        ->set('nuovo.nome', 'Paola Riva')
+        ->set('nuovo.email', 'paola.riva@easylab.test')
+        ->set('nuovoRuolo', User::GESTORE_ROLE)
+        ->call('invitaTecnico')
+        ->assertHasNoErrors()
+        // Il messaggio nomina la figura creata, non «Tecnico» per abitudine.
+        ->assertSee('Gestore «Paola Riva» creato');
+
+    $gestore = User::where('email', 'paola.riva@easylab.test')->firstOrFail();
+
+    expect($gestore->tenant_id)->toBeNull()
+        ->and($gestore->getRoleNames()->all())->toBe([User::GESTORE_ROLE]);
+});
+
+it('still creates a tecnico when nothing is chosen', function () {
+    // Il default della modale: aprirla e inviare non deve promuovere nessuno.
+    Livewire::test(Tecnici::class)
+        ->call('apriInvito')
+        ->set('nuovo.nome', 'Dario Costa')
+        ->set('nuovo.email', 'dario.costa@easylab.test')
+        ->call('invitaTecnico')
+        ->assertHasNoErrors();
+
+    expect(User::where('email', 'dario.costa@easylab.test')->firstOrFail()->getRoleNames()->all())
+        ->toBe([User::TECNICO_ROLE]);
+});
+
+it('forgets the chosen figure when the modal is reopened', function () {
+    // Una modale riaperta su «Gestore» perché l'ultima volta si era scelto
+    // quello conferirebbe il ruolo più largo a chi non l'ha chiesto.
+    $pagina = Livewire::test(Tecnici::class)
+        ->call('apriInvito')
+        ->set('nuovoRuolo', User::GESTORE_ROLE)
+        ->call('chiudiInvito');
+
+    expect($pagina->get('nuovoRuolo'))->toBe(User::TECNICO_ROLE);
+
+    $pagina->set('nuovoRuolo', User::GESTORE_ROLE)->call('apriInvito');
+
+    expect($pagina->get('nuovoRuolo'))->toBe(User::TECNICO_ROLE);
+});
+
+it('warns about the second factor for the gestore, and not for the tecnico', function () {
+    $modale = Livewire::test(Tecnici::class)->call('apriInvito');
+
+    $modale->assertDontSee('richiede il secondo fattore')->assertSeeHtml('data-figura="Tecnico"');
+
+    $modale->set('nuovoRuolo', User::GESTORE_ROLE)
+        ->assertSee('richiede il secondo fattore')
+        ->assertSeeHtml('data-figura="Gestore"')
+        ->assertSee('Non elimina reparti');
+});
+
+it('lists gestori next to tecnici, each with their role', function () {
+    $tecnico = tecnicoDiEasyLab('Luca Ferri');
+
+    $gestore = tecnicoDiEasyLab('Anna Gallo');
+    $gestore->syncRoles([User::GESTORE_ROLE]);
+
+    // Un Admin senza Ente non è né l'uno né l'altro: resta fuori dalla pagina.
+    $estraneo = tecnicoDiEasyLab('Zeno Estraneo');
+    $estraneo->syncRoles(['Admin']);
+
+    $pagina = Livewire::test(Tecnici::class);
+
+    expect($pagina->viewData('tecnici')->pluck('id')->all())->toBe([$gestore->id, $tecnico->id]);
+
+    $html = $pagina->html();
+
+    expect($html)->toMatch('/data-ruolo-persona="'.$gestore->id.'">Gestore</')
+        ->and($html)->toMatch('/data-ruolo-persona="'.$tecnico->id.'">Tecnico</');
+});
+
+it('gives a gestore a portfolio the same way, and the gestore then sees that sede only', function () {
+    $gestore = tecnicoDiEasyLab('Anna Gallo');
+    $gestore->syncRoles([User::GESTORE_ROLE]);
+
+    Livewire::test(Tecnici::class)
+        ->call('apriPortafoglio', $gestore->id)
+        ->set('portafoglioSedi', [$this->sanMarco->id])
+        ->call('salvaPortafoglio')
+        ->assertHasNoErrors();
+
+    expect(portafoglioDi($gestore))->toBe([$this->sanMarco->id])
+        // Chi gestisce una sede può prendersi un intervento in carico.
+        ->and(Assegnabili::perSede($this->sanMarco->id)->pluck('id')->all())->toContain($gestore->id)
+        ->and(Assegnabili::perSede($this->bergamo->id)->pluck('id')->all())->not->toContain($gestore->id);
+
+    $this->actingAs($gestore->fresh());
+
+    expect(UnitaOrganizzativa::pluck('nome')->all())->toBe(['Sede di Milano']);
+});

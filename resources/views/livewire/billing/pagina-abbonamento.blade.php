@@ -7,10 +7,14 @@
      è la cabina di regia, non il cliente: il componente non li passa nemmeno
      alla vista, e un test negativo presidia la cosa.
 
-     ⛔ **Nessun importo.** Il listino in `config/easylab.php` è dichiarato «a
-     LISTINO, non incassato» e nulla nel repository si accorgerebbe se
-     divergesse dal Price su Stripe. Le cifre vere stanno nel portale, che è il
+     ⛔ **Nessuna cifra su ciò che il cliente paga.** Il listino è dichiarato «a
+     LISTINO, non incassato», e chi è rimasto su un prezzo storico paga un
+     importo che il listino non dice. Le cifre vere stanno nel portale, che è il
      posto in cui ci sono davvero.
+
+     ⚠️ Il prezzo dei piani **in vendita** in fondo alla pagina invece c'è
+     (ADR-045): è l'importo del Price corrente, cioè ciò che il checkout
+     addebiterà. Chi sceglie deve saperlo prima di pagare.
 
      ⚠️ Solo token semantici (DS §8.2, ADR-034): `surface`, `ink`, `border`,
      `lock-soft`, `bad-soft`. Nessuna classe di scala, e questo file NON va
@@ -30,6 +34,28 @@
     @if (session('erroreAbbonamento'))
         <div class="mt-6 rounded-lg border border-border bg-bad-soft p-4 text-sm text-bad-soft-ink">
             {{ session('erroreAbbonamento') }}
+        </div>
+    @endif
+
+    @if (session('esitoAbbonamento'))
+        <div class="mt-6 rounded-lg border border-border bg-ok-soft p-4 text-sm text-ok-soft-ink">
+            {{ session('esitoAbbonamento') }}
+        </div>
+    @endif
+
+    {{-- ⚠️ Al CONDIZIONALE, e non è prudenza di stile: il parametro lo scrive il
+         ritorno da Stripe, ma chiunque può digitarlo nella barra degli
+         indirizzi. La pagina non sa se il pagamento è avvenuto — lo sa il
+         webhook, ed è lui a cambiare il piano. «Pagamento ricevuto» qui sarebbe
+         un'affermazione che la pagina non può sostenere (ADR-045). --}}
+    @if ($ritornoCheckout === 'ok')
+        <div class="mt-6 rounded-lg border border-border bg-ok-soft p-4 text-sm text-ok-soft-ink">
+            Se hai completato il pagamento, il piano si aggiorna appena Stripe conferma l'incasso:
+            di solito bastano pochi secondi. Ricarica la pagina per vederlo.
+        </div>
+    @elseif ($ritornoCheckout === 'annullato')
+        <div class="mt-6 rounded-lg border border-border bg-surface p-4 text-sm text-ink-2">
+            Hai lasciato il pagamento prima di concluderlo: nessun piano è stato attivato.
         </div>
     @endif
 
@@ -112,9 +138,17 @@
                 disdire l'abbonamento. Si apre su Stripe, fuori da Easy Lab.
             </p>
         @elseif ($pianoGratuito)
+            {{-- ⚠️ «Non c'è nulla da gestire qui» era vero finché la pagina non
+                 vendeva niente. Dal 3 Ott 2026 (ADR-045) sotto questa scheda ci
+                 sono i piani attivabili: dirlo due righe sopra sarebbe
+                 contraddirsi da soli. --}}
             <p class="text-sm text-ink-2">
-                Il piano Free non ha un portale di fatturazione: è la sua definizione. Non c'è
-                nulla da gestire qui — la fatturazione, se prevista, avviene fuori dal software.
+                Il piano Free non ha un portale di fatturazione: è la sua definizione.
+                @if ($pianiOfferti !== [])
+                    Per passare a un piano a pagamento, scegline uno qui sotto.
+                @else
+                    Non c'è nulla da gestire qui — la fatturazione, se prevista, avviene fuori dal software.
+                @endif
             </p>
         @else
             <p class="text-sm text-ink-2">
@@ -123,4 +157,94 @@
             </p>
         @endif
     </x-ui.card>
+
+    {{-- 🔗 ADR-045 — i piani che questo account può comprare da sé.
+
+         🔴 **La lista viene da `PianiAcquistabili`, e non si filtra qui**: mai
+         un piano gratuito, mai uno che costa meno di ciò che l'account ha o ha
+         avuto. La vista stampa ciò che riceve; la regola la rifà il controller
+         sul POST, perché un bottone nascosto non è una guardia.
+
+         ⚠️ **Form POST classici verso un controller invokable**, come il
+         portale qui sopra e per la stessa ragione: questo componente non deve
+         avere azioni (la fuga dal lockout, v. il suo docblock). --}}
+    @if ($pianiOfferti !== [])
+        <x-ui.card class="mt-4" data-piani-in-vendita>
+            <h2 class="text-base font-semibold text-ink">
+                {{ $offerta->eUnCambio() ? 'Passa a un piano più grande' : 'Attiva un piano' }}
+            </h2>
+
+            @if ($impersonazione)
+                <p class="mt-2 text-sm text-ink-2">
+                    Un piano non si attiva e non si cambia durante un&rsquo;impersonazione: l&rsquo;acquisto
+                    sarebbe a nome del cliente. Qui sotto c&rsquo;è ciò che il cliente vede.
+                </p>
+            @elseif (! $puoComprare)
+                <p class="mt-2 text-sm text-ink-2">
+                    I pagamenti non sono configurati su questo ambiente. Contatta EasyLab.
+                </p>
+            @elseif ($offerta->eUnCambio())
+                <p class="mt-2 text-sm text-ink-2">
+                    Il cambio è immediato. La differenza per il periodo già iniziato la calcola Stripe
+                    e va nella prossima fattura. Da questa pagina non si passa a un piano di importo inferiore.
+                </p>
+            @else
+                {{-- ⚠️ La partita IVA si dice PRIMA: al checkout è obbligatoria
+                     (ADR-045), e chi arriva lì senza averla sotto mano torna
+                     indietro con la sessione aperta. --}}
+                <p class="mt-2 text-sm text-ink-2">
+                    Il pagamento avviene su Stripe, fuori da Easy Lab: lì ti vengono chiesti la partita IVA
+                    e l&rsquo;indirizzo di fatturazione. Il piano si attiva quando Stripe conferma l&rsquo;incasso.
+                </p>
+            @endif
+
+            <ul class="mt-4 space-y-4">
+                @foreach ($pianiOfferti as $riga)
+                    @php $prezzo = number_format($riga['importoCent'] / 100, 2, ',', '.'); @endphp
+                    <li class="border-t border-border pt-4" data-piano="{{ $riga['codice'] }}">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <p class="text-sm font-semibold text-ink">{{ $riga['etichetta'] }}</p>
+                            @if ($riga['proposto'])
+                                <x-ui.badge variant="primary">Proposto da EasyLab</x-ui.badge>
+                            @endif
+                        </div>
+                        <p class="mt-1 text-sm text-ink-2">
+                            {{ $prezzo }} € al mese ·
+                            {{ $riga['maxEnti'] === null ? 'sedi illimitate' : 'fino a '.$riga['maxEnti'].' sedi' }}
+                        </p>
+
+                        @if ($puoComprare)
+                            <form method="POST" action="{{ route('abbonamento.piano') }}" class="mt-3 space-y-3">
+                                @csrf
+                                <input type="hidden" name="piano" value="{{ $riga['codice'] }}">
+
+                                {{-- ⚠️ Solo sul cambio: lì un clic impegna a
+                                     pagare di più senza una pagina di Stripe a
+                                     chiedere conferma. All'attivazione quella
+                                     pagina c'è, ed è il checkout. --}}
+                                @if ($offerta->eUnCambio())
+                                    <label class="flex items-start gap-2 text-sm text-ink-2">
+                                        <input type="checkbox" name="conferma" value="1" required
+                                               class="mt-0.5 rounded border border-border-strong bg-surface text-brand focus:ring-ring">
+                                        <span>Confermo il passaggio a {{ $riga['etichetta'] }}, {{ $prezzo }} € al mese.</span>
+                                    </label>
+                                @endif
+
+                                <x-ui.button type="submit">
+                                    {{ $offerta->eUnCambio() ? 'Passa a' : 'Attiva' }} {{ $riga['etichetta'] }}
+                                </x-ui.button>
+                            </form>
+                        @endif
+                    </li>
+                @endforeach
+            </ul>
+        </x-ui.card>
+    @elseif ($offerta->impedimento !== null)
+        {{-- ⛔ La frase viene dall'offerta ed è la stessa che il controller
+             risponde al POST. Nessuna cita il motivo di un blocco: v.
+             `OffertaPiani`. --}}
+        <x-ui.card class="mt-4" data-piani-in-vendita>
+            <p class="text-sm text-ink-2">{{ $offerta->messaggioImpedimento() }}</p>
+        </x-ui.card>
+    @endif
 </div>

@@ -61,6 +61,20 @@ class User extends Authenticatable
     public const TECNICO_ROLE = 'Tecnico';
 
     /**
+     * Personale EasyLab che gestisce la manutenzione dei clienti assegnati
+     * (🔗 ADR-046). Stesso portafoglio del Tecnico, più la scrittura.
+     */
+    public const GESTORE_ROLE = 'Gestore';
+
+    /**
+     * Il ruolo che lavora sui clienti con manutenzione gestita da EasyLab
+     * (🔗 ADR-046). Costante per la ragione delle altre: lo nomina
+     * `ClientiGestiti`, cioè un criterio di accesso, e un refuso lì non
+     * romperebbe nulla — spegnerebbe la regola.
+     */
+    public const SUPERADMIN_ROLE = 'Superadmin';
+
+    /**
      * Il laboratorio/Ente finale (🔗 Funzionalità per Ruolo §4).
      *
      * Vive qui come costante, e non come stringa ribattuta, per la ragione dei
@@ -119,6 +133,26 @@ class User extends Authenticatable
     public function isTecnico(): bool
     {
         return $this->hasRole(self::TECNICO_ROLE);
+    }
+
+    public function isGestore(): bool
+    {
+        return $this->hasRole(self::GESTORE_ROLE);
+    }
+
+    /**
+     * True per chi al posto del confine Ente ha un **portafoglio** di sedi
+     * (🔗 ADR-030 il Tecnico, ADR-046 il Gestore): è la domanda che fa
+     * `AccessoTecnico`, e i due ruoli vi rispondono allo stesso modo.
+     */
+    public function lavoraPerPortafoglio(): bool
+    {
+        return $this->hasAnyRole([self::TECNICO_ROLE, self::GESTORE_ROLE]);
+    }
+
+    public function isSuperadmin(): bool
+    {
+        return $this->hasRole(self::SUPERADMIN_ROLE);
     }
 
     /**

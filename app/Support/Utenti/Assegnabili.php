@@ -37,9 +37,10 @@ use Illuminate\Support\Facades\DB;
  * *Resta vero — e voluto — che l'assegnazione **puntuale** apra comunque quella
  * singola macchina: è il secondo canale di ADR-030, e non passa di qui.*
  *
- * Entrambi i rami richiedono il ruolo `Tecnico`: appartenere all'Ente non rende
- * una persona assegnabile. Admin, Tenant e ruoli di piattaforma non devono
- * comparire in una tendina operativa destinata ai tecnici.
+ * Entrambi i rami richiedono un ruolo **operativo** — `Tecnico` o, dal 6 Ott
+ * 2026, `Gestore` (🔗 ADR-046): appartenere all'Ente non rende una persona
+ * assegnabile. Admin, Tenant, Superadmin e Developer non devono comparire in
+ * una tendina destinata a chi esegue il lavoro.
  *
  * ## ⛔ `User` non ha global scope: la whitelist è l'unica barriera
  *
@@ -79,7 +80,10 @@ final class Assegnabili
         }
 
         return User::query()
-            ->whereHas('roles', fn ($q) => $q->where('name', User::TECNICO_ROLE))
+            // Tecnico o, dal 6 Ott 2026, Gestore (🔗 ADR-046): chi gestisce una
+            // sede per EasyLab può prendersi un intervento in carico. Il ramo
+            // qui sotto vale per entrambi: assegnabile **solo se lavora qui**.
+            ->whereHas('roles', fn ($q) => $q->whereIn('name', [User::TECNICO_ROLE, User::GESTORE_ROLE]))
             ->where(fn (Builder $q) => $q
                 ->where('tenant_id', $sedeId)
                 ->orWhere(fn (Builder $q) => $q

@@ -39,7 +39,7 @@ use Spatie\Permission\PermissionRegistrar;
  * parallelo è dannoso quando è una **seconda fonte di verità**; questo è una
  * rete, e non lo consuma nessuno tranne l'asserzione qui sotto.
  */
-const RUOLI_IN_ORDINE_DI_DOCUMENTO = ['Developer', 'Superadmin', 'Admin', 'Responsabile Reparto', 'Tenant', 'Tecnico'];
+const RUOLI_IN_ORDINE_DI_DOCUMENTO = ['Developer', 'Superadmin', 'Admin', 'Responsabile Reparto', 'Tenant', 'Tecnico', 'Gestore'];
 
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
@@ -72,7 +72,7 @@ function intestazioneDellaGriglia(string $html): string
 // ─── L'orientamento ──────────────────────────────────────────────────────────
 
 it('renders the roles in the same order as the matrix document', function () {
-    // 🔴 Congela l'orientamento, che è una decisione e non un caso: **6 ruoli in
+    // 🔴 Congela l'orientamento, che è una decisione e non un caso: **7 ruoli in
     // colonna, 54 permessi in riga**, come la tabella di `Schema Ruoli §5`.
     // Questa pagina verrà affiancata a quel documento — è il posto dove si
     // scopre che il documento è vecchio, e oggi lo è — e chi confronta i due non

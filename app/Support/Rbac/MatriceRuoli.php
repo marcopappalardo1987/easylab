@@ -317,7 +317,7 @@ final class MatriceRuoli
             return Role::findByName($nome, self::GUARD);
         } catch (RoleDoesNotExist) {
             throw ValidationException::withMessages([
-                'ruolo' => "Il ruolo «{$nome}» non esiste nel database. I sei ruoli nascono dal bootstrap: `php artisan db:seed --class=RolesAndPermissionsSeeder`.",
+                'ruolo' => "Il ruolo «{$nome}» non esiste nel database. I ruoli nascono dal bootstrap: `php artisan db:seed --class=RolesAndPermissionsSeeder`.",
             ]);
         }
     }

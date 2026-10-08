@@ -7,7 +7,7 @@ use App\Models\Documento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Support\Documenti\FiltroDocumenti;
-use App\Support\Tenancy\AccessoTecnico;
+use App\Support\Tenancy\SediSeguite;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Layout;
@@ -46,7 +46,7 @@ use Livewire\WithPagination;
  * diversi ordinati per data — e la comodità dell'aggregazione, senza una
  * colonna che nomini l'Ente, diventa la perdita del dato che tiene separati due
  * clienti. La colonna compare **solo** per chi attraversa gli Enti
- * (`AccessoTecnico::siApplica()`): per l'Admin ripeterebbe lo stesso nome su
+ * (`SediSeguite::piuClienti()`): per l'Admin ripeterebbe lo stesso nome su
  * ogni riga, cioè sarebbe rumore, e costerebbe una query in più a ogni render.
  *
  * **In sola lettura, di proposito**: niente upload e niente eliminazione. Quei
@@ -228,7 +228,9 @@ class ElencoDocumenti extends Component
         // «per comodità»): un Ente raggiunto solo da una macchina assegnata e
         // fuori portafoglio non è visibile come nodo — è l'esposizione minima
         // dichiarata in ADR-030 — e la riga lo dice invece di inventarne il nome.
-        $mostraEnte = AccessoTecnico::siApplica();
+        // Dal 6 Ott 2026 (ADR-046) anche per il Superadmin sui clienti gestiti:
+        // chiunque possa avere in pagina i documenti di più clienti.
+        $mostraEnte = SediSeguite::piuClienti();
 
         $enti = $mostraEnte
             ? UnitaOrganizzativa::query()

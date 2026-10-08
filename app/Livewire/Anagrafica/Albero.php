@@ -13,6 +13,7 @@ use App\Models\UnitaOrganizzativa;
 use App\Support\Notifiche\AvvisiObsolescenza;
 use App\Support\Piani;
 use App\Support\Provisioning\ProvisionaEnte;
+use App\Support\Tenancy\AccessoTecnico;
 use App\Support\Tenancy\CurrentTenant;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -321,6 +322,7 @@ class Albero extends Component
     {
         $this->authorize('unita_organizzativa.update');
         $node = UnitaOrganizzativa::findOrFail($id);
+        $this->rifiutaEnteAltrui($node);
 
         $this->resetForm();
         $this->editingId = $node->id;
@@ -349,6 +351,7 @@ class Albero extends Component
             // DB, non lo stato del client — le proprietà Livewire arrivano dal
             // browser e sono manipolabili.
             $node = UnitaOrganizzativa::findOrFail($this->editingId);
+            $this->rifiutaEnteAltrui($node);
             $isEnte = $node->tipo === TipoUnitaOrganizzativa::Ente;
 
             $regole = [
@@ -477,6 +480,28 @@ class Albero extends Component
     {
         $this->resetForm();
         $this->showForm = false;
+    }
+
+    /**
+     * Il nodo **Ente** non lo modifica chi lavora per portafoglio (ADR-046).
+     *
+     * Il Gestore ha `unita_organizzativa.update` per rinominare reparti e
+     * sotto-laboratori dei clienti che segue. Il nodo Ente è un'altra cosa: il
+     * suo nome è la sede del cliente, e la soglia di obsolescenza che porta con
+     * sé fa partire avvisi a tutti i suoi utenti. Resta a chi di quell'Ente fa
+     * parte, e al Superadmin.
+     *
+     * Per ruolo e non per permesso, perché il permesso è lo stesso: è il
+     * *nodo* a fare la differenza, e la matrice non lo sa.
+     */
+    public function puoModificareEnte(): bool
+    {
+        return ! AccessoTecnico::siApplica();
+    }
+
+    private function rifiutaEnteAltrui(UnitaOrganizzativa $node): void
+    {
+        abort_if($node->tipo === TipoUnitaOrganizzativa::Ente && ! $this->puoModificareEnte(), 403);
     }
 
     /**
@@ -620,6 +645,8 @@ class Albero extends Component
             'strumenti' => $strumenti,
             'childCounts' => $childCounts,
             'strumentiCounts' => $strumentiCounts,
+            // La sede di chi guarda: il «Marchio email» si offre solo lì.
+            'enteProprio' => CurrentTenant::id(),
             // Solo a modale aperta e con permesso: a modale chiusa zero query
             // in più, disciplina già seguita in SchedaStrumento::render().
             'fornitori' => $this->showStrumentoForm && $current && Gate::allows('fornitori.view')

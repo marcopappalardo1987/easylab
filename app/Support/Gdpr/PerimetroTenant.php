@@ -76,11 +76,18 @@ final class PerimetroTenant
      * (specchio locale di Stripe: la fonte è là, ADR-032) e `di_piattaforma`
      * (un flag di EasyLab, non un dato del cliente).
      *
+     * `piano_proposto` esce accanto a `piano` (ADR-045): è un dato del rapporto
+     * commerciale che il cliente legge già su `/abbonamento`, non
+     * un'annotazione interna.
+     *
+     * `manutenzione_gestita` esce anch'essa (ADR-046): dice al cliente che
+     * EasyLab lavora sui suoi dati, ed è proprio ciò che ha diritto di sapere.
+     *
      * @var list<string>
      */
     public const COLONNE_ACCOUNT = [
         'id', 'ragione_sociale', 'partita_iva', 'codice_fiscale', 'pec', 'codice_destinatario_sdi',
-        'piano', 'is_locked', 'locked_at', 'stripe_locked_at', 'created_at', 'updated_at', 'deleted_at',
+        'piano', 'piano_proposto', 'manutenzione_gestita', 'is_locked', 'locked_at', 'stripe_locked_at', 'created_at', 'updated_at', 'deleted_at',
     ];
 
     /** @var list<string> */
