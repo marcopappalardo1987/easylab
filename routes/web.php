@@ -25,6 +25,7 @@ use App\Livewire\Guida\Manuale as GuidaManuale;
 use App\Livewire\Interventi\Scadenzario;
 use App\Livewire\Piattaforma\Cabina;
 use App\Livewire\Piattaforma\EditorRuoli;
+use App\Livewire\Piattaforma\EmailDiSistema;
 use App\Livewire\Piattaforma\Errori;
 use App\Livewire\Piattaforma\Listino;
 use App\Livewire\Piattaforma\ParcoGlobale;
@@ -317,6 +318,13 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     Route::get('/piattaforma/tecnici', Tecnici::class)
         ->middleware('can:'.Tecnici::PERMESSO)
         ->name('piattaforma.tecnici');
+
+    // Le email dell'applicazione: elenco, interruttori e prove di invio
+    // (🔗 ADR-047). `tenants.provision` e non `tenants.view_all`: qui si decide
+    // cosa ricevono tutti i clienti, e si manda posta a un indirizzo qualunque.
+    Route::get('/piattaforma/email', EmailDiSistema::class)
+        ->middleware('can:'.EmailDiSistema::PERMESSO)
+        ->name('piattaforma.email');
 
     Route::get('/piattaforma/errori', Errori::class)
         ->middleware('can:'.Errori::PERMESSO)

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Scopes\DepartmentScope;
 use App\Models\Scopes\TenantScope;
+use App\Support\Notifiche\AvvisiAccount;
 use App\Support\Piani;
 use Database\Factories\AccountFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -165,11 +166,30 @@ class Account extends Model
             return;
         }
 
+        $eraChiuso = (bool) $this->is_locked;
+
         $this->forceFill([
             'locked_at' => now(),
             'locked_reason' => $motivo,
             'is_locked' => true,
         ])->save();
+
+        $this->avvisaDelBlocco($eraChiuso);
+    }
+
+    /**
+     * L'email «accesso sospeso» (ADR-047), **solo quando la porta si chiude
+     * davvero**: un secondo blocco su un account già chiuso dall'altra sorgente
+     * non cambia nulla per chi vi lavora, e scrivergli di nuovo sarebbe rumore.
+     *
+     * `rescue()`: il blocco è già scritto, e una coda irraggiungibile non deve
+     * far fallire il webhook di Stripe che lo ha deciso.
+     */
+    private function avvisaDelBlocco(bool $eraChiuso): void
+    {
+        if (! $eraChiuso) {
+            rescue(fn () => AvvisiAccount::bloccato($this));
+        }
     }
 
     public function sblocca(): void
@@ -215,11 +235,15 @@ class Account extends Model
             return;
         }
 
+        $eraChiuso = (bool) $this->is_locked;
+
         $this->forceFill([
             'stripe_locked_at' => now(),
             'stripe_lock_reason' => $motivo,
             'is_locked' => true,
         ])->save();
+
+        $this->avvisaDelBlocco($eraChiuso);
     }
 
     public function sbloccaPerStripe(): void
@@ -252,7 +276,7 @@ class Account extends Model
      * e lasciarla accesa dopo farebbe dire alla cabina «in attesa di pagamento»
      * di un cliente che sta pagando.
      */
-    public function cambiaPiano(string $piano): void
+    public function cambiaPiano(string $piano, bool $annuncia = true): void
     {
         if (! Piani::esiste($piano)) {
             throw new InvalidArgumentException(
@@ -264,7 +288,17 @@ class Account extends Model
             return;
         }
 
+        $precedente = (string) $this->piano;
+
         $this->forceFill(['piano' => $piano, 'piano_proposto' => null])->save();
+
+        // L'email «piano cambiato» (ADR-047). `$annuncia: false` è per la
+        // **nascita** dell'account, dove il piano non cambia — si assegna — e
+        // a dirlo sono già l'invito o il benvenuto. `rescue()` per la ragione
+        // di `avvisaDelBlocco()`: qui arriva anche il webhook di Stripe.
+        if ($annuncia) {
+            rescue(fn () => AvvisiAccount::pianoCambiato($this, $precedente));
+        }
     }
 
     /**

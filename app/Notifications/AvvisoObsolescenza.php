@@ -2,6 +2,8 @@
 
 namespace App\Notifications;
 
+use App\Support\Email\CatalogoEmail;
+use App\Support\Email\InterruttoriEmail;
 use App\Support\Mail\MarchioEmail;
 use App\Support\Notifiche\RigaObsolescenza;
 use Illuminate\Bus\Queueable;
@@ -66,7 +68,10 @@ class AvvisoObsolescenza extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
-        return $notifiable->riceve_email_scadenze
+        // Dal 9 Ott 2026 (ADR-047) le domande sono due: la piattaforma l'ha
+        // accesa, e la persona non vi ha rinunciato. La campanella resta in
+        // entrambi i casi: spegnere un'email non spegne ciò che si vede entrando.
+        return InterruttoriEmail::parte(CatalogoEmail::AVVISO_OBSOLESCENZA, $notifiable)
             ? ['database', 'mail']
             : ['database'];
     }

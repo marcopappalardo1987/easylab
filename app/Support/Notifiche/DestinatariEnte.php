@@ -42,6 +42,19 @@ use App\Support\Tenancy\AccessibleNodes;
 final class DestinatariEnte
 {
     /**
+     * True se questa persona è fra chi riceve le email del proprio Ente: la
+     * stessa domanda di `perEnte()`, posta a una persona sola.
+     *
+     * Serve alla pagina delle preferenze (🔗 ADR-047), che mostra un
+     * interruttore solo a chi quell'email potrebbe davvero riceverla — e lo
+     * chiede qui, invece di riscrivere l'elenco dei ruoli in un secondo posto.
+     */
+    public static function riguarda(User $utente): bool
+    {
+        return $utente->hasRole('Admin') || $utente->hasRole(User::TENANT_ROLE) || $utente->isDepartmentScoped();
+    }
+
+    /**
      * @return list<array{utente: User, nodi: list<int>|null}>
      */
     public static function perEnte(int $tenantId): array

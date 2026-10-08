@@ -70,7 +70,8 @@
         ['rotta' => 'piattaforma.ruoli', 'etichetta' => 'Ruoli e permessi', 'permesso' => App\Livewire\Piattaforma\EditorRuoli::PERMESSO],
         ['rotta' => 'piattaforma.piani', 'etichetta' => 'Piani', 'permesso' => App\Livewire\Piattaforma\Listino::PERMESSO],
         ['rotta' => 'piattaforma.parco', 'etichetta' => 'Parco clienti', 'permesso' => App\Livewire\Piattaforma\ParcoGlobale::PERMESSO],
-        ['rotta' => 'piattaforma.tecnici', 'etichetta' => 'I miei tecnici', 'permesso' => App\Livewire\Piattaforma\Tecnici::PERMESSO],
+        ['rotta' => 'piattaforma.tecnici', 'etichetta' => 'Tecnici e gestori', 'permesso' => App\Livewire\Piattaforma\Tecnici::PERMESSO],
+        ['rotta' => 'piattaforma.email', 'etichetta' => 'Email', 'permesso' => App\Livewire\Piattaforma\EmailDiSistema::PERMESSO],
         ['rotta' => 'piattaforma.errori', 'etichetta' => 'Errori', 'permesso' => App\Livewire\Piattaforma\Errori::PERMESSO],
     ])->filter(fn (array $voce) => auth()->user()?->can($voce['permesso']));
 @endphp

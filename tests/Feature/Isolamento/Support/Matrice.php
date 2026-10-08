@@ -14,10 +14,15 @@ use App\Models\RicambioUtilizzo;
 use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
+use App\Notifications\AccountBloccato;
 use App\Notifications\AvvisoObsolescenza;
 use App\Notifications\BenvenutoRegistrazione;
 use App\Notifications\DigestScadenze;
+use App\Notifications\InterventoAssegnato;
+use App\Notifications\InterventoEseguito;
+use App\Notifications\InterventoProgrammato;
 use App\Notifications\InvitoUtente;
+use App\Notifications\PianoCambiato;
 use App\Notifications\PropostaPiano;
 use App\Notifications\VerificaEmailRegistrazione;
 use Illuminate\Database\Eloquent\Model;
@@ -49,6 +54,8 @@ final class Matrice
     private const CRUSCOTTO = 't:Isolamento/DettaglioIsolationTest.php::counts only the machines of the own Ente on the dashboard';
 
     private const DIGEST = 't:Isolamento/CodeIsolationTest.php::delivers the digest of A with the brand and rows of A, whatever the context on the worker';
+
+    private const EMAIL_INTERVENTI = 't:Email/EmailInterventiTest.php::builds each intervento email with the brand and the name of the ente in its payload, whatever the context on the worker';
 
     private const HARNESS = 't:Isolamento/VettoriIsolationTest.php::blocks every query vector across tenants on every tenant model';
 
@@ -219,6 +226,7 @@ final class Matrice
             'Notifiche/Campanella' => 't:Notifiche/CampanellaTest.php::never shows the notifications of another user',
             'Piattaforma/Cabina' => $piattaforma,
             'Piattaforma/EditorRuoli' => $piattaforma,
+            'Piattaforma/EmailDiSistema' => $piattaforma,
             'Piattaforma/Errori' => $piattaforma,
             'Piattaforma/Listino' => $piattaforma,
             'Piattaforma/ParcoGlobale' => $piattaforma,
@@ -257,6 +265,14 @@ final class Matrice
             VerificaEmailRegistrazione::class => $senzaEnte,
             BenvenutoRegistrazione::class => $senzaEnte,
             PropostaPiano::class => $senzaEnte,
+            // 🔗 ADR-047. Le tre sugli interventi portano i dati di un Ente: la
+            // prova è che marchio e nome arrivano dall'id nel payload anche
+            // quando sul worker c'è l'utente di un altro cliente.
+            InterventoProgrammato::class => self::EMAIL_INTERVENTI,
+            InterventoEseguito::class => self::EMAIL_INTERVENTI,
+            InterventoAssegnato::class => self::EMAIL_INTERVENTI,
+            AccountBloccato::class => $senzaEnte,
+            PianoCambiato::class => $senzaEnte,
             InviaAllertaErrore::class => 't:Notifiche/MarchioEmailTest.php::never brands the platform alert with a tenant, by construction and not by convention',
         ];
     }

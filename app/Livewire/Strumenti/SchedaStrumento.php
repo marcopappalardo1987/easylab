@@ -22,6 +22,7 @@ use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Rules\NomeRicambio;
+use App\Support\Notifiche\AvvisiIntervento;
 use App\Support\Tenancy\AccessoTecnico;
 use App\Support\Utenti\Assegnabili;
 use Carbon\Carbon;
@@ -363,7 +364,7 @@ class SchedaStrumento extends Component
 
         // Intervento e righe ricambio atomici (ADR-022). Il servizio apre a sua
         // volta una transazione propria: annidata → savepoint, costo nullo.
-        DB::transaction(function () use ($payload, $righeNuove) {
+        $intervento = DB::transaction(function () use ($payload, $righeNuove): Intervento {
             if ($this->editingInterventoId === null) {
                 $intervento = new Intervento($payload + [
                     'tenant_id' => $this->strumento->tenant_id, // invariante interventi.tenant_id == strumenti.tenant_id
@@ -384,9 +385,45 @@ class SchedaStrumento extends Component
                 app(RegistraRicambiIntervento::class)
                     ->esegui($intervento, $righeNuove, array_map(intval(...), $this->ricambiRimossi));
             }
+
+            return $intervento;
         });
 
+        $this->avvisaDelSalvataggio($intervento);
+
         $this->closeInterventoForm();
+    }
+
+    /**
+     * Le email che seguono il salvataggio di un intervento (🔗 ADR-047).
+     *
+     * ⚠️ **Dopo la transazione, e dentro `rescue()`**: l'intervento è già
+     * scritto, e una coda irraggiungibile non deve trasformare un salvataggio
+     * riuscito in una pagina di errore — né lasciare in coda l'email di un
+     * intervento che un rollback ha cancellato.
+     *
+     * - **Programmato** solo alla nascita di un intervento ancora da fare.
+     *   L'inserimento storico (`gia_eseguito`) è la registrazione di un lavoro
+     *   del passato: non è né un programma né un'esecuzione di oggi.
+     * - **Assegnato** quando l'assegnatario è nuovo: alla nascita, o quando una
+     *   modifica lo cambia. Rileggere `wasChanged` e non il form: è ciò che il
+     *   database ha davvero scritto, dopo la whitelist di `Assegnabili`.
+     */
+    private function avvisaDelSalvataggio(Intervento $intervento): void
+    {
+        if ($intervento->stato !== StatoIntervento::NonFatto) {
+            return;
+        }
+
+        rescue(function () use ($intervento): void {
+            if ($intervento->wasRecentlyCreated) {
+                AvvisiIntervento::programmato($intervento, $this->strumento);
+            }
+
+            if ($intervento->wasRecentlyCreated || $intervento->wasChanged('tecnico_id')) {
+                AvvisiIntervento::assegnato($intervento, $this->strumento);
+            }
+        });
     }
 
     // --- Repeater ricambi (ADR-022) — stesso pattern del repeater `parametri` ---
@@ -600,9 +637,15 @@ class SchedaStrumento extends Component
         // se fallisse, il lavoro fatto resterebbe registrato — chiudere una
         // taratura e pianificarne un'altra sono due gesti, e il primo non deve
         // dipendere dal secondo.
-        if ($eraTaratura && $this->pianificaProssimaTaratura) {
-            $intervento->pianificaTaraturaSuccessiva((int) $this->mesiProssimaTaratura);
-        }
+        $successiva = $eraTaratura && $this->pianificaProssimaTaratura
+            ? $intervento->pianificaTaraturaSuccessiva((int) $this->mesiProssimaTaratura)
+            : null;
+
+        // 🔗 ADR-047. Dopo entrambe le scritture e dentro `rescue()`, per la
+        // ragione di `avvisaDelSalvataggio()`: il lavoro chiuso resta chiuso
+        // anche se l'email non parte. La taratura successiva si annuncia qui,
+        // nella stessa email, invece che con un «programmato» un secondo dopo.
+        rescue(fn () => AvvisiIntervento::eseguito($intervento, $this->strumento, $successiva));
 
         $this->closeCompleta();
     }

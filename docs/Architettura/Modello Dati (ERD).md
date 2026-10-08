@@ -125,6 +125,7 @@ Utente della piattaforma. Auth/2FA via Jetstream/Fortify (ADR-012). Non tutti gl
 | `two_factor_secret` / `two_factor_recovery_codes` | text nullable | 2FA (Fortify). |
 | ~~`is_active`~~ | — | Non esiste: 🔗 ADR-038 ha scelto il **soft delete**, non un terzo flag di accesso. Lo stato mostrato in UI deriva da `deleted_at` e `email_verified_at`, senza una colonna concorrente. Il lockout commerciale resta separato e vive su `accounts`. |
 | `riceve_email_scadenze` | boolean default true | Opt-out dal digest email (🔗 ADR-011, 18 Ago 2026) = diritto di opposizione del registro T4. Riguarda **solo l'email**: le notifiche in-app restano sempre. Fuori dall'attributo `Fillable`, come `visibilita_garanzie_ricambio` (ADR-029): si scrive solo da `/settings/notifiche`. |
+| `riceve_email_interventi_programmati`, `riceve_email_interventi_eseguiti`, `riceve_email_interventi_assegnati` | boolean default true | Le tre preferenze sulle email degli interventi (🔗 ADR-047, 9 Ott 2026), nella stessa forma della riga sopra: opt-out della persona, solo per l'email, fuori dall'attributo `Fillable`. Valgono **insieme** all'interruttore di piattaforma (`interruttori_email`): l'email parte se entrambi dicono sì. |
 | `tema` | enum: `sistema` \| `chiaro` \| `scuro`, NOT NULL default `sistema` | Preferenza di tema (🔗 ADR-034). **Il DB è la verità, `localStorage` è la cache che evita il lampo**: chi entra da un dispositivo nuovo ritrova la propria scelta, e un tablet condiviso non impone a tutti quella dell'ultimo che l'ha toccato. NOT NULL con default, come `soglia_obsolescenza_anni` e `visibilita_garanzie_ricambio`: con una colonna nullable il default vivrebbe in due posti (un COALESCE in SQL e un `??` in PHP) liberi di divergere. Il CHECK nasce **con** la colonna — `enum()` è varchar + CHECK su entrambi i driver — a differenza di `strumenti.forced_state`, dove l'`ADD CONSTRAINT` si salta su SQLite. Fuori da `$fillable`. *(Riga aggiunta il 28 Ago 2026: la colonna era a DB dal 26 e questa tabella non la elencava — la stessa forma dell'omissione già annotata su `visibilita_garanzie_ricambio`.)* |
 | timestamps, `deleted_at` | | Soft delete della persona (🔗 ADR-038). Una riga cestinata non autentica e sparisce da assegnatari, digest e impersonazione per il `SoftDeletingScope`; le relazioni di attribuzione storica la leggono invece con `withTrashed()`. La migration additiva è nel codice ma **non risulta ancora applicata al DB di sviluppo al 30 Ago 2026**. |
 
@@ -404,6 +405,16 @@ Cuore manutentivo. Le **tarature e certificazioni** sono interventi `tipo = tara
 | timestamps | | **append-only**, niente soft delete/update. |
 
 > Il trasferimento aggiorna `strumenti.unita_organizzativa_id` e — se cross-tenant — `strumenti.tenant_id`; lo **storico interventi resta legato allo strumento** e segue la macchina (continuità manutentiva, ADR-015). Il log completo resta visibile solo a EasyLab/Superadmin.
+
+### 5.4-bis `interruttori_email` (interruttori di piattaforma — ADR-047, 9 Ott 2026)
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `chiave` | string, PK | La chiave dell'email in `CatalogoEmail` (es. `intervento_eseguito`). Stringa senza vincoli: l'elenco vive nel codice, e una riga rimasta su un'email tolta dal catalogo non deve far fallire nulla. |
+| `attiva` | boolean | Accesa o spenta **per tutti i clienti**. |
+| timestamps | | |
+
+🔴 **L'assenza della riga non vuol dire «spenta»**: vuol dire «mai toccata», e vale lo stato con cui l'email nasce (`TipoEmail::nataAccesa`). È ciò che fa nascere spente le email nuove senza un seeding da ricordare. ⚠️ **Senza `tenant_id`** per scelta: sono interruttori della piattaforma; la scelta della persona sta su `users.riceve_email_*`. Nessun model: la leggono e la scrivono `InterruttoriEmail` col query builder, con audit a mano («Email accesa» / «Email spenta»).
 
 ### 5.5 `avvisi_scadenza` (memoria dello scheduler — ADR-011, attuata il 18 Ago 2026)
 Log degli avvisi già inviati: risponde all'unica domanda che il comando giornaliero pone a ogni giro, «di questa scadenza ho già avvisato?». Senza, il digest ripeterebbe le stesse righe finché la scadenza resta aperta.

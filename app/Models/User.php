@@ -100,6 +100,10 @@ class User extends Authenticatable
             // preferenze dell'utente, mai per mass-assignment — la stessa
             // postura di `visibilita_garanzie_ricambio` (ADR-029).
             'riceve_email_scadenze' => 'boolean',
+            // Le tre preferenze sugli interventi (ADR-047), stessa forma.
+            'riceve_email_interventi_programmati' => 'boolean',
+            'riceve_email_interventi_eseguiti' => 'boolean',
+            'riceve_email_interventi_assegnati' => 'boolean',
             // La preferenza di tema (ADR-034). Fuori dall'attributo Fillable
             // come le due qui sopra: si scrive solo dalle preferenze
             // dell'utente, con `forceFill`, mai per mass-assignment.
