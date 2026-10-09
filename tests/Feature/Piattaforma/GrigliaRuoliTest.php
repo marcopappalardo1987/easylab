@@ -448,7 +448,13 @@ it('keeps the page cost flat, whatever the size of the matrix', function () {
     // cura era sbagliata, è stata annullata, e il costo se n'è andato con lei:
     // un tetto alzato per una modifica poi ritirata è debito che nessuno
     // ricorda di restituire.
-    expect($base)->toBeLessThan(12);
+    //
+    // 🗓️ **Il tetto sale a 13, il 9 Ott 2026 (🔗 ADR-048).** La barra laterale
+    // chiede se esiste un Ente di piattaforma, per offrire «Persone di EasyLab»
+    // a chi governa senza un Ente proprio: una query, solo per loro, e il
+    // Superadmin di questo test è uno di loro. Questa modifica resta: se la
+    // voce sparisse dal layout, il tetto torna a 12.
+    expect($base)->toBeLessThan(13);
 
     // La matrice cresce di venti celle accese: il costo non deve muoversi di
     // una query, perché non dipende dal numero di celle ma dal numero di query

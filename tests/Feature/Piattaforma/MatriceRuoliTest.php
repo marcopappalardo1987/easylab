@@ -253,8 +253,11 @@ it('computes the new state from the database, not from the caller', function () 
 
     MatriceRuoli::commuta('Tenant', 'spostamenti.view');
 
+    // ⚠️ `orderBy('id')`: l'asserzione è su una **sequenza**, e senza ordine la
+    // sequenza la decide il motore. Su Postgres le due righe sono tornate
+    // invertite in CI il 9 Ott 2026, con lo stesso commit verde un giro prima.
     expect(permessiDiRuolo('Tenant'))->toBe($prima)
-        ->and(VistaPiattaforma::audit()->pluck('description')->all())->toBe([
+        ->and(VistaPiattaforma::audit()->orderBy('id')->pluck('description')->all())->toBe([
             'Permesso concesso al ruolo',
             'Permesso revocato al ruolo',
         ]);

@@ -126,6 +126,10 @@ it('does not show a platform user a link to the tenant-bound people page', funct
     // non ha nessuna voce operativa, quindi «Persone» gli mancherebbe comunque
     // e il test non proverebbe più la guardia sull'Ente corrente. Il
     // Superadmin senza Ente le voci le ha, e questa no.
+    //
+    // Dal 9 Ott 2026 (🔗 ADR-048) chi governa senza Ente amministra le persone
+    // dell'Ente di piattaforma: qui quell'Ente non c'è, e la risposta resta
+    // questa. Il caso in cui c'è sta in `ConferireSuperadminTest`.
     $developer = User::factory()->create([
         'tenant_id' => null,
         'two_factor_confirmed_at' => now(),
