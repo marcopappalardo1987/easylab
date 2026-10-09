@@ -44,6 +44,29 @@
             </button>
         </div>
 
+        {{-- Le email sugli interventi (🔗 ADR-047). La lista arriva dal
+             componente già filtrata: qui compare solo ciò che questa persona
+             potrebbe davvero ricevere, e solo se la piattaforma l'ha acceso. --}}
+        @foreach ($emailInterventi as $voce)
+            <hr class="my-6 border-border">
+
+            <div class="flex items-start justify-between gap-4" wire:key="email-{{ $voce['proprieta'] }}">
+                <div>
+                    <h2 class="font-semibold text-ink">{{ $voce['titolo'] }}</h2>
+                    <p class="mt-1 text-sm text-ink-2">{{ $voce['testo'] }}</p>
+                </div>
+
+                <button type="button"
+                        wire:click="$toggle('{{ $voce['proprieta'] }}')"
+                        role="switch"
+                        aria-checked="{{ $this->{$voce['proprieta']} ? 'true' : 'false' }}"
+                        aria-label="{{ $voce['titolo'] }}"
+                        class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-canvas focus:outline-none {{ $this->{$voce['proprieta']} ? 'bg-brand' : 'bg-border-strong' }}">
+                    <span class="inline-block h-5 w-5 transform rounded-full bg-surface shadow transition {{ $this->{$voce['proprieta']} ? 'translate-x-5' : 'translate-x-0' }}"></span>
+                </button>
+            </div>
+        @endforeach
+
         <hr class="my-6 border-border">
 
         <p class="text-sm text-ink-2">

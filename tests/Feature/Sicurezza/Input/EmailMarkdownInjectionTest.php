@@ -45,6 +45,24 @@ function datiEmail(string $vista, string $t): array
         'mail.invito-utente' => ['destinatario' => $utente, 'ente' => $t, 'url' => 'https://easylab.test/invito', 'giorni' => 7],
         'mail.verifica-registrazione' => ['nome' => $t, 'ente' => $t, 'url' => 'https://easylab.test/verifica', 'ore' => 24],
         'mail.proposta-piano' => ['ragioneSociale' => $t, 'piano' => $t, 'prezzo' => '49,00', 'url' => 'https://easylab.test/abbonamento'],
+        // 🔗 ADR-047: le cinque email nate il 9 Ott 2026. Nome della macchina,
+        // descrizione, ubicazione e nomi di persona sono tutti testo scritto
+        // da un utente.
+        'mail.intervento-programmato' => [
+            'ente' => $t, 'strumento' => $t, 'ubicazione' => $t, 'tipo' => $t, 'descrizione' => $t,
+            'scadenza' => '01/12/2026', 'assegnatario' => $t, 'autore' => $t, 'url' => 'https://easylab.test/strumenti/7',
+        ],
+        'mail.intervento-eseguito' => [
+            'ente' => $t, 'strumento' => $t, 'ubicazione' => $t, 'tipo' => $t, 'descrizione' => $t,
+            'eseguitoIl' => '01/12/2026', 'autore' => $t, 'conReport' => true, 'prossima' => '01/12/2027',
+            'url' => 'https://easylab.test/strumenti/7',
+        ],
+        'mail.intervento-assegnato' => [
+            'ente' => $t, 'strumento' => $t, 'ubicazione' => $t, 'tipo' => $t, 'descrizione' => $t,
+            'scadenza' => '01/12/2026', 'assegnatoDa' => $t, 'url' => 'https://easylab.test/strumenti/7',
+        ],
+        'mail.account-bloccato' => ['ragioneSociale' => $t, 'url' => 'https://easylab.test/abbonamento'],
+        'mail.piano-cambiato' => ['ragioneSociale' => $t, 'da' => $t, 'a' => $t, 'url' => 'https://easylab.test/abbonamento'],
         'mail.avviso-obsolescenza' => [
             'ente' => $t, 'soglia' => 10, 'destinatario' => $utente,
             'righe' => [RigaObsolescenza::daStrumento(Strumento::factory()->make([
@@ -72,6 +90,11 @@ dataset('viste email', [
     'mail.invito-utente',
     'mail.verifica-registrazione',
     'mail.proposta-piano',
+    'mail.intervento-programmato',
+    'mail.intervento-eseguito',
+    'mail.intervento-assegnato',
+    'mail.account-bloccato',
+    'mail.piano-cambiato',
     'mail.avviso-obsolescenza',
     'mail.digest-scadenze',
 ]);

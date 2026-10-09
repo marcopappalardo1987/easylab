@@ -1596,3 +1596,37 @@ Guardando le prime cinque guide pubblicate, però, la regola produceva una guida
 
 - ⚠️ **Non fatto**: cambiare ruolo a una persona già creata (da Tecnico a Gestore si passa creando la persona con un'altra email, o da console); un cestino con ripristino per ciò che il Gestore non può eliminare; il filtro per sede su Documenti e Ricambi (c'è su Strumenti e Scadenzario); la traccia in audit delle **letture** del Gestore e del Superadmin sui clienti gestiti (ADR-007 la prevede per il solo Tecnico — qui ogni scrittura è già tracciata col nome di chi l'ha fatta).
 - **Prova di mutazione**: ogni guardia di `ClientiGestiti`, del ramo in `TenantScope`, dell'eccezione in `BelongsToTenant`, di `Account::affidaManutenzione()`, della migration del ruolo, delle guardie di pagina (spostamento, nodo Ente, fornitori, import, filtro sede) e della leva in cabina rende rosso un test dedicato (`ClientiGestitiTest`, `AccessoGestoreTest`, `StaffSuPiuClientiTest`, `ManutenzioneGestitaTest`, `TecniciTest`, `AppShellTest`).
+
+---
+
+**ADR-047 — Le email dell'applicazione: un catalogo, due interruttori, cinque email nuove e la prova di invio**
+
+*Stato: Accettata e attuata il 9 Ott 2026. Estende ADR-011 (notifiche email e in-app) e ne conserva lo scheduler, la memoria anti-duplicati e la preferenza `riceve_email_scadenze`. Usa ADR-013 (lockout), ADR-045 (piano), ADR-030 (chi lavora per il cliente) e ADR-046 (clienti gestiti da EasyLab).*
+
+**Contesto.** Per sapere cosa l'applicazione scriveva per posta bisognava leggere nove classi e due comandi. Due fatti non producevano nessuna email: l'assegnazione di un intervento (il tecnico lo scopriva aprendo «Campo», o col riepilogo delle 06:00 quando la scadenza si avvicinava) e ciò che accade all'account (blocco, cambio di piano). Il cliente a cui EasyLab gestisce la manutenzione (ADR-046) non veniva a sapere che un lavoro era stato programmato o eseguito. Non c'era modo di spegnere un'email per tutti, né di vederne una prima che partisse verso un cliente. E lo scheduler, da cui dipendono le due email giornaliere, in produzione e in staging **non era acceso**.
+
+**Decisione.**
+
+1. **Un catalogo** (`App\Support\Email\CatalogoEmail`): quindici voci, ciascuna con nome, quando parte e a chi. Lo leggono la pagina, gli interruttori e le prove.
+2. **Due famiglie.** Le email *informative* (riepilogo scadenze, obsolescenza, intervento programmato / eseguito / assegnato, account bloccato, piano cambiato) hanno un interruttore. Quelle *di servizio* (invito, piano da attivare, verifica indirizzo, account già esistente, benvenuto, account eliminato, nuovo errore, recupero password) no: spegnerle chiuderebbe fuori qualcuno.
+3. **Due interruttori per le informative**, e l'email parte solo se entrambi dicono sì:
+   - di **piattaforma** (tabella `interruttori_email`, da Piattaforma → Email, permesso `tenants.provision`): vale per tutti i clienti, ogni cambio è una riga di audit;
+   - della **persona** (colonne `users.riceve_email_*`, da Preferenze): la pagina mostra a ciascuno solo le email che il suo ruolo può ricevere, e solo se la piattaforma le ha accese.
+4. **Cinque email nuove.** *Intervento programmato* ed *eseguito* vanno alle persone del cliente — gli stessi destinatari del riepilogo (`DestinatariEnte`): Admin e Tenant per l'Ente, Responsabile Reparto solo se la macchina è nel suo sotto-albero — e mai a chi ha compiuto il gesto. *Intervento assegnato* va alla sola persona assegnata, non a sé stessa. *Account bloccato* e *piano cambiato* vanno ai membri dell'account.
+5. 🔴 **Le cinque nuove nascono spente.** Un deploy non comincia a scrivere ai clienti di sua iniziativa: si provano, e si accendono quando si è deciso. L'assenza della riga in `interruttori_email` vuol dire «mai toccata», e vale lo stato di nascita scritto nel catalogo.
+6. **La prova di invio**: da Piattaforma → Email, qualunque email del catalogo si manda subito a un indirizzo scelto, con dati finti (`CampioniEmail`) e l'oggetto che comincia con `[Prova]`. Sincrona, perché chi la preme vuole l'esito; venti al minuto per persona; ogni invio è una riga di audit.
+7. **Lo scheduler è acceso** su Laravel Cloud in produzione e in staging dall'8 Ott 2026, dopo il primo giro `--senza-invio` dei due comandi su entrambi gli ambienti (in staging ha registrato in silenzio circa 45.000 scadenze già aperte).
+
+**Conseguenze.**
+
+- 🔴 **Le notifiche portano solo scalari.** Vanno in coda e si rendono su un worker, dove i global scope si ritirano: un `Intervento` serializzato verrebbe riletto senza confine. Chi accoda (`AvvisiIntervento`, `AvvisiAccount`) legge nella richiesta e passa testo; il marchio si risolve dall'id nel payload, come nel riepilogo.
+- **Si chiama dal gesto, non da un evento del model.** Un intervento nasce anche da un seeder o dall'inserimento storico del backlog: nessuno dei due è «qualcuno ha programmato un intervento». L'inserimento già eseguito non manda nulla.
+- **Un'email non decide l'esito del gesto.** L'accodamento sta dentro `rescue()`: una coda irraggiungibile non trasforma un intervento salvato in una pagina di errore, né fa rispondere 500 al webhook di Stripe che ha deciso un blocco.
+- **Il report di fine lavoro non esce per email**, e nemmeno il motivo di un blocco (ADR-013): l'email dice che c'è, o che l'accesso è sospeso, e porta dietro il login.
+- **La taratura successiva** pianificata alla chiusura si annuncia dentro «eseguito», non con un secondo «programmato».
+- **Il cambio di piano non si annuncia alla nascita** dell'account (`cambiaPiano(…, annuncia: false)` dalla cabina e dal modulo pubblico): lì il piano si assegna, e a dirlo sono già l'invito o il benvenuto.
+- Riepilogo e obsolescenza ricevono l'interruttore di piattaforma; spenta l'email, **la campanella resta**.
+- Lo scheduler fa anche la **rotazione** già dichiarata nel registro dei trattamenti (avvisi oltre 24 mesi, notifiche in-app oltre 12, error tracker a 90/180 giorni): con lo scheduler spento era una retention scritta e non applicata.
+
+- ⚠️ **Non fatto**: il riepilogo delle scadenze non arriva a EasyLab per i clienti che gestisce (lo ricevono gli utenti del cliente; Superadmin e Gestore solo per gli interventi assegnati a loro); nessuna email quando un intervento viene riaperto, spostato di data o eliminato; nessun interruttore per singolo Ente; la campanella in applicazione non riceve le cinque email nuove.
+- **Prova di mutazione**: ogni guardia di `InterruttoriEmail`, di `AvvisiIntervento` e `AvvisiAccount`, degli agganci in `SchedaStrumento` e in `Account`, delle due nascite (`annuncia: false`), di `via()` delle notifiche, della pagina delle preferenze e di `EmailDiSistema` rende rosso un test dedicato (`InterruttoriEmailTest`, `EmailInterventiTest`, `EmailAccountTest`, `EmailDiSistemaTest`, `PreferenzeNotificheTest`).

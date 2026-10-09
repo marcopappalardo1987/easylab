@@ -313,7 +313,8 @@ trait ProvisionaCliente
         }
 
         if (Piani::eGratuito($piano)) {
-            $esito->account->cambiaPiano($piano);
+            // `annuncia: false`: il cliente nasce adesso, e il piano non gli «cambia».
+            $esito->account->cambiaPiano($piano, annuncia: false);
 
             return ' Piano: «'.Piani::etichetta($piano).'».';
         }

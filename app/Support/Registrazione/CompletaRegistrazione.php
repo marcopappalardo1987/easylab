@@ -301,7 +301,8 @@ final class CompletaRegistrazione
             // 🔴 E il piano viene da `registrazioni.piano`, **mai** da
             // `$esito->piano`: quello arriva dai metadata, cioè da un payload
             // che ha viaggiato su un dominio di terzi.
-            $account->cambiaPiano($riga->piano);
+            // `annuncia: false`: l'account nasce adesso, e a dirlo è il benvenuto.
+            $account->cambiaPiano($riga->piano, annuncia: false);
 
             $this->rispecchiaSubscription($account, $riga, $esito);
 

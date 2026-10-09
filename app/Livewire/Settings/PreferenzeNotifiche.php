@@ -5,6 +5,9 @@ namespace App\Livewire\Settings;
 use App\Enums\TemaUtente;
 use App\Livewire\Settings\Concerns\ScegliTema;
 use App\Models\User;
+use App\Support\Email\CatalogoEmail;
+use App\Support\Email\InterruttoriEmail;
+use App\Support\Notifiche\DestinatariEnte;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -51,18 +54,93 @@ class PreferenzeNotifiche extends Component
 
     public bool $riceveEmailScadenze = true;
 
+    /**
+     * Le tre preferenze sugli interventi (🔗 ADR-047), nella stessa forma: una
+     * property pubblica ciascuna, scritta con `forceFill` solo da `salva()`.
+     */
+    public bool $riceveEmailInterventiProgrammati = true;
+
+    public bool $riceveEmailInterventiEseguiti = true;
+
+    public bool $riceveEmailInterventiAssegnati = true;
+
+    /** Property → colonna di `users`: l'unica mappa fra il form e il database. */
+    private const COLONNE = [
+        'riceveEmailScadenze' => 'riceve_email_scadenze',
+        'riceveEmailInterventiProgrammati' => 'riceve_email_interventi_programmati',
+        'riceveEmailInterventiEseguiti' => 'riceve_email_interventi_eseguiti',
+        'riceveEmailInterventiAssegnati' => 'riceve_email_interventi_assegnati',
+    ];
+
     public function mount(): void
     {
-        $this->riceveEmailScadenze = (bool) $this->user()->riceve_email_scadenze;
+        // Riletta dal database: l'istanza in sessione può non avere le colonne
+        // nuove, e `null` non deve leggersi come «spenta».
+        $utente = $this->user()->fresh() ?? $this->user();
+
+        foreach (self::COLONNE as $proprieta => $colonna) {
+            $this->{$proprieta} = (bool) ($utente->getAttribute($colonna) ?? true);
+        }
     }
 
     public function salva(): void
     {
-        $this->user()->forceFill([
-            'riceve_email_scadenze' => $this->riceveEmailScadenze,
-        ])->save();
+        $valori = [];
+
+        foreach (self::COLONNE as $proprieta => $colonna) {
+            $valori[$colonna] = (bool) $this->{$proprieta};
+        }
+
+        $this->user()->forceFill($valori)->save();
 
         $this->dispatch('preferenze-salvate');
+    }
+
+    /**
+     * Le email sugli interventi fra cui questa persona può scegliere.
+     *
+     * 🔴 **Solo quelle che potrebbe davvero ricevere**: un interruttore per
+     * un'email che non le arriverebbe comunque è una promessa falsa in
+     * entrambe le posizioni. Due condizioni, entrambe lette altrove e non
+     * riscritte qui: la piattaforma l'ha accesa (`InterruttoriEmail`), e il
+     * suo ruolo è fra i destinatari (`DestinatariEnte` per le email del
+     * cliente, il portafoglio per quella di chi viene assegnato).
+     *
+     * @return list<array{proprieta: string, titolo: string, testo: string}>
+     */
+    public function emailInterventi(): array
+    {
+        $utente = $this->user();
+        $delCliente = DestinatariEnte::riguarda($utente);
+
+        $voci = [
+            [
+                'chiave' => CatalogoEmail::INTERVENTO_PROGRAMMATO,
+                'riguarda' => $delCliente,
+                'proprieta' => 'riceveEmailInterventiProgrammati',
+                'titolo' => 'Intervento programmato',
+                'testo' => 'Un\'email quando qualcuno pianifica un intervento su una macchina che segui.',
+            ],
+            [
+                'chiave' => CatalogoEmail::INTERVENTO_ESEGUITO,
+                'riguarda' => $delCliente,
+                'proprieta' => 'riceveEmailInterventiEseguiti',
+                'titolo' => 'Intervento eseguito',
+                'testo' => 'Un\'email quando un intervento su una macchina che segui viene chiuso come eseguito.',
+            ],
+            [
+                'chiave' => CatalogoEmail::INTERVENTO_ASSEGNATO,
+                'riguarda' => $utente->lavoraPerPortafoglio(),
+                'proprieta' => 'riceveEmailInterventiAssegnati',
+                'titolo' => 'Intervento assegnato a te',
+                'testo' => 'Un\'email quando ti viene assegnato un intervento. Il lavoro resta comunque in «Campo».',
+            ],
+        ];
+
+        return array_values(array_map(
+            fn (array $voce) => ['proprieta' => $voce['proprieta'], 'titolo' => $voce['titolo'], 'testo' => $voce['testo']],
+            array_filter($voci, fn (array $voce) => $voce['riguarda'] && InterruttoriEmail::attiva($voce['chiave'])),
+        ));
     }
 
     private function user(): User
@@ -81,6 +159,7 @@ class PreferenzeNotifiche extends Component
             // combobox letta sull'accessibilità: lo stato del client non
             // aggiunge mai nulla a ciò che il server ha deciso di mostrare.
             'temaCorrente' => TemaUtente::oSistema($this->user()->tema),
+            'emailInterventi' => $this->emailInterventi(),
         ]);
     }
 }

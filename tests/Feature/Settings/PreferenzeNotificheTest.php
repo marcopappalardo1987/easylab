@@ -3,6 +3,8 @@
 use App\Livewire\Settings\PreferenzeNotifiche;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
+use App\Support\Email\CatalogoEmail;
+use App\Support\Email\InterruttoriEmail;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Livewire\Livewire;
 
@@ -66,4 +68,117 @@ it('never lets the preference be forged by mass assignment', function () {
 
 it('requires authentication', function () {
     $this->get(route('settings.notifiche'))->assertRedirect(route('login'));
+});
+
+// ─── Le email sugli interventi (🔗 ADR-047) ──────────────────────────────────
+
+/** Una persona con quel ruolo, dentro un Ente o di piattaforma. */
+function personaConRuolo(string $ruolo, bool $conEnte = true): User
+{
+    $u = User::factory()->create([
+        'tenant_id' => $conEnte ? UnitaOrganizzativa::factory()->ente()->create()->id : null,
+    ]);
+    $u->assignRole($ruolo);
+
+    return $u->fresh();
+}
+
+it('offers no switch for an email the platform has not turned on', function () {
+    // Le tre email nascono spente: un interruttore per un'email che non
+    // arriverebbe comunque sarebbe una promessa falsa.
+    $this->actingAs($this->utente);
+
+    Livewire::test(PreferenzeNotifiche::class)
+        ->assertSee('Riepilogo email delle scadenze')
+        ->assertDontSee('Intervento programmato')
+        ->assertDontSee('Intervento eseguito')
+        ->assertDontSee('Intervento assegnato a te');
+});
+
+it('offers each person only the emails their role can receive', function (string $ruolo, bool $conEnte, array $vede, array $nonVede) {
+    foreach ([
+        CatalogoEmail::INTERVENTO_PROGRAMMATO,
+        CatalogoEmail::INTERVENTO_ESEGUITO,
+        CatalogoEmail::INTERVENTO_ASSEGNATO,
+    ] as $chiave) {
+        InterruttoriEmail::imposta($chiave, true);
+    }
+
+    $this->actingAs(personaConRuolo($ruolo, $conEnte));
+
+    $pagina = Livewire::test(PreferenzeNotifiche::class);
+
+    foreach ($vede as $titolo) {
+        $pagina->assertSee($titolo);
+    }
+    foreach ($nonVede as $titolo) {
+        $pagina->assertDontSee($titolo);
+    }
+})->with([
+    'Admin' => ['Admin', true, ['Intervento programmato', 'Intervento eseguito'], ['Intervento assegnato a te']],
+    'Tenant' => ['Tenant', true, ['Intervento programmato', 'Intervento eseguito'], ['Intervento assegnato a te']],
+    'Responsabile Reparto' => ['Responsabile Reparto', true, ['Intervento programmato', 'Intervento eseguito'], ['Intervento assegnato a te']],
+    'Tecnico di EasyLab' => ['Tecnico', false, ['Intervento assegnato a te'], ['Intervento programmato', 'Intervento eseguito']],
+    'Gestore' => ['Gestore', false, ['Intervento assegnato a te'], ['Intervento programmato', 'Intervento eseguito']],
+]);
+
+it('offers only the emails that are on, one by one', function () {
+    InterruttoriEmail::imposta(CatalogoEmail::INTERVENTO_ESEGUITO, true);
+
+    $this->actingAs($this->utente);
+
+    Livewire::test(PreferenzeNotifiche::class)
+        ->assertSee('Intervento eseguito')
+        ->assertDontSee('Intervento programmato');
+});
+
+it('starts with the three intervento emails enabled, and persists each opt-out on its own column', function () {
+    $this->actingAs($this->utente);
+
+    Livewire::test(PreferenzeNotifiche::class)
+        ->assertSet('riceveEmailInterventiProgrammati', true)
+        ->assertSet('riceveEmailInterventiEseguiti', true)
+        ->assertSet('riceveEmailInterventiAssegnati', true)
+        ->set('riceveEmailInterventiEseguiti', false)
+        ->call('salva');
+
+    $dopo = $this->utente->fresh();
+
+    expect($dopo->riceve_email_interventi_eseguiti)->toBeFalse()
+        // Le altre restano dov'erano: ogni interruttore ha la sua colonna.
+        ->and($dopo->riceve_email_interventi_programmati)->toBeTrue()
+        ->and($dopo->riceve_email_interventi_assegnati)->toBeTrue()
+        ->and($dopo->riceve_email_scadenze)->toBeTrue();
+});
+
+it('shows each intervento email as the person left it, and lets them opt back in', function () {
+    $this->utente->forceFill([
+        'riceve_email_interventi_programmati' => false,
+        'riceve_email_interventi_assegnati' => false,
+    ])->save();
+    $this->actingAs($this->utente);
+
+    Livewire::test(PreferenzeNotifiche::class)
+        ->assertSet('riceveEmailInterventiProgrammati', false)
+        ->assertSet('riceveEmailInterventiEseguiti', true)
+        ->assertSet('riceveEmailInterventiAssegnati', false)
+        ->set('riceveEmailInterventiProgrammati', true)
+        ->call('salva');
+
+    expect($this->utente->fresh()->riceve_email_interventi_programmati)->toBeTrue()
+        ->and($this->utente->fresh()->riceve_email_interventi_assegnati)->toBeFalse();
+});
+
+it('never lets the intervento preferences be forged by mass assignment', function () {
+    $this->utente->update([
+        'riceve_email_interventi_programmati' => false,
+        'riceve_email_interventi_eseguiti' => false,
+        'riceve_email_interventi_assegnati' => false,
+    ]);
+
+    $dopo = $this->utente->fresh();
+
+    expect($dopo->riceve_email_interventi_programmati)->toBeTrue()
+        ->and($dopo->riceve_email_interventi_eseguiti)->toBeTrue()
+        ->and($dopo->riceve_email_interventi_assegnati)->toBeTrue();
 });

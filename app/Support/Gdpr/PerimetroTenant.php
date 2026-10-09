@@ -60,7 +60,11 @@ final class PerimetroTenant
      */
     public const COLONNE_UTENTI = [
         'id', 'name', 'email', 'email_verified_at', 'tenant_id',
-        'riceve_email_scadenze', 'tema', 'created_at', 'updated_at', 'deleted_at',
+        'riceve_email_scadenze',
+        // Le tre preferenze sugli interventi (ADR-047): scelte della persona,
+        // come quella qui sopra, e come quella sono sue da leggere.
+        'riceve_email_interventi_programmati', 'riceve_email_interventi_eseguiti', 'riceve_email_interventi_assegnati',
+        'tema', 'created_at', 'updated_at', 'deleted_at',
     ];
 
     /** @var list<string> */

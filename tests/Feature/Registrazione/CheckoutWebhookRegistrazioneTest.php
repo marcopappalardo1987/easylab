@@ -4,11 +4,15 @@ use App\Models\Account;
 use App\Models\Errore;
 use App\Models\Registrazione;
 use App\Models\User;
+use App\Notifications\PianoCambiato;
 use App\Support\AuditLog;
+use App\Support\Email\CatalogoEmail;
+use App\Support\Email\InterruttoriEmail;
 use App\Support\Provisioning\ProvisionaEnte;
 use App\Support\Registrazione\CompletaRegistrazione;
 use App\Support\Registrazione\RegistrazioneRifiutata;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Testing\TestResponse;
 use Spatie\Activitylog\Models\Activity;
 use Tests\Support\BancoRegistrazione;
@@ -101,6 +105,23 @@ it('makes the account of somebody who paid and never came back', function () {
         ->and($account->stripe_id)->toBe('cus_aurora')
         ->and(User::query()->where('email', 'marta@laboratorio-aurora.it')->exists())->toBeTrue()
         ->and($this->riga->fresh()->completata())->toBeTrue();
+});
+
+it('does not announce a plan change to an account that is being born on its plan', function () {
+    // 🔗 ADR-047: l'account nasce già sul piano pagato. Non gli è «cambiato»
+    // nulla, e a dirlo è il benvenuto — una seconda email «il piano è passato
+    // da Free a SaaS» racconterebbe un fatto che il cliente non ha vissuto.
+    InterruttoriEmail::imposta(CatalogoEmail::PIANO_CAMBIATO, true);
+    Notification::fake();
+
+    consegnaRegistrazione(sessionePagata(['registrazione_id' => (string) $this->riga->id]))->assertOk();
+
+    expect(Account::query()->sole()->piano)->toBe('saas');
+
+    Notification::assertNotSentTo(
+        User::where('email', 'marta@laboratorio-aurora.it')->sole(),
+        PianoCambiato::class,
+    );
 });
 
 it('makes one account even if Stripe delivers the same event twice', function () {
