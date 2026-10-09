@@ -60,7 +60,14 @@ trait OffreImpersonazione
     {
         Gate::authorize('utenti.impersonate');
 
-        VistaPiattaforma::accounts()->whereKey($accountId)->firstOrFail();
+        // 🔴 `accountsInclusaPiattaforma()` e non `accounts()` (9 Ott 2026): la
+        // cabina offre questa scelta anche per l'account di EasyLab, quando ha
+        // più di una persona impersonabile, ed è la strada con cui il
+        // Developer entra come Superadmin. Con la porta dei soli clienti quel
+        // bottone rispondeva 404 dal giorno in cui i Superadmin sono diventati
+        // due. La lettura (`clienteScelto()`) usava già la porta giusta: a
+        // essere sbagliata era la guardia.
+        VistaPiattaforma::accountsInclusaPiattaforma()->whereKey($accountId)->firstOrFail();
 
         // Simmetrico ad `apriLockout`/`apriFiscali`: una modale alla volta.
         $this->chiudiOgniModale();
@@ -78,7 +85,8 @@ trait OffreImpersonazione
         if ($valore !== null) {
             Gate::authorize('utenti.impersonate');
 
-            VistaPiattaforma::accounts()->whereKey($valore)->firstOrFail();
+            // Stessa porta di `apriScelta()`, per la stessa ragione.
+            VistaPiattaforma::accountsInclusaPiattaforma()->whereKey($valore)->firstOrFail();
         }
     }
 

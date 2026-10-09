@@ -627,11 +627,15 @@ it('refuses to open the member chooser without the impersonation permission', fu
         ->toThrow(AuthorizationException::class);
 });
 
-it('refuses to open the member chooser for an account outside the platform view', function () {
+it('refuses to open the member chooser for an account that does not exist', function () {
+    // ⚠️ Fino al 9 Ott 2026 qui si rifiutava l'account di EasyLab. Era la
+    // stessa guardia che dalla cabina rispondeva 404 a «Impersona (N)»
+    // (🔗 ADR-048, `ImpersonazioneUiTest`): il concern è condiviso, la porta è
+    // una, e resta fuori ciò che la porta non restituisce.
     $this->actingAs($this->superadmin);
     $this->withoutExceptionHandling();
 
-    expect(fn () => schedaRicambi()->call('apriScelta', $this->easylab->id))
+    expect(fn () => schedaRicambi()->call('apriScelta', 999_999))
         ->toThrow(ModelNotFoundException::class);
 });
 

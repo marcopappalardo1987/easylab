@@ -152,15 +152,108 @@ it('hides the control from whoever may see the page but not impersonate', functi
         ->assertDontSee('Impersona');
 });
 
-it('refuses to open the member choice for an account that is not a customer', function () {
-    $piattaforma = Account::factory()->create(['di_piattaforma' => true]);
+it('refuses to open the member choice for an account that does not exist or is in the bin', function () {
+    // ⚠️ Fino al 9 Ott 2026 questo test rifiutava anche l'account di
+    // piattaforma, cioè teneva fermo il difetto: la striscia di EasyLab offre
+    // «Impersona (N)» e quel bottone rispondeva 404 (vedi il test qui sotto).
+    // Resta rifiutato ciò che la porta non restituisce: un id inventato e un
+    // cliente cestinato.
+    $cestinato = Account::factory()->create(['ragione_sociale' => 'Cliente Cestinato']);
+    $cestinato->delete();
 
-    expect(fn () => Livewire::test(Cabina::class)->call('apriScelta', $piattaforma->id))
-        ->toThrow(ModelNotFoundException::class);
+    foreach ([999_999, $cestinato->id] as $id) {
+        expect(fn () => Livewire::test(Cabina::class)->call('apriScelta', $id))
+            ->toThrow(ModelNotFoundException::class);
 
-    // E per l'altra strada, la property, che Livewire accetta dal browser.
-    expect(fn () => Livewire::test(Cabina::class)->set('sceltaImpersonazione', $piattaforma->id))
-        ->toThrow(ModelNotFoundException::class);
+        // E per l'altra strada, la property, che Livewire accetta dal browser.
+        expect(fn () => Livewire::test(Cabina::class)->set('sceltaImpersonazione', $id))
+            ->toThrow(ModelNotFoundException::class);
+    }
+});
+
+/**
+ * EasyLab con due Superadmin e un Developer fra i membri: il caso in cui la
+ * striscia della cabina rende il bottone «Impersona (2)» e non il link diretto.
+ *
+ * @return array{account: Account, primo: User, secondo: User, developer: User}
+ */
+function piattaformaConDueSuperadmin(): array
+{
+    $account = Account::factory()->diPiattaforma()->create(['ragione_sociale' => 'EasyLab']);
+    $ente = UnitaOrganizzativa::factory()->ente()->perAccount($account)->create(['nome' => 'EasyLab']);
+
+    $persona = function (string $nome, string $ruolo) use ($account, $ente): User {
+        $u = User::factory()->create(['name' => $nome, 'tenant_id' => $ente->id, 'two_factor_confirmed_at' => now()]);
+        $u->assignRole($ruolo);
+        $account->aggiungiMembro($u);
+
+        return $u->fresh();
+    };
+
+    return [
+        'account' => $account,
+        'primo' => $persona('Sara Prima', 'Superadmin'),
+        'secondo' => $persona('Sergio Secondo', 'Superadmin'),
+        'developer' => $persona('Dora Developer', 'Developer'),
+    ];
+}
+
+it('opens the member choice of the platform account, which is how a Developer reaches a Superadmin', function () {
+    // 🔴 Segnalato da Marco il 9 Ott 2026: «se da developer faccio
+    // impersonificazione verso superadmin ottengo errore 404». Con un solo
+    // Superadmin la striscia rende un link diretto e il difetto non si vede:
+    // è comparso il giorno in cui i Superadmin sono diventati due (ADR-048).
+    $mondo = piattaformaConDueSuperadmin();
+
+    $developer = User::factory()->create(['name' => 'Il Developer']);
+    $developer->assignRole('Developer');
+    $this->actingAs($developer->fresh());
+
+    Livewire::test(Cabina::class)
+        // Il bottone che la pagina offre davvero, con l'id che manda.
+        ->assertSeeHtml('wire:click="apriScelta('.$mondo['account']->id.')"')
+        ->assertSee('Impersona (2)')
+        ->call('apriScelta', $mondo['account']->id)
+        ->assertSet('sceltaImpersonazione', $mondo['account']->id)
+        ->assertSee('Impersona un membro di EasyLab')
+        ->assertSeeHtml(route('impersonate', $mondo['primo']))
+        ->assertSeeHtml(route('impersonate', $mondo['secondo']))
+        // Il Developer resta l'unico che non si impersona, nemmeno da qui.
+        ->assertDontSeeHtml(route('impersonate', $mondo['developer']))
+        ->assertDontSee('Dora Developer');
+
+    // L'altra strada, la property.
+    Livewire::test(Cabina::class)
+        ->set('sceltaImpersonazione', $mondo['account']->id)
+        ->assertSee('Impersona un membro di EasyLab')
+        ->assertSee('Sergio Secondo');
+
+    // E il gesto arriva in fondo: si entra come il Superadmin scelto.
+    $this->get(route('impersonate', $mondo['secondo']));
+
+    expect(app('impersonate')->isImpersonating())->toBeTrue()
+        ->and(auth()->id())->toBe($mondo['secondo']->id);
+});
+
+it('still keeps the platform members away from whoever may see the page but not impersonate', function () {
+    // 🔴 Il negativo della riga sopra: aprire la porta all'account di
+    // piattaforma non deve aprirla a chi ha il solo `tenants.view_all`. Dietro
+    // quella modale ci sono nome ed email di chi governa la piattaforma.
+    $mondo = piattaformaConDueSuperadmin();
+
+    $osservatore = User::factory()->create(['two_factor_confirmed_at' => now()]);
+    $osservatore->givePermissionTo('tenants.view_all');
+    $this->actingAs($osservatore->fresh());
+
+    Livewire::test(Cabina::class)
+        ->assertDontSee('Sara Prima')
+        ->assertDontSee('Impersona')
+        ->call('apriScelta', $mondo['account']->id)
+        ->assertForbidden();
+
+    Livewire::test(Cabina::class)
+        ->set('sceltaImpersonazione', $mondo['account']->id)
+        ->assertForbidden();
 });
 
 it('never lists a member of another customer in the choice', function () {

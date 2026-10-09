@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Notifications\InvitoUtente;
 use App\Support\AuditLog;
 use App\Support\Tenancy\CurrentTenant;
+use App\Support\Tenancy\EntePiattaforma;
 use App\Support\Utenti\InvitaUtente;
 use App\Support\Utenti\InvitoRifiutato;
 use App\Support\Utenti\RuoliAssegnabili;
@@ -150,10 +151,16 @@ class ElencoUtenti extends Component
      * ⚠️ Fail-closed: senza Ente non si elenca nessuno. Un utente autenticato
      * senza `tenant_id` è un tecnico di piattaforma (🔗 ADR-030), e le sue
      * persone non sono «quelle senza Ente» — sono nessuna.
+     *
+     * 🔴 **Un'eccezione sola, dal 9 Ott 2026 (🔗 ADR-048)**: chi governa la
+     * piattaforma senza avere un Ente proprio (il Developer, che nasce così)
+     * amministra le persone dell'**Ente di piattaforma**. Non «di tutti»: di
+     * quell'Ente, lo stesso su cui sta il Superadmin (`EntePiattaforma`). Per
+     * un tecnico o un gestore senza Ente la risposta resta 403.
      */
     private function enteId(): int
     {
-        $id = CurrentTenant::id();
+        $id = CurrentTenant::id() ?? EntePiattaforma::perChiGoverna(Auth::user());
 
         abort_if($id === null, 403);
 
