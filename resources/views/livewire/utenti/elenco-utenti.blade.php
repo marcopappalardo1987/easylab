@@ -249,6 +249,15 @@
                          finisce su `/settings/security` e non può andare altrove.
                          È il comportamento voluto — scoprirlo dalla telefonata di
                          chi non riesce a entrare è un'altra cosa. --}}
+                    {{-- 🔗 ADR-048: un Superadmin da questa schermata non si
+                         toglie più. Detto **prima** del gesto, accanto al campo. --}}
+                    @if ($this->nonSiToglieDaQui($ruolo))
+                        <p class="mt-2 rounded-md border border-bad-dot bg-bad-soft px-3 py-2 text-sm text-bad-soft-ink" data-avviso-superadmin>
+                            Un Superadmin governa tutta la piattaforma: clienti, piani, ruoli e accessi di chiunque.
+                            Da questa pagina il ruolo si dà, ma <strong>non si toglie</strong>: per revocarlo serve la console.
+                        </p>
+                    @endif
+
                     @if ($this->imponeSecondoFattore($ruolo))
                         <p class="mt-2 rounded-md border border-warn-dot bg-warn-soft px-3 py-2 text-sm text-warn-soft-ink">
                             Questo ruolo richiede il secondo fattore. Al primo accesso le sarà chiesto di
@@ -300,6 +309,13 @@
                     @error('nuovoRuolo')
                         <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
                     @enderror
+
+                    @if ($this->nonSiToglieDaQui($nuovoRuolo))
+                        <p class="mt-2 rounded-md border border-bad-dot bg-bad-soft px-3 py-2 text-sm text-bad-soft-ink" data-avviso-superadmin>
+                            Un Superadmin governa tutta la piattaforma: clienti, piani, ruoli e accessi di chiunque.
+                            Da questa pagina il ruolo si dà, ma <strong>non si toglie</strong>: per revocarlo serve la console.
+                        </p>
+                    @endif
 
                     @if ($this->imponeSecondoFattore($nuovoRuolo))
                         <p class="mt-2 rounded-md border border-warn-dot bg-warn-soft px-3 py-2 text-sm text-warn-soft-ink">
