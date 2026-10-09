@@ -55,6 +55,36 @@ final class DestinatariEnte
     }
 
     /**
+     * Le persone del cliente che seguono **questa macchina**, meno chi sta
+     * agendo: è la domanda delle email che seguono un gesto (🔗 ADR-047).
+     *
+     * `nodi === null` è «tutto l'Ente»; una lista è il sotto-albero del
+     * Responsabile, e la macchina deve starci dentro — o l'email diventerebbe
+     * il canale che scavalca `DepartmentScope`.
+     *
+     * @param  ?int  $escluso  l'id di chi compie il gesto: lo sa già.
+     * @return list<User>
+     */
+    public static function perMacchina(int $tenantId, int $unitaId, ?int $escluso = null): array
+    {
+        $persone = [];
+
+        foreach (self::perEnte($tenantId) as ['utente' => $utente, 'nodi' => $nodi]) {
+            if ($utente->id === $escluso) {
+                continue;
+            }
+
+            if ($nodi !== null && ! in_array($unitaId, $nodi, true)) {
+                continue;
+            }
+
+            $persone[] = $utente;
+        }
+
+        return $persone;
+    }
+
+    /**
      * @return list<array{utente: User, nodi: list<int>|null}>
      */
     public static function perEnte(int $tenantId): array

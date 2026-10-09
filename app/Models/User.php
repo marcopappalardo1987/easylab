@@ -104,6 +104,7 @@ class User extends Authenticatable
             'riceve_email_interventi_programmati' => 'boolean',
             'riceve_email_interventi_eseguiti' => 'boolean',
             'riceve_email_interventi_assegnati' => 'boolean',
+            'riceve_email_macchine_segnalate' => 'boolean',
             // La preferenza di tema (ADR-034). Fuori dall'attributo Fillable
             // come le due qui sopra: si scrive solo dalle preferenze
             // dell'utente, con `forceFill`, mai per mass-assignment.

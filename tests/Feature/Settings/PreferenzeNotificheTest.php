@@ -90,6 +90,7 @@ it('offers no switch for an email the platform has not turned on', function () {
 
     Livewire::test(PreferenzeNotifiche::class)
         ->assertSee('Riepilogo email delle scadenze')
+        ->assertDontSee('Macchina segnalata')
         ->assertDontSee('Intervento programmato')
         ->assertDontSee('Intervento eseguito')
         ->assertDontSee('Intervento assegnato a te');
@@ -97,6 +98,7 @@ it('offers no switch for an email the platform has not turned on', function () {
 
 it('offers each person only the emails their role can receive', function (string $ruolo, bool $conEnte, array $vede, array $nonVede) {
     foreach ([
+        CatalogoEmail::MACCHINA_SEGNALATA,
         CatalogoEmail::INTERVENTO_PROGRAMMATO,
         CatalogoEmail::INTERVENTO_ESEGUITO,
         CatalogoEmail::INTERVENTO_ASSEGNATO,
@@ -115,11 +117,11 @@ it('offers each person only the emails their role can receive', function (string
         $pagina->assertDontSee($titolo);
     }
 })->with([
-    'Admin' => ['Admin', true, ['Intervento programmato', 'Intervento eseguito'], ['Intervento assegnato a te']],
-    'Tenant' => ['Tenant', true, ['Intervento programmato', 'Intervento eseguito'], ['Intervento assegnato a te']],
-    'Responsabile Reparto' => ['Responsabile Reparto', true, ['Intervento programmato', 'Intervento eseguito'], ['Intervento assegnato a te']],
-    'Tecnico di EasyLab' => ['Tecnico', false, ['Intervento assegnato a te'], ['Intervento programmato', 'Intervento eseguito']],
-    'Gestore' => ['Gestore', false, ['Intervento assegnato a te'], ['Intervento programmato', 'Intervento eseguito']],
+    'Admin' => ['Admin', true, ['Macchina segnalata', 'Intervento programmato', 'Intervento eseguito'], ['Intervento assegnato a te']],
+    'Tenant' => ['Tenant', true, ['Macchina segnalata', 'Intervento programmato', 'Intervento eseguito'], ['Intervento assegnato a te']],
+    'Responsabile Reparto' => ['Responsabile Reparto', true, ['Macchina segnalata', 'Intervento programmato', 'Intervento eseguito'], ['Intervento assegnato a te']],
+    'Tecnico di EasyLab' => ['Tecnico', false, ['Intervento assegnato a te'], ['Macchina segnalata', 'Intervento programmato', 'Intervento eseguito']],
+    'Gestore' => ['Gestore', false, ['Intervento assegnato a te'], ['Macchina segnalata', 'Intervento programmato', 'Intervento eseguito']],
 ]);
 
 it('offers only the emails that are on, one by one', function () {
@@ -139,6 +141,7 @@ it('starts with the three intervento emails enabled, and persists each opt-out o
         ->assertSet('riceveEmailInterventiProgrammati', true)
         ->assertSet('riceveEmailInterventiEseguiti', true)
         ->assertSet('riceveEmailInterventiAssegnati', true)
+        ->assertSet('riceveEmailMacchineSegnalate', true)
         ->set('riceveEmailInterventiEseguiti', false)
         ->call('salva');
 
@@ -148,7 +151,23 @@ it('starts with the three intervento emails enabled, and persists each opt-out o
         // Le altre restano dov'erano: ogni interruttore ha la sua colonna.
         ->and($dopo->riceve_email_interventi_programmati)->toBeTrue()
         ->and($dopo->riceve_email_interventi_assegnati)->toBeTrue()
+        ->and($dopo->riceve_email_macchine_segnalate)->toBeTrue()
         ->and($dopo->riceve_email_scadenze)->toBeTrue();
+});
+
+it('persists the opt-out from the flagged-machine email on its own column', function () {
+    $this->actingAs($this->utente);
+
+    Livewire::test(PreferenzeNotifiche::class)
+        ->set('riceveEmailMacchineSegnalate', false)
+        ->call('salva');
+
+    $dopo = $this->utente->fresh();
+
+    expect($dopo->riceve_email_macchine_segnalate)->toBeFalse()
+        ->and($dopo->riceve_email_interventi_eseguiti)->toBeTrue();
+
+    Livewire::test(PreferenzeNotifiche::class)->assertSet('riceveEmailMacchineSegnalate', false);
 });
 
 it('shows each intervento email as the person left it, and lets them opt back in', function () {
@@ -174,11 +193,13 @@ it('never lets the intervento preferences be forged by mass assignment', functio
         'riceve_email_interventi_programmati' => false,
         'riceve_email_interventi_eseguiti' => false,
         'riceve_email_interventi_assegnati' => false,
+        'riceve_email_macchine_segnalate' => false,
     ]);
 
     $dopo = $this->utente->fresh();
 
     expect($dopo->riceve_email_interventi_programmati)->toBeTrue()
         ->and($dopo->riceve_email_interventi_eseguiti)->toBeTrue()
-        ->and($dopo->riceve_email_interventi_assegnati)->toBeTrue();
+        ->and($dopo->riceve_email_interventi_assegnati)->toBeTrue()
+        ->and($dopo->riceve_email_macchine_segnalate)->toBeTrue();
 });

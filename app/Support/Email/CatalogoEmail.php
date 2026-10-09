@@ -22,7 +22,7 @@ use InvalidArgumentException;
  *   verifica dell'indirizzo) o non sa che il proprio account non c'è più. Non
  *   hanno interruttore, apposta.
  *
- * ⚠️ **Le cinque email nate il 9 Ott 2026 nascono spente** (`nataAccesa:
+ * ⚠️ **Le sei email nate il 9 Ott 2026 nascono spente** (`nataAccesa:
  * false`): un deploy non deve cominciare a scrivere ai clienti di sua
  * iniziativa. Si provano dalla pagina, e si accendono quando si è deciso.
  *
@@ -35,6 +35,8 @@ final class CatalogoEmail
     public const RIEPILOGO_SCADENZE = 'riepilogo_scadenze';
 
     public const AVVISO_OBSOLESCENZA = 'avviso_obsolescenza';
+
+    public const MACCHINA_SEGNALATA = 'macchina_segnalata';
 
     public const INTERVENTO_PROGRAMMATO = 'intervento_programmato';
 
@@ -86,6 +88,15 @@ final class CatalogoEmail
                 aChi: 'Admin e Tenant per tutto l\'Ente, Responsabile Reparto per i suoi reparti.',
                 sospendibile: true,
                 preferenza: 'riceve_email_scadenze',
+            ),
+            new TipoEmail(
+                chiave: self::MACCHINA_SEGNALATA,
+                nome: 'Macchina segnalata',
+                quando: 'Quando qualcuno segnala una macchina portando il semaforo a mano su «Azione richiesta» o «Non idoneo». Porta il motivo scritto da chi la segnala.',
+                aChi: 'Admin e Tenant dell\'Ente, Responsabile Reparto se la macchina è nei suoi reparti. Mai a chi l\'ha segnalata.',
+                sospendibile: true,
+                nataAccesa: false,
+                preferenza: 'riceve_email_macchine_segnalate',
             ),
             new TipoEmail(
                 chiave: self::INTERVENTO_PROGRAMMATO,

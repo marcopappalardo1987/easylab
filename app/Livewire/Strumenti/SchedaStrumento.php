@@ -23,6 +23,7 @@ use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Rules\NomeRicambio;
 use App\Support\Notifiche\AvvisiIntervento;
+use App\Support\Notifiche\AvvisiStrumento;
 use App\Support\Tenancy\AccessoTecnico;
 use App\Support\Utenti\Assegnabili;
 use Carbon\Carbon;
@@ -791,6 +792,15 @@ class SchedaStrumento extends Component
             StatoSemaforo::from($this->forzaForm['stato']),
             $this->forzaForm['motivo'] ?: null,
         );
+
+        // 🔗 ADR-047: la segnalazione arriva alle persone del cliente. Solo se
+        // la forzatura ha davvero cambiato qualcosa — stato o motivo — o un
+        // secondo «Salva» sulla stessa modale manderebbe la stessa email due
+        // volte. Dentro `rescue()`: la segnalazione è già scritta, e una coda
+        // irraggiungibile non deve trasformarla in una pagina di errore.
+        if ($this->strumento->wasChanged(['forced_state', 'forced_reason'])) {
+            rescue(fn () => AvvisiStrumento::segnalata($this->strumento));
+        }
 
         $this->closeForza();
     }

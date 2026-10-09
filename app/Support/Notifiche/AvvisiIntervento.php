@@ -129,31 +129,18 @@ final class AvvisiIntervento
     }
 
     /**
-     * Le persone del cliente che seguono questa macchina, meno chi sta agendo.
-     *
-     * `nodi === null` è «tutto l'Ente»; una lista è il sotto-albero del
-     * Responsabile, e la macchina deve starci dentro — o l'email diventerebbe
-     * il canale che scavalca `DepartmentScope`.
+     * Le persone del cliente che seguono questa macchina, meno chi sta agendo:
+     * la regola sta in `DestinatariEnte::perMacchina()`, condivisa con
+     * `AvvisiStrumento`.
      *
      * @return list<User>
      */
     private static function delCliente(Intervento $intervento, Strumento $strumento): array
     {
-        $chiAgisce = auth()->id();
-        $persone = [];
-
-        foreach (DestinatariEnte::perEnte((int) $intervento->tenant_id) as ['utente' => $utente, 'nodi' => $nodi]) {
-            if ($utente->id === $chiAgisce) {
-                continue;
-            }
-
-            if ($nodi !== null && ! in_array((int) $strumento->unita_organizzativa_id, $nodi, true)) {
-                continue;
-            }
-
-            $persone[] = $utente;
-        }
-
-        return $persone;
+        return DestinatariEnte::perMacchina(
+            (int) $intervento->tenant_id,
+            (int) $strumento->unita_organizzativa_id,
+            auth()->id(),
+        );
     }
 }

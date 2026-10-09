@@ -25,6 +25,7 @@ beforeEach(function () {
 });
 
 const EMAIL_NUOVE = [
+    CatalogoEmail::MACCHINA_SEGNALATA,
     CatalogoEmail::INTERVENTO_PROGRAMMATO,
     CatalogoEmail::INTERVENTO_ESEGUITO,
     CatalogoEmail::INTERVENTO_ASSEGNATO,

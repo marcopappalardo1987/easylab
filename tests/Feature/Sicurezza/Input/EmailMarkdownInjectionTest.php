@@ -61,6 +61,10 @@ function datiEmail(string $vista, string $t): array
             'ente' => $t, 'strumento' => $t, 'ubicazione' => $t, 'tipo' => $t, 'descrizione' => $t,
             'scadenza' => '01/12/2026', 'assegnatoDa' => $t, 'url' => 'https://easylab.test/strumenti/7',
         ],
+        'mail.macchina-segnalata' => [
+            'ente' => $t, 'strumento' => $t, 'ubicazione' => $t, 'stato' => $t, 'nonIdonea' => true,
+            'motivo' => $t, 'autore' => $t, 'url' => 'https://easylab.test/strumenti/7',
+        ],
         'mail.account-bloccato' => ['ragioneSociale' => $t, 'url' => 'https://easylab.test/abbonamento'],
         'mail.piano-cambiato' => ['ragioneSociale' => $t, 'da' => $t, 'a' => $t, 'url' => 'https://easylab.test/abbonamento'],
         'mail.avviso-obsolescenza' => [
@@ -93,6 +97,7 @@ dataset('viste email', [
     'mail.intervento-programmato',
     'mail.intervento-eseguito',
     'mail.intervento-assegnato',
+    'mail.macchina-segnalata',
     'mail.account-bloccato',
     'mail.piano-cambiato',
     'mail.avviso-obsolescenza',
