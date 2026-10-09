@@ -284,10 +284,30 @@ class ElencoUtenti extends Component
     // Lettura
     // =========================================================================
 
-    /** @return list<string> */
+    /**
+     * I ruoli che chi guarda può conferire qui: la stessa lista serve la
+     * tendina e la validazione delle due azioni che scrivono.
+     *
+     * Sull'Ente di piattaforma, per un Superadmin, comprende `Superadmin`
+     * (🔗 ADR-048). Ovunque altro sono i quattro ruoli del cliente.
+     *
+     * @return list<string>
+     */
     public function ruoliConferibili(): array
     {
-        return RuoliAssegnabili::perCliente();
+        return RuoliAssegnabili::perEnte(Auth::user(), $this->ente());
+    }
+
+    /**
+     * Il ruolo scelto è uno che da qui non si potrà più togliere?
+     *
+     * Serve all'avviso nelle due modali: un Superadmin non è amministrabile da
+     * questa schermata (`RuoliAssegnabili::amministrabile()`), quindi
+     * conferirlo è un gesto che da qui non si annulla.
+     */
+    public function nonSiToglieDaQui(string $ruolo): bool
+    {
+        return $ruolo === User::SUPERADMIN_ROLE;
     }
 
     /** Il ruolo scelto imporrà il secondo fattore a chi lo riceve? (🔗 ADR-016) */
@@ -382,7 +402,7 @@ class ElencoUtenti extends Component
         // suite resterebbe verde perché a rifiutare sarebbe la validazione.
         // La forma («c'è un ruolo?») la controlla `validate`, la sostanza
         // («è conferibile?») la controlla `ammesso()`.
-        abort_unless(RuoliAssegnabili::ammesso($this->ruolo), 403);
+        abort_unless(in_array($this->ruolo, $this->ruoliConferibili(), true), 403);
 
         try {
             $esito = (new InvitaUtente($this->nome, $this->email, $this->ruolo, $this->ente()))->esegui();
@@ -560,14 +580,20 @@ class ElencoUtenti extends Component
             'nuovoRuolo' => ['required', 'string'],
         ], attributes: ['nuovoRuolo' => 'ruolo']);
 
-        abort_unless(RuoliAssegnabili::ammesso($this->nuovoRuolo), 403);
+        abort_unless(in_array($this->nuovoRuolo, $this->ruoliConferibili(), true), 403);
+
+        // 🔗 ADR-048: un Superadmin sa fare tutto ciò che fa un Admin, e resta
+        // fra chi amministra il contratto dell'Ente di piattaforma. Promuovere
+        // l'unico Admin a Superadmin non lascia quindi l'Ente scoperto, né lo
+        // toglie dai membri dell'account.
+        $amministraAncora = in_array($this->nuovoRuolo, ['Admin', User::SUPERADMIN_ROLE], true);
 
         try {
-            $esito = DB::transaction(function (): ?array {
+            $esito = DB::transaction(function () use ($amministraAncora): ?array {
                 $this->bloccaPersoneAttiveDellEnte();
                 $persona = $this->personaDellEnte($this->utenteRuolo);
 
-                if ($persona->hasRole('Admin') && $this->nuovoRuolo !== 'Admin' && $this->ultimoAdmin($persona)) {
+                if ($persona->hasRole('Admin') && ! $amministraAncora && $this->ultimoAdmin($persona)) {
                     $this->errore = "{$persona->name} è l'unico Admin di questo Ente: nominane un altro prima di cambiarle ruolo.";
 
                     return null;
@@ -592,7 +618,7 @@ class ElencoUtenti extends Component
                 // già difende, e un solo posto che la mantiene vale più di due
                 // che la reinterpretano. L'ultimo membro lancia, e la
                 // transazione annulla anche il cambio di ruolo.
-                if ($eraAdmin && $this->nuovoRuolo !== 'Admin') {
+                if ($eraAdmin && ! $amministraAncora) {
                     $this->accountDellEnte()?->rimuoviMembro($persona);
                 }
 
@@ -793,7 +819,10 @@ class ElencoUtenti extends Component
      */
     private function aggiornaAppartenenza(User $persona): void
     {
-        if ($persona->hasRole('Admin')) {
+        // Anche il Superadmin (🔗 ADR-048): quello nato dal seeder è membro
+        // dell'account di piattaforma, e uno nato da qui non deve essere una
+        // figura diversa.
+        if ($persona->hasAnyRole(['Admin', User::SUPERADMIN_ROLE])) {
             $this->accountDellEnte()?->aggiungiMembro($persona);
         }
     }

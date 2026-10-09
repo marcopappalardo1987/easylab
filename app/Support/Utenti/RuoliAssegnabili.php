@@ -2,6 +2,7 @@
 
 namespace App\Support\Utenti;
 
+use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Support\Rbac;
 
@@ -13,15 +14,22 @@ use App\Support\Rbac;
  * divergere. Una whitelist scritta in Blade e un `in_array` scritto nell'azione
  * sono due whitelist, e a divergere ci mettono un bugfix.
  *
- * ## ⛔ Superadmin e Developer non sono conferibili da nessuna interfaccia
+ * ## ⛔ Il Developer non è conferibile da nessuna interfaccia; il Superadmin da una sola
  *
  * Non «non compaiono nella tendina»: **sono rifiutati dal codice**. Un ruolo
  * assente da una `<select>` è a un `$wire.set()` di distanza, e questi due
  * portano `tenants.view_all` — cioè la lettura sulle righe di *tutti* i clienti
  * (🔗 ADR-037). Il Developer in più è la **chiave di riserva** della piattaforma
  * (🔗 ADR-016): non esiste alcun `Gate::before` da super-admin, quindi quel
- * ruolo è davvero l'ultima via di rientro. Si creano da console, che è dove
+ * ruolo è davvero l'ultima via di rientro. Si crea da console, che è dove
  * stanno le chiavi.
+ *
+ * 🔴 **Dal 9 Ott 2026 il Superadmin si conferisce anche dall'interfaccia**
+ * (🔗 ADR-048, decisione di Marco), ma solo dove tre condizioni valgono
+ * insieme — vedi `conferisceSuperadmin()`: chi conferisce è già Superadmin (o
+ * Developer), la schermata è quella delle persone dell'**Ente di piattaforma**,
+ * e la persona a quell'Ente appartiene. Ovunque altro resta rifiutato come
+ * prima, e **toglierlo** resta di console.
  *
  * ## Il secondo fattore è una conseguenza del ruolo, e va detta prima
  *
@@ -63,6 +71,47 @@ final class RuoliAssegnabili
     public static function perPiattaforma(): array
     {
         return [User::TECNICO_ROLE, User::GESTORE_ROLE];
+    }
+
+    /**
+     * Chi sta guardando può conferire **Superadmin** da questa schermata?
+     * (🔗 ADR-048)
+     *
+     * Due condizioni, entrambe necessarie:
+     *
+     * - **chi conferisce è Superadmin o Developer**, per *ruolo* e non per
+     *   permesso. `utenti.update` ce l'ha anche l'Admin di un cliente, e
+     *   l'editor dei ruoli può ridistribuirlo: legare a un permesso la nascita
+     *   di un Superadmin vorrebbe dire che un clic su `/piattaforma/ruoli`
+     *   potrebbe darla a chiunque;
+     * - **l'Ente è quello di piattaforma** (`accounts.di_piattaforma`). Un
+     *   Superadmin nato dentro l'Ente di un cliente avrebbe quell'Ente come
+     *   «proprio» e sarebbe membro del suo contratto: una figura che nessuna
+     *   regola di tenancy ha previsto.
+     *
+     * ⛔ Non conferisce mai il Developer, da nessuna parte.
+     */
+    public static function conferisceSuperadmin(?User $chi, ?UnitaOrganizzativa $ente): bool
+    {
+        return $chi !== null
+            && $chi->hasAnyRole([User::SUPERADMIN_ROLE, 'Developer'])
+            && $ente?->account?->di_piattaforma === true;
+    }
+
+    /**
+     * I ruoli che **questa persona** può conferire sulle persone di
+     * **quell'Ente**: i quattro del cliente, più Superadmin dove
+     * `conferisceSuperadmin()` lo consente.
+     *
+     * È la lista che serve la tendina **e** la validazione di `/utenti`.
+     *
+     * @return list<string>
+     */
+    public static function perEnte(?User $chi, ?UnitaOrganizzativa $ente): array
+    {
+        return self::conferisceSuperadmin($chi, $ente)
+            ? [...self::perCliente(), User::SUPERADMIN_ROLE]
+            : self::perCliente();
     }
 
     /**

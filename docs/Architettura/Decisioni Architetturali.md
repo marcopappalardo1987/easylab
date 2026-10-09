@@ -1642,3 +1642,27 @@ Guardando le prime cinque guide pubblicate, però, la regola produceva una guida
 
 **Verifica degli ambienti, 9 Ott 2026.** Produzione: posta su SMTP (`smtps.aruba.it:465`, mittente `no-reply@easylab.technology`), stretta di mano e autenticazione riuscite senza inviare nulla; coda sul servizio gestito di Laravel Cloud (`cloud`), un job di prova è stato eseguito in meno di un minuto, nessun job fallito; scheduler con i quattro task in elenco. Staging: alle 06:00 del 9 Ott lo scheduler ha registrato 275 avvisi e creato 149 notifiche, senza job falliti. ⚠️ `ERRORI_ALERT_EMAIL` non è impostata in produzione: l'email «Nuovo errore» non parte. La consegna in una casella vera non è stata provata da qui.
 
+---
+
+**ADR-048 — Un Superadmin ne crea un altro, o promuove una persona, dall'interfaccia**
+
+*Stato: Accettata e attuata il 9 Ott 2026, per decisione di Marco. **Supera ADR-038 in un punto solo**: «Superadmin e Developer non sono conferibili da nessuna interfaccia» resta vero per il Developer; per il Superadmin vale la regola qui sotto. Tutto il resto di ADR-038 — la whitelist nell'azione che scrive, «ciò che un'interfaccia non sa conferire non lo sa togliere», il cestino — resta com'è.*
+
+**Contesto.** Il Superadmin nasceva solo dal seeder, letto da tre variabili d'ambiente: per averne un secondo bisognava cambiarle, rifare un deploy e rilanciare un comando, con la password scelta da chi operava e lasciata in chiaro nell'ambiente. EasyLab ha bisogno di più persone con quel ruolo, e la risposta «da console» non era praticabile per chi la piattaforma la usa e non la sviluppa.
+
+**Decisione.** Dalla pagina **Persone** dell'Ente di piattaforma, chi è già Superadmin trova `Superadmin` fra i ruoli: può **invitare** una persona nuova con quel ruolo, o **cambiare ruolo** a una che c'è già. La regola sta in un posto solo (`RuoliAssegnabili::conferisceSuperadmin()`), serve la tendina e la validazione delle due azioni, e chiede due cose insieme:
+
+1. **chi conferisce è Superadmin o Developer, per ruolo e non per permesso.** `utenti.update` ce l'ha anche l'Admin — quello dell'Ente di piattaforma compreso — e l'editor dei ruoli può ridistribuirlo: legare a un permesso la nascita di un Superadmin vorrebbe dire che un clic su `/piattaforma/ruoli` potrebbe darla a chiunque;
+2. **l'Ente è quello di piattaforma** (`accounts.di_piattaforma`). Un Superadmin nato dentro l'Ente di un cliente avrebbe quell'Ente come «proprio» e sarebbe membro del suo contratto.
+
+**Conseguenze.**
+
+- 🔴 **Il ruolo si dà da qui, e da qui non si toglie.** Una riga Superadmin resta non amministrabile dalla pagina (nessun cambio ruolo, nessun cestino): revocarlo è ancora un gesto di console. Le due modali lo dicono **prima** del gesto.
+- 🔴 **Il costo va tenuto presente.** Un Superadmin governa clienti, piani, ruoli e accessi di chiunque: da oggi un account Superadmin compromesso può crearne altri, e restare. Le difese sono il secondo fattore obbligatorio (anche per chi viene promosso, dal primo accesso), la riga di audit a ogni invito e a ogni cambio di ruolo, e il fatto che la revoca non passi dalla stessa porta.
+- Chi diventa Superadmin entra fra i membri dell'account di piattaforma, come quello nato dal seeder. Promuovere l'unico Admin dell'Ente di piattaforma è ammesso: un Superadmin sa fare tutto ciò che fa un Admin.
+- Chi è invitato sceglie da sé la password dal link dell'invito: nessuno la conosce al posto suo, e nessuna variabile d'ambiente la contiene.
+- ⛔ **Il Developer resta di console**, da chiunque e ovunque: è la chiave di riserva (ADR-016).
+
+- ⚠️ **Non fatto**: togliere il ruolo o cestinare un Superadmin dall'interfaccia; conferirlo da Piattaforma → Tecnici, che resta la pagina di chi lavora per portafoglio.
+- **Prova di mutazione**: ognuna delle due condizioni, la whitelist nelle due azioni, l'esclusione del Developer, l'appartenenza all'account e l'avviso in modale rendono rosso un test di `ConferireSuperadminTest`.
+
