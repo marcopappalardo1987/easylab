@@ -16,6 +16,7 @@ use App\Notifications\InterventoAssegnato;
 use App\Notifications\InterventoEseguito;
 use App\Notifications\InterventoProgrammato;
 use App\Notifications\InvitoUtente;
+use App\Notifications\MacchinaSegnalata;
 use App\Notifications\NuovoErrore;
 use App\Notifications\PianoCambiato;
 use App\Notifications\PropostaPiano;
@@ -93,6 +94,12 @@ final class CampioniEmail
                     'id' => 0, 'nome' => self::MACCHINA, 'data_installazione' => now()->subYears(12),
                 ])),
             ]), $persona],
+
+            CatalogoEmail::MACCHINA_SEGNALATA => [new MacchinaSegnalata(
+                enteId: $ente, enteNome: self::ENTE, strumentoId: 0, strumentoNome: self::MACCHINA,
+                ubicazione: self::UBICAZIONE, stato: 'Non idoneo', nonIdonea: true,
+                motivo: 'Perdita di pressione durante il ciclo', autore: 'Giulia Verdi',
+            ), $persona],
 
             CatalogoEmail::INTERVENTO_PROGRAMMATO => [new InterventoProgrammato(
                 enteId: $ente, enteNome: self::ENTE, strumentoId: 0, strumentoNome: self::MACCHINA,

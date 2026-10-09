@@ -1607,7 +1607,7 @@ Guardando le prime cinque guide pubblicate, però, la regola produceva una guida
 
 **Decisione.**
 
-1. **Un catalogo** (`App\Support\Email\CatalogoEmail`): quindici voci, ciascuna con nome, quando parte e a chi. Lo leggono la pagina, gli interruttori e le prove.
+1. **Un catalogo** (`App\Support\Email\CatalogoEmail`): quindici voci alla nascita (sedici con l'aggiunta in fondo), ciascuna con nome, quando parte e a chi. Lo leggono la pagina, gli interruttori e le prove.
 2. **Due famiglie.** Le email *informative* (riepilogo scadenze, obsolescenza, intervento programmato / eseguito / assegnato, account bloccato, piano cambiato) hanno un interruttore. Quelle *di servizio* (invito, piano da attivare, verifica indirizzo, account già esistente, benvenuto, account eliminato, nuovo errore, recupero password) no: spegnerle chiuderebbe fuori qualcuno.
 3. **Due interruttori per le informative**, e l'email parte solo se entrambi dicono sì:
    - di **piattaforma** (tabella `interruttori_email`, da Piattaforma → Email, permesso `tenants.provision`): vale per tutti i clienti, ogni cambio è una riga di audit;
@@ -1630,3 +1630,15 @@ Guardando le prime cinque guide pubblicate, però, la regola produceva una guida
 
 - ⚠️ **Non fatto**: il riepilogo delle scadenze non arriva a EasyLab per i clienti che gestisce (lo ricevono gli utenti del cliente; Superadmin e Gestore solo per gli interventi assegnati a loro); nessuna email quando un intervento viene riaperto, spostato di data o eliminato; nessun interruttore per singolo Ente; la campanella in applicazione non riceve le cinque email nuove.
 - **Prova di mutazione**: ogni guardia di `InterruttoriEmail`, di `AvvisiIntervento` e `AvvisiAccount`, degli agganci in `SchedaStrumento` e in `Account`, delle due nascite (`annuncia: false`), di `via()` delle notifiche, della pagina delle preferenze e di `EmailDiSistema` rende rosso un test dedicato (`InterruttoriEmailTest`, `EmailInterventiTest`, `EmailAccountTest`, `EmailDiSistemaTest`, `PreferenzeNotificheTest`).
+
+**Aggiunta del 9 Ott 2026 a ADR-047 — «Macchina segnalata».** Una sesta email informativa, chiesta da Marco lo stesso giorno: il cliente deve sapere quando una macchina **ha bisogno di un intervento**, non solo quando un intervento viene programmato o eseguito. Delle strade possibili è stata scelta la segnalazione: l'email parte quando qualcuno porta **a mano** il semaforo su «Azione richiesta» o «Non idoneo» (🔗 ADR-005), cioè nell'unico caso che non dipende dal calendario — le scadenze le racconta già il riepilogo delle 06:00.
+
+- Destinatari: gli stessi delle email sugli interventi (`DestinatariEnte::perMacchina()`, ora condivisa), mai chi segnala. Parte anche quando a segnalare è il personale di EasyLab: è il caso per cui esiste.
+- **Il motivo esce**, a differenza del report di fine lavoro: è scritto apposta per dire agli altri cosa non va, e lo leggono le stesse persone che lo vedono sulla scheda. Reso come testo, mai come markdown.
+- Non parte quando la macchina viene dichiarata «In regola», né quando la forzatura viene tolta. Non si ripete se un secondo salvataggio lascia stato e motivo com'erano.
+- Come le altre: nasce spenta, ha il suo interruttore di piattaforma (`macchina_segnalata`) e la sua preferenza personale (`users.riceve_email_macchine_segnalate`), si prova da Piattaforma → Email. Le voci del catalogo diventano sedici.
+- ⚠️ **Non fatto**: l'avviso inverso, da cliente a EasyLab — quando è il cliente a segnalare, chi gli gestisce la manutenzione non riceve nulla; un'email quando la macchina torna in regola.
+- **Prova di mutazione**: ogni guardia di `AvvisiStrumento`, di `DestinatariEnte::perMacchina()`, dell'aggancio in `SchedaStrumento::forza()`, di `MacchinaSegnalata::via()` e della vista rende rosso un test di `EmailMacchinaSegnalataTest`.
+
+**Verifica degli ambienti, 9 Ott 2026.** Produzione: posta su SMTP (`smtps.aruba.it:465`, mittente `no-reply@easylab.technology`), stretta di mano e autenticazione riuscite senza inviare nulla; coda sul servizio gestito di Laravel Cloud (`cloud`), un job di prova è stato eseguito in meno di un minuto, nessun job fallito; scheduler con i quattro task in elenco. Staging: alle 06:00 del 9 Ott lo scheduler ha registrato 275 avvisi e creato 149 notifiche, senza job falliti. ⚠️ `ERRORI_ALERT_EMAIL` non è impostata in produzione: l'email «Nuovo errore» non parte. La consegna in una casella vera non è stata provata da qui.
+

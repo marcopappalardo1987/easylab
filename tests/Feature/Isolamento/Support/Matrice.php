@@ -22,6 +22,7 @@ use App\Notifications\InterventoAssegnato;
 use App\Notifications\InterventoEseguito;
 use App\Notifications\InterventoProgrammato;
 use App\Notifications\InvitoUtente;
+use App\Notifications\MacchinaSegnalata;
 use App\Notifications\PianoCambiato;
 use App\Notifications\PropostaPiano;
 use App\Notifications\VerificaEmailRegistrazione;
@@ -271,6 +272,7 @@ final class Matrice
             InterventoProgrammato::class => self::EMAIL_INTERVENTI,
             InterventoEseguito::class => self::EMAIL_INTERVENTI,
             InterventoAssegnato::class => self::EMAIL_INTERVENTI,
+            MacchinaSegnalata::class => 't:Email/EmailMacchinaSegnalataTest.php::builds the email with the brand and the name of the ente in its payload, whatever the context on the worker',
             AccountBloccato::class => $senzaEnte,
             PianoCambiato::class => $senzaEnte,
             InviaAllertaErrore::class => 't:Notifiche/MarchioEmailTest.php::never brands the platform alert with a tenant, by construction and not by convention',

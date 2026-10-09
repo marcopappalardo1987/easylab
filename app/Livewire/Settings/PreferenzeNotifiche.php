@@ -55,7 +55,8 @@ class PreferenzeNotifiche extends Component
     public bool $riceveEmailScadenze = true;
 
     /**
-     * Le tre preferenze sugli interventi (🔗 ADR-047), nella stessa forma: una
+     * Le preferenze sulle email che seguono un gesto (🔗 ADR-047) — tre sugli
+     * interventi e una sulla macchina segnalata — nella stessa forma: una
      * property pubblica ciascuna, scritta con `forceFill` solo da `salva()`.
      */
     public bool $riceveEmailInterventiProgrammati = true;
@@ -64,12 +65,15 @@ class PreferenzeNotifiche extends Component
 
     public bool $riceveEmailInterventiAssegnati = true;
 
+    public bool $riceveEmailMacchineSegnalate = true;
+
     /** Property → colonna di `users`: l'unica mappa fra il form e il database. */
     private const COLONNE = [
         'riceveEmailScadenze' => 'riceve_email_scadenze',
         'riceveEmailInterventiProgrammati' => 'riceve_email_interventi_programmati',
         'riceveEmailInterventiEseguiti' => 'riceve_email_interventi_eseguiti',
         'riceveEmailInterventiAssegnati' => 'riceve_email_interventi_assegnati',
+        'riceveEmailMacchineSegnalate' => 'riceve_email_macchine_segnalate',
     ];
 
     public function mount(): void
@@ -114,6 +118,13 @@ class PreferenzeNotifiche extends Component
         $delCliente = DestinatariEnte::riguarda($utente);
 
         $voci = [
+            [
+                'chiave' => CatalogoEmail::MACCHINA_SEGNALATA,
+                'riguarda' => $delCliente,
+                'proprieta' => 'riceveEmailMacchineSegnalate',
+                'titolo' => 'Macchina segnalata',
+                'testo' => 'Un\'email quando qualcuno segnala una macchina che segui come «Azione richiesta» o «Non idoneo».',
+            ],
             [
                 'chiave' => CatalogoEmail::INTERVENTO_PROGRAMMATO,
                 'riguarda' => $delCliente,

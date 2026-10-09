@@ -64,6 +64,7 @@ final class PerimetroTenant
         // Le tre preferenze sugli interventi (ADR-047): scelte della persona,
         // come quella qui sopra, e come quella sono sue da leggere.
         'riceve_email_interventi_programmati', 'riceve_email_interventi_eseguiti', 'riceve_email_interventi_assegnati',
+        'riceve_email_macchine_segnalate',
         'tema', 'created_at', 'updated_at', 'deleted_at',
     ];
 
