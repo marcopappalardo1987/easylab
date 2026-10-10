@@ -1708,3 +1708,32 @@ Guardando le prime cinque guide pubblicate, però, la regola produceva una guida
 - ⚠️ **Non fatto**: il numero di strumenti accanto a ogni cliente nella cabina e nell'esportazione; un avviso al cliente quando si avvicina al tetto; un'opzione del comando `easylab:provision-tenant`, che non ne ha bisogno perché il contratto non decide niente.
 - **Prova di mutazione**: 74 mutazioni, tutte rosse. Il confine del tetto (riempirlo esattamente è permesso), i due modi di contare, i cestinati e le sedi chiuse, i tre casi senza tetto, il lock, le due guardie dell'albero e la sede a cui si chiede, il tutto-o-niente dell'import, la validazione del listino, chi viene spinto oltre e chi no, l'audit, e ogni pagina che dichiara il tetto rendono rosso un test di `TettoStrumentiTest`, `ListinoTest` o `GovernoListinoTest`.
 
+---
+
+**ADR-050 — Il piano senza canone è in comodato d'uso: «free», «gratis» e «gratuito» non si scrivono**
+
+*Stato: Accettata e attuata il 10 Ott 2026, per decisione di Marco: «i piani free non devono comparire come free o gratuito ma come comodato d'uso. Il cliente mai dovrà leggere free o gratis». Precisa ADR-002 nel nome, non nella sostanza. Solo su staging.*
+
+**Contesto.** ADR-002 chiamava «Free» il piano che accompagna un contratto di manutenzione, e la parola era finita ovunque: nell'etichetta del piano, in due frasi della pagina Abbonamento, nei testi del listino. Ma quel piano non è un regalo: il software è dato in comodato d'uso a fronte di un contratto, e «gratis» davanti al cliente racconta un'altra cosa.
+
+**Decisione.**
+
+1. **L'etichetta del piano di partenza è «Comodato d'uso»**, nel bootstrap (`config/easylab.php`) e, con una migration, nei database che esistono già. La migration tocca la riga solo se porta ancora il nome di partenza: un nome scelto da una persona dal listino non si sovrascrive.
+2. **Il tipo di piano si chiama «comodato d'uso»** dove prima si leggeva «gratuito»: distintivo e casella del listino, messaggi di validazione, testo d'aiuto della cabina, catalogo delle email.
+3. **Le tre parole stanno in un posto solo**, `App\Support\Listino\LessicoCommerciale`, che le definisce come parole intere e in qualunque maiuscola («freezer» e «Freemium» non sono «free»).
+4. **Il listino rifiuta un'etichetta che ne contiene una**, alla nascita del piano e a ogni modifica. È l'unico punto in cui la parola la scrive una persona e non il codice, quindi è lì che «mai» si rende vero.
+
+**Che cosa NON cambia.** `free` resta il **codice** del piano in `accounts.piano`, e `gratuito` il nome della colonna e del flag (`Piani::eGratuito()`). Sono identificatori, e rinominarli vorrebbe dire migrare ogni account, la config, i webhook e mezza suite per una stringa che il cliente non vede. Ciò che conta è che non gli arrivi, ed è ciò che i guardrail sorvegliano.
+
+**Dove il codice sarebbe arrivato al cliente.** Un posto solo: l'archivio dei suoi dati (`easylab:esporta-tenant`), dove `account.csv` portava `accounts.piano` com'è. Ora il piano e il piano proposto escono col nome che il cliente legge in pagina; un piano uscito dal catalogo non ha un nome da dare e resta com'è.
+
+**Conseguenze.**
+
+- **Tre guardrail leggono ciò che l'applicazione scrive**: il testo di ogni vista (compilata, così i commenti spariscono e resta l'HTML che arriva nel browser), ogni frase di `app/`, `config/`, `lang/`, dei seeder e delle rotte, e i testi e le didascalie delle guide. Una frase scritta di fretta con una delle tre parole rende rossa la suite.
+- ⚠️ **Il limite dichiarato dei guardrail.** Un letterale PHP che è solo l'identificatore (`'free'`, `'gratuito'`) non si distingue da un codice o da una colonna, e passa. La rete per una parola nuda stampata in pagina è il test che apre le pagine del cliente (Abbonamento, anagrafica, dashboard, strumenti) e ne legge il testo.
+- **La tendina dei piani in cabina** non dice più «gratuito» accanto al piano: dice che cosa fa la scelta, «attivo da subito», accanto a «da proporre al cliente» dei piani a pagamento.
+- La frase sul portale di fatturazione non nomina più il piano: «Un piano in comodato d'uso non ha un portale di fatturazione: non c'è un abbonamento da gestire», nella pagina e nel rifiuto del controller.
+
+- ⚠️ **Non fatto, e non si può fare dal codice**: i **video delle guide** già registrati sono immagini, e se inquadrano la pagina Abbonamento o il listino mostrano il nome di prima finché non si rigirano. La didascalia della guida al listino è corretta nel copione e cambierà in pagina alla prossima registrazione. Un piano creato a mano con una delle tre parole nel nome resta com'è finché non lo si rinomina: il listino lo rifiuta al primo salvataggio.
+- **Prova di mutazione**: 26 mutazioni, tutte rosse. Ogni parola dell'elenco, i confini di parola, le maiuscole, il rifiuto dell'etichetta, le due condizioni della migration, ogni frase rimessa com'era (vista, controller, listino, cabina, guida, didascalia, email di prova) e le quattro guardie dell'esportazione.
+

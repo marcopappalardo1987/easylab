@@ -174,7 +174,7 @@
 
                                 <span class="mt-1 flex flex-wrap gap-1">
                                     @if ($piano->gratuito)
-                                        <x-ui.badge variant="neutral">gratuito</x-ui.badge>
+                                        <x-ui.badge variant="neutral">comodato d'uso</x-ui.badge>
                                     @endif
                                     @if ($codice === $predefinito)
                                         {{-- Detto **prima** del click: è il piano
@@ -347,7 +347,7 @@
                                          porta da cui ci si fa un Ente e un ruolo
                                          Admin senza pagare. Detto, perché è una
                                          regola e non un guasto. --}}
-                                    <span class="text-xs text-ink-3" title="Un piano a 0 € non si vende da un link pubblico: sarebbe un account gratuito per chiunque">
+                                    <span class="text-xs text-ink-3" title="Un piano a 0 € non si vende da un link pubblico: sarebbe un account senza pagare per chiunque">
                                         nessuno: è a 0 €
                                     </span>
                                 @endif
@@ -535,7 +535,7 @@
                     <input type="checkbox" wire:model="nuovo.gratuito"
                            class="mt-0.5 rounded border border-border-strong bg-surface text-brand focus:ring-ring">
                     <span>
-                        Piano <strong>gratuito</strong>: nessun customer e nessuna subscription su Stripe (ADR-002).
+                        Piano in <strong>comodato d'uso</strong>: nessun customer e nessuna subscription su Stripe (ADR-002).
                         <span class="mt-0.5 block text-xs text-ink-3">
                             Non è «costa zero»: un piano a pagamento a 0 € — una promozione — ha una
                             subscription vera e va lasciato senza spunta. Anche questo non si potrà più cambiare.
@@ -557,9 +557,9 @@
         <x-ui.modal title="Modifica il piano" close="chiudiModifica">
             <div class="space-y-4" data-form-modifica>
                 <p class="text-sm text-ink-2">
-                    Il <strong>codice</strong> e la <strong>gratuità</strong> non compaiono qui perché non si
+                    Il <strong>codice</strong> e il <strong>comodato d&rsquo;uso</strong> non compaiono qui perché non si
                     cambiano dopo la creazione: il primo vive in <code class="text-xs">accounts.piano</code>,
-                    la seconda marcherebbe come paganti dei clienti senza subscription. Per l&rsquo;altro
+                    il secondo marcherebbe come paganti dei clienti senza subscription. Per l&rsquo;altro
                     comportamento si crea un piano nuovo.
                 </p>
 

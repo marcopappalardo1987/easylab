@@ -121,7 +121,7 @@ final class CampioniEmail
             ), $persona],
 
             CatalogoEmail::ACCOUNT_BLOCCATO => [new AccountBloccato(self::CLIENTE), $persona],
-            CatalogoEmail::PIANO_CAMBIATO => [new PianoCambiato(self::CLIENTE, 'Free', 'SaaS'), $persona],
+            CatalogoEmail::PIANO_CAMBIATO => [new PianoCambiato(self::CLIENTE, 'Comodato d\'uso', 'SaaS'), $persona],
             CatalogoEmail::INVITO => [new InvitoUtente(self::ENTE, $indirizzo, $ente ?: null), $persona],
             CatalogoEmail::PROPOSTA_PIANO => [new PropostaPiano(self::CLIENTE, 'SaaS', 4900, $indirizzo), $persona],
             CatalogoEmail::VERIFICA_INDIRIZZO => [new VerificaEmailRegistrazione($indirizzo), self::richiedente()],

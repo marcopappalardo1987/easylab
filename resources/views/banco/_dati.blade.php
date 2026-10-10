@@ -117,7 +117,7 @@
         unita="clienti"
         :voci="[
             ['etichetta' => 'SaaS', 'valore' => 25, 'classe' => 'bg-chart-brand', 'glifo' => '●'],
-            ['etichetta' => 'Free', 'valore' => 12, 'classe' => 'bg-chart-obsoleto', 'glifo' => '◆'],
+            ['etichetta' => 'Comodato d\'uso', 'valore' => 12, 'classe' => 'bg-chart-obsoleto', 'glifo' => '◆'],
             ['etichetta' => 'Bloccati', 'valore' => 2, 'classe' => 'bg-chart-rosso', 'glifo' => '■'],
         ]" />
 @endcomponent

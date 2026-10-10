@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\Documento;
 use App\Models\User;
 use App\Support\AuditLog;
+use App\Support\Piani;
 use App\Support\Piattaforma\CsvSicuro;
 use App\Support\Tenancy\VistaPiattaforma;
 use Illuminate\Contracts\Filesystem\Filesystem;
@@ -250,6 +251,26 @@ final class EsportazioneTenant
     }
 
     /**
+     * Il piano esce col nome che il cliente legge in pagina, non col codice che
+     * `accounts.piano` conserva (🔗 ADR-050).
+     *
+     * Il codice è un identificatore interno, e quello del piano senza canone è
+     * `free`: nell'archivio che il cliente apre sarebbe l'unico posto in cui
+     * leggerebbe una parola che Easy Lab non usa con lui. Un piano uscito dal
+     * catalogo non ha un nome da dare, e resta com'è.
+     */
+    private static function colPianoInChiaro(object $riga): object
+    {
+        foreach (['piano', 'piano_proposto'] as $colonna) {
+            if (is_string($riga->{$colonna}) && Piani::esiste($riga->{$colonna})) {
+                $riga->{$colonna} = Piani::etichetta($riga->{$colonna});
+            }
+        }
+
+        return $riga;
+    }
+
+    /**
      * Le letture e la composizione dello zip (senza chiuderlo).
      *
      * @return array{0: PerimetroTenant, 1: array<string, int>, 2: int, 3: list<int>}
@@ -268,7 +289,8 @@ final class EsportazioneTenant
         $righe['account'] = $this->scriviCsv(
             "{$lavoro}/account.csv",
             PerimetroTenant::COLONNE_ACCOUNT,
-            DB::table('accounts')->where('id', $account->getKey())->get(PerimetroTenant::COLONNE_ACCOUNT),
+            DB::table('accounts')->where('id', $account->getKey())->get(PerimetroTenant::COLONNE_ACCOUNT)
+                ->map(fn (object $riga) => self::colPianoInChiaro($riga)),
         );
         $aggiungi("{$lavoro}/account.csv", 'dati/account.csv');
 

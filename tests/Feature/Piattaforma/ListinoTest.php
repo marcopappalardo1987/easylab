@@ -53,7 +53,7 @@ it('shows the two bootstrap plans with the string that lives in accounts.piano',
     // torna. Un listino che mostrasse i soli nomi commerciali obbligherebbe ad
     // aprire il database per collegare «SaaS» a `saas`.
     ($this->pagina)()
-        ->assertSee('Free')
+        ->assertSee("Comodato d'uso")
         ->assertSee('SaaS')
         ->assertSee('free')
         ->assertSee('saas')

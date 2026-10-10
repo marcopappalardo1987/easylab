@@ -152,6 +152,33 @@ it('works on a locked account, which is the typical case', function () {
     expect($manifest['account']['bloccato'])->toBeTrue();
 });
 
+it('writes the plan by the name the customer reads, never by its internal code', function () {
+    // 🔗 ADR-050: il codice del piano senza canone è `free`, e l'archivio lo
+    // apre il cliente. Esce il nome che legge in pagina.
+    $account = $this->mondo->riga('A', 'account');
+    DB::table('accounts')->where('id', $account->id)->update(['piano' => 'free', 'piano_proposto' => 'saas']);
+
+    $percorso = $this->cartella.'/nomi.zip';
+    esporta($account->fresh(), $this->superadmin->email, $percorso)->assertSuccessful();
+
+    $riga = righeCsvGdpr(vociZip($percorso)['dati/account.csv'])[0];
+
+    expect($riga['piano'])->toBe("Comodato d'uso")
+        ->and($riga['piano_proposto'])->toBe('SaaS');
+
+    // Un piano uscito dal catalogo non ha un nome da dare, e una proposta che
+    // non c'è non è un piano: restano come sono, e l'export non si ferma.
+    DB::table('accounts')->where('id', $account->id)->update(['piano' => 'fantasma', 'piano_proposto' => null]);
+
+    $percorso = $this->cartella.'/fuori-catalogo.zip';
+    esporta($account->fresh(), $this->superadmin->email, $percorso)->assertSuccessful();
+
+    $riga = righeCsvGdpr(vociZip($percorso)['dati/account.csv'])[0];
+
+    expect($riga['piano'])->toBe('fantasma')
+        ->and($riga['piano_proposto'])->toBe('');
+});
+
 it('writes a manifest whose counts and hashes match the archive', function () {
     $percorso = $this->cartella.'/a.zip';
     esporta($this->mondo->riga('A', 'account'), $this->superadmin->email, $percorso)->assertSuccessful();

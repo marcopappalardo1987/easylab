@@ -194,7 +194,7 @@ it('never marks the customer as paying when a paid plan is chosen', function () 
         ->call('creaCliente')
         ->assertHasNoErrors()
         ->assertSee('Piano «SaaS» proposto')
-        ->assertSee('resta su «Free»');
+        ->assertSee("resta su «Comodato d'uso»");
 
     $account = Account::query()->where('ragione_sociale', 'Laboratorio Aurora')->sole();
 
@@ -364,7 +364,9 @@ it('offers the plan select only where a brand-new customer is born', function ()
 
     // Il valore vuoto È il predefinito; un piano a pagamento porta il suo
     // codice, e dice quanto costa.
-    expect($tendina[0])->toContain('<option value="">Free — gratuito (predefinito)</option>')
+    // 🔗 ADR-050: il piano senza canone si legge «Comodato d'uso», e la tendina
+    // dice che cosa fa la scelta, non che non si paga.
+    expect($tendina[0])->toContain('<option value="">Comodato d&#039;uso — attivo da subito (predefinito)</option>')
         ->and($tendina[0])->toContain('<option value="saas">SaaS — 49,00 € al mese, da proporre al cliente</option>');
 });
 

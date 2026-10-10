@@ -4,7 +4,7 @@
 
 Gli errori dell'applicazione si raccolgono dentro Easy Lab, in una pagina che
 vede il solo Developer. È una scelta che costa lavoro — un servizio esterno
-sarebbe stato gratis e pronto — e la ragione per cui è stata presa vale la pena
+sarebbe stato pronto e senza costi — e la ragione per cui è stata presa vale la pena
 saperla, perché spiega anche perché quella pagina è così chiusa.
 
 ## capitolo 1

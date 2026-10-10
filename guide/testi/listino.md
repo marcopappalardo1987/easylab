@@ -27,7 +27,7 @@ nessuno glielo dica.
 ## 3
 
 Un piano senza un prezzo agganciato a Stripe **non è vendibile**, e la
-registrazione pubblica lo dichiara invece di ripiegare su qualcosa di gratuito.
+registrazione pubblica lo dichiara invece di ripiegare su un piano in comodato d'uso.
 È una scelta deliberata: un ripiego rassicurante nasconderebbe l'errore di
 configurazione e regalerebbe account.
 

@@ -113,7 +113,7 @@ final class GovernoListino
 
         if ($gratuito && $prezzo !== 0) {
             throw ValidationException::withMessages([
-                'prezzo_mensile_cent' => 'Un piano gratuito non può avere un prezzo: «gratuito» significa nessun customer e nessuna subscription (ADR-002). Un piano a pagamento a 0 € — una promozione — è invece ammesso: togliere la spunta.',
+                'prezzo_mensile_cent' => 'Un piano in comodato d\'uso non può avere un prezzo: significa nessun customer e nessuna subscription (ADR-002). Un piano a pagamento a 0 € — una promozione — è invece ammesso: togliere la spunta.',
             ]);
         }
 
@@ -179,7 +179,7 @@ final class GovernoListino
 
         if (array_key_exists('gratuito', $dati) && (bool) $dati['gratuito'] !== (bool) $piano->gratuito) {
             throw ValidationException::withMessages([
-                'gratuito' => 'La gratuità di un piano non si cambia dopo la creazione: ribaltarla su un piano già venduto marcherebbe come paganti dei clienti senza subscription, o il contrario (ADR-002). Si crea un piano nuovo.',
+                'gratuito' => 'Il comodato d\'uso di un piano non si cambia dopo la creazione: ribaltarlo su un piano già venduto marcherebbe come paganti dei clienti senza subscription, o il contrario (ADR-002). Si crea un piano nuovo.',
             ]);
         }
 
@@ -220,7 +220,7 @@ final class GovernoListino
 
         if ($piano->gratuito && $importoCent !== 0) {
             throw ValidationException::withMessages([
-                'prezzo_mensile_cent' => 'Un piano gratuito non può avere un prezzo (ADR-002). Per venderlo si crea un piano nuovo: la gratuità non si ribalta.',
+                'prezzo_mensile_cent' => 'Un piano in comodato d\'uso non può avere un prezzo (ADR-002). Per venderlo si crea un piano nuovo: il comodato non si ribalta.',
             ]);
         }
 
@@ -685,7 +685,7 @@ final class GovernoListino
 
         if ($piano->gratuito) {
             throw ValidationException::withMessages([
-                'price_id' => "«{$piano->codice}» è un piano gratuito: per definizione non ha né customer né subscription su Stripe (ADR-002).",
+                'price_id' => "«{$piano->codice}» è un piano in comodato d'uso: per definizione non ha né customer né subscription su Stripe (ADR-002).",
             ]);
         }
 
@@ -798,6 +798,12 @@ final class GovernoListino
             throw ValidationException::withMessages([
                 'etichetta' => "L'etichetta è ciò che il cliente legge in pagina: non può essere vuota.",
             ]);
+        }
+
+        // 🔗 ADR-050: l'etichetta finisce in pagina, nelle email e nel
+        // messaggio del tetto. Rifiutarla qui è ciò che rende vero «mai».
+        if (LessicoCommerciale::vietato($etichetta)) {
+            throw ValidationException::withMessages(['etichetta' => LessicoCommerciale::ETICHETTA_RIFIUTATA]);
         }
     }
 

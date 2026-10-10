@@ -430,7 +430,7 @@ it('says WHY the sede button is gone, with the numbers', function () {
         ->test(Albero::class)
         // Il numero e il nome del piano, non un generico «esaurite».
         ->assertSee('include')
-        ->assertSee('Free')
+        ->assertSee("Comodato d'uso")
         // E la via d'uscita.
         ->assertSee('abbonamento');
 });

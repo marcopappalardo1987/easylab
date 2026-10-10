@@ -820,7 +820,7 @@
                      subscription resta ciò che questa modale non produce. --}}
                 <p class="text-sm text-ink-2">
                     Nascono insieme il cliente, il suo primo <strong>Ente</strong> e l'amministratore che lo governa.
-                    Con un piano gratuito il cliente nasce su quel piano. Con un piano a pagamento
+                    Con un piano in comodato d'uso il cliente nasce su quel piano. Con un piano a pagamento
                     nasce sul piano <strong>{{ App\Support\Piani::esiste(App\Support\Piani::predefinito()) ? App\Support\Piani::etichetta(App\Support\Piani::predefinito()) : App\Support\Piani::predefinito() }}</strong>
                     e riceve la proposta via email: il piano parte quando lo paga, non prima.
                 </p>
@@ -880,7 +880,7 @@
                                  testo. --}}
                             @foreach ($pianiDiNascita as $opzione)
                                 <option value="{{ $opzione['predefinito'] ? '' : $opzione['codice'] }}">{{ $opzione['etichetta'] }} — {{ $opzione['gratuito']
-                                    ? 'gratuito'.($opzione['predefinito'] ? ' (predefinito)' : '')
+                                    ? 'attivo da subito'.($opzione['predefinito'] ? ' (predefinito)' : '')
                                     : number_format((int) $opzione['importoCent'] / 100, 2, ',', '.').' € al mese, da proporre al cliente' }}</option>
                             @endforeach
                         </select>

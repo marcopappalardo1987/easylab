@@ -136,7 +136,7 @@ final class CatalogoEmail
             new TipoEmail(
                 chiave: self::PIANO_CAMBIATO,
                 nome: 'Piano cambiato',
-                quando: 'Quando cambia il piano di un account che esiste già: attivazione, cambio, ritorno al piano gratuito dopo una disdetta.',
+                quando: 'Quando cambia il piano di un account che esiste già: attivazione, cambio, ritorno al piano in comodato d\'uso dopo una disdetta.',
                 aChi: 'Tutti i membri dell\'account.',
                 sospendibile: true,
                 nataAccesa: false,

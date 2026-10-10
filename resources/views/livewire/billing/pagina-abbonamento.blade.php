@@ -151,7 +151,7 @@
                  sono i piani attivabili: dirlo due righe sopra sarebbe
                  contraddirsi da soli. --}}
             <p class="text-sm text-ink-2">
-                Il piano Free non ha un portale di fatturazione: è la sua definizione.
+                Un piano in comodato d'uso non ha un portale di fatturazione: non c'è un abbonamento da gestire.
                 @if ($pianiOfferti !== [])
                     Per passare a un piano a pagamento, scegline uno qui sotto.
                 @else

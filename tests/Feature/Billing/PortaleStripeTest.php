@@ -239,7 +239,7 @@ it('hides the button and explains itself on a free plan without a customer', fun
         ->get(route('abbonamento.index'))
         ->assertOk()
         ->assertDontSee(route('abbonamento.portale'))
-        ->assertSee('Il piano Free non ha un portale di fatturazione');
+        ->assertSee("Un piano in comodato d'uso non ha un portale di fatturazione", false);
 });
 
 it('refuses before the network when the environment has no Stripe secret', function () {

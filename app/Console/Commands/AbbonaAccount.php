@@ -79,7 +79,7 @@ class AbbonaAccount extends Command
         // un contratto di manutenzione fisico, fatturato fuori dal software).
         if (Piani::eGratuito($piano)) {
             $this->error('Il piano «'.Piani::etichetta($piano).'» non ha un abbonamento Stripe: è la sua definizione — nessun customer, nessuna subscription.');
-            $this->line('Un account Free si crea con easylab:provision-tenant, oppure si riporta a Free con una disdetta su Stripe.');
+            $this->line('Un account in comodato d\'uso si crea con easylab:provision-tenant, oppure ci torna con una disdetta su Stripe.');
 
             return self::FAILURE;
         }
