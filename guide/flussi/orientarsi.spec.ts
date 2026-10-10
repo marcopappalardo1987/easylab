@@ -32,18 +32,18 @@ test('orientarsi', async ({ page }) => {
   await s.panoramica('Entrando si apre sempre la Dashboard: lo stato delle macchine della tua sede.', 6);
 
   await s.scatto(
-    'Verde in regola, giallo azione richiesta, rosso non idoneo. Sono i tre stati, e coprono tutte le macchine.',
+    'Verde strumentazione idonea, giallo interventi necessari, rosso strumenti non idonei. Sono i tre stati, e coprono tutte le macchine.',
     {
       // I tre riquadri insieme: il padre dei link è la griglia che li contiene.
-      su: page.getByRole('link', { name: /In regola/ }).locator('..'),
+      su: page.getByRole('link', { name: /Strumentazione idonea/ }).locator('..'),
       zoom: 1.15,
       alone: false,
       durata: 7,
     },
   );
 
-  await s.scatto("Gli obsoleti sono a parte: è una segnalazione sull'età, non uno stato di manutenzione.", {
-    su: page.getByRole('link', { name: /Obsoleti/ }),
+  await s.scatto("Gli strumenti obsoleti sono a parte: è una segnalazione sull'età, non uno stato di manutenzione.", {
+    su: page.getByRole('link', { name: /Strumenti obsoleti/ }),
     zoom: 1.7,
     durata: 6.5,
   });
@@ -51,11 +51,11 @@ test('orientarsi', async ({ page }) => {
   await s.movimento(
     "Ogni riquadro è un filtro già pronto: si clicca e si apre l'elenco di quelle macchine.",
     async () => {
-      await page.getByRole('link', { name: /Azione richiesta/ }).click();
+      await page.getByRole('link', { name: /Interventi necessari/ }).click();
       await page.waitForURL('**/strumenti**');
       await expect(page.locator('tbody tr').first()).toBeVisible();
     },
-    { su: page.getByRole('link', { name: /Azione richiesta/ }), zoom: 1.3, coda: 1.2 },
+    { su: page.getByRole('link', { name: /Interventi necessari/ }), zoom: 1.3, coda: 1.2 },
   );
 
   await s.scatto("L'elenco arriva già filtrato su quello che hai chiesto.", {

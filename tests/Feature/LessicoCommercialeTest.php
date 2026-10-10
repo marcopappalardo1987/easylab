@@ -1,9 +1,13 @@
 <?php
 
+use App\Enums\StatoSemaforo;
 use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Billing\PaginaAbbonamento;
+use App\Livewire\Piattaforma\ParcoGlobale;
+use App\Livewire\Strumenti\ElencoStrumenti;
 use App\Models\Account;
 use App\Models\Piano;
+use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Support\Listino\GovernoListino;
@@ -334,4 +338,106 @@ it('gives the same sentence when the billing portal is asked for by hand', funct
     $this->actingAs($admin)
         ->post(route('abbonamento.portale'))
         ->assertSessionHas('erroreAbbonamento', "Un piano in comodato d'uso non ha un portale di fatturazione: non c'è un abbonamento da gestire.");
+});
+
+// ─── Le diciture degli stati (🔗 ADR-052) ────────────────────────────────────
+//
+// Chieste da Marco il 10 Ott 2026 al posto di «In regola», «Azione richiesta»,
+// «Non idoneo» e «Obsoleti»: «Strumentazione idonea», «Interventi necessari»,
+// «Strumenti non idonei», «Strumenti obsoleti». Sopra un conteggio o in un
+// filtro si legge l'insieme; sulla scheda di una macchina, il singolare.
+
+it('names the three states and the obsolete ones with the words that were asked for', function () {
+    expect(array_map(fn (StatoSemaforo $s) => $s->etichettaInsieme(), StatoSemaforo::cases()))
+        ->toBe(['Strumentazione idonea', 'Interventi necessari', 'Strumenti non idonei'])
+        // Sulla scheda di UNA macchina il plurale non regge.
+        ->and(array_map(fn (StatoSemaforo $s) => $s->etichetta(), StatoSemaforo::cases()))
+        ->toBe(['Strumentazione idonea', 'Interventi necessari', 'Strumento non idoneo'])
+        ->and(Strumento::ETICHETTA_OBSOLETI)->toBe('Strumenti obsoleti')
+        ->and(Strumento::ETICHETTA_OBSOLETO)->toBe('Strumento obsoleto');
+});
+
+it('uses the words of the whole in the filters of the two lists', function (string $componente) {
+    $this->seed(RolesAndPermissionsSeeder::class);
+
+    $html = Livewire::actingAs(utenteConRuolo('Superadmin'))->test($componente)->html();
+
+    expect($html)
+        ->toContain('● Strumentazione idonea</option>')
+        ->toContain('◐ Interventi necessari</option>')
+        ->toContain('■ Strumenti non idonei</option>')
+        ->toContain('⏳ Solo strumenti obsoleti');
+})->with([
+    // ⚠️ Con le chiavi: un array di due nomi di classe Pest lo legge come
+    // `[Classe, 'metodo']`, cioè come un fornitore di dati da chiamare.
+    "l'elenco degli strumenti" => [ElencoStrumenti::class],
+    'il parco della piattaforma' => [ParcoGlobale::class],
+]);
+
+it('uses the words of one machine on its own page, and where its state is forced', function () {
+    $this->seed(RolesAndPermissionsSeeder::class);
+
+    $ente = UnitaOrganizzativa::factory()->ente()->create();
+    $reparto = UnitaOrganizzativa::factory()->dipartimento()->under($ente)->create();
+    $strumento = Strumento::factory()->forNode($reparto)->create(['data_installazione' => today()->subYears(30)]);
+    $admin = User::factory()->create(['tenant_id' => $ente->id, 'two_factor_confirmed_at' => now()]);
+    $admin->assignRole('Admin');
+
+    $strumento->forzaSemaforo(StatoSemaforo::Rosso, 'Guarnizione rotta');
+
+    $pagina = scheda($admin, $strumento->fresh())
+        ->assertSee('Strumento non idoneo')
+        ->assertSee('Strumento obsoleto')
+        // 🔴 Non il plurale dei riquadri: qui la macchina è una.
+        ->assertDontSee('Strumenti non idonei')
+        ->assertDontSee('Strumenti obsoleti');
+
+    $html = $pagina->call('openForza')->html();
+
+    expect($html)
+        ->toContain('● Strumentazione idonea</option>')
+        ->toContain('◐ Interventi necessari</option>')
+        ->toContain('■ Strumento non idoneo</option>')
+        ->toContain('Motivo (obbligatorio per «strumento non idoneo»)');
+});
+
+it('writes none of the old words for the states, in any view, sentence or guide', function () {
+    // Le viste ne avevano una copia ciascuna: è così che una dicitura cambiata
+    // in un posto resta quella di prima in un altro. Ora le dà l'enum, e
+    // questa rete prende chi ne riscrive una a mano.
+    $vecchie = '/In regola|Azione richiesta|Non idoneo|Solo obsoleti/';
+    $violazioni = [];
+
+    foreach ((new Finder)->files()->in(resource_path('views'))->name('*.blade.php') as $file) {
+        $scritto = scrittoDallaVista($file->getContents());
+
+        if (preg_match($vecchie, $scritto['testo'].' '.implode(' ', $scritto['letterali']), $trovata) === 1) {
+            $violazioni[] = "{$file->getRelativePathname()}: «{$trovata[0]}»";
+        }
+    }
+
+    $sorgenti = (new Finder)->files()
+        ->in([app_path(), config_path(), database_path('seeders'), base_path('lang')])
+        ->name('*.php');
+
+    foreach ($sorgenti as $file) {
+        if (preg_match($vecchie, implode(' ', letteraliScrittiIn($file->getContents())), $trovata) === 1) {
+            $violazioni[] = "{$file->getRelativePathname()}: «{$trovata[0]}»";
+        }
+    }
+
+    foreach ((new Finder)->files()->in([base_path('guide/testi'), base_path('guide/flussi')])->name(['*.md', '*.json', '*.spec.ts']) as $file) {
+        // I commenti dei copioni spiegano che cosa NON fare, e nominano le
+        // diciture: si leggono le sole righe che non sono un commento.
+        $righe = array_filter(
+            explode("\n", $file->getContents()),
+            fn (string $riga) => preg_match('/^\s*(\/\/|\*|\/\*)/', $riga) !== 1,
+        );
+
+        if (preg_match($vecchie, implode("\n", $righe), $trovata) === 1) {
+            $violazioni[] = "guide/{$file->getRelativePathname()}: «{$trovata[0]}»";
+        }
+    }
+
+    expect($violazioni)->toBe([]);
 });

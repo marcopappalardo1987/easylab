@@ -49,7 +49,7 @@ test('elenco strumenti', async ({ page }) => {
     durata: 7,
   });
 
-  await g.passo('Lo stato è il semaforo: in regola, azione richiesta, non idoneo.', {
+  await g.passo('Lo stato è il semaforo: strumentazione idonea, interventi necessari, strumenti non idonei.', {
     su: page.locator('select').nth(1),
     zoom: 2,
     durata: 6,
@@ -63,7 +63,7 @@ test('elenco strumenti', async ({ page }) => {
     durata: 7,
   });
 
-  await g.passo("«Solo obsoleti» è a parte, e si somma agli altri filtri: risponde all'età, non alla manutenzione.", {
+  await g.passo("«Solo strumenti obsoleti» è a parte, e si somma agli altri filtri: risponde all'età, non alla manutenzione.", {
     su: page.getByText(/obsolet/i).first(),
     zoom: 2.2,
     durata: 7,
@@ -92,7 +92,7 @@ test('elenco strumenti', async ({ page }) => {
 
   g.chiusura('Da ricordare', [
     'La ricerca guarda nome, modello e matricola insieme, e basta una parte di uno dei tre.',
-    'I filtri si sommano: ubicazione, stato e «solo obsoleti» restringono insieme.',
+    'I filtri si sommano: ubicazione, stato e «solo strumenti obsoleti» restringono insieme.',
     'Le colonne ordinano, e «prossima scadenza» è quella che mette in cima ciò che scade prima.',
   ]);
 

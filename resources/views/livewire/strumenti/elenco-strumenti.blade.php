@@ -109,13 +109,16 @@
                 @endforeach
             </select>
 
-            {{-- Filtro semaforo (ADR-005): stato effettivo, cioè forzato se c'è. --}}
+            {{-- Filtro semaforo (ADR-005): stato effettivo, cioè forzato se c'è.
+                 Le diciture sono quelle dell'insieme (🔗 ADR-052): le dà l'enum.
+                 `sm:w-60` e non più `w-52`: «Strumentazione idonea» è più lunga
+                 di «In regola», e una tendina la taglierebbe. --}}
             <select wire:model.live="stato"
-                class="block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none sm:w-52">
+                class="block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none sm:w-60">
                 <option value="">Tutti gli stati</option>
-                <option value="arancione">◐ Azione richiesta</option>
-                <option value="verde">● In regola</option>
-                <option value="rosso">■ Non idoneo</option>
+                <option value="arancione">◐ {{ \App\Enums\StatoSemaforo::Arancione->etichettaInsieme() }}</option>
+                <option value="verde">● {{ \App\Enums\StatoSemaforo::Verde->etichettaInsieme() }}</option>
+                <option value="rosso">■ {{ \App\Enums\StatoSemaforo::Rosso->etichettaInsieme() }}</option>
             </select>
 
             {{-- Obsolescenza (ADR-014): segnalazione sull'età, indipendente dal semaforo. --}}
@@ -125,7 +128,7 @@
                      inerte — il campo non aveva bordo. --}}
                 <input type="checkbox" wire:model.live="soloObsoleti"
                     class="rounded border border-border-strong text-brand focus:ring-ring">
-                ⏳ Solo obsoleti
+                ⏳ Solo {{ mb_strtolower(\App\Models\Strumento::ETICHETTA_OBSOLETI) }}
             </label>
         </div>
     </x-ui.card>

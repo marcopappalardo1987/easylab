@@ -1,8 +1,8 @@
 {
   "0": "Tre posti, e non cambiano mai: la Dashboard che riassume, il menù che porta ovunque, la barra in alto che riguarda te.",
   "2": "Entrando si apre sempre la Dashboard. Non è una pagina di benvenuto: è lo stato delle macchine della tua sede.",
-  "3": "Gli stati sono tre, e non si sovrappongono. Verde in regola, giallo azione richiesta, rosso non idoneo: sommandoli hai tutte le macchine che vedi.",
-  "4": "Gli obsoleti sono contati a parte, perché rispondono a un'altra domanda: l'età della macchina, non la sua manutenzione.",
+  "3": "Gli stati sono tre, e non si sovrappongono. Verde strumentazione idonea, giallo interventi necessari, rosso strumenti non idonei: sommandoli hai tutte le macchine che vedi.",
+  "4": "Gli strumenti obsoleti sono contati a parte, perché rispondono a un'altra domanda: l'età della macchina, non la sua manutenzione.",
   "5": "E i riquadri non sono solo da guardare. Ognuno è un filtro già pronto: si clicca, e si apre l'elenco di quelle macchine.",
   "6": "L'elenco arriva già ristretto su quello che hai chiesto. Da lì puoi continuare a filtrare, oppure aprire una scheda.",
   "8": "Il menù di sinistra resta sempre al suo posto, e cambia con quello che il tuo ruolo può fare: due colleghi possono vedere due menù diversi.",

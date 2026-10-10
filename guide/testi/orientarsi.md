@@ -20,14 +20,15 @@ che chiede attenzione oggi?
 
 ## 2
 
-Gli stati sono tre e non si sovrappongono: **verde** in regola, **giallo**
-azione richiesta, **rosso** non idoneo. Ogni macchina sta in uno e uno solo, e
+Gli stati sono tre e non si sovrappongono: **verde** strumentazione idonea,
+**giallo** interventi necessari, **rosso** strumenti non idonei. Ogni macchina
+sta in uno e uno solo, e
 i tre insieme coprono tutto il parco: se sommi i numeri dei riquadri ottieni il
 totale delle macchine, senza avanzi e senza doppioni.
 
 ## 3
 
-Gli obsoleti sono contati a parte perché rispondono a una domanda diversa. Non
+Gli strumenti obsoleti sono contati a parte perché rispondono a una domanda diversa. Non
 dicono che la macchina abbia una manutenzione scaduta, ma che ha superato l'età
 oltre la quale conviene programmarne la sostituzione: uno strumento può essere
 verde e obsoleto insieme, e sono due informazioni entrambe vere.

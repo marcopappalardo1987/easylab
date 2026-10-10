@@ -1773,3 +1773,33 @@ Guardando le prime cinque guide pubblicate, però, la regola produceva una guida
 - **Provato in un browser vero**, sull'ambiente dimostrativo locale: apertura, fuoco sul campo di ricerca, filtro mentre si scrive, frecce, Invio che sceglie senza inviare il form, Esc che chiude il selettore e non la modale, creazione al volo con Invio. È la parte che i test Livewire non vedono.
 - **Prova di mutazione**: 91 mutazioni, tutte rosse. Una condizione (`showInterventoForm` accanto all'esistenza della riga) è risultata ridondante ed è stata tolta invece di essere difesa.
 
+---
+
+**ADR-052 — Le diciture degli stati: «Strumentazione idonea», «Interventi necessari», «Strumenti non idonei», «Strumenti obsoleti»**
+
+*Stato: Accettata e attuata il 10 Ott 2026, per decisione di Marco. Supera le tre parole di Design System §4 («In regola», «Azione richiesta», «Non idoneo») e la dicitura «Obsoleti» di ADR-014; colori, glifi e regole del semaforo (ADR-005, ADR-020) non cambiano. Solo su staging.*
+
+**Decisione.** I tre stati del semaforo e la segnalazione di obsolescenza cambiano nome, ovunque compaiano:
+
+| | Sopra un conteggio, in un filtro | Sulla scheda di una macchina |
+|---|---|---|
+| verde | Strumentazione idonea | Strumentazione idonea |
+| arancione | Interventi necessari | Interventi necessari |
+| rosso | Strumenti non idonei | Strumento non idoneo |
+| obsolescenza | Strumenti obsoleti | Strumento obsoleto |
+
+Le prime due diciture sono le stesse nei due contesti. Le altre due, che Marco ha dato al plurale, **sulla macchina singola vanno al singolare**: «Strumenti non idonei» sopra un numero, «Strumento non idoneo» accanto al nome di un'autoclave.
+
+**Una fonte sola.** Fino a oggi ogni vista aveva la propria copia delle tre parole, e il commento sull'enum lo diceva: «chi ne cambia una qui le cambi anche là». Ora le dà `StatoSemaforo` (`etichetta()` per una macchina, `etichettaInsieme()` per l'insieme) e, per l'obsolescenza, due costanti di `Strumento`. Il componente `x-ui.semaforo`, i filtri dei due elenchi, la forzatura, il badge ⏳, la dashboard e le email leggono da lì.
+
+**Dove cambiano.** I quattro riquadri della dashboard e la nota sotto; il filtro di stato e la spunta «Solo strumenti obsoleti» dell'elenco strumenti e del parco di piattaforma; la scheda della macchina (intestazione, panoramica, forzatura del semaforo); il badge ⏳ per riga; l'email «macchina segnalata», che ora ha per titolo la dicitura dello stato; le preferenze notifiche e il catalogo delle email; i testi e i copioni delle guide.
+
+**Conseguenze.**
+
+- La tendina del filtro passa da `w-52` a `w-60`: «Strumentazione idonea» è più lunga di «In regola», e una tendina la taglierebbe.
+- 🔴 **L'arancione si chiama «Interventi necessari» anche quando ad accenderlo è una garanzia in scadenza.** È il nome dello stato, non la sua causa, e resta vero ciò che ADR-020 vieta: la dashboard non scompone l'arancione per causa. Il test che lo sorveglia cercava la parola «interventi» in pagina; ora toglie il nome dello stato e cerca in ciò che resta.
+- Un guardrail legge viste, sorgenti e guide e diventa rosso se una delle diciture di prima viene riscritta a mano.
+- ⚠️ I **video delle guide** già registrati mostrano le diciture di prima finché non si rigirano; i copioni puntano già quelle nuove, quindi la prossima registrazione le trova.
+- ⚠️ Restano com'erano le frasi che non sono il nome dello stato: l'oggetto dell'email («… non è idonea», «… richiede un intervento») e la prosa che dice «in regola» di altro (le tarature, i pagamenti di una sede).
+- **Prova di mutazione**: 25 mutazioni, tutte rosse. Ogni dicitura rimessa com'era, il singolare e il plurale scambiati nei riquadri, nei filtri, nella forzatura e nei badge, il titolo dell'email, i testi delle preferenze, una guida e un copione.
+

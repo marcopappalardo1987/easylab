@@ -298,6 +298,12 @@ class Strumento extends Model implements ReachesStrumento
         return $this->tenant?->soglia_obsolescenza_anni ?? 10;
     }
 
+    /** Come si chiama una macchina obsoleta, sul suo badge (🔗 ADR-052). */
+    public const ETICHETTA_OBSOLETO = 'Strumento obsoleto';
+
+    /** E l'insieme delle obsolete: il riquadro della dashboard, il filtro degli elenchi. */
+    public const ETICHETTA_OBSOLETI = 'Strumenti obsoleti';
+
     /**
      * Obsolescenza (ADR-014): `(oggi − data_installazione) >= soglia`, campo
      * DERIVATO e mai persistito. Confine INCLUSIVO — installato esattamente N

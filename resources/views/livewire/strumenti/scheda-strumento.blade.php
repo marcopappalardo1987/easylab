@@ -534,16 +534,16 @@
                     {{-- .live: cambiando stato, il campo motivo diventa obbligatorio sul rosso --}}
                     <select id="forzaStato" wire:model.live="forzaForm.stato"
                         class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
-                        <option value="{{ App\Enums\StatoSemaforo::Verde->value }}">● In regola</option>
-                        <option value="{{ App\Enums\StatoSemaforo::Arancione->value }}">◐ Azione richiesta</option>
-                        <option value="{{ App\Enums\StatoSemaforo::Rosso->value }}">■ Non idoneo</option>
+                        <option value="{{ App\Enums\StatoSemaforo::Verde->value }}">● {{ App\Enums\StatoSemaforo::Verde->etichetta() }}</option>
+                        <option value="{{ App\Enums\StatoSemaforo::Arancione->value }}">◐ {{ App\Enums\StatoSemaforo::Arancione->etichetta() }}</option>
+                        <option value="{{ App\Enums\StatoSemaforo::Rosso->value }}">■ {{ App\Enums\StatoSemaforo::Rosso->etichetta() }}</option>
                     </select>
                     @error('forzaForm.stato') <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p> @enderror
                 </div>
 
                 @php $richiedeMotivo = $forzaForm['stato'] === App\Enums\StatoSemaforo::Rosso->value; @endphp
                 <x-ui.textarea name="forzaForm.motivo" wire:model="forzaForm.motivo"
-                    :label="$richiedeMotivo ? 'Motivo (obbligatorio per «non idoneo»)' : 'Motivo (opzionale)'" />
+                    :label="$richiedeMotivo ? 'Motivo (obbligatorio per «'.mb_strtolower(App\Enums\StatoSemaforo::Rosso->etichetta()).'»)' : 'Motivo (opzionale)'" />
 
                 <div class="flex items-center justify-between gap-3">
                     <div>
@@ -690,7 +690,7 @@
         <x-ui.modal title="Rimuovere il ricambio?">
             <p class="text-sm text-ink-2">
                 La riga di montaggio e la garanzia del pezzo verranno cestinate insieme.
-                Se quella garanzia teneva acceso il semaforo, lo strumento tornerà in regola.
+                Se quella garanzia teneva acceso il semaforo, lo strumento tornerà idoneo.
             </p>
             <div class="mt-6 flex justify-end gap-3">
                 <x-ui.button variant="secondary" wire:click="$set('deletingUtilizzoId', null)">Annulla</x-ui.button>

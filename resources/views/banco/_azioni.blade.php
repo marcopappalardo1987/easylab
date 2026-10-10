@@ -87,7 +87,7 @@
     'nota' => "`neutral` porta un filo di bordo INTERNO: su una card la superficie incassata è quasi dello stesso colore del fondo, in entrambi i temi, e senza quel filo la pill smetterebbe di essere una pill. `info` e `primary` sono due gradini dello stesso blu, non due blu (ADR-033).",
 ])
     <x-ui.badge>Neutro</x-ui.badge>
-    <x-ui.badge variant="success">In regola</x-ui.badge>
+    <x-ui.badge variant="success">Strumentazione idonea</x-ui.badge>
     <x-ui.badge variant="warning">In scadenza</x-ui.badge>
     <x-ui.badge variant="danger">Scaduto</x-ui.badge>
     <x-ui.badge variant="info">Informativo</x-ui.badge>

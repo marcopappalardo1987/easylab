@@ -151,8 +151,8 @@ it('shows the stato and prossima scadenza columns', function () {
         // Etichetta da `label()`, non da `ucfirst($value)`: con il valore grezzo
         // qui si leggerebbe "Manutenzione_full_risk" (ADR-021).
         ->assertSee('Manutenzione full risk tra 4 gg')
-        ->assertSee('Azione richiesta')   // etichetta sr-only del dot
-        ->assertSee('In regola');         // gli strumenti senza interventi
+        ->assertSee('Interventi necessari')   // etichetta sr-only del dot
+        ->assertSee('Strumentazione idonea'); // gli strumenti senza interventi
 });
 
 it('shows the nearest of several imminent scadenze in the elenco', function () {

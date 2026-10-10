@@ -78,7 +78,7 @@ test('vetrina', async ({ page }) => {
   );
 
   await s.movimento(
-    'Il semaforo è un filtro come gli altri: «azione richiesta» lascia solo le macchine che stanno per scadere.',
+    'Il semaforo è un filtro come gli altri: «interventi necessari» lascia solo le macchine che stanno per scadere.',
     async () => {
       await page.locator('select').nth(1).selectOption('arancione');
       await page.waitForTimeout(900);

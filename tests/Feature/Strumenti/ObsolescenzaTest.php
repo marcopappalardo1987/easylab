@@ -131,12 +131,12 @@ it('keeps the elenco filter aligned with isObsoleto, with a custom soglia', func
 it('shows the obsoleto badge in the elenco only beyond the soglia', function () {
     Strumento::factory()->forNode($this->dept)->create(['nome' => 'Vecchia', 'data_installazione' => today()->subYears(12)->toDateString()]);
 
-    Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)->assertSee('Obsoleto');
+    Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)->assertSee('Strumento obsoleto');
 
     Strumento::query()->delete();
     Strumento::factory()->forNode($this->dept)->create(['nome' => 'Nuova', 'data_installazione' => today()->subYear()->toDateString()]);
 
-    Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)->assertDontSee('Obsoleto');
+    Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)->assertDontSee('Strumento obsoleto');
 });
 
 it('goes back to the first page when the obsoleti filter changes', function () {

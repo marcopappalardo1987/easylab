@@ -106,8 +106,8 @@ basta.
 ## 10
 
 La Dashboard è la pagina che vedrai per prima ogni volta, e riassume lo stato
-delle macchine della tua sede: quante sono in regola, quante chiedono un'azione
-e quante non sono utilizzabili. Quello che ci trovi dipende dal tuo ruolo e dai
+delle macchine della tua sede: quante sono idonee, quante hanno interventi
+necessari e quante non sono idonee. Quello che ci trovi dipende dal tuo ruolo e dai
 reparti che ti sono stati assegnati, quindi due colleghi della stessa sede
 possono vedere numeri diversi, ed è voluto. Se ti sembra di vedere troppo poco —
 per esempio nessuna macchina — quasi sempre manca l'assegnazione a un reparto, e

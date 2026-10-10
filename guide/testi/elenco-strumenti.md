@@ -51,8 +51,9 @@ pagine, e il modo di fare un giro di reparto senza passare dall'anagrafica.
 
 ## 5
 
-Il filtro di stato è il semaforo della Dashboard applicato all'elenco: in
-regola, azione richiesta, non idoneo. Sono gli stessi tre stati, con gli stessi
+Il filtro di stato è il semaforo della Dashboard applicato all'elenco:
+strumentazione idonea, interventi necessari, strumenti non idonei. Sono gli
+stessi tre stati, con gli stessi
 significati, quindi il numero che leggi in un riquadro della Dashboard è
 esattamente il numero di righe che ottieni scegliendo quello stato qui.
 
@@ -65,10 +66,11 @@ qualcosa, quella colonna dice cosa.
 
 ## 7
 
-«Solo obsoleti» sta a parte perché risponde a una domanda diversa: non parla di
+«Solo strumenti obsoleti» sta a parte perché risponde a una domanda diversa: non
+parla di
 manutenzione ma di **età**, cioè di macchine che hanno superato la soglia oltre
 la quale conviene programmarne la sostituzione. Si somma agli altri filtri, e la
-combinazione più utile è proprio «obsolete e in regola»: quelle che oggi
+combinazione più utile è proprio «obsolete e idonee»: quelle che oggi
 funzionano ma andrebbero messe a budget.
 
 ## capitolo 3

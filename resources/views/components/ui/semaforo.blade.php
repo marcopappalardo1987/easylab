@@ -2,6 +2,9 @@
     'stato',
     'size' => 'sm',
     'label' => false,
+    // `true` sopra un conteggio (i riquadri della dashboard): la dicitura è
+    // quella dell'insieme, «Strumenti non idonei» e non «Strumento non idoneo».
+    'insieme' => false,
 ])
 
 @php
@@ -16,12 +19,16 @@
     // **solo** perché ogni voce porta anche il glifo e l'etichetta. Il colore
     // arriva dai token SEMANTICI (`--ok-dot`/`--warn-dot`/`--bad-dot`), che il
     // tema riscrive sotto: qui non c'è, e non va aggiunta, nessuna `dark:`.
+    //
+    // 🔗 ADR-052: la dicitura NON sta più qui. La dà l'enum, che è la sola
+    // fonte per questo componente, per i filtri e per le email.
     $mappa = [
-        StatoSemaforo::Verde->value => ['text-ok-dot', '●', 'In regola'],
-        StatoSemaforo::Arancione->value => ['text-warn-dot', '◐', 'Azione richiesta'],
-        StatoSemaforo::Rosso->value => ['text-bad-dot', '■', 'Non idoneo'],
+        StatoSemaforo::Verde->value => ['text-ok-dot', '●'],
+        StatoSemaforo::Arancione->value => ['text-warn-dot', '◐'],
+        StatoSemaforo::Rosso->value => ['text-bad-dot', '■'],
     ];
-    [$colore, $simbolo, $etichetta] = $mappa[$stato->value];
+    [$colore, $simbolo] = $mappa[$stato->value];
+    $etichetta = $insieme ? $stato->etichettaInsieme() : $stato->etichetta();
 @endphp
 
 <span {{ $attributes->merge(['class' => 'inline-flex items-center gap-1.5']) }} title="{{ $etichetta }}">

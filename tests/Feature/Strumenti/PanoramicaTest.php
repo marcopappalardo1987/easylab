@@ -66,7 +66,7 @@ it('ignores scadenze beyond the soglia', function () {
         ->create(['data_scadenza' => today()->addDays(Semaforo::giorniImminente() + 1)->toDateString()]);
 
     scheda($this->admin, $this->strumento)
-        ->assertSee('In regola')
+        ->assertSee('Strumentazione idonea')
         ->assertSee('Nessuna scadenza aperta o imminente.')
         ->assertDontSee('Motivi (');
 });
@@ -92,8 +92,8 @@ it('shows both the forced state and the calculated one with its motivi', functio
 
     scheda($this->admin, $this->strumento->fresh())
         ->assertSee('Stato forzato')
-        ->assertSee('Non idoneo')          // il forzato, che vince
-        ->assertSee('Azione richiesta')    // il calcolato, che resta
+        ->assertSee('Strumento non idoneo') // il forzato, che vince
+        ->assertSee('Interventi necessari') // il calcolato, che resta
         ->assertSee('Guasto in verifica')
         ->assertSee($this->admin->name)
         ->assertSee('Intervento scaduto il')   // il problema reale non sparisce
@@ -192,8 +192,8 @@ it('treats obsolescenza as information, never as a motivo of the semaforo', func
         ->create(['nome' => 'Vecchia', 'data_installazione' => today()->subYears(12)->toDateString()]);
 
     scheda($this->admin, $vecchio)
-        ->assertSee('Obsoleto')
-        ->assertSee('In regola')
+        ->assertSee('Strumento obsoleto')
+        ->assertSee('Strumentazione idonea')
         ->assertDontSee('Motivi (');
 });
 
@@ -210,7 +210,7 @@ it('degrades a motivo to neutral text for who lacks the area permission', functi
     $componente = scheda($ospite, $this->strumento);
 
     // Il pallino e il motivo sì (è un aggregato dovuto a tutti)...
-    $componente->assertSee('Azione richiesta')
+    $componente->assertSee('Interventi necessari')
         ->assertSee('Intervento scaduto il')
         // ...il dettaglio, il link e i blocchi d'area no.
         ->assertDontSee('Taratura annuale')

@@ -117,10 +117,10 @@ it('puts each number under its own label', function () {
     // System §4 impone colore **+ forma + etichetta**, e un riquadro che
     // perdesse il simbolo resterebbe leggibile solo a chi distingue i colori.
     expect(array_keys($riquadri))->toEqualCanonicalizing([
-        '● In regola 4',            // 3 sane + la vecchia, che è verde e obsoleta
-        '◐ Azione richiesta 2',
-        '■ Non idoneo 1',
-        '⏳ Obsoleti 1 oltre 10 anni',
+        '● Strumentazione idonea 4',   // 3 sane + la vecchia, che è verde e obsoleta
+        '◐ Interventi necessari 2',
+        '■ Strumenti non idonei 1',
+        '⏳ Strumenti obsoleti 1 oltre 10 anni',
     ]);
 });
 
@@ -150,9 +150,9 @@ it('leads where it promises, and counts what it says', function () {
     $html = $this->actingAs($this->admin)->get(route('dashboard'))->assertOk()->getContent();
     $riquadri = ($this->riquadri)($html);
 
-    expect($riquadri)->toHaveKey('◐ Azione richiesta 3');
+    expect($riquadri)->toHaveKey('◐ Interventi necessari 3');
 
-    $parametri = ($this->parametriDi)($riquadri['◐ Azione richiesta 3']['href']);
+    $parametri = ($this->parametriDi)($riquadri['◐ Interventi necessari 3']['href']);
 
     // I NOMI dei parametri sono un contratto fra le due pagine: un `?stato=`
     // diventato `?semaforo=` deve far cadere questo test, mentre un
@@ -178,7 +178,7 @@ it('leads the obsolete tile to a list that really is filtered', function () {
 
     $html = $this->actingAs($this->admin)->get(route('dashboard'))->assertOk()->getContent();
     $riquadri = ($this->riquadri)($html);
-    $chiave = collect(array_keys($riquadri))->first(fn (string $k) => str_contains($k, 'Obsoleti'));
+    $chiave = collect(array_keys($riquadri))->first(fn (string $k) => str_contains($k, 'Strumenti obsoleti'));
 
     // ⚠️ La forma con cui `soloObsoleti` viaggia in query string è stata LETTA
     // dall'applicazione, non indovinata: un `=1` scritto a occhio è ciò che
@@ -192,7 +192,7 @@ it('leads the obsolete tile to a list that really is filtered', function () {
         ->viewData('strumenti');
 
     expect($trovate->total())->toBe(1)
-        ->and($chiave)->toBe('⏳ Obsoleti 1 oltre 10 anni');
+        ->and($chiave)->toBe('⏳ Strumenti obsoleti 1 oltre 10 anni');
 });
 
 // ─── Il vuoto ────────────────────────────────────────────────────────────────
@@ -204,7 +204,7 @@ it('says one sentence instead of four zeros when there is nothing to see', funct
         ->and(($this->riquadri)($html))->toBeEmpty();
 
     $testo = preg_replace('/\s+/', ' ', strip_tags($html));
-    expect($testo)->not->toContain('Azione richiesta');
+    expect($testo)->not->toContain('Interventi necessari');
 });
 
 it('says the same true sentence to a Responsabile with no assignments', function () {
@@ -253,7 +253,7 @@ it('drops the parco block for whoever cannot see the strumenti', function () {
     $testo = preg_replace('/\s+/', ' ', strip_tags($html));
 
     expect(($this->riquadri)($html))->toBeEmpty()
-        ->and($testo)->not->toContain('Azione richiesta')
+        ->and($testo)->not->toContain('Interventi necessari')
         ->and($testo)->not->toContain('Nessuno strumento visibile.');
 });
 
@@ -299,7 +299,7 @@ it('never counts the machines of another Ente, through a real request', function
 
     $html = $this->actingAs($this->admin)->get(route('dashboard'))->assertOk()->getContent();
 
-    expect(array_keys(($this->riquadri)($html)))->toContain('● In regola 1', '◐ Azione richiesta 0');
+    expect(array_keys(($this->riquadri)($html)))->toContain('● Strumentazione idonea 1', '◐ Interventi necessari 0');
 });
 
 // ─── Chi non ha macchine, ma ha un mestiere ──────────────────────────────────
@@ -353,6 +353,13 @@ it('never breaks the orange down by cause', function () {
     $testo = mb_strtolower(preg_replace('/\s+/', ' ', strip_tags(
         Livewire::actingAs($this->admin)->test(Home::class)->html()
     )));
+
+    // 🗓️ 10 Ott 2026 (🔗 ADR-052): l'arancione ora SI CHIAMA «Interventi
+    // necessari». La parola è nel nome dello stato, non in una sua
+    // scomposizione: si toglie il nome, e si cerca in ciò che resta. Un «di cui
+    // 3 per interventi» scritto accanto al numero resterebbe e verrebbe preso.
+    expect($testo)->toContain('interventi necessari');
+    $testo = str_replace('interventi necessari', '', $testo);
 
     foreach (['ricambio', 'ricambi', 'garanzia', 'garanzie', 'intervento', 'interventi'] as $parola) {
         expect($testo)->not->toContain($parola);

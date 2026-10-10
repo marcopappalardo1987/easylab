@@ -3,6 +3,7 @@
 namespace App\Support\Email;
 
 use App\Enums\StatoIntervento;
+use App\Enums\StatoSemaforo;
 use App\Models\Intervento;
 use App\Models\Strumento;
 use App\Models\User;
@@ -97,7 +98,7 @@ final class CampioniEmail
 
             CatalogoEmail::MACCHINA_SEGNALATA => [new MacchinaSegnalata(
                 enteId: $ente, enteNome: self::ENTE, strumentoId: 0, strumentoNome: self::MACCHINA,
-                ubicazione: self::UBICAZIONE, stato: 'Non idoneo', nonIdonea: true,
+                ubicazione: self::UBICAZIONE, stato: StatoSemaforo::Rosso->etichetta(), nonIdonea: true,
                 motivo: 'Perdita di pressione durante il ciclo', autore: 'Giulia Verdi',
             ), $persona],
 

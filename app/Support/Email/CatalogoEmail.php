@@ -2,6 +2,7 @@
 
 namespace App\Support\Email;
 
+use App\Enums\StatoSemaforo;
 use InvalidArgumentException;
 
 /**
@@ -92,7 +93,7 @@ final class CatalogoEmail
             new TipoEmail(
                 chiave: self::MACCHINA_SEGNALATA,
                 nome: 'Macchina segnalata',
-                quando: 'Quando qualcuno segnala una macchina portando il semaforo a mano su «Azione richiesta» o «Non idoneo». Porta il motivo scritto da chi la segnala.',
+                quando: 'Quando qualcuno segnala una macchina portando il semaforo a mano su «'.StatoSemaforo::Arancione->etichetta().'» o «'.StatoSemaforo::Rosso->etichetta().'». Porta il motivo scritto da chi la segnala.',
                 aChi: 'Admin e Tenant dell\'Ente, Responsabile Reparto se la macchina è nei suoi reparti. Mai a chi l\'ha segnalata.',
                 sospendibile: true,
                 nataAccesa: false,

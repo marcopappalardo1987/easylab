@@ -1,7 +1,9 @@
 {{-- Testo utente: sempre da TestoMarkdown::sicuro(), che neutralizza link e tabelle (D-T1c-1). --}}
 @use('App\Support\Mail\TestoMarkdown')
 <x-mail::message :marchio="$marchio" :logo="$marchio->cid($message ?? null)">
-# {{ $nonIdonea ? 'Macchina non idonea' : 'Una macchina richiede un intervento' }}
+{{-- 🔗 ADR-052: il titolo è la dicitura dello stato, quella che la persona
+     ritrova sulla scheda. La dà `StatoSemaforo::etichetta()`, da chi notifica. --}}
+# {{ TestoMarkdown::sicuro($stato) }}
 
 **{{ TestoMarkdown::sicuro($strumento) }}** è stata segnalata: lo stato è ora **{{ TestoMarkdown::sicuro($stato) }}**.
 

@@ -251,7 +251,7 @@
                         <x-ui.input name="sogliaObsolescenzaAnni" label="Soglia obsolescenza (anni)"
                             type="number" min="1" max="50" wire:model="sogliaObsolescenzaAnni" />
                         <p class="mt-1 text-xs text-ink-3">
-                            Oltre questa età uno strumento è segnalato ⏳ Obsoleto.
+                            Oltre questa età uno strumento è segnalato fra gli ⏳ {{ mb_strtolower(\App\Models\Strumento::ETICHETTA_OBSOLETI) }}.
                             È solo una segnalazione: non blocca la manutenzione.
                         </p>
                     </div>

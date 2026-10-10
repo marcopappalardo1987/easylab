@@ -26,9 +26,9 @@ a una domanda sola: c'è qualcosa che chiede attenzione oggi?
 ## 1
 
 I riquadri in alto non sono decorazioni da guardare: ognuno è una domanda con la
-sua risposta, e si clicca. «In regola», «azione richiesta» e «non idoneo» sono i
+sua risposta, e si clicca. «Strumentazione idonea», «interventi necessari» e «strumenti non idonei» sono i
 tre stati del semaforo, e coprono tutto il parco senza sovrapporsi — la somma dei
-tre dà il totale delle macchine che vedi. Gli obsoleti sono contati a parte
+tre dà il totale delle macchine che vedi. Gli strumenti obsoleti sono contati a parte
 perché rispondono a un'altra domanda: l'età della macchina, non la sua
 manutenzione. Cliccare un riquadro porta all'elenco già filtrato su quello
 stato, che è il motivo per cui questa pagina fa risparmiare tempo invece di
@@ -67,7 +67,7 @@ righe stai guardando rispetto al totale.
 ## 5
 
 I tre filtri si sommano fra loro e si sommano alla ricerca. Quello degli stati è
-lo stesso semaforo dei riquadri della Dashboard: scegliendo «azione richiesta»
+lo stesso semaforo dei riquadri della Dashboard: scegliendo «interventi necessari»
 restano solo le macchine che hanno qualcosa in scadenza, che è l'elenco da cui
 si pianifica la settimana. Togliere un filtro non azzera gli altri, quindi si
 può restringere per gradi senza ricominciare ogni volta.

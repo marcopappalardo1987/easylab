@@ -84,7 +84,7 @@ it('tells the people of the client that a machine is not fit, with the reason, a
             && $n->strumentoId === $this->autoclave->id
             && $n->strumentoNome === 'Autoclave'
             && str_contains($n->ubicazione, 'Chimica')
-            && $n->stato === 'Non idoneo'
+            && $n->stato === 'Strumento non idoneo'
             && $n->nonIdonea === true
             && $n->motivo === 'Guasto alla pompa'
             && $n->autore === 'Aldo Admin',
@@ -103,7 +103,7 @@ it('tells them also when the machine only needs attention, with or without a rea
 
     ($this->segnala)($this->admin, 'arancione');
 
-    Notification::assertSentTo($this->tenant, fn (MacchinaSegnalata $n) => $n->stato === 'Azione richiesta'
+    Notification::assertSentTo($this->tenant, fn (MacchinaSegnalata $n) => $n->stato === 'Interventi necessari'
         && $n->nonIdonea === false
         && $n->motivo === null);
 });
@@ -190,7 +190,10 @@ it('writes the two states with different words, and the reason as plain text', f
         $html = (string) $messaggio->render();
 
         return $messaggio->subject === 'Easy Lab · Ente A: Autoclave non è idonea'
-            && str_contains($html, 'Macchina non idonea')
+            // 🔗 ADR-052: il TITOLO è la dicitura dello stato. Si guarda l'`<h1>`
+            // e non la pagina, perché la stessa dicitura sta anche nel corpo, e
+            // un titolo tornato quello di prima passerebbe inosservato.
+            && preg_match('/<h1[^>]*>\s*Strumento non idoneo\s*<\/h1>/', $html) === 1
             && str_contains($html, 'non va usata')
             // Il motivo è testo scritto da una persona: non diventa un link.
             && ! str_contains($html, 'href="https://evil.example');
@@ -207,7 +210,7 @@ it('writes the two states with different words, and the reason as plain text', f
         $html = (string) $messaggio->render();
 
         return $messaggio->subject === 'Easy Lab · Ente A: Autoclave richiede un intervento'
-            && str_contains($html, 'Una macchina richiede un intervento')
+            && preg_match('/<h1[^>]*>\s*Interventi necessari\s*<\/h1>/', $html) === 1
             && ! str_contains($html, 'non va usata');
     });
 });

@@ -96,14 +96,14 @@ it('shows the semaforo badge in the header', function () {
     // Senza interventi: in regola.
     $this->actingAs($this->admin)->get(route('strumenti.show', $this->strumento))
         ->assertOk()
-        ->assertSee('In regola');
+        ->assertSee('Strumentazione idonea');
 
     // Con un intervento scaduto-non-fatto: arancione automatico (DoD S3).
     Intervento::factory()->forStrumento($this->strumento)->scaduto()->create();
 
     $this->actingAs($this->admin)->get(route('strumenti.show', $this->strumento))
-        ->assertSee('Azione richiesta')
-        ->assertDontSee('In regola');
+        ->assertSee('Interventi necessari')
+        ->assertDontSee('Strumentazione idonea');
 });
 
 it('shows the obsoleto badge in the header only beyond the soglia', function () {
@@ -113,11 +113,11 @@ it('shows the obsoleto badge in the header only beyond the soglia', function () 
 
     $this->actingAs($this->admin)->get(route('strumenti.show', $vecchio))
         ->assertOk()
-        ->assertSee('Obsoleto');
+        ->assertSee('Strumento obsoleto');
 
     $nuovo = Strumento::factory()->forNode($this->dept)
         ->create(['nome' => 'Nuova', 'data_installazione' => today()->subYear()->toDateString()]);
 
     $this->actingAs($this->admin)->get(route('strumenti.show', $nuovo))
-        ->assertDontSee('Obsoleto');
+        ->assertDontSee('Strumento obsoleto');
 });
