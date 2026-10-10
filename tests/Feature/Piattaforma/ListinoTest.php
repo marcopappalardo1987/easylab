@@ -1,10 +1,12 @@
 <?php
 
+use App\Enums\ConteggioStrumenti;
 use App\Livewire\Piattaforma\Cabina;
 use App\Livewire\Piattaforma\Listino;
 use App\Models\Account;
 use App\Models\Piano;
 use App\Models\PrezzoPiano;
+use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Support\Listino\CatalogoPiani;
 use App\Support\Listino\Stripe\PortaListinoStripe;
@@ -367,8 +369,11 @@ it('asks before lowering the cap under someone, and writes nothing until it is c
         ->set('modifica.max_enti', '2')
         ->call('salva');
 
-    // La modale è aperta, col conteggio dentro.
-    expect($componente->html())->toContain('data-conferma-tetto="1"');
+    // La modale è aperta, col conteggio dentro. E parla solo del tetto che si
+    // è mosso: la metà degli strumenti (ADR-049) non c'è.
+    expect($componente->html())
+        ->toContain('data-conferma-tetto="1"')
+        ->not->toContain('data-conferma-strumenti');
 
     // 🔴 E **niente è stato scritto**: è la metà del test che conta. Una modale
     // che comparisse dopo la scrittura sarebbe una notifica, non una conferma.
@@ -769,4 +774,293 @@ it('keeps the page cost flat as the catalogue grows', function () {
         // E il numero è **scritto**, non solo «uguale a prima»: un costo che
         // fosse già lineare all'inizio passerebbe il confronto con sé stesso.
         ->and($costoIniziale)->toBe(3);
+});
+
+// ─── Il tetto di strumenti (🔗 ADR-049) ──────────────────────────────────────
+//
+// Due leve e non una: **quanti**, e **a che cosa si applica** il numero. Si
+// decidono qui, sul piano; il contratto del cliente le trova già decise.
+
+/**
+ * Un cliente sul piano `saas`: una sede per ogni numero, con tanti strumenti
+ * quanti il numero dice.
+ *
+ * ⚠️ Va chiamata **prima** di aprire la pagina: `BelongsToTenant` forza la sede
+ * di chi è connesso, e chi apre il listino non ne ha una.
+ */
+function clienteConStrumenti(int ...$perSede): Account
+{
+    $account = Account::factory()->saas()->create();
+
+    foreach ($perSede as $quanti) {
+        $sede = UnitaOrganizzativa::factory()->ente()->perAccount($account)->create();
+        $reparto = UnitaOrganizzativa::factory()->dipartimento()->under($sede)->create();
+        Strumento::factory()->forNode($reparto)->count($quanti)->create();
+    }
+
+    return $account;
+}
+
+/** Il tetto di strumenti di `saas`, messo a mano come fixture. */
+function tettoStrumentiDiSaas(?int $max, string $conteggio = 'per_sede'): Piano
+{
+    $saas = Piani::modello('saas');
+    $saas->forceFill(['max_strumenti' => $max, 'conteggio_strumenti' => $conteggio])->save();
+    app(CatalogoPiani::class)->dimentica();
+
+    return $saas;
+}
+
+it('creates a plan with an instrument cap and the way it counts, and says it on the row', function () {
+    ($this->pagina)()
+        ->call('apriCreazione')
+        ->set('nuovo.codice', 'pro')
+        ->set('nuovo.etichetta', 'Pro')
+        ->set('nuovo.max_enti', '3')
+        ->set('nuovo.max_strumenti', '50')
+        ->set('nuovo.conteggio_strumenti', 'per_cliente')
+        ->set('nuovo.prezzo_mensile_cent', '9900')
+        ->call('crea')
+        ->assertHasNoErrors()
+        ->assertSee('fino a 50 strumenti in tutto');
+
+    expect(Piani::maxStrumenti('pro'))->toBe(50)
+        ->and(Piani::conteggioStrumenti('pro'))->toBe(ConteggioStrumenti::PerCliente);
+});
+
+it('leaves a plan without an instrument cap, counted per sede, unless told otherwise', function () {
+    ($this->pagina)()
+        ->call('apriCreazione')
+        ->set('nuovo.codice', 'base')
+        ->set('nuovo.etichetta', 'Base')
+        ->set('nuovo.prezzo_mensile_cent', '1900')
+        ->call('crea')
+        ->assertHasNoErrors()
+        ->assertSee('strumenti illimitati');
+
+    expect(Piani::maxStrumenti('base'))->toBeNull()
+        ->and(Piani::conteggioStrumenti('base'))->toBe(ConteggioStrumenti::PerSede)
+        // 🔴 I piani che esistevano prima non ricevono un tetto: la migration
+        // non lo mette a nessuno.
+        ->and(Piani::maxStrumenti('free'))->toBeNull()
+        ->and(Piani::maxStrumenti('saas'))->toBeNull();
+});
+
+it('opens the edit form on the cap the plan has, and saves what is changed', function () {
+    $saas = tettoStrumentiDiSaas(40, 'per_cliente');
+
+    ($this->pagina)()
+        ->call('apriModifica', $saas->id)
+        ->assertSet('modifica.max_strumenti', '40')
+        ->assertSet('modifica.conteggio_strumenti', 'per_cliente')
+        ->set('modifica.max_strumenti', '60')
+        ->set('modifica.conteggio_strumenti', 'per_sede')
+        ->call('salva')
+        ->assertHasNoErrors()
+        ->assertSee('fino a 60 strumenti per sede');
+
+    app(CatalogoPiani::class)->dimentica();
+
+    expect(Piani::maxStrumenti('saas'))->toBe(60)
+        ->and(Piani::conteggioStrumenti('saas'))->toBe(ConteggioStrumenti::PerSede);
+
+    // Vuoto è «illimitato», come per il tetto di Enti.
+    ($this->pagina)()
+        ->call('apriModifica', $saas->id)
+        ->set('modifica.max_strumenti', '')
+        ->call('salva')
+        ->assertHasNoErrors();
+
+    app(CatalogoPiani::class)->dimentica();
+
+    expect(Piani::maxStrumenti('saas'))->toBeNull();
+});
+
+it('refuses zero instruments and a way of counting that is not one of the two', function () {
+    $saas = tettoStrumentiDiSaas(40, 'per_cliente');
+
+    ($this->pagina)()
+        ->call('apriModifica', $saas->id)
+        ->set('modifica.max_strumenti', '0')
+        ->call('salva')
+        ->assertHasErrors('max_strumenti');
+
+    // 🔴 La tendina offre due voci, ma la property arriva dal browser.
+    ($this->pagina)()
+        ->call('apriModifica', $saas->id)
+        ->set('modifica.conteggio_strumenti', 'a_caso')
+        ->call('salva')
+        ->assertHasErrors('conteggio_strumenti');
+
+    app(CatalogoPiani::class)->dimentica();
+
+    expect(Piani::maxStrumenti('saas'))->toBe(40)
+        ->and(Piani::conteggioStrumenti('saas'))->toBe(ConteggioStrumenti::PerCliente);
+});
+
+it('asks before a lower instrument cap pushes someone over, and writes nothing until confirmed', function () {
+    clienteConStrumenti(3);
+    // Esattamente sul tetto nuovo: ci sta, e non è fra chi viene spinto fuori.
+    clienteConStrumenti(4);
+    clienteConStrumenti(5);
+    $saas = tettoStrumentiDiSaas(10);
+
+    $componente = ($this->pagina)()
+        ->call('apriModifica', $saas->id)
+        ->set('modifica.max_strumenti', '4')
+        ->call('salva');
+
+    // Uno solo dei due: quello con 5. E si dice da che cosa a che cosa.
+    expect($componente->html())
+        ->toContain('data-conferma-strumenti="1"')
+        ->toContain('fino a 10 strumenti per sede')
+        ->toContain('fino a 4 strumenti per sede')
+        // Il tetto di Enti non si è mosso: la sua metà della modale non c'è.
+        ->not->toContain('data-conferma-tetto');
+
+    // 🔴 Niente è stato scritto.
+    expect($saas->fresh()->max_strumenti)->toBe(10);
+
+    $componente->call('procedi')->assertHasNoErrors();
+
+    expect($saas->fresh()->max_strumenti)->toBe(4)
+        // E nessuno strumento è stato tolto a nessuno.
+        ->and(DB::table('strumenti')->whereNull('deleted_at')->count())->toBe(12);
+});
+
+it('weighs a sede on its own or the contract as a whole, the way the new rule counts', function () {
+    // Tre sedi da 4: dodici strumenti in tutto.
+    clienteConStrumenti(4, 4, 4);
+    $saas = tettoStrumentiDiSaas(5, 'per_sede');
+
+    // 🔴 Il numero non cambia, cambia a che cosa si applica: «5 in tutto»
+    // spinge fuori chi con «5 per sede» stava dentro.
+    $cambiaModo = ($this->pagina)()
+        ->call('apriModifica', $saas->id)
+        ->set('modifica.conteggio_strumenti', 'per_cliente')
+        ->call('salva');
+
+    expect($cambiaModo->html())
+        ->toContain('data-conferma-strumenti="1"')
+        ->toContain('fino a 5 strumenti in tutto');
+
+    // «20 in tutto» lo tiene dentro: nessuna domanda, e si scrive.
+    $largo = ($this->pagina)()
+        ->call('apriModifica', $saas->id)
+        ->set('modifica.max_strumenti', '20')
+        ->set('modifica.conteggio_strumenti', 'per_cliente')
+        ->call('salva')
+        ->assertHasNoErrors();
+
+    expect($largo->html())->not->toContain('data-conferma-strumenti');
+    expect($saas->fresh()->conteggio_strumenti)->toBe(ConteggioStrumenti::PerCliente);
+
+    // E il ritorno: «3 per sede» è più stretto di «20 in tutto» per chi ha
+    // una sede da 4, anche se il numero del contratto lo conterrebbe.
+    $perSede = ($this->pagina)()
+        ->call('apriModifica', $saas->id)
+        ->set('modifica.max_strumenti', '3')
+        ->set('modifica.conteggio_strumenti', 'per_sede')
+        ->call('salva');
+
+    expect($perSede->html())->toContain('data-conferma-strumenti="1"');
+});
+
+it('counts who a new cap catches, where there was none', function () {
+    clienteConStrumenti(7);
+    clienteConStrumenti(2);
+    clienteConStrumenti(6, 1);
+    $saas = Piani::modello('saas');
+
+    $componente = ($this->pagina)()
+        ->call('apriModifica', $saas->id)
+        ->set('modifica.max_strumenti', '5')
+        ->call('salva');
+
+    expect($componente->html())
+        ->toContain('data-conferma-strumenti="2"')
+        ->toContain('strumenti illimitati');
+});
+
+it('does not ask again about who was already over, nor when the cap goes up or away', function () {
+    // 🔴 La stessa trappola del tetto di Enti: il grandfathering lascia per
+    // sempre un cliente sopra il tetto, e una domanda che guardasse solo «c'è
+    // qualcuno oltre?» si riaprirebbe a ogni salvataggio dell'etichetta.
+    clienteConStrumenti(9);
+    $saas = tettoStrumentiDiSaas(5);
+
+    $passi = [
+        "solo l'etichetta" => ['modifica.etichetta' => 'SaaS Pro'],
+        'ancora più giù, per chi era già fuori' => ['modifica.max_strumenti' => '4'],
+        'in salita, restando sopra' => ['modifica.max_strumenti' => '8'],
+        'senza più tetto' => ['modifica.max_strumenti' => ''],
+    ];
+
+    foreach ($passi as $campi) {
+        $componente = ($this->pagina)()->call('apriModifica', $saas->id);
+
+        foreach ($campi as $campo => $valore) {
+            $componente->set($campo, $valore);
+        }
+
+        $componente->call('salva')->assertHasNoErrors();
+
+        expect($componente->html())->not->toContain('data-conferma-strumenti');
+    }
+
+    app(CatalogoPiani::class)->dimentica();
+
+    expect($saas->fresh()->etichetta)->toBe('SaaS Pro')
+        ->and($saas->fresh()->max_strumenti)->toBeNull();
+});
+
+it('never counts EasyLab, a trashed customer, a closed sede, a binned instrument or another plan', function () {
+    // Ognuno di questi, contato, farebbe comparire una modale che avvisa di
+    // clienti che non hanno alcun problema.
+    $easylab = Account::factory()->diPiattaforma()->saas()->create();
+    $sedeEasylab = UnitaOrganizzativa::factory()->ente()->perAccount($easylab)->create();
+    Strumento::factory()->forNode(UnitaOrganizzativa::factory()->dipartimento()->under($sedeEasylab)->create())->count(9)->create();
+
+    clienteConStrumenti(9)->delete();
+
+    clienteConStrumenti(9)->enti()->first()->delete();
+
+    clienteConStrumenti(9);
+    Strumento::withoutGlobalScopes()->latest('id')->take(8)->get()->each->delete();
+
+    $free = Account::factory()->create();
+    $sedeFree = UnitaOrganizzativa::factory()->ente()->perAccount($free)->create();
+    Strumento::factory()->forNode(UnitaOrganizzativa::factory()->dipartimento()->under($sedeFree)->create())->count(9)->create();
+
+    $saas = Piani::modello('saas');
+
+    $componente = ($this->pagina)()
+        ->call('apriModifica', $saas->id)
+        ->set('modifica.max_strumenti', '5')
+        ->call('salva')
+        ->assertHasNoErrors();
+
+    expect($componente->html())->not->toContain('data-conferma-strumenti');
+    expect($saas->fresh()->max_strumenti)->toBe(5);
+});
+
+it('asks about sedi and instruments in one go when both caps come down', function () {
+    $account = clienteConStrumenti(6, 1, 1);
+    $saas = tettoStrumentiDiSaas(10);
+
+    $componente = ($this->pagina)()
+        ->call('apriModifica', $saas->id)
+        ->set('modifica.max_enti', '2')
+        ->set('modifica.max_strumenti', '5')
+        ->call('salva');
+
+    expect($componente->html())
+        ->toContain('data-conferma-tetto="1"')
+        ->toContain('data-conferma-strumenti="1"');
+
+    $componente->call('procedi')->assertHasNoErrors();
+
+    expect($saas->fresh()->max_enti)->toBe(2)
+        ->and($saas->fresh()->max_strumenti)->toBe(5)
+        ->and($account->fresh()->enti()->count())->toBe(3);
 });

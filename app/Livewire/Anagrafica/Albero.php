@@ -10,6 +10,8 @@ use App\Models\Account;
 use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
+use App\Support\Billing\TettoStrumenti;
+use App\Support\Billing\TettoStrumentiRaggiunto;
 use App\Support\Notifiche\AvvisiObsolescenza;
 use App\Support\Piani;
 use App\Support\Provisioning\ProvisionaEnte;
@@ -544,6 +546,18 @@ class Albero extends Component
             return;
         }
 
+        // 🔗 ADR-049: il tetto del piano si dice **prima** del form, coi numeri.
+        // Lasciar compilare una scheda per poi rifiutarla al salvataggio
+        // sarebbe far lavorare qualcuno per niente. Non è la guardia: quella
+        // sta in `saveStrumento()`, dentro la transazione.
+        $tetto = TettoStrumenti::dellEnte((int) $node->tenant_id);
+
+        if (! $tetto->consente()) {
+            $this->notice = $tetto->spiegazione();
+
+            return;
+        }
+
         $this->provenienza = null;
         $this->resetStrumentoForm();
         $this->showStrumentoForm = true;
@@ -567,28 +581,46 @@ class Albero extends Component
             ],
         );
 
-        DB::transaction(function () use ($node) {
-            $strumento = Strumento::create([
-                'tenant_id' => $node->tenant_id,
-                'unita_organizzativa_id' => $node->id,
-                ...$this->strumentoPayload(),
-            ]);
+        try {
+            DB::transaction(function () use ($node) {
+                // 🔴 ADR-049: la guardia del tetto di strumenti, **dentro** la
+                // transazione. Il controllo di `addStrumento()` è già passato
+                // da un pezzo quando si arriva qui, e l'azione si può chiamare
+                // senza passare dal bottone.
+                TettoStrumenti::esigi((int) $node->tenant_id);
 
-            // Provenienza esterna → registra un movimento di ingresso (ADR-015).
-            if (filled($this->provenienza)) {
-                SpostamentoStrumento::create([
-                    'tenant_id' => $node->tenant_id,
-                    'strumento_id' => $strumento->id,
-                    'da_esterno' => trim($this->provenienza),
-                    'a_nodo_id' => $node->id,
-                    'tipo_spostamento' => TipoSpostamento::Ingresso,
-                    'data' => now()->toDateString(),
-                    'eseguito_da' => auth()->id(),
-                ]);
-            }
-        });
+                $this->creaStrumento($node);
+            });
+        } catch (TettoStrumentiRaggiunto $pieno) {
+            $this->closeStrumentoForm();
+            $this->notice = $pieno->getMessage();
+
+            return;
+        }
 
         $this->closeStrumentoForm();
+    }
+
+    private function creaStrumento(UnitaOrganizzativa $node): void
+    {
+        $strumento = Strumento::create([
+            'tenant_id' => $node->tenant_id,
+            'unita_organizzativa_id' => $node->id,
+            ...$this->strumentoPayload(),
+        ]);
+
+        // Provenienza esterna → registra un movimento di ingresso (ADR-015).
+        if (filled($this->provenienza)) {
+            SpostamentoStrumento::create([
+                'tenant_id' => $node->tenant_id,
+                'strumento_id' => $strumento->id,
+                'da_esterno' => trim($this->provenienza),
+                'a_nodo_id' => $node->id,
+                'tipo_spostamento' => TipoSpostamento::Ingresso,
+                'data' => now()->toDateString(),
+                'eseguito_da' => auth()->id(),
+            ]);
+        }
     }
 
     public function closeStrumentoForm(): void

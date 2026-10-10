@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ConteggioStrumenti;
 use App\Models\Concerns\AuditsDomainWrites;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -59,6 +60,10 @@ class Piano extends Model
     protected $fillable = [
         'etichetta',
         'max_enti',
+        // Il tetto di strumenti e il modo di contarlo (ADR-049): campi del
+        // form del listino come `max_enti`, e stare qui li mette nell'audit.
+        'max_strumenti',
+        'conteggio_strumenti',
         'prezzo_mensile_cent',
         'attivo',
         'ordine',
@@ -76,6 +81,7 @@ class Piano extends Model
         'prezzo_mensile_cent' => 0,
         'valuta' => 'eur',
         'ordine' => 0,
+        'conteggio_strumenti' => 'per_sede',
     ];
 
     protected function casts(): array
@@ -84,6 +90,8 @@ class Piano extends Model
             'gratuito' => 'boolean',
             'attivo' => 'boolean',
             'max_enti' => 'integer',
+            'max_strumenti' => 'integer',
+            'conteggio_strumenti' => ConteggioStrumenti::class,
             'prezzo_mensile_cent' => 'integer',
             'ordine' => 'integer',
             'stripe_sincronizzato_at' => 'datetime',
@@ -110,6 +118,12 @@ class Piano extends Model
     protected function attributiDerivatiTracciati(): array
     {
         return ['stripe_product_id', 'stripe_sincronizzato_at'];
+    }
+
+    /** Il tetto di strumenti detto a parole (🔗 ADR-049): vedi `ConteggioStrumenti::tetto()`. */
+    public function tettoStrumentiInParole(): string
+    {
+        return $this->conteggio_strumenti->tetto($this->max_strumenti);
     }
 
     /** @return HasMany<PrezzoPiano, $this> */

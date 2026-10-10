@@ -158,6 +158,8 @@ it('refuses an unknown plan instead of guessing a limit', function () {
     // Il negativo che conta: un `?? 1` silenzioso trasformerebbe un dato
     // corrotto in un limite sbagliato applicato a un cliente vero.
     expect(fn () => Piani::maxEnti('gold'))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => Piani::maxStrumenti('gold'))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => Piani::conteggioStrumenti('gold'))->toThrow(InvalidArgumentException::class)
         ->and(fn () => Piani::prezzoMensileCent('gold'))->toThrow(InvalidArgumentException::class)
         ->and(fn () => Piani::etichetta('gold'))->toThrow(InvalidArgumentException::class)
         ->and(fn () => Piani::modello('gold'))->toThrow(InvalidArgumentException::class)

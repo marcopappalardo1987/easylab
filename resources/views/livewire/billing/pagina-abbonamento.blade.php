@@ -105,6 +105,14 @@
                      mentre il provisioning della successiva esplode. --}}
                 <dd class="mt-1 text-sm text-ink">{{ $entiUsati }}@if ($limiteEnti !== null) su {{ $limiteEnti }}@endif</dd>
             </div>
+            {{-- 🔗 ADR-049. Assente su un piano fuori catalogo, per la stessa
+                 ragione del limite di sedi qui sopra. --}}
+            @if ($strumenti !== null)
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wide text-ink-3">Strumenti</dt>
+                    <dd class="mt-1 text-sm text-ink" data-strumenti>{{ $strumenti }}</dd>
+                </div>
+            @endif
         </dl>
     </x-ui.card>
 
@@ -210,7 +218,8 @@
                         </div>
                         <p class="mt-1 text-sm text-ink-2">
                             {{ $prezzo }} € al mese ·
-                            {{ $riga['maxEnti'] === null ? 'sedi illimitate' : 'fino a '.$riga['maxEnti'].' sedi' }}
+                            {{ $riga['maxEnti'] === null ? 'sedi illimitate' : 'fino a '.$riga['maxEnti'].' sedi' }} ·
+                            {{ $riga['strumenti'] }}
                         </p>
 
                         @if ($puoComprare)

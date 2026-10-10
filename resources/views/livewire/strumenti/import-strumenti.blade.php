@@ -85,13 +85,23 @@ Incubatrice INC-9;INC-9;SN-0002;01/07/2020;Neonatologia &gt; Terapia intensiva;O
                 </div>
                 <div class="flex gap-2">
                     <x-ui.button variant="secondary" wire:click="ricarica">Carica un altro file</x-ui.button>
-                    @if ($valide > 0)
+                    @if ($oltreIlTetto)
+                        <x-ui.button disabled>Oltre il tetto del piano</x-ui.button>
+                    @elseif ($valide > 0)
                         <x-ui.button wire:click="importa">Importa {{ $valide }} righe valide</x-ui.button>
                     @else
                         <x-ui.button disabled>Nessuna riga valida</x-ui.button>
                     @endif
                 </div>
             </div>
+
+            {{-- 🔗 ADR-049. Il tetto di strumenti del piano: l'import è tutto o
+                 niente, e qui si dice quanti ce ne stanno ancora. --}}
+            @if ($oltreIlTetto)
+                <p class="mt-3 rounded-md border border-warn-dot bg-warn-soft px-3 py-2 text-sm text-warn-soft-ink" data-oltre-il-tetto>
+                    {{ $oltreIlTetto }}
+                </p>
+            @endif
 
             @if ($troncato)
                 <p class="mt-3 rounded-md border border-warn-dot bg-warn-soft px-3 py-2 text-sm text-warn-soft-ink">

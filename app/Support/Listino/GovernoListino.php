@@ -2,6 +2,7 @@
 
 namespace App\Support\Listino;
 
+use App\Enums\ConteggioStrumenti;
 use App\Models\Piano;
 use App\Models\PrezzoPiano;
 use App\Support\Listino\Stripe\DivergenzaListino;
@@ -92,6 +93,8 @@ final class GovernoListino
         $gratuito = (bool) ($dati['gratuito'] ?? false);
         $prezzo = (int) ($dati['prezzo_mensile_cent'] ?? 0);
         $maxEnti = self::maxEntiValidato($dati);
+        $maxStrumenti = self::maxStrumentiValidato($dati);
+        $conteggio = self::conteggioStrumentiValidato($dati, ConteggioStrumenti::PerSede);
 
         if (preg_match(self::CODICE_VALIDO, $codice) !== 1) {
             throw ValidationException::withMessages([
@@ -114,7 +117,7 @@ final class GovernoListino
             ]);
         }
 
-        $piano = DB::transaction(function () use ($codice, $etichetta, $gratuito, $prezzo, $maxEnti, $dati) {
+        $piano = DB::transaction(function () use ($codice, $etichetta, $gratuito, $prezzo, $maxEnti, $maxStrumenti, $conteggio, $dati) {
             $piano = new Piano;
 
             // `forceFill()` per le colonne fuori-`$fillable`: `codice`,
@@ -129,6 +132,8 @@ final class GovernoListino
                 'gratuito' => $gratuito,
                 'prezzo_mensile_cent' => $prezzo,
                 'max_enti' => $maxEnti,
+                'max_strumenti' => $maxStrumenti,
+                'conteggio_strumenti' => $conteggio,
                 'valuta' => (string) config('cashier.currency', 'eur'),
                 'attivo' => true,
                 'ordine' => (int) ($dati['ordine'] ?? 0),
@@ -143,7 +148,7 @@ final class GovernoListino
     }
 
     /**
-     * L'anagrafica: etichetta, tetto di Enti, ordine.
+     * L'anagrafica: etichetta, tetto di Enti, tetto di strumenti, ordine.
      *
      * Rifiuta ogni tentativo di cambiare `codice` o `gratuito`, **anche quando
      * il valore passato è uguale a quello attuale**? No: un valore identico è
@@ -158,6 +163,11 @@ final class GovernoListino
      * stato legittimo e documentato). La conseguenza va **mostrata prima del
      * click**, con il conteggio degli account che finirebbero sopra il limite:
      * è una decisione da far prendere a un umano, non una guardia.
+     *
+     * Lo stesso vale per il tetto di **strumenti** e per il modo di contarlo
+     * (🔗 ADR-049): abbassare il numero, o passare da «per sede» a «in tutto»,
+     * non toglie uno strumento a nessuno. Chi resta sopra tiene ciò che ha e
+     * non ne aggiunge (`TettoStrumenti`).
      */
     public static function aggiornaAnagrafica(Piano $piano, array $dati): Piano
     {
@@ -177,11 +187,15 @@ final class GovernoListino
         self::verificaEtichetta($etichetta);
 
         $maxEnti = array_key_exists('max_enti', $dati) ? self::maxEntiValidato($dati) : $piano->max_enti;
+        $maxStrumenti = array_key_exists('max_strumenti', $dati) ? self::maxStrumentiValidato($dati) : $piano->max_strumenti;
+        $conteggio = self::conteggioStrumentiValidato($dati, $piano->conteggio_strumenti);
 
-        DB::transaction(function () use ($piano, $etichetta, $maxEnti, $dati) {
+        DB::transaction(function () use ($piano, $etichetta, $maxEnti, $maxStrumenti, $conteggio, $dati) {
             $piano->forceFill([
                 'etichetta' => $etichetta,
                 'max_enti' => $maxEnti,
+                'max_strumenti' => $maxStrumenti,
+                'conteggio_strumenti' => $conteggio,
                 'ordine' => (int) ($dati['ordine'] ?? $piano->ordine),
             ])->save();
         });
@@ -818,5 +832,49 @@ final class GovernoListino
         }
 
         return $max;
+    }
+
+    /** Come `maxEntiValidato()`: vuoto è «illimitato», e zero non è un tetto (🔗 ADR-049). */
+    private static function maxStrumentiValidato(array $dati): ?int
+    {
+        $grezzo = $dati['max_strumenti'] ?? null;
+
+        if ($grezzo === null || $grezzo === '') {
+            return null;
+        }
+
+        $max = (int) $grezzo;
+
+        if ($max < 1) {
+            throw ValidationException::withMessages([
+                'max_strumenti' => 'Il tetto di strumenti è almeno 1, oppure vuoto per «illimitato». Un piano da zero strumenti non servirebbe a nessuno.',
+            ]);
+        }
+
+        return $max;
+    }
+
+    /**
+     * Il modo di contare gli strumenti, o `$seAssente` quando il form non lo
+     * manda. Un valore che non è uno dei due si rifiuta: `tryFrom` e non
+     * `from`, o un valore forgiato diventerebbe un 500 invece di un errore di
+     * campo.
+     */
+    private static function conteggioStrumentiValidato(array $dati, ConteggioStrumenti $seAssente): ConteggioStrumenti
+    {
+        if (! array_key_exists('conteggio_strumenti', $dati)) {
+            return $seAssente;
+        }
+
+        $grezzo = $dati['conteggio_strumenti'];
+        $conteggio = is_string($grezzo) ? ConteggioStrumenti::tryFrom($grezzo) : null;
+
+        if ($conteggio === null) {
+            throw ValidationException::withMessages([
+                'conteggio_strumenti' => 'Il tetto di strumenti si conta per sede o per cliente: scegli uno dei due.',
+            ]);
+        }
+
+        return $conteggio;
     }
 }

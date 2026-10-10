@@ -1675,3 +1675,36 @@ Guardando le prime cinque guide pubblicate, però, la regola produceva una guida
 - Restano invariati: `utenti.impersonate` chiesto dentro l'azione, il Developer mai impersonabile, nessun candidato per chi sta già impersonando.
 - **Prova di mutazione**: le due porte della scelta, la rilettura dell'account, il flag di piattaforma, i due `deleted_at`, l'ordinamento, il ruolo e la precedenza del ripiego, le condizioni della voce di menù rendono rosso un test di `ImpersonazioneUiTest` o di `ConferireSuperadminTest`.
 
+---
+
+**ADR-049 — Il tetto di strumenti è un attributo del piano, e il piano dice anche come si conta**
+
+*Stato: Accettata e attuata il 10 Ott 2026, per decisione di Marco. Gemella di ADR-032 (il tetto di Enti) e figlia di ADR-035 (il listino a database). Solo su staging: la promozione in produzione è una decisione a parte.*
+
+**Contesto.** Un piano limitava una cosa sola, il numero di sedi (`max_enti`). Per vendere piani diversi serviva una seconda leva: quante macchine un cliente può tenere a sistema.
+
+**Decisione.** Due colonne su `piani`, perché sono due decisioni:
+
+1. **`max_strumenti`**: quanti. `null` significa illimitato, come per `max_enti`, ed è il valore di ogni piano esistente: la migration non mette un tetto a nessuno.
+2. **`conteggio_strumenti`**: a che cosa si applica il numero. `per_sede`, ogni sede (Ente) ha il suo tetto; `per_cliente`, il tetto è uno solo e somma gli strumenti di tutte le sedi dello stesso contratto. Su un piano da una sede sola i due modi coincidono.
+
+🔴 **Entrambe stanno sul piano e non sul contratto.** La prima stesura metteva il modo di contare sull'Account, scelto alla nascita del cliente: Marco l'ha corretta lo stesso giorno. Si decide nel listino, quando il piano nasce, e chi lo attiva lo trova già deciso. È la ragione per cui la cabina e il provisioning non hanno nessun campo nuovo.
+
+**Dove si fa rispettare.** La regola vive in `App\Support\Billing\TettoStrumenti`, e la consumano i due soli gesti che fanno nascere uno strumento: l'albero dell'anagrafica e l'import CSV. Un guardrail legge `app/` e diventa rosso se un terzo `Strumento::create` compare in un file che non la chiama.
+
+- **L'albero** dice il tetto *prima* di aprire il form, coi numeri («Il piano SaaS include fino a 50 strumenti per sede, e questa sede ne ha già 50»), e lo richiede di nuovo dentro la transazione del salvataggio.
+- **L'import** è tutto o niente: se le righe valide non ci stanno tutte, l'anteprima dice quante ne stanno ancora e il bottone non c'è. Importarne «quante ce ne stanno» lascerebbe a chi ha caricato il file il compito di scoprire quali sono rimaste fuori.
+- **Il conteggio non passa dagli scope.** `Strumento` ha `TenantScope` e `DepartmentScope`: contando con quelli, un Responsabile di reparto vedrebbe solo i propri strumenti, cioè un tetto che per lui non si riempie mai. Il tetto è della sede o del cliente, non di chi guarda. Per la stessa ragione si legge il piano della sede in cui lo strumento finisce: il Superadmin che lavora su un cliente gestito (ADR-046) risponde al tetto di quel cliente.
+- 🔴 **Il lock.** Dentro la transazione si blocca la riga dell'Account prima di contare, o due salvataggi insieme leggerebbero ciascuno «c'è ancora un posto». Sull'account e non sulla sede, perché col conteggio per cliente le sedi si contendono lo stesso tetto. Solo quando un tetto c'è: su un piano illimitato creare uno strumento non prende lock e non conta niente.
+
+**Conseguenze.**
+
+- **Una condizione d'ingresso, non un'espulsione** (grandfathering, come ADR-032). Chi è sopra il tetto, perché il piano è stato ristretto o perché è sceso di piano, tiene tutti gli strumenti che ha e non ne aggiunge. I cestinati non contano: eliminare uno strumento libera il suo posto.
+- **Quando il tetto non c'è**: piano illimitato, sede senza contratto, piano uscito dal catalogo. Quest'ultimo è un dato da riparare dalla cabina, e non deve fermare il lavoro di un laboratorio che non ne ha colpa: qui si ripiega su «nessun tetto», al contrario del provisioning di una sede, che rifiuta spiegando.
+- **Il listino chiede prima di restringere.** Abbassare il numero o cambiare il modo di contare è permesso; se la regola nuova mette fuori dal tetto qualcuno che oggi ci sta dentro, la modale lo dice col conteggio, accanto a quella del tetto di Enti. Conta chi viene *spinto* oltre, non chi era già sopra: con due leve «scende» non si legge da un confronto fra numeri (da «50 per sede» a «100 in tutto» restringe chi ha tre sedi piene e allarga chi ne ha una), e chi era già sopra non deve riaprire la domanda a ogni salvataggio dell'etichetta.
+- **Lo si dichiara dove si sceglie un piano**: riga del listino, pagina pubblica di registrazione, pagina Abbonamento (che dice anche quanti ne sono occupati, «12 su 50 in questa sede» o «34 su 100 fra tutte le sedi»). La frase è una sola, `ConteggioStrumenti::tetto()`.
+- Le due colonne sono nel `$fillable` di `Piano`, quindi ogni modifica lascia una riga nel registro di audit coi due valori.
+
+- ⚠️ **Non fatto**: il numero di strumenti accanto a ogni cliente nella cabina e nell'esportazione; un avviso al cliente quando si avvicina al tetto; un'opzione del comando `easylab:provision-tenant`, che non ne ha bisogno perché il contratto non decide niente.
+- **Prova di mutazione**: 74 mutazioni, tutte rosse. Il confine del tetto (riempirlo esattamente è permesso), i due modi di contare, i cestinati e le sedi chiuse, i tre casi senza tetto, il lock, le due guardie dell'albero e la sede a cui si chiede, il tutto-o-niente dell'import, la validazione del listino, chi viene spinto oltre e chi no, l'audit, e ogni pagina che dichiara il tetto rendono rosso un test di `TettoStrumentiTest`, `ListinoTest` o `GovernoListinoTest`.
+

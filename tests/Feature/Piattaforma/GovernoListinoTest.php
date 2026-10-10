@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\ConteggioStrumenti;
 use App\Models\Piano;
 use App\Support\AuditLog;
 use App\Support\Listino\CatalogoPiani;
@@ -455,4 +456,107 @@ it('refuses to hook a price that belongs to another Stripe product', function ()
     // Il price corrente è rimasto quello del prodotto del piano.
     expect(Piani::stripePrice('saas'))->not->toBe('price_di_un_altro')
         ->and($saas->fresh()->prezzi()->count())->toBe(1);
+});
+
+// ─── Il tetto di strumenti (🔗 ADR-049) ──────────────────────────────────────
+
+it('refuses a cap of zero instruments, and reads an empty one as unlimited', function () {
+    expect(fn () => GovernoListino::crea([
+        'codice' => 'zero_strumenti',
+        'etichetta' => 'Assurdo',
+        'max_strumenti' => 0,
+    ]))->toThrow(ValidationException::class);
+
+    expect(GovernoListino::crea([
+        'codice' => 'senza_tetto',
+        'etichetta' => 'Senza tetto',
+        'max_strumenti' => '',
+    ])->max_strumenti)->toBeNull();
+
+    $conTetto = GovernoListino::crea([
+        'codice' => 'con_tetto',
+        'etichetta' => 'Con tetto',
+        'max_strumenti' => '25',
+        'conteggio_strumenti' => 'per_cliente',
+    ]);
+
+    expect($conTetto->max_strumenti)->toBe(25)
+        ->and($conTetto->conteggio_strumenti)->toBe(ConteggioStrumenti::PerCliente)
+        // E si rilegge così anche dal database, non solo dall'istanza.
+        ->and($conTetto->fresh()->conteggio_strumenti)->toBe(ConteggioStrumenti::PerCliente);
+});
+
+it('counts per sede when nobody says how, because that is what a plan without the field means', function () {
+    $piano = GovernoListino::crea(['codice' => 'muto', 'etichetta' => 'Muto', 'max_strumenti' => 10]);
+
+    expect($piano->fresh()->conteggio_strumenti)->toBe(ConteggioStrumenti::PerSede);
+
+    // ⚠️ E lo dice anche un'istanza mai salvata: il default di colonna arriva
+    // all'INSERT, quindi senza `$attributes` un piano appena costruito
+    // leggerebbe `null` e la frase del tetto andrebbe in errore.
+    expect((new Piano)->tettoStrumentiInParole())->toBe('strumenti illimitati')
+        // E un numero arrivato da un form si rilegge come numero, non come la
+        // stringa che il form ha mandato.
+        ->and((new Piano)->fill(['max_strumenti' => '7'])->max_strumenti)->toBe(7);
+});
+
+it('refuses a way of counting instruments that is not one of the two', function (mixed $valore) {
+    // `tryFrom` e non `from`: un valore forgiato dev'essere un errore di campo,
+    // non un 500. E un array non è una stringa da provare a leggere.
+    expect(fn () => GovernoListino::crea([
+        'codice' => 'storto',
+        'etichetta' => 'Storto',
+        'conteggio_strumenti' => $valore,
+    ]))->toThrow(ValidationException::class);
+
+    expect(Piano::query()->where('codice', 'storto')->exists())->toBeFalse();
+})->with([
+    'una parola a caso' => ['a_caso'],
+    'vuoto' => [''],
+    'null' => [null],
+    'un array' => [['per_sede']],
+]);
+
+it('keeps the cap and the way of counting when an update does not mention them', function () {
+    $piano = GovernoListino::crea([
+        'codice' => 'fermo',
+        'etichetta' => 'Fermo',
+        'max_strumenti' => 30,
+        'conteggio_strumenti' => 'per_cliente',
+    ]);
+
+    // Un form che manda la sola etichetta non azzera ciò che non ha mandato.
+    GovernoListino::aggiornaAnagrafica($piano, ['etichetta' => 'Nuovo nome']);
+
+    expect($piano->fresh()->max_strumenti)->toBe(30)
+        ->and($piano->fresh()->conteggio_strumenti)->toBe(ConteggioStrumenti::PerCliente);
+
+    GovernoListino::aggiornaAnagrafica($piano, ['max_strumenti' => '', 'conteggio_strumenti' => 'per_sede']);
+
+    expect($piano->fresh()->max_strumenti)->toBeNull()
+        ->and($piano->fresh()->conteggio_strumenti)->toBe(ConteggioStrumenti::PerSede);
+
+    expect(fn () => GovernoListino::aggiornaAnagrafica($piano, ['max_strumenti' => 0]))->toThrow(ValidationException::class)
+        ->and(fn () => GovernoListino::aggiornaAnagrafica($piano, ['conteggio_strumenti' => 'a_caso']))->toThrow(ValidationException::class);
+});
+
+it('leaves the change of an instrument cap in the audit register, with both values', function () {
+    // Restringere un piano cambia ciò che i clienti possono fare: chi l'ha
+    // fatto e quando deve restare scritto, come per ogni altro campo del form.
+    $piano = GovernoListino::crea(['codice' => 'tracciato', 'etichetta' => 'Tracciato', 'max_strumenti' => 30]);
+
+    GovernoListino::aggiornaAnagrafica($piano, ['max_strumenti' => 12, 'conteggio_strumenti' => 'per_cliente']);
+
+    $riga = Activity::query()
+        ->where('log_name', AuditLog::NAME)
+        ->where('subject_type', $piano->getMorphClass())
+        ->where('subject_id', $piano->id)
+        ->latest('id')
+        ->first();
+
+    expect($riga->description)->toBe('Modifica piano')
+        ->and($riga->attribute_changes['old']['max_strumenti'])->toBe(30)
+        ->and($riga->attribute_changes['attributes']['max_strumenti'])->toBe(12)
+        ->and($riga->attribute_changes['old']['conteggio_strumenti'])->toBe('per_sede')
+        ->and($riga->attribute_changes['attributes']['conteggio_strumenti'])->toBe('per_cliente');
 });

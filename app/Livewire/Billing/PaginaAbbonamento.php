@@ -2,9 +2,11 @@
 
 namespace App\Livewire\Billing;
 
+use App\Enums\ConteggioStrumenti;
 use App\Models\Account;
 use App\Models\Piano;
 use App\Support\Billing\PianiAcquistabili;
+use App\Support\Billing\TettoStrumenti;
 use App\Support\Piani;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Layout;
@@ -160,6 +162,10 @@ class PaginaAbbonamento extends Component
             // afferma ciò che non si sa.
             'limiteEnti' => $pianoNoto ? (Piani::maxEnti($account->piano) ?? '∞') : null,
             'entiUsati' => $account->enti()->count(),
+            // 🔗 ADR-049: il tetto di strumenti e quanti ne sono occupati. `null`
+            // su un piano fuori catalogo, come per le sedi: non si afferma ciò
+            // che non si sa.
+            'strumenti' => $pianoNoto ? $this->strumenti() : null,
             'statoAbbonamento' => $this->statoAbbonamento($account),
             // 🔴 SOLO il booleano. Il motivo del blocco non esce da qui.
             'sospeso' => (bool) $account->is_locked,
@@ -183,7 +189,7 @@ class PaginaAbbonamento extends Component
      * (ADR-045) va in cima, perché è quello per cui il cliente è arrivato qui.
      *
      * @param  list<Piano>  $piani
-     * @return list<array{codice: string, etichetta: string, importoCent: int, maxEnti: int|null, proposto: bool}>
+     * @return list<array{codice: string, etichetta: string, importoCent: int, maxEnti: int|null, strumenti: string, proposto: bool}>
      */
     private function pianiOfferti(array $piani, Account $account): array
     {
@@ -192,6 +198,7 @@ class PaginaAbbonamento extends Component
             'etichetta' => $piano->etichetta,
             'importoCent' => (int) Piani::importoCorrenteCent($piano->codice),
             'maxEnti' => $piano->max_enti,
+            'strumenti' => $piano->tettoStrumentiInParole(),
             'proposto' => $piano->codice === $account->piano_proposto,
         ], $piani);
 
@@ -199,6 +206,25 @@ class PaginaAbbonamento extends Component
         usort($righe, fn (array $a, array $b) => (int) $b['proposto'] <=> (int) $a['proposto']);
 
         return $righe;
+    }
+
+    /**
+     * Gli strumenti rispetto al tetto del piano, in una frase: «illimitati»,
+     * «12 su 50 in questa sede», «34 su 100 fra tutte le sedi» (🔗 ADR-049).
+     *
+     * La sede è quella corrente, la stessa da cui `account()` risale al
+     * contratto: col conteggio per sede il numero che conta è il suo.
+     */
+    private function strumenti(): string
+    {
+        $tetto = TettoStrumenti::dellEnte((int) auth()->user()->ente->getKey());
+
+        if ($tetto->massimo === null) {
+            return 'illimitati';
+        }
+
+        return "{$tetto->presenti} su {$tetto->massimo} "
+            .($tetto->conteggio === ConteggioStrumenti::PerSede ? 'in questa sede' : 'fra tutte le sedi');
     }
 
     /**
