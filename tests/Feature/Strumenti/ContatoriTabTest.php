@@ -106,9 +106,13 @@ it('counts a scadenza from the day it enters the soglia, and not the day before'
 
 it('keeps the numbers when the semaforo is forced: a forzatura does not hide what is still to do', function () {
     Intervento::factory()->forStrumento($this->strumento)->scaduto()->create();
-    $this->strumento->forzaSemaforo(StatoSemaforo::Verde, $this->admin, 'Verificata sul campo');
 
-    expect(($this->numeroSul)(scheda($this->admin, $this->strumento->fresh())->html(), 'interventi'))->toBe('1');
+    // Chi forza è l'utente autenticato: `forzaSemaforo()` non lo riceve.
+    $this->actingAs($this->admin);
+    $this->strumento->forzaSemaforo(StatoSemaforo::Verde, 'Verificata sul campo');
+
+    expect($this->strumento->fresh()->forced_reason)->toBe('Verificata sul campo')
+        ->and(($this->numeroSul)(scheda($this->admin, $this->strumento->fresh())->html(), 'interventi'))->toBe('1');
 });
 
 it('never lights a number on Ricambi for a tenant whose ente hides the garanzie of the parts', function () {
