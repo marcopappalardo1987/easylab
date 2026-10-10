@@ -97,3 +97,96 @@ it('gives the dark mark the same alt, because a hidden image is not announced', 
     expect(substr_count($sorgente, 'alt="{{ $alt }}"'))->toBe(2)
         ->and($sorgente)->not->toContain('alt=""');
 });
+
+// ─── L'icona nella scheda del browser (🔗 ADR-056) ───────────────────────────
+//
+// Chiesta da Marco il 10 Ott 2026: la «yL» del logo. Fino a quel giorno
+// `public/favicon.ico` era un file di **zero byte** — la pagina rispondeva 200,
+// il browser chiedeva l'icona, la trovava, e non mostrava niente. È lo stesso
+// guasto del logo qui sopra, in piccolo: nessun errore da nessuna parte.
+
+it('never points the icon links at a file that is not there', function () {
+    preg_match_all("/asset\('([^']+)'\)/", file_get_contents(resource_path('views/components/brand-icone.blade.php')), $trovati);
+
+    expect($trovati[1])->toEqualCanonicalizing(['favicon.ico', 'favicon.svg', 'apple-touch-icon.png']);
+
+    foreach ($trovati[1] as $percorso) {
+        expect(public_path($percorso))->toBeFile()
+            // 🔴 «Esiste» non basta: quello di prima esisteva, ed era vuoto.
+            ->and(filesize(public_path($percorso)))->toBeGreaterThan(500);
+    }
+});
+
+it('serves a real ico with the three sizes a browser asks for', function () {
+    $ico = file_get_contents(public_path('favicon.ico'));
+
+    ['riservato' => $riservato, 'tipo' => $tipo, 'quante' => $quante] = unpack('vriservato/vtipo/vquante', $ico);
+
+    expect([$riservato, $tipo, $quante])->toBe([0, 1, 3]);
+
+    $lati = [];
+    for ($i = 0; $i < $quante; $i++) {
+        $voce = unpack('Clarghezza/Caltezza/Ccolori/Criservato/vpiani/vbit/Vbyte/Vinizio', $ico, 6 + 16 * $i);
+        $immagine = substr($ico, $voce['inizio'], $voce['byte']);
+
+        // Ogni voce è un PNG intero, del lato dichiarato.
+        expect(substr($immagine, 0, 8))->toBe("\x89PNG\r\n\x1a\n")
+            ->and(unpack('Nlarghezza/Naltezza', $immagine, 16))->toBe(['larghezza' => $voce['larghezza'], 'altezza' => $voce['altezza']]);
+
+        $lati[] = $voce['larghezza'];
+    }
+
+    expect($lati)->toBe([16, 32, 48]);
+});
+
+it('serves a square touch icon of the size ios wants', function () {
+    expect(getimagesize(public_path('apple-touch-icon.png')))
+        ->toMatchArray([0 => 180, 1 => 180, 'mime' => 'image/png']);
+});
+
+it('draws the icon with the very shapes of the logo, the y and the L', function () {
+    $icona = file_get_contents(public_path('favicon.svg'));
+    $logo = file_get_contents(public_path('brand/easylab-logo-compatto.svg'));
+
+    // Il braccio della y, la curva che sale nella L, e la L: tre forme, e
+    // ciascuna è nel logo così com'è. Un'icona ridisegnata a mano non lo sarebbe.
+    preg_match_all('/\s(?:d|points)="([^"]+)"/', $icona, $forme);
+
+    expect($forme[1])->toHaveCount(3);
+
+    foreach ($forme[1] as $forma) {
+        expect(str_contains($logo, $forma))->toBeTrue();
+    }
+
+    // Quadrata, o il browser la schiaccia.
+    preg_match('/viewBox="\S+ \S+ (\S+) (\S+)"/', $icona, $lati);
+
+    expect($lati[1])->toBe($lati[2])
+        // Su fondo scuro il blu profondo si alza, come nel logo (ADR-033/034).
+        ->and($icona)->toContain('prefers-color-scheme:dark')
+        ->toContain('#afd6ef')
+        ->toContain('#06589c')
+        ->toContain('#2997d4');
+});
+
+it('puts the icon in the head of every page, signed in or not', function () {
+    $attesi = [
+        '<link rel="icon" href="'.asset('favicon.ico').'?v=1" sizes="48x48">',
+        '<link rel="icon" href="'.asset('favicon.svg').'?v=1" type="image/svg+xml" sizes="any">',
+        '<link rel="apple-touch-icon" href="'.asset('apple-touch-icon.png').'?v=1">',
+    ];
+
+    $utente = User::factory()->create(['two_factor_confirmed_at' => now()]);
+    $dentro = $this->actingAs($utente)->get('/dashboard')->assertOk()->getContent();
+
+    $this->post(route('logout'));
+    $fuori = $this->get(route('login'))->assertOk()->getContent();
+
+    foreach ([$dentro, $fuori] as $pagina) {
+        $testa = substr($pagina, 0, (int) strpos($pagina, '</head>'));
+
+        foreach ($attesi as $link) {
+            expect(str_contains($testa, $link))->toBeTrue();
+        }
+    }
+});

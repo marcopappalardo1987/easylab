@@ -55,6 +55,9 @@
 
         @livewireStyles
 
+        {{-- Sotto i fogli di stile, come in `guest-layout`: un'icona non ha fretta. --}}
+        <x-brand-icone />
+
         {{-- Stili per-pagina: serve alle regole di STAMPA, che sono specifiche
              del foglio e non hanno senso nel bundle di tutta l'app (@page,
              per esempio, è globale e non si può accendere per una sola vista

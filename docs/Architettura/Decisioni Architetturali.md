@@ -1898,3 +1898,25 @@ Se la scheda porta l'**email** del referente, **le email che parlano di quella m
 - **Una forzatura non spegne i numeri**, come non nasconde i motivi (ADR-005): ciò che è da fare resta da fare anche su una macchina dichiarata idonea a mano.
 - Scaduto e in scadenza hanno lo stesso colore, quello dello stato che spiegano; a distinguerli sono le righe del tab. Il numero ha un testo per chi non lo vede («2 scadenze da gestire»), e oltre 99 diventa «99+».
 - **Prova di mutazione**: 30 mutazioni, tutte rosse. Ogni area resa visibile a chiunque, l'ability sostituita dal permesso nudo, ogni motivo contato sul tab sbagliato, il conto che ignora la visibilità, i numeri scambiati fra i tab, lo zero mostrato, il tetto a due cifre, il testo per chi non vede.
+
+---
+
+**ADR-056 — L'icona nella scheda del browser: la «yL» del logo**
+
+*Stato: Accettata e attuata il 10 Ott 2026, per decisione di Marco. Completa ADR-033 (il marchio) e ADR-034 (i due temi). Solo su staging.*
+
+**Decisione.** L'icona di Easy Lab è la **«yL» del logo**: il braccio della y, la curva sfumata che sale nella L, e la L. Non è ridisegnata: sono le tre forme di `brand/easylab-logo-compatto.svg`, prese così come sono e messe in un riquadro quadrato.
+
+Tre file in `public/`, collegati dal componente `x-brand-icone` nella testa delle due impaginazioni (chi è dentro, chi è fuori):
+
+- `favicon.svg` per i browser che la leggono: vettoriale, e **su tema scuro alza il blu profondo** a `#AFD6EF`, come la variante scura del logo;
+- `favicon.ico` (16, 32 e 48 pixel) per chi non legge l'SVG e per chi la chiede alla radice senza guardare la pagina;
+- `apple-touch-icon.png` (180 pixel, su fondo bianco) per la schermata Home di iOS.
+
+**Conseguenze.**
+
+- 🔴 **Prima l'icona c'era, ed era un file di zero byte.** `public/favicon.ico` esisteva dal primo giorno, vuoto: nessun errore, e nessuna icona. Il test non chiede solo che i file esistano: chiede che pesino, che l'`.ico` contenga davvero tre immagini della misura dichiarata, e che l'SVG sia fatto delle forme del logo.
+- ⚠️ I tre file sono **generati dal logo**: se il logo cambia, vanno rifatti. Il test che confronta le forme lo rende rosso.
+- ⚠️ `favicon.ico` e `apple-touch-icon.png` sono pixel, e non seguono il tema: su una barra scura il braccio blu profondo della y si legge meno. Chi legge l'SVG non ha il problema.
+- Il `?v=1` nei collegamenti cambia quando cambia il disegno: le icone sono fra le cose che un browser tiene in memoria più a lungo.
+- **Prova di mutazione**: 15 mutazioni, tutte rosse. Il componente tolto da ciascuna impaginazione, ogni collegamento tolto o puntato a un file che non c'è, una forma ritoccata, il riquadro non quadrato, la variante scura tolta, l'`.ico` svuotato, l'icona di iOS della misura sbagliata.

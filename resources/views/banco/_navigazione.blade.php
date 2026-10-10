@@ -74,6 +74,29 @@
 @endcomponent
 
 @component('banco.pezzo', [
+    'titolo' => 'x-brand-icone — la «yL» nella scheda del browser',
+    'token' => 'tre FILE in public/: favicon.svg · favicon.ico · apple-touch-icon.png',
+    'nota' => "Il componente rende solo i `<link>` della testa (ADR-056): qui sotto ci sono i file a cui punta, alle misure in cui un browser li mostra. ⚠️ L'SVG segue il tema del SISTEMA e non quello della pagina — è un file a sé, come il logo — quindi sui due fondi qui sotto ha lo stesso colore: per vedere il blu alzarsi va cambiato il tema del sistema.",
+])
+    {{-- Qui nel corpo i `<link>` non fanno niente di diverso da quelli della
+         testa: il browser ha già la stessa icona. --}}
+    <x-brand-icone />
+
+    <div class="flex flex-wrap items-end gap-6 rounded-md border border-border bg-surface p-4">
+        <img src="{{ asset('favicon.svg') }}" alt="Icona di Easy Lab, 16 pixel" class="size-4">
+        <img src="{{ asset('favicon.svg') }}" alt="Icona di Easy Lab, 32 pixel" class="size-8">
+        <img src="{{ asset('favicon.svg') }}" alt="Icona di Easy Lab, 48 pixel" class="size-12">
+        <img src="{{ asset('apple-touch-icon.png') }}" alt="Icona di Easy Lab per la schermata Home" class="size-16 rounded-xl border border-border">
+    </div>
+
+    <div class="flex flex-wrap items-end gap-6 rounded-md border border-border bg-surface-sunken p-4">
+        <img src="{{ asset('favicon.svg') }}" alt="" class="size-4">
+        <img src="{{ asset('favicon.svg') }}" alt="" class="size-8">
+        <img src="{{ asset('favicon.svg') }}" alt="" class="size-12">
+    </div>
+@endcomponent
+
+@component('banco.pezzo', [
     'titolo' => 'x-ui.selettore-tema — i tre stati',
     'token' => 'bg-surface + border-border · premuto: aria-pressed:bg-brand-soft-strong + aria-pressed:text-brand-soft-ink · size-11 (44px esatti)',
     'nota' => "⚠️ I tre esempi rendono i tre valori possibili di `aria-pressed`, che nell'applicazione viene dal database. Qui non c'è un utente: cliccarli cambia davvero il tema (è Alpine a scrivere `data-theme` e `localStorage`), ma `wire:click` è inerte e nessuna colonna si muove. Al ricaricamento il colore viene da `localStorage` mentre l'evidenziazione riparte da «sistema» — è una proprietà del banco, non del componente. La riga premuta è legata all'ATTRIBUTO e non a una classe calcolata: la stessa regola vale per ciò che rende il server e per ciò che Alpine anticipa.",
