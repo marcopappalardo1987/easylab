@@ -32,7 +32,7 @@ function paginePerElenco(): array
         'documenti ricerca' => ['/documenti?cerca=SEGRETO', ['Documento-SEGRETO-A']],
         'fornitori' => ['/fornitori', ['Fornitore-SEGRETO-A']],
         'ricambi' => ['/ricambi?search=SEGRETO', ['Ricambio-SEGRETO-A']],
-        'anagrafica' => ['/anagrafica', ['Reparto-SEGRETO-A']],
+        'anagrafica' => ['/laboratori', ['Reparto-SEGRETO-A']],
         'utenti' => ['/utenti', ['Utente-SEGRETO-A']],
         'campo' => ['/campo', []],
     ];

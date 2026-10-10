@@ -60,9 +60,9 @@ riguardano.
 
 ## 7
 
-«Anagrafica» è la struttura della sede rappresentata com'è davvero: dentro la
-sede ci sono i dipartimenti, dentro i dipartimenti i laboratori, e dentro i
-laboratori le macchine. È il posto in cui si guarda quando la domanda comincia
+«Laboratori» è la struttura della sede rappresentata com'è davvero: dentro la
+sede ci sono i laboratori, dentro i laboratori i sotto-laboratori, e dentro
+quelli le macchine. È il posto in cui si guarda quando la domanda comincia
 con «dove», e non con «quale».
 
 ## 8

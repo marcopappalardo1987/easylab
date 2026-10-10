@@ -29,7 +29,7 @@ cui nessuno si fida, perché non si sa mai quale versione si sta guardando.
 
 ## capitolo 2
 
-Dentro c'è l'anagrafica della macchina e tutto il suo storico di manutenzione:
+Dentro ci sono i dati della macchina e tutto il suo storico di manutenzione:
 le stesse informazioni della scheda, in forma stampabile.
 
 ## 3

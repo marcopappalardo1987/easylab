@@ -5,7 +5,7 @@
 
 <div class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6" x-data="{ tab: 'panoramica' }">
 
-    <a href="{{ route('anagrafica.index') }}" wire:navigate class="text-sm text-ink-2 hover:text-ink">‹ Torna all'anagrafica</a>
+    <a href="{{ route('anagrafica.index') }}" wire:navigate class="text-sm text-ink-2 hover:text-ink">‹ Torna ai laboratori</a>
 
     {{-- Header --}}
     <div class="mt-3 flex flex-wrap items-start justify-between gap-3">
@@ -474,7 +474,7 @@
                     <label for="destinazioneId" class="block text-sm font-medium text-ink">Destinazione</label>
                     <select id="destinazioneId" wire:model="destinazioneId"
                         class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
-                        <option value="">— Scegli dipartimento o laboratorio —</option>
+                        <option value="">— Scegli laboratorio o sotto-laboratorio —</option>
                         @foreach ($nodiDestinazione as $nodo)
                             <option value="{{ $nodo->id }}">{{ $nodo->nome }}</option>
                         @endforeach

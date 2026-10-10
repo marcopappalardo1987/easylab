@@ -24,7 +24,7 @@ l'insieme esatto delle cose che quella persona può vedere e fare.
 ## 2
 
 L'Amministratore ha il menù più lungo: oltre a strumenti e scadenze ci sono
-anagrafica, persone, fornitori e abbonamento. Sono le voci con cui si governa
+laboratori, persone, fornitori e abbonamento. Sono le voci con cui si governa
 l'organizzazione, non con cui si lavora sulle macchine.
 
 ## 3

@@ -9,31 +9,31 @@ import { accedi } from '../lib/accesso';
  * Developer, quindi a un Responsabile questi pulsanti non compaiono affatto.
  * Il catalogo diceva «Admin, Responsabile» e sbagliava.
  *
- * ⚠️ Il nome del dipartimento nuovo va scelto fra quelli che NON esistono: il
+ * ⚠️ Il nome del laboratorio nuovo va scelto fra quelli che NON esistono: il
  * seme ne ha già dodici, Microbiologia compresa, e la prima stesura di questo
  * copione ne creava un doppione — che è esattamente il gesto che la guida
  * insegnerebbe a fare.
  *
- * ⚠️ Il copione SCRIVE (crea un dipartimento): `azzera.sh` gira prima di ogni
+ * ⚠️ Il copione SCRIVE (crea un laboratorio): `azzera.sh` gira prima di ogni
  * giratura, o alla seconda passata l'albero avrebbe due «Microscopia».
  */
 test('creare nodi', async ({ page }) => {
-  const g = new Regista(page, 'creare-nodi', 'Aggiungere e rinominare i reparti', "Tenere l'anagrafica uguale al laboratorio vero");
+  const g = new Regista(page, 'creare-nodi', 'Aggiungere e rinominare i reparti', "Tenere la struttura uguale alla sede vera");
 
   await accedi(page, 'maria.conti@aurora.test');
 
-  g.capitolo('Parte 1 di 3', 'Un dipartimento nuovo');
+  g.capitolo('Parte 1 di 3', 'Un laboratorio nuovo');
 
-  await page.goto('/anagrafica');
+  await page.goto('/laboratori');
   await page.waitForLoadState('networkidle');
 
-  await g.passo("Il pulsante in alto a destra aggiunge sempre un figlio del punto in cui ti trovi: alla radice, un dipartimento.", {
-    su: page.getByRole('button', { name: /Aggiungi dipartimento/ }).first(),
+  await g.passo("Il pulsante in alto a destra aggiunge sempre un figlio del punto in cui ti trovi: alla radice, un laboratorio.", {
+    su: page.getByRole('button', { name: /Aggiungi laboratorio/ }).first(),
     zoom: 2.1,
     durata: 7,
   });
 
-  await page.getByRole('button', { name: /Aggiungi dipartimento/ }).first().click();
+  await page.getByRole('button', { name: /Aggiungi laboratorio/ }).first().click();
   await page.waitForLoadState('networkidle');
 
   await g.passo('Si apre un modulo, e il nome è la sola cosa obbligatoria.', {
@@ -65,7 +65,7 @@ test('creare nodi', async ({ page }) => {
 
   g.capitolo('Parte 2 di 3', 'Dentro il nuovo reparto');
 
-  await g.passo("Il dipartimento è nell'elenco, vuoto: nessun laboratorio e nessuna macchina.", {
+  await g.passo("Il laboratorio è nell'elenco, vuoto: nessun sotto-laboratorio e nessuna macchina.", {
     su: page.getByText('Microscopia').first(),
     zoom: 2.2,
     durata: 6,
@@ -84,7 +84,7 @@ test('creare nodi', async ({ page }) => {
   await page.waitForLoadState('networkidle');
   await page.fill('#nome', 'Terreni di coltura');
 
-  await g.passo('Un laboratorio dentro il dipartimento, con lo stesso modulo di prima.', {
+  await g.passo('Un sotto-laboratorio dentro il laboratorio, con lo stesso modulo di prima.', {
     su: page.getByLabel('Nome'),
     zoom: 2.2,
     durata: 6,
@@ -120,9 +120,9 @@ test('creare nodi', async ({ page }) => {
   });
 
   g.chiusura('Da ricordare', [
-    "Il pulsante di aggiunta segue il livello in cui ti trovi: alla radice crea un dipartimento, dentro un dipartimento un laboratorio.",
+    "Il pulsante di aggiunta segue il livello in cui ti trovi: alla radice crea un laboratorio, dentro un laboratorio un sotto-laboratorio.",
     'Rinominare è sicuro: cambia solo l\'etichetta, e le macchine non si spostano.',
-    "L'anagrafica va tenuta uguale al reparto vero: è da lì che le macchine ereditano dove sono, e chi le può vedere.",
+    "La struttura va tenuta uguale al reparto vero: è da lì che le macchine ereditano dove sono, e chi le può vedere.",
   ]);
 
   g.scrivi();

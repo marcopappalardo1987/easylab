@@ -6,7 +6,7 @@
 ## premessa
 
 Le macchine si spostano: un reparto si riorganizza, un laboratorio chiude, uno
-strumento va in un'altra stanza. Se l'anagrafica non lo registra, chi la cerca
+strumento va in un'altra stanza. Se Easy Lab non lo registra, chi la cerca
 la trova dove non è più, e i conteggi per reparto diventano falsi. Spostarla in
 Easy Lab richiede tre clic, e lascia una traccia che serve più avanti.
 
@@ -30,12 +30,12 @@ questo che lo spostamento ha uno storico suo e la modifica no.
 
 ## capitolo 2
 
-La destinazione si sceglie dall'albero dell'anagrafica, non si scrive. Se il
+La destinazione si sceglie dall'albero dei laboratori, non si scrive. Se il
 laboratorio giusto non c'è ancora, va creato prima.
 
 ## 3
 
-La tendina contiene i dipartimenti e i laboratori della sede, cioè esattamente i
+La tendina contiene i laboratori e i sotto-laboratori della sede, cioè esattamente i
 nodi in cui una macchina può stare. Non si può digitare un'ubicazione libera, ed
 è voluto: un'ubicazione scritta a mano non sarebbe filtrabile né sommabile, e in
 sei mesi si avrebbero tre grafie diverse dello stesso locale.
@@ -61,7 +61,7 @@ sapere dov'è una macchina e sapere che vita ha fatto.
 ## 6
 
 L'ubicazione in cima è cambiata, e con lei tutto quello che ne dipende: la
-colonna dell'elenco, il filtro per reparto, i conteggi dell'anagrafica, e chi ha
+colonna dell'elenco, il filtro per reparto, i conteggi di «Laboratori», e chi ha
 accesso alla macchina — perché l'accesso dei Responsabili segue i reparti
 assegnati, quindi spostare una macchina può cambiare chi la vede.
 

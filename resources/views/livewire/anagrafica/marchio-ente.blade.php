@@ -4,7 +4,7 @@
         <div class="min-w-0">
             <nav aria-label="Percorso" class="flex flex-wrap items-center gap-1 text-sm text-ink-3">
                 <a href="{{ route('anagrafica.index') }}" wire:navigate
-                    class="rounded px-1 py-0.5 hover:bg-surface-sunken hover:text-ink">Anagrafica</a>
+                    class="rounded px-1 py-0.5 hover:bg-surface-sunken hover:text-ink">{{ \App\Enums\TipoUnitaOrganizzativa::SEZIONE }}</a>
                 <span class="text-ink-3">›</span>
                 <span class="font-medium text-ink">{{ $ente->nome }}</span>
             </nav>

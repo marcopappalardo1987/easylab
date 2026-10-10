@@ -52,7 +52,7 @@ return [
             'sommario' => 'Entrare, orientarsi, e sistemare le proprie preferenze.',
         ],
         'B' => [
-            'titolo' => 'Anagrafica',
+            'titolo' => 'Laboratori',
             'sommario' => 'La struttura della sede, e il marchio con cui escono le email.',
         ],
         'C' => [
@@ -114,13 +114,13 @@ return [
         // anagrafica, che hanno ciascuna la propria voce più sotto. Sta prima
         // di tutte perché è quella da guardare per prima; si toglie dal
         // catalogo cancellando questa riga, senza toccare altro.
-        ['slug' => 'vetrina', 'argomento' => 'A', 'chiavi' => ['panoramica', 'introduzione', 'giro', 'inizio', 'dashboard', 'cercare', 'anagrafica', 'minuto']],
+        ['slug' => 'vetrina', 'argomento' => 'A', 'chiavi' => ['panoramica', 'introduzione', 'giro', 'inizio', 'dashboard', 'cercare', 'laboratori', 'anagrafica', 'minuto']],
         ['slug' => 'primo-accesso', 'argomento' => 'A', 'chiavi' => ['invito', 'password', 'registrazione', 'email', 'accesso', 'login']],
         ['slug' => 'orientarsi', 'argomento' => 'A', 'chiavi' => ['dashboard', 'menù', 'semaforo', 'stati', 'obsoleti', 'campanella', 'notifiche']],
         ['slug' => 'tema-e-notifiche', 'argomento' => 'A', 'chiavi' => ['tema', 'scuro', 'chiaro', 'buio', 'preferenze', 'email', 'digest', 'avvisi']],
         ['slug' => 'due-fattori', 'argomento' => 'A', 'chiavi' => ['2fa', 'due fattori', 'sicurezza', 'codice', 'autenticazione', 'recupero', 'telefono', 'password']],
-        ['slug' => 'albero-anagrafica', 'argomento' => 'B', 'chiavi' => ['albero', 'struttura', 'dipartimento', 'laboratorio', 'sede', 'briciole', 'dove', 'reparto']],
-        ['slug' => 'creare-nodi', 'argomento' => 'B', 'chiavi' => ['creare', 'aggiungere', 'rinominare', 'dipartimento', 'laboratorio', 'reparto', 'eliminare', 'struttura']],
+        ['slug' => 'albero-anagrafica', 'argomento' => 'B', 'chiavi' => ['albero', 'struttura', 'laboratori', 'laboratorio', 'sotto-laboratorio', 'sede', 'briciole', 'dove', 'reparto', 'dipartimento', 'anagrafica']],
+        ['slug' => 'creare-nodi', 'argomento' => 'B', 'chiavi' => ['creare', 'aggiungere', 'rinominare', 'laboratorio', 'sotto-laboratorio', 'reparto', 'eliminare', 'struttura', 'dipartimento']],
         ['slug' => 'marchio-ente', 'argomento' => 'B', 'chiavi' => ['marchio', 'logo', 'colore', 'email', 'testata', 'brand', 'personalizzare']],
         ['slug' => 'elenco-strumenti', 'argomento' => 'C', 'chiavi' => ['elenco', 'cercare', 'ricerca', 'filtro', 'ordinare', 'matricola', 'modello', 'obsoleti', 'stato']],
         ['slug' => 'scheda-strumento', 'argomento' => 'C', 'chiavi' => ['scheda', 'panoramica', 'linguette', 'tab', 'macchina', 'dettaglio', 'statistiche']],

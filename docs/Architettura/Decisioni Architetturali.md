@@ -1803,3 +1803,32 @@ Le prime due diciture sono le stesse nei due contesti. Le altre due, che Marco h
 - ⚠️ Restano com'erano le frasi che non sono il nome dello stato: l'oggetto dell'email («… non è idonea», «… richiede un intervento») e la prosa che dice «in regola» di altro (le tarature, i pagamenti di una sede).
 - **Prova di mutazione**: 25 mutazioni, tutte rosse. Ogni dicitura rimessa com'era, il singolare e il plurale scambiati nei riquadri, nei filtri, nella forzatura e nei badge, il titolo dell'email, i testi delle preferenze, una guida e un copione.
 
+---
+
+**ADR-053 — «Laboratori» al posto di «Anagrafica», e «laboratorio» al posto di «dipartimento»**
+
+*Stato: Accettata e attuata il 10 Ott 2026, per decisione di Marco. Cambia i nomi che ERD §4.1 dà alla struttura di una sede; la struttura stessa (ADR-001, ADR-006) non cambia. Solo su staging.*
+
+**Decisione.** La sezione che mostra la struttura di una sede si chiama **«Laboratori»** e non più «Anagrafica»: nel menù, nel titolo della pagina, nelle briciole, nelle guide. Il livello sotto la sede si chiama **«laboratorio»** e non più «dipartimento»; ciò che sta dentro un laboratorio resta un **«sotto-laboratorio»**.
+
+| | Prima | Ora |
+|---|---|---|
+| la sezione | Anagrafica | Laboratori |
+| il primo livello sotto la sede | Dipartimento, Dipartimenti | Laboratorio, Laboratori |
+| ciò che sta dentro | Sotto-laboratorio | Sotto-laboratorio |
+| l'indirizzo | `/anagrafica` | `/laboratori` |
+
+**Una fonte sola.** I nomi li dà `TipoUnitaOrganizzativa`: `SEZIONE`, `etichetta()`, `plurale()`. La vista dell'albero, il menù e le briciole li leggono lì invece di tenerne una copia ciascuno.
+
+**Ciò che NON cambia, perché nessuno lo legge.** `dipartimento` resta il valore della colonna `unita_organizzativa.tipo` e il nome del case; `anagrafica.index` e `anagrafica.marchio` restano i nomi delle rotte; `App\Livewire\Anagrafica` resta il namespace; `albero-anagrafica` resta lo slug della guida. Sono identificatori: rinominarli avrebbe voluto dire una migration su ogni nodo di ogni cliente, e cento chiamate toccate, per parole che non arrivano mai in pagina. È la stessa scelta di ADR-050 per `free`.
+
+**Conseguenze.**
+
+- Gli indirizzi di prima **rimandano** a quelli nuovi con un 301 (`/anagrafica`, `/anagrafica/marchio`): sono nei segnalibri e nelle email già spedite.
+- 🔴 **La linguetta «Anagrafica» della scheda di una macchina resta.** È un'altra cosa: tiene i dati fissi dello strumento (matricola, parametri, fornitore, referente), non la struttura della sede, e chiamarla «Laboratori» sarebbe stato sbagliato. Se deve cambiare nome, è una decisione a parte.
+- Un guardrail legge viste, sorgenti e guide e diventa rosso se «dipartimento» o «anagrafica» tornano in un testo. Le eccezioni sono elencate una per una (la linguetta e lo slug), e un'eccezione che non serve più fa fallire il test: non resta lì a coprire un ritorno.
+- Le parole di prima restano fra le **chiavi di ricerca** delle guide: chi ha in testa «anagrafica» o «dipartimento» deve trovare la pagina lo stesso.
+- ⚠️ L'esportazione dei dati di un cliente (`EsportazioneTenant`) è una copia delle tabelle, e nella colonna `tipo` porta il valore com'è scritto: `dipartimento`.
+- ⚠️ I **video delle guide** già registrati mostrano i nomi di prima finché non si rigirano; i copioni puntano già quelli nuovi.
+- **Prova di mutazione**: 29 mutazioni, tutte rosse. Ogni nome rimesso com'era nell'enum, nell'albero, nel menù, nelle briciole; i due livelli scambiati; il rimando tolto, reso temporaneo, mandato all'indirizzo sbagliato; una frase per ciascuna delle viste, dei sorgenti, delle guide e dei copioni toccati.
+

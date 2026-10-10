@@ -37,7 +37,7 @@ test('storico pdf', async ({ page }) => {
   await page.getByRole('button', { name: 'Interventi' }).first().click();
   await page.waitForLoadState('networkidle');
 
-  await g.passo('Dentro c\'è questo: l\'anagrafica della macchina e lo storico completo degli interventi, dal più recente.', {
+  await g.passo('Dentro c\'è questo: i dati della macchina e lo storico completo degli interventi, dal più recente.', {
     zoom: 1,
     durata: 8,
   });
@@ -64,7 +64,7 @@ test('storico pdf', async ({ page }) => {
   });
 
   g.chiusura('Da ricordare', [
-    'Il PDF contiene anagrafica e storico completo degli interventi di una macchina, impaginati.',
+    'Il PDF contiene dati e storico completo degli interventi di una macchina, impaginati.',
     'Serve a dimostrare la manutenzione fuori da Easy Lab: ispezioni, certificazioni, passaggi di proprietà.',
     'È una fotografia del momento: dopo un intervento nuovo va rigenerato.',
   ]);

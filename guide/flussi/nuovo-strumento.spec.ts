@@ -5,7 +5,7 @@ import { accedi } from '../lib/accesso';
 /**
  * Guida C3 — «Registrare una macchina nuova».
  *
- * ⚠️ Si parte dall'ANAGRAFICA e non dall'elenco: lo strumento nasce dentro un
+ * ⚠️ Si parte da «LABORATORI» e non dall'elenco: lo strumento nasce dentro un
  * laboratorio, e il modulo prende l'ubicazione dal nodo in cui ti trovi. Non
  * esiste un «nuovo strumento» generico in cui scegliere il reparto da una
  * tendina, ed è la cosa che la guida deve far capire per prima.
@@ -23,10 +23,10 @@ test('nuovo strumento', async ({ page }) => {
 
   g.capitolo('Parte 1 di 3', 'Si parte dal posto giusto');
 
-  await page.goto('/anagrafica');
+  await page.goto('/laboratori');
   await page.waitForLoadState('networkidle');
 
-  await g.passo("Una macchina si registra dall'anagrafica, non dall'elenco: prima si va nel laboratorio in cui si trova.", {
+  await g.passo("Una macchina si registra da «Laboratori», non dall'elenco: prima si va nel laboratorio in cui si trova.", {
     su: page.getByText('Genetica Medica').first(),
     click: true,
     zoom: 2.1,
@@ -84,7 +84,7 @@ test('nuovo strumento', async ({ page }) => {
     durata: 7,
   });
 
-  await g.passo('Il fornitore è obbligatorio, e si sceglie fra quelli in anagrafica: è a chi telefonare quando la macchina si guasta.', {
+  await g.passo('Il fornitore è obbligatorio, e si sceglie fra quelli registrati: è a chi telefonare quando la macchina si guasta.', {
     su: page.locator('#strumentoForm\\.fornitore_id'),
     zoom: 2,
     durata: 8,

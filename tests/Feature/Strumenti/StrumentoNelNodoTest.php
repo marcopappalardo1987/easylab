@@ -56,7 +56,7 @@ it('does not allow adding a strumento on the ente node', function () {
         ->call('addStrumento')
         ->set('strumentoForm.fornitore_id', $this->fornitore->id)
         ->assertSet('showStrumentoForm', false)
-        ->assertSet('notice', "Aggiungi gli strumenti a un dipartimento o sotto-laboratorio, non all'Ente.");
+        ->assertSet('notice', "Aggiungi gli strumenti a un laboratorio o a un sotto-laboratorio, non all'Ente.");
 });
 
 it('forbids a Tenant from adding a strumento', function () {

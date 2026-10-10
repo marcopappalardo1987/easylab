@@ -2,8 +2,12 @@
     use App\Enums\TipoUnitaOrganizzativa;
 
     $isEnte = $current && $current->tipo === TipoUnitaOrganizzativa::Ente;
-    $childLabel = $current ? ($isEnte ? 'Dipartimenti' : 'Sotto-laboratori') : 'Enti';
-    $addLabel = $isEnte ? 'Aggiungi dipartimento' : 'Aggiungi sotto-laboratorio';
+    // 🔗 ADR-053: i nomi dei livelli li dà l'enum. Sotto la sede ci sono i
+    // laboratori (fino al 10 Ott 2026 «dipartimenti»), e sotto quelli i
+    // sotto-laboratori.
+    $figli = $current ? ($isEnte ? TipoUnitaOrganizzativa::Dipartimento : TipoUnitaOrganizzativa::Sottolaboratorio) : TipoUnitaOrganizzativa::Ente;
+    $childLabel = $figli->plurale();
+    $addLabel = 'Aggiungi '.mb_strtolower($figli->etichetta());
 @endphp
 
 <div class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
@@ -11,7 +15,7 @@
     {{-- Intestazione + breadcrumb --}}
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">
-            <h1 class="text-2xl font-bold tracking-tight text-ink">Anagrafica</h1>
+            <h1 class="text-2xl font-bold tracking-tight text-ink">{{ TipoUnitaOrganizzativa::SEZIONE }}</h1>
 
             @if ($breadcrumb->isNotEmpty())
                 <nav aria-label="Percorso" class="mt-1 flex flex-wrap items-center gap-1 text-sm text-ink-3">
@@ -158,7 +162,7 @@
 
         @if ($children->isEmpty())
             <div class="mt-3 rounded-lg border border-dashed border-border px-4 py-8 text-center">
-                <p class="text-sm text-ink-3">Nessun {{ $isEnte ? 'dipartimento' : ($current ? 'sotto-laboratorio' : 'ente') }} qui.</p>
+                <p class="text-sm text-ink-3">Nessun {{ mb_strtolower($figli->etichetta()) }} qui.</p>
                 @if ($current)
                     @can('unita_organizzativa.create')
                         <x-ui.button variant="secondary" class="mt-3" wire:click="addChild({{ $current->id }})">+ {{ $addLabel }}</x-ui.button>
@@ -235,7 +239,7 @@
 
     {{-- Modale create/edit unità --}}
     @if ($showForm)
-        @php $tipoLabel = ['dipartimento' => 'Dipartimento', 'sottolaboratorio' => 'Sotto-laboratorio'][$tipo] ?? ucfirst($tipo); @endphp
+        @php $tipoLabel = TipoUnitaOrganizzativa::tryFrom((string) $tipo)?->etichetta() ?? ucfirst((string) $tipo); @endphp
         <x-ui.modal :title="$editingId ? 'Rinomina' : 'Nuovo '.strtolower($tipoLabel)" close="closeForm">
             <form wire:submit="save" class="space-y-5">
                 @unless ($editingId)

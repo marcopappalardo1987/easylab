@@ -5,7 +5,7 @@
 
 ## premessa
 
-L'anagrafica dei fornitori esiste per rispondere a una domanda sola, e sempre
+L'elenco dei fornitori esiste per rispondere a una domanda sola, e sempre
 nello stesso momento: la macchina è ferma, a chi telefono? Tutto il resto —
 quante macchine ha fornito, quanto pesa sul parco — viene di conseguenza. È un
 elenco corto e va tenuto pulito, perché lo si consulta quando si ha fretta.
@@ -17,7 +17,7 @@ Chi vende e chi assiste le macchine della sede, con i loro contatti.
 ## 1
 
 «Fornitori» nel menù apre l'elenco di quelli registrati per la sede in cui ti
-trovi. Sono anagrafiche dell'Ente, non condivise fra clienti diversi: ogni
+trovi. Sono dell'Ente, non condivisi fra clienti diversi: ogni
 laboratorio ha i propri, con i propri contatti e i propri contratti.
 
 ## 2
@@ -92,4 +92,4 @@ alla creazione, quindi ogni macchina ha sempre un fornitore.
 
 Da quel momento il conteggio in questa pagina sale, e soprattutto dalla scheda
 della macchina si arriva a chi chiamare senza aprire una rubrica. È il giro che
-questa anagrafica esiste per rendere possibile.
+questo elenco esiste per rendere possibile.

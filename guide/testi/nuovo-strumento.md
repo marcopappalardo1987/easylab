@@ -6,8 +6,8 @@
 ## premessa
 
 Una macchina non si registra da un modulo generico: nasce **dentro** il
-laboratorio in cui si trova. È il motivo per cui il gesto comincia
-dall'anagrafica e non dall'elenco degli strumenti, e capirlo la prima volta
+laboratorio in cui si trova. È il motivo per cui il gesto comincia da
+«Laboratori» e non dall'elenco degli strumenti, e capirlo la prima volta
 evita di cercare a lungo un pulsante «nuovo strumento» che non esiste dove ci
 si aspetta.
 
@@ -18,7 +18,7 @@ conferma di dove nascerà.
 
 ## 1
 
-Dall'anagrafica si scende fino al laboratorio in cui la macchina si trova
+Da «Laboratori» si scende fino al punto in cui la macchina si trova
 davvero. Non c'è una tendina «ubicazione» nel modulo: l'ubicazione è il punto in
 cui ti trovi, e questo rende impossibile creare una macchina in un reparto per
 distrazione.
@@ -71,7 +71,7 @@ meglio una stima ragionevole che il campo vuoto.
 ## 8
 
 Il fornitore è **obbligatorio**, e non è burocrazia: è a chi si telefona quando
-la macchina si guasta. Si sceglie dall'elenco di quelli in anagrafica, che si
+la macchina si guasta. Si sceglie dall'elenco di quelli registrati, che si
 può scorrere oppure restringere scrivendo qualche lettera del nome. Se il
 fornitore non c'è, «＋ Nuovo fornitore» lo crea da lì e lo sceglie, senza
 chiudere il modulo: i contatti dell'assistenza si completano poi da «Fornitori».
@@ -90,8 +90,8 @@ stato in cui è più facile dimenticarsene.
 
 ## 10
 
-La macchina compare subito nell'elenco del laboratorio, e i conteggi
-dell'anagrafica salgono di uno fino alla radice. Da questo momento è cercabile
+La macchina compare subito nell'elenco del laboratorio, e i conteggi di
+«Laboratori» salgono di uno fino alla radice. Da questo momento è cercabile
 per nome, modello e matricola come tutte le altre.
 
 ## 11

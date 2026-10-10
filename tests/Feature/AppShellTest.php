@@ -149,7 +149,7 @@ it('leaves a developer without an ente with the platform and the guide only', fu
     $nav = barraLaterale($this->actingAs($developer)->get(route('piattaforma.index'))->assertOk()->getContent());
 
     expect($nav)->toContain('Piattaforma', 'Guida')
-        ->and($nav)->not->toContain('Dashboard', 'Anagrafica', 'Strumenti', 'Documenti', 'Fornitori', 'Scadenzario', 'Ricambi', 'Campo');
+        ->and($nav)->not->toContain('Dashboard', 'Laboratori', 'Strumenti', 'Documenti', 'Fornitori', 'Scadenzario', 'Ricambi', 'Campo');
 });
 
 it('sends a developer without an ente from the dashboard to the platform', function () {
@@ -190,7 +190,7 @@ it('gives a gestore the working pages, without people and without the platform',
 
     $nav = barraLaterale($this->actingAs($gestore)->get(route('dashboard'))->assertOk()->getContent());
 
-    expect($nav)->toContain('Dashboard', 'Anagrafica', 'Strumenti', 'Documenti', 'Fornitori', 'Scadenzario', 'Ricambi')
+    expect($nav)->toContain('Dashboard', 'Laboratori', 'Strumenti', 'Documenti', 'Fornitori', 'Scadenzario', 'Ricambi')
         ->and($nav)->not->toContain('Persone', 'Piattaforma', 'Guida');
 });
 

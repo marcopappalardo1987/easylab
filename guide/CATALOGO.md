@@ -72,12 +72,12 @@ altre guide: a un Responsabile lo switcher **non compare affatto**. Vedi
 | ✅ | `due-fattori` | attivare la verifica in due passaggi, i codici di recupero | `settings.security` | tutti ⚠️ |
 | ✅ | `cambiare-sede` | lo switcher fra le sedi di uno stesso account | (top bar) | Tenant ⚠️ |
 
-## B. Anagrafica — 3 guide ✅ **complete**
+## B. Laboratori — 3 guide ✅ **complete**
 
 | | slug | contenuto | rotte | ruoli |
 |---|---|---|---|---|
-| ✅ | `albero-anagrafica` | navigare Ente → dipartimento → laboratorio, briciole di pane | `anagrafica.index` | tutti |
-| ✅ | `creare-nodi` | aggiungere e rinominare dipartimenti e laboratori | `anagrafica.index` | Admin ⚠️ |
+| ✅ | `albero-anagrafica` | navigare Ente → laboratorio → sotto-laboratorio, briciole di pane | `anagrafica.index` | tutti |
+| ✅ | `creare-nodi` | aggiungere e rinominare laboratori e sotto-laboratori | `anagrafica.index` | Admin ⚠️ |
 | ✅ | `marchio-ente` | logo e colore con cui escono digest, avvisi e inviti | `anagrafica.marchio` | Admin |
 
 ## C. Strumenti — 10 guide ✅ **complete**
@@ -129,7 +129,7 @@ altre guide: a un Responsabile lo switcher **non compare affatto**. Vedi
 
 | | slug | contenuto | rotte | ruoli |
 |---|---|---|---|---|
-| ✅ | `fornitori` | anagrafica fornitori e come si lega alla macchina | `fornitori.index` | tutti (sola lettura per Tenant) |
+| ✅ | `fornitori` | elenco dei fornitori e come si lega alla macchina | `fornitori.index` | tutti (sola lettura per Tenant) |
 
 ## I. Persone e permessi — 2 guide ✅ **complete**
 

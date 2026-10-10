@@ -44,10 +44,10 @@ caratteristica».
 
 ## 4
 
-Il filtro per ubicazione segue l'albero dell'anagrafica, quindi contiene i
-reparti e i laboratori così come sono: scegliendo un dipartimento restano le
-sue macchine, comprese quelle dei laboratori sotto. È il ponte fra le due
-pagine, e il modo di fare un giro di reparto senza passare dall'anagrafica.
+Il filtro per ubicazione segue l'albero di «Laboratori», quindi contiene i
+laboratori e i sotto-laboratori così come sono: scegliendo un laboratorio
+restano le sue macchine, comprese quelle dei sotto-laboratori. È il ponte fra le
+due pagine, e il modo di fare un giro di reparto senza passare da «Laboratori».
 
 ## 5
 

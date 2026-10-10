@@ -43,7 +43,7 @@ test('elenco strumenti', async ({ page }) => {
 
   g.capitolo('Parte 2 di 3', 'Filtrare');
 
-  await g.passo("Il filtro per ubicazione segue l'albero dell'anagrafica: si sceglie un reparto e restano le sue macchine.", {
+  await g.passo("Il filtro per ubicazione segue l'albero dei laboratori: si sceglie un reparto e restano le sue macchine.", {
     su: page.locator('select').first(),
     zoom: 2,
     durata: 7,

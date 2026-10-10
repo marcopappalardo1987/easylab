@@ -33,7 +33,7 @@ Autoclave AC-200;AC-200;SN-0001;2015-03-01;Terapia intensiva;
 Incubatrice INC-9;INC-9;SN-0002;01/07/2020;Neonatologia &gt; Terapia intensiva;Ospedale San Paolo</pre>
         <ul class="mt-3 space-y-1 text-sm text-ink-2">
             <li>• <strong>nome</strong> e <strong>ubicazione</strong> sono obbligatori; gli altri campi sono facoltativi.</li>
-            <li>• <strong>ubicazione</strong>: nome del dipartimento/laboratorio. Se esistono nodi omonimi, usa il percorso (<code class="rounded bg-surface-code px-1">Dipartimento &gt; Laboratorio</code>).</li>
+            <li>• <strong>ubicazione</strong>: nome del laboratorio o del sotto-laboratorio. Se esistono nodi omonimi, usa il percorso (<code class="rounded bg-surface-code px-1">Laboratorio &gt; Sotto-laboratorio</code>).</li>
             <li>• <strong>data_installazione</strong>: <code class="rounded bg-surface-code px-1">AAAA-MM-GG</code> oppure <code class="rounded bg-surface-code px-1">GG/MM/AAAA</code>.</li>
             <li>• <strong>provenienza</strong>: ente esterno da cui arriva la macchina → registra un movimento di <em>ingresso</em>.</li>
             <li>• Massimo {{ \App\Livewire\Strumenti\ImportStrumenti::MAX_RIGHE }} righe per file (max 2 MB).</li>

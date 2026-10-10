@@ -87,13 +87,13 @@ test('vetrina', async ({ page }) => {
   );
 
   // ── Tre: la struttura ───────────────────────────────────────────────────────
-  s.cartello('Struttura', 'Sede, dipartimento, laboratorio');
+  s.cartello('Struttura', 'Sede, laboratorio, sotto-laboratorio');
 
-  await page.goto('/anagrafica');
+  await page.goto('/laboratori');
   await page.waitForLoadState('networkidle');
 
   await s.scatto(
-    "L'anagrafica è la sede come è fatta davvero, non un elenco: al primo livello ci sono i dipartimenti.",
+    "«Laboratori» è la sede come è fatta davvero, non un elenco: al primo livello ci sono i laboratori.",
     { su: page.getByText('Genetica Medica').first(), zoom: 1.35, durata: 7 },
   );
 
@@ -116,7 +116,7 @@ test('vetrina', async ({ page }) => {
   s.chiusura('Tre cose da portarsi via', [
     'La Dashboard apre la giornata: ogni riquadro è già un filtro.',
     "La ricerca guarda nome, modello e matricola insieme.",
-    "L'anagrafica è la struttura vera della sede, e si percorre cliccando.",
+    "«Laboratori» è la struttura vera della sede, e si percorre cliccando.",
   ]);
 
   await s.scrivi();

@@ -77,13 +77,13 @@ test('orientarsi', async ({ page }) => {
   });
 
   await s.movimento(
-    "«Anagrafica» è l'albero della sede: dipartimenti, laboratori, e le macchine dentro.",
+    "«Laboratori» è l'albero della sede: laboratori, sotto-laboratori, e le macchine dentro.",
     async () => {
-      await page.getByRole('link', { name: 'Anagrafica', exact: true }).click();
-      await page.waitForURL('**/anagrafica**');
+      await page.getByRole('link', { name: 'Laboratori', exact: true }).click();
+      await page.waitForURL('**/laboratori**');
       await page.waitForTimeout(500);
     },
-    { su: page.getByRole('link', { name: 'Anagrafica', exact: true }), zoom: 1.5, coda: 1 },
+    { su: page.getByRole('link', { name: 'Laboratori', exact: true }), zoom: 1.5, coda: 1 },
   );
 
   await s.panoramica('Si scende un nodo alla volta, e il percorso in alto dice sempre dove sei.', 6);

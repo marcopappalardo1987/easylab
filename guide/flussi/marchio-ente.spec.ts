@@ -18,10 +18,10 @@ test('marchio ente', async ({ page }) => {
 
   g.capitolo('Parte 1 di 3', 'A che cosa serve');
 
-  await page.goto('/anagrafica/marchio');
+  await page.goto('/laboratori/marchio');
   await page.waitForLoadState('networkidle');
 
-  await g.passo("Si arriva da «Anagrafica», col pulsante «Marchio email»: riguarda l'Ente, non il tuo account.", {
+  await g.passo("Si arriva da «Laboratori», col pulsante «Marchio email»: riguarda l'Ente, non il tuo account.", {
     su: page.getByRole('heading').first(),
     zoom: 1.7,
     durata: 7,

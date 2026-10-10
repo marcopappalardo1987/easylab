@@ -541,7 +541,7 @@ class Albero extends Component
 
         $node = UnitaOrganizzativa::findOrFail($this->currentId);
         if ($node->tipo === TipoUnitaOrganizzativa::Ente) {
-            $this->notice = 'Aggiungi gli strumenti a un dipartimento o sotto-laboratorio, non all\'Ente.';
+            $this->notice = 'Aggiungi gli strumenti a un laboratorio o a un sotto-laboratorio, non all\'Ente.';
 
             return;
         }

@@ -394,7 +394,7 @@ class ImportStrumenti extends Component
                 if ($candidati->isEmpty()) {
                     $errori[] = 'Ubicazione non trovata: '.Str::limit($dati['ubicazione'], self::ANTEPRIMA_SCARTATE);
                 } elseif ($candidati->count() > 1) {
-                    $errori[] = 'Ubicazione ambigua: usa il percorso (es. "Dipartimento > '.$dati['ubicazione'].'")';
+                    $errori[] = 'Ubicazione ambigua: usa il percorso (es. "Laboratorio > '.$dati['ubicazione'].'")';
                 } else {
                     $nodo = $candidati->first();
                 }

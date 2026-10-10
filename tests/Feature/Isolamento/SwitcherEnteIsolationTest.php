@@ -86,7 +86,7 @@ it('never keeps tenant data in the shared cache, so a switch cannot inherit it',
     // Il guasto temuto: una chiave di cache non legata all'Ente, scritta dalla
     // sede di partenza e letta da quella d'arrivo (o da un altro cliente).
     $this->actingAs($this->admin);
-    foreach (['/dashboard', '/strumenti', '/scadenzario', '/documenti', '/fornitori', '/ricambi?search=SEGRETO', '/anagrafica'] as $url) {
+    foreach (['/dashboard', '/strumenti', '/scadenzario', '/documenti', '/fornitori', '/ricambi?search=SEGRETO', '/laboratori'] as $url) {
         $this->get($url)->assertOk();
     }
     passaAllaSede($this->sedeA2->id);

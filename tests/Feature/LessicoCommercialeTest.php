@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\StatoSemaforo;
+use App\Enums\TipoUnitaOrganizzativa;
 use App\Livewire\Anagrafica\Albero;
 use App\Livewire\Billing\PaginaAbbonamento;
 use App\Livewire\Piattaforma\ParcoGlobale;
@@ -440,4 +441,167 @@ it('writes none of the old words for the states, in any view, sentence or guide'
     }
 
     expect($violazioni)->toBe([]);
+});
+
+// ─── «Laboratori», e niente più «dipartimenti» (🔗 ADR-053) ──────────────────
+//
+// Chiesto da Marco il 10 Ott 2026: la sezione «Anagrafica» si chiama
+// «Laboratori», e il livello sotto la sede non è più un «dipartimento» ma un
+// «laboratorio». `dipartimento` resta il valore della colonna `tipo` e
+// `anagrafica.*` il nome delle rotte: identificatori, che nessuno legge.
+
+/** Una sede col suo Admin, e un laboratorio dentro. */
+function sedeConUnLaboratorio(): array
+{
+    $sede = UnitaOrganizzativa::factory()->ente()->create(['nome' => 'Ospedale di Salerno']);
+    $admin = User::factory()->create(['tenant_id' => $sede->id, 'two_factor_confirmed_at' => now()]);
+    $admin->assignRole('Admin');
+    $laboratorio = UnitaOrganizzativa::factory()->dipartimento()->under($sede)->create(['nome' => 'Virologia']);
+
+    return [$sede, $admin, $laboratorio];
+}
+
+it('names the section and the levels of a sede with the words that were asked for', function () {
+    expect(TipoUnitaOrganizzativa::SEZIONE)->toBe('Laboratori')
+        ->and(array_map(fn (TipoUnitaOrganizzativa $t) => $t->etichetta(), TipoUnitaOrganizzativa::cases()))
+        ->toBe(['Ente', 'Laboratorio', 'Sotto-laboratorio'])
+        ->and(array_map(fn (TipoUnitaOrganizzativa $t) => $t->plurale(), TipoUnitaOrganizzativa::cases()))
+        ->toBe(['Enti', 'Laboratori', 'Sotto-laboratori'])
+        // Il valore scritto nel database NON cambia: è un identificatore.
+        ->and(TipoUnitaOrganizzativa::Dipartimento->value)->toBe('dipartimento');
+});
+
+it('calls the section Laboratori in the menu, on the page and in the breadcrumb of the brand page', function () {
+    $this->seed(RolesAndPermissionsSeeder::class);
+    [, $admin] = sedeConUnLaboratorio();
+
+    $pagina = $this->actingAs($admin)->get('/laboratori')->assertOk();
+
+    expect($pagina->getContent())
+        ->toMatch('#<a href="[^"]*/laboratori"[^>]*>(?:\s|<svg.*?</svg>)*Laboratori\s*</a>#s')
+        ->toMatch('#<h1[^>]*>Laboratori</h1>#')
+        ->and(testoLettoIn($pagina->getContent()))->not->toContain('Anagrafica');
+
+    expect($this->actingAs($admin)->get('/laboratori/marchio')->assertOk()->getContent())
+        ->toMatch('#<a href="[^"]*/laboratori"[^>]*>Laboratori</a>#')
+        ->and(testoLettoIn($this->actingAs($admin)->get('/laboratori/marchio')->getContent()))->not->toContain('Anagrafica');
+});
+
+it('sends the old addresses to the new ones, because they are in bookmarks and in emails already sent', function () {
+    $this->seed(RolesAndPermissionsSeeder::class);
+    [, $admin] = sedeConUnLaboratorio();
+
+    $this->actingAs($admin)->get('/anagrafica')->assertStatus(301)->assertRedirect('/laboratori');
+    $this->actingAs($admin)->get('/anagrafica/marchio')->assertStatus(301)->assertRedirect('/laboratori/marchio');
+
+    // I nomi delle rotte restano quelli: chi li chiama non deve cambiare.
+    expect(route('anagrafica.index', absolute: false))->toBe('/laboratori')
+        ->and(route('anagrafica.marchio', absolute: false))->toBe('/laboratori/marchio');
+});
+
+it('calls laboratori the first level of a sede, and sotto-laboratori what is inside one', function () {
+    $this->seed(RolesAndPermissionsSeeder::class);
+    [$sede, $admin, $laboratorio] = sedeConUnLaboratorio();
+
+    $albero = Livewire::actingAs($admin)->test(Albero::class);
+
+    expect($albero->html())
+        ->toMatch('#<h2[^>]*>Laboratori</h2>#')
+        ->toContain('+ Aggiungi laboratorio')
+        ->not->toContain('sotto-laboratorio');
+
+    $albero->call('addChild', $sede->id)
+        ->assertSet('tipo', 'dipartimento')
+        ->assertSee('Nuovo laboratorio')
+        ->assertSeeHtml('Tipo: <span class="font-medium text-ink">Laboratorio</span>')
+        ->call('closeForm');
+
+    $albero->call('open', $laboratorio->id);
+
+    expect($albero->html())
+        ->toMatch('#<h2[^>]*>Sotto-laboratori</h2>#')
+        ->toContain('+ Aggiungi sotto-laboratorio')
+        ->toContain('Nessun sotto-laboratorio qui.');
+
+    $albero->call('addChild', $laboratorio->id)
+        ->assertSet('tipo', 'sottolaboratorio')
+        ->assertSee('Nuovo sotto-laboratorio')
+        ->assertSeeHtml('Tipo: <span class="font-medium text-ink">Sotto-laboratorio</span>');
+});
+
+it('says a sede without laboratori has no laboratorio, not no dipartimento', function () {
+    $this->seed(RolesAndPermissionsSeeder::class);
+    $sede = UnitaOrganizzativa::factory()->ente()->create();
+    $admin = User::factory()->create(['tenant_id' => $sede->id, 'two_factor_confirmed_at' => now()]);
+    $admin->assignRole('Admin');
+
+    Livewire::actingAs($admin)->test(Albero::class)->assertSee('Nessun laboratorio qui.');
+});
+
+it('writes neither dipartimento nor the old name of the section, in any view, sentence or guide', function () {
+    $vecchie = '/dipartiment\w*|anagrafic\w*/iu';
+
+    // «Anagrafica» sopravvive in UN senso, ed è un'altra cosa: la linguetta
+    // della scheda di una macchina, che ne tiene i dati fissi. Lì non è il nome
+    // della sezione, e chiamarla «Laboratori» sarebbe stato sbagliato.
+    $ammesse = [
+        'livewire/strumenti/scheda-strumento.blade.php' => ['Anagrafica'],
+        'guide/testi/scheda-strumento.md' => ['Anagrafica'],
+        'guide/testi/modificare-strumento.md' => ['Anagrafica'],
+        'guide/testi/spostare-strumento.md' => ['Anagrafica'],
+        'guide/flussi/scheda-strumento.spec.ts' => ['Anagrafica', 'anagrafica'],
+        'guide/flussi/modificare-strumento.spec.ts' => ['Anagrafica'],
+        'guide/flussi/spostare-strumento.spec.ts' => ['Anagrafica'],
+        // Lo slug della guida è un identificatore: è il nome dei file già
+        // pubblicati, e l'indirizzo della sua pagina nel manuale.
+        'guide/flussi/albero-anagrafica.spec.ts' => ['anagrafica'],
+    ];
+    $violazioni = [];
+    $usate = [];
+
+    $cerca = function (string $dove, string $testo) use ($vecchie, $ammesse, &$violazioni, &$usate): void {
+        preg_match_all($vecchie, $testo, $trovate);
+
+        foreach (array_unique($trovate[0]) as $parola) {
+            if (in_array($parola, $ammesse[$dove] ?? [], true)) {
+                $usate[$dove][] = $parola;
+            } else {
+                $violazioni[] = "{$dove}: «{$parola}»";
+            }
+        }
+    };
+
+    // Nomi di rotta, di vista, valori di colonna: `anagrafica.index`,
+    // `anagrafica.*`, `dipartimento`. Sono identificatori, e restano.
+    $frase = fn (string $letterale) => preg_match('/^[a-z0-9_.\-*]*$/', $letterale) !== 1;
+
+    foreach ((new Finder)->files()->in(resource_path('views'))->name('*.blade.php') as $file) {
+        $scritto = scrittoDallaVista($file->getContents());
+        $cerca($file->getRelativePathname(), $scritto['testo'].' '.implode(' ', array_filter($scritto['letterali'], $frase)));
+    }
+
+    $sorgenti = (new Finder)->files()
+        ->in([app_path(), config_path(), database_path('seeders'), base_path('lang')])
+        ->name('*.php');
+
+    foreach ($sorgenti as $file) {
+        $cerca($file->getRelativePathname(), implode(' ', array_filter(letteraliScrittiIn($file->getContents()), $frase)));
+    }
+
+    foreach ((new Finder)->files()->in([base_path('guide/testi'), base_path('guide/flussi')])->name(['*.md', '*.json', '*.spec.ts']) as $file) {
+        // I commenti dei copioni e i preamboli dei testi non escono: si leggono
+        // le sole righe che non sono un commento.
+        $righe = array_filter(
+            explode("\n", $file->getContents()),
+            fn (string $riga) => preg_match('/^\s*(\/\/|\*|\/\*)/', $riga) !== 1,
+        );
+
+        $cerca('guide/'.basename($file->getPath()).'/'.$file->getFilename(), implode("\n", $righe));
+    }
+
+    expect($violazioni)->toBe([])
+        // Un'eccezione che non serve più si toglie: lasciata lì, coprirebbe
+        // il giorno in cui la parola torna per un altro motivo.
+        ->and(array_map(fn (array $parole) => collect($parole)->unique()->sort()->values()->all(), $usate))
+        ->toEqual(array_map(fn (array $parole) => collect($parole)->sort()->values()->all(), $ammesse));
 });

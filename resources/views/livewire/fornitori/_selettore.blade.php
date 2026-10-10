@@ -112,7 +112,7 @@
                         </li>
                     @empty
                         <li class="px-3 py-3 text-sm text-ink-3" data-nessun-fornitore>
-                            {{ $cercato !== '' ? 'Nessun fornitore con questo nome.' : 'Nessun fornitore in anagrafica.' }}
+                            {{ $cercato !== '' ? 'Nessun fornitore con questo nome.' : 'Nessun fornitore registrato.' }}
                         </li>
                     @endforelse
                 </ul>

@@ -4,7 +4,7 @@
 
   ⚠️ Questa guida è una PANORAMICA: tocca tre cose che hanno ciascuna la propria
   guida (la Dashboard in «Orientarsi», la ricerca in «L'elenco degli strumenti»,
-  l'albero in «L'albero dell'anagrafica»). Quindi qui si spiega *dove sono* e
+  l'albero in «L'albero dei laboratori»). Quindi qui si spiega *dove sono* e
   *a che servono*, mai *come si fanno* nel dettaglio: quello sta nelle tre, e
   ripeterlo qui creerebbe due verità da tenere allineate.
 -->
@@ -15,7 +15,7 @@ Easy Lab tiene in ordine il parco strumenti di un laboratorio: che macchine ci
 sono, dove stanno, quando vanno tarate o riviste. Questa è la panoramica da un
 minuto e mezzo, quella da guardare per prima: non insegna a fare niente, dice
 dove sono le tre cose che userai tutti i giorni — la Dashboard da cui si apre la
-giornata, la ricerca con cui si trova una macchina, l'anagrafica che dice dov'è
+giornata, la ricerca con cui si trova una macchina, «Laboratori» che dice dov'è
 montata. Ognuna delle tre ha poi la sua guida, più lenta e più completa.
 
 ## capitolo 1
@@ -52,7 +52,7 @@ migliaio.
 
 Quel che resta dopo il filtro è già la risposta, non un indice da cui ripartire:
 ogni riga porta con sé la matricola, il modello, l'ubicazione per esteso — sede,
-dipartimento, laboratorio — la data di installazione e la prossima scadenza, col
+laboratorio, sotto-laboratorio — la data di installazione e la prossima scadenza, col
 suo colore. Per moltissime domande quotidiane («dov'è la centrifuga Eppendorf?»,
 «quando scade la taratura?») non serve nemmeno aprire la scheda.
 
@@ -61,7 +61,7 @@ suo colore. Per moltissime domande quotidiane («dov'è la centrifuga Eppendorf?
 L'elenco non è paginato a blocchetti da dieci: scorre. È una scelta che conta
 quando si cerca a occhio invece che per nome — si scende lungo il parco come si
 scorrerebbe un registro, e le macchine di un reparto restano vicine perché
-l'ordine predefinito segue l'anagrafica. I numeri in alto dicono sempre quante
+l'ordine predefinito segue la struttura. I numeri in alto dicono sempre quante
 righe stai guardando rispetto al totale.
 
 ## 5
@@ -74,13 +74,13 @@ può restringere per gradi senza ricominciare ogni volta.
 
 ## capitolo 3
 
-L'anagrafica è l'altra metà: non l'elenco delle macchine, ma la struttura della
+«Laboratori» è l'altra metà: non l'elenco delle macchine, ma la struttura della
 sede in cui le macchine stanno.
 
 ## 6
 
-Al primo livello ci sono i dipartimenti, e sotto ognuno i suoi laboratori e le
-sue stanze, quanti livelli servono. Non è un elenco con un campo «reparto»
+Al primo livello ci sono i laboratori, e sotto ognuno i suoi sotto-laboratori e
+le sue stanze, quanti livelli servono. Non è un elenco con un campo «reparto»
 scritto a mano: è un albero vero, e ogni nodo porta con sé quante macchine
 contiene contando anche quelle dei livelli sotto. È il motivo per cui un
 trasloco si registra spostando una macchina da un nodo a un altro, e tutti i
