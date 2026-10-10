@@ -64,6 +64,8 @@ class RicambioUtilizzo extends Model implements ReachesStrumento
         'strumento_id',
         'ricambio_id',
         'intervento_id',
+        // Da chi è stato comprato questo pezzo (ADR-051): facoltativo.
+        'fornitore_id',
         'quantita',
         'data',
     ];
@@ -201,7 +203,7 @@ class RicambioUtilizzo extends Model implements ReachesStrumento
     protected function verificaCoerenza(): void
     {
         // Un update della sola `data` non ripaga tre SELECT.
-        if ($this->exists && ! $this->isDirty(['tenant_id', 'strumento_id', 'ricambio_id', 'intervento_id', 'quantita'])) {
+        if ($this->exists && ! $this->isDirty(['tenant_id', 'strumento_id', 'ricambio_id', 'intervento_id', 'fornitore_id', 'quantita'])) {
             return;
         }
 
@@ -230,6 +232,19 @@ class RicambioUtilizzo extends Model implements ReachesStrumento
             throw new InvalidArgumentException(
                 'RicambioUtilizzo: il ricambio deve appartenere allo stesso Ente della riga (ERD §7.1).'
             );
+        }
+
+        if ($this->fornitore_id !== null) {
+            // 🔗 ADR-051, stessa regola di `Strumento` (ADR-023): l'anagrafica
+            // fornitori è per Ente, e una riga che puntasse a quella di un
+            // altro ne mostrerebbe la ragione sociale.
+            $tenantFornitore = DB::table('fornitori')->where('id', $this->fornitore_id)->value('tenant_id');
+
+            if ($tenantFornitore === null || (int) $tenantFornitore !== (int) $this->tenant_id) {
+                throw new InvalidArgumentException(
+                    'RicambioUtilizzo: il fornitore deve appartenere allo stesso Ente della riga (ADR-051).'
+                );
+            }
         }
 
         if ($this->intervento_id !== null) {
@@ -268,6 +283,21 @@ class RicambioUtilizzo extends Model implements ReachesStrumento
     public function ricambio(): BelongsTo
     {
         return $this->belongsTo(Ricambio::class, 'ricambio_id');
+    }
+
+    /**
+     * Il fornitore da cui il pezzo è stato comprato, se è stato detto
+     * (🔗 ADR-051).
+     *
+     * `withTrashed()` come `Strumento::fornitore()`: un fornitore cestinato
+     * resta leggibile sulla riga, o la cella vuota si leggerebbe «mai
+     * inserito».
+     *
+     * @return BelongsTo<Fornitore, $this>
+     */
+    public function fornitore(): BelongsTo
+    {
+        return $this->belongsTo(Fornitore::class, 'fornitore_id')->withTrashed();
     }
 
     public function intervento(): BelongsTo

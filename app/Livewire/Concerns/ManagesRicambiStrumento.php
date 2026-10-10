@@ -34,12 +34,14 @@ trait ManagesRicambiStrumento
 
     public ?int $editingUtilizzoId = null;
 
-    /** @var array{nome:string,quantita:int,data:?string,scadenza_garanzia:?string} */
+    /** @var array{nome:string,quantita:int,data:?string,scadenza_garanzia:?string,fornitore_id:?int} */
     public array $ricambioForm = [
         'nome' => '',
         'quantita' => 1,
         'data' => null,
         'scadenza_garanzia' => null,
+        // Da chi è stato comprato il pezzo (ADR-051): facoltativo.
+        'fornitore_id' => null,
     ];
 
     public ?int $deletingUtilizzoId = null;
@@ -80,6 +82,7 @@ trait ManagesRicambiStrumento
             'scadenza_garanzia' => Gate::allows('view', Garanzia::class)
                 ? $garanzia?->data_scadenza_effettiva?->toDateString()
                 : null,
+            'fornitore_id' => Gate::allows('fornitori.view') ? $utilizzo->fornitore_id : null,
         ];
 
         $this->showRicambioForm = true;
@@ -88,6 +91,18 @@ trait ManagesRicambiStrumento
     public function closeRicambioForm(): void
     {
         $this->reset(['showRicambioForm', 'editingUtilizzoId', 'ricambioForm', 'suggerimenti', 'ricambioAttivo']);
+        $this->chiudiFornitori();
+    }
+
+    /**
+     * Il fornitore già salvato sul pezzo che si sta correggendo: il selettore
+     * e la regola lo riammettono anche se nel frattempo è stato cestinato.
+     */
+    protected function fornitoreDelPezzoInCorrezione(): ?int
+    {
+        $id = $this->strumento->ricambiUtilizzati()->whereKey($this->editingUtilizzoId)->value('fornitore_id');
+
+        return $id === null ? null : (int) $id;
     }
 
     /**
@@ -124,7 +139,9 @@ trait ManagesRicambiStrumento
             'ricambioForm.quantita' => ['required', 'integer', 'min:1', 'max:100000'],
             'ricambioForm.data' => ['nullable', 'date'],
             'ricambioForm.scadenza_garanzia' => ['nullable', 'date'],
-        ])['ricambioForm'];
+            // 🔗 ADR-051: i vivi della sede, più quello già sulla riga.
+            'ricambioForm.fornitore_id' => $this->regolaFornitore((int) $utilizzo->tenant_id, $utilizzo->fornitore_id),
+        ], attributes: ['ricambioForm.fornitore_id' => 'fornitore'])['ricambioForm'];
 
         // T1a (S7): un nome che non c'è a catalogo diventa una voce nuova in
         // `collegaOCrea()`, quindi vuole lo stesso permesso del form intervento.
@@ -144,6 +161,11 @@ trait ManagesRicambiStrumento
             $utilizzo->update([
                 'ricambio_id' => $ricambio->id,
                 'quantita' => $validato['quantita'],
+                // Chi non vede i fornitori non ha il campo: la riga tiene il
+                // fornitore che aveva, invece di perderlo a ogni correzione.
+                ...(Gate::allows('fornitori.view')
+                    ? ['fornitore_id' => ((int) ($validato['fornitore_id'] ?? 0)) ?: null]
+                    : []),
             ]);
 
             // `fissaMontaggio` e non un update diretto: porta con sé
@@ -194,7 +216,12 @@ trait ManagesRicambiStrumento
             return collect();
         }
 
-        $righe = $this->strumento->ricambiUtilizzati()->with(['ricambio', 'intervento'])->get();
+        $righe = $this->strumento->ricambiUtilizzati()
+            ->with(['ricambio', 'intervento'])
+            // 🔗 ADR-051: il fornitore del pezzo, solo per chi lo può leggere.
+            // Se nessuna riga ne ha uno, Eloquent non lancia la query.
+            ->when(Gate::allows('fornitori.view'), fn ($q) => $q->with('fornitore'))
+            ->get();
 
         // Le garanzie in UNA query, e solo per chi ha titolo a vederle: il
         // `with('garanzia')` passerebbe dal privacy scope riga per riga.

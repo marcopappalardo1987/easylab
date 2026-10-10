@@ -11,43 +11,15 @@
     {{-- Fornitore (ADR-023): obbligatorio nel form, nullable in schema. Gated,
          perché un ruolo che non lo vede non deve nemmeno esserne bloccato. --}}
     @can('fornitori.view')
-        <div>
-            <label for="strumentoForm.fornitore_id" class="block text-sm font-medium text-ink">Fornitore</label>
-            <select id="strumentoForm.fornitore_id" wire:model="strumentoForm.fornitore_id"
-                class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
-                {{-- ⛔ **Il segnaposto NON è `disabled`, e la ragione è che lo era.**
-                     Un `<option disabled>` il browser non può selezionarlo: con
-                     `fornitore_id` vuoto mostrava quindi il PRIMO fornitore
-                     dell'elenco, mentre il valore restava vuoto. Si vedeva un
-                     fornitore scelto, si premeva Salva e arrivava «il campo è
-                     obbligatorio» — con la risposta in bella vista. Segnalato da
-                     Marco il 29 Ago 2026.
-
-                     Il `disabled` era stato messo con l'intento giusto — «non
-                     proporre il primo dell'elenco come se fosse una scelta» — e
-                     otteneva esattamente il contrario. Senza, il segnaposto è
-                     ciò che si vede finché nessuno sceglie, che è quello che si
-                     voleva; e se qualcuno ci torna sopra, `required` lo ferma. --}}
-                <option value="">— Scegli un fornitore —</option>
-                @foreach ($fornitori as $f)
-                    <option value="{{ $f->id }}">
-                        {{ $f->ragione_sociale }}{{ $f->trashed() ? ' (cestinato)' : '' }}
-                    </option>
-                @endforeach
-            </select>
-            @error('strumentoForm.fornitore_id')
-                <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
-            @enderror
-            @if ($fornitori->isEmpty())
-                <p class="mt-1 text-xs text-ink-3">
-                    Nessun fornitore in anagrafica.
-                    @can('fornitori.create')
-                        <a href="{{ route('fornitori.index') }}" wire:navigate class="text-brand hover:text-brand-hover">Aggiungine uno</a>
-                        prima di registrare la macchina.
-                    @endcan
-                </p>
-            @endif
-        </div>
+        {{-- 🔗 ADR-051: non più una `<select>`. Si scorre, si filtra scrivendo
+             e, se il fornitore manca, lo si crea da qui senza chiudere il form. --}}
+        @include('livewire.fornitori._selettore', [
+            'campo' => 'strumento',
+            'etichetta' => 'Fornitore',
+            'sceltoId' => $strumentoForm['fornitore_id'] ?? null,
+            'erroreSu' => 'strumentoForm.fornitore_id',
+            'facoltativo' => false,
+        ])
     @endcan
 
     {{-- Parametri tecnici: repeater chiave → valore --}}

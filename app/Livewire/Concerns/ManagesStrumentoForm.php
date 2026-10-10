@@ -2,11 +2,8 @@
 
 namespace App\Livewire\Concerns;
 
-use App\Models\Fornitore;
 use App\Models\Strumento;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\Rule;
 
 /**
  * Form condiviso dello Strumento (create in Albero, edit in SchedaStrumento).
@@ -17,6 +14,10 @@ use Illuminate\Validation\Rule;
  */
 trait ManagesStrumentoForm
 {
+    // Il campo fornitore del form è un selettore con ricerca e creazione al
+    // volo (ADR-051): la definizione di «selezionabile» vive lì.
+    use SceglieFornitore;
+
     /** @var array{nome:string,modello:?string,matricola:?string,data_installazione:?string} */
     public array $strumentoForm = [
         'nome' => '',
@@ -39,31 +40,6 @@ trait ManagesStrumentoForm
         $this->parametri = array_values($this->parametri);
     }
 
-    /**
-     * Fornitori selezionabili per un Ente (ADR-023): **una sola definizione**,
-     * usata dal select del form e dalla validazione al salvataggio.
-     *
-     * È il precedente di `SchedaStrumento::assegnabili()`, e la ragione è la
-     * stessa: se la whitelist del select e il controllo al save fossero due
-     * query diverse, un `fornitore_id` forgiato dal browser passerebbe il
-     * secondo pur non comparendo nel primo — e le due copie potrebbero
-     * divergere alla prima modifica.
-     *
-     * `$correnteId` riammette il fornitore già associato anche se cestinato:
-     * senza, modificare una macchina il cui fornitore è stato cestinato
-     * fallirebbe la validazione su un campo che l'utente non ha toccato.
-     *
-     * @return Builder<Fornitore>
-     */
-    protected function fornitoriSelezionabili(int $tenantId, ?int $correnteId = null): Builder
-    {
-        return Fornitore::withTrashed()
-            ->where('tenant_id', $tenantId)
-            ->where(fn (Builder $q) => $q->whereNull('deleted_at')
-                ->when($correnteId !== null, fn (Builder $q) => $q->orWhere('id', $correnteId)))
-            ->orderBy('ragione_sociale');
-    }
-
     protected function strumentoFormRules(?int $tenantId = null, ?int $correnteId = null): array
     {
         return [
@@ -71,15 +47,9 @@ trait ManagesStrumentoForm
             // riguarda chi inserisce a mano, non le righe storiche né l'import.
             // La regola è condizionata al permesso: un ruolo che il campo non lo
             // vede nemmeno non può essere bloccato da un campo che non ha.
-            'strumentoForm.fornitore_id' => Gate::allows('fornitori.view')
-                // T1a (S7): la stessa lista della tendina — vivi del tenant, più il
-                // cestinato già associato. Prima un id cestinato forgiato passava.
-                ? ['required', 'integer', Rule::exists('fornitori', 'id')->where(
-                    fn ($q) => $q->where('tenant_id', $tenantId)
-                        ->where(fn ($q) => $q->whereNull('deleted_at')
-                            ->when($correnteId !== null, fn ($q) => $q->orWhere('id', $correnteId)))
-                )]
-                : ['nullable'],
+            // T1a (S7): la stessa lista del selettore — vivi del tenant, più il
+            // cestinato già associato. Prima un id cestinato forgiato passava.
+            'strumentoForm.fornitore_id' => $this->regolaFornitore((int) $tenantId, $correnteId, obbligatorio: true),
             'strumentoForm.nome' => ['required', 'string', 'max:255'],
             'strumentoForm.modello' => ['nullable', 'string', 'max:255'],
             'strumentoForm.matricola' => ['nullable', 'string', 'max:255'],
@@ -118,6 +88,8 @@ trait ManagesStrumentoForm
     {
         $this->strumentoForm = ['nome' => '', 'modello' => '', 'matricola' => '', 'data_installazione' => '', 'fornitore_id' => null];
         $this->parametri = [];
+        // Un selettore rimasto aperto riaprirebbe il prossimo form già a metà.
+        $this->chiudiFornitori();
         $this->resetValidation();
     }
 

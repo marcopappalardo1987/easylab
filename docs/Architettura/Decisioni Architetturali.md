@@ -1737,3 +1737,39 @@ Guardando le prime cinque guide pubblicate, però, la regola produceva una guida
 - ⚠️ **Non fatto, e non si può fare dal codice**: i **video delle guide** già registrati sono immagini, e se inquadrano la pagina Abbonamento o il listino mostrano il nome di prima finché non si rigirano. La didascalia della guida al listino è corretta nel copione e cambierà in pagina alla prossima registrazione. Un piano creato a mano con una delle tre parole nel nome resta com'è finché non lo si rinomina: il listino lo rifiuta al primo salvataggio.
 - **Prova di mutazione**: 26 mutazioni, tutte rosse. Ogni parola dell'elenco, i confini di parola, le maiuscole, il rifiuto dell'etichetta, le due condizioni della migration, ogni frase rimessa com'era (vista, controller, listino, cabina, guida, didascalia, email di prova) e le quattro guardie dell'esportazione.
 
+---
+
+**ADR-051 — Il fornitore anche sui ricambi, e un selettore che si filtra e crea al volo**
+
+*Stato: Accettata e attuata il 10 Ott 2026, su richiesta di Marco. Estende ADR-023 (il fornitore della macchina) e tocca ADR-008/022 (i ricambi). Solo su staging.*
+
+**Contesto.** Tre richieste nella stessa frase. I fornitori devono potersi associare anche ai ricambi. Registrando una macchina o un ricambio, un fornitore che non c'è costringeva a chiudere il form, andare in «Fornitori», crearlo, tornare e ricominciare. E il campo era una `<select>`: con trenta fornitori si scorre, con trecento no.
+
+**Decisione.**
+
+1. **Il fornitore di un ricambio sta sul pezzo montato** (`ricambio_utilizzo.fornitore_id`), non sulla voce di catalogo. La voce è un nome («Guarnizione portello»), e lo stesso pezzo si compra da fornitori diversi in anni diversi; con il collega-o-crea per nome, un fornitore sulla voce verrebbe riscritto a ogni montaggio. A sapere da chi è arrivato è il pezzo montato quel giorno, che è anche quello che porta la propria garanzia. **Facoltativo**: un pezzo si registra anche senza dirlo.
+2. **Il campo fornitore è un selettore, non una tendina**, uguale per la macchina e per i ricambi (`SceglieFornitore` e la vista `fornitori/_selettore`): un bottone che mostra la scelta e, aperto, un campo di ricerca sopra un elenco che scorre. Scrivendo l'elenco si restringe, senza distinguere maiuscole e ovunque cada il testo nel nome; mostra cinquanta voci alla volta e dice quando ce ne sono altre.
+3. **«＋ Nuovo fornitore» dentro il selettore**: un mini-form (ragione sociale, email, telefono) crea il fornitore nella sede della macchina e lo sceglie, lasciando aperto il form da cui si è partiti con tutto ciò che c'era scritto. Parte già compilato con ciò che si stava cercando.
+
+**Dove compare.** Nel form della macchina (creazione dall'albero, modifica dalla scheda), in ogni riga dei ricambi del form intervento, e nella correzione di un pezzo dal tab Ricambi. Il tab mostra il fornitore di ogni pezzo; la pagina Fornitori conta, accanto alle macchine, i ricambi montati.
+
+**Le regole che lo tengono fermo.**
+
+- 🔴 **Lo stato «aperto» sta sul server**, non in Alpine: è la regola di `TendineLivewireGuardrailTest`. L'elenco arriva con un giro sul server, e uno stato tenuto nel browser ripartirebbe da capo proprio quando Livewire ridisegna per riempirlo. Alpine porta il fuoco nel campo di ricerca e muove l'evidenziazione con le frecce; Invio fa `click()` sul bottone evidenziato, quindi la strada per scegliere resta una sola, quella che i test percorrono.
+- 🔴 **Una sola definizione di «selezionabile»**: i fornitori vivi della sede, più quello già associato anche se cestinato. Riempie l'elenco, decide se una scelta è accettata (fuori c'è un 404, non un 403) e, detta in SQL da `regolaFornitore()`, valida il salvataggio: la property del form è pubblica, e un id forgiato ci arriva senza passare da nessun selettore.
+- 🔴 **Creare un fornitore chiede `fornitori.create`**, non il permesso del form ospite: poter registrare una macchina non è poter allargare l'anagrafica. Le regole del mini-form sono quelle della pagina Fornitori (`RegoleFornitore`), in un posto solo.
+- **La sede è quella della macchina**, non di chi lavora: il Superadmin che registra una macchina in un cliente gestito (ADR-046) sceglie fra i fornitori di quel cliente, e quello che crea nasce lì. Se `BelongsToTenant` riscrivesse la sede con un'altra, il fornitore non viene creato.
+- **Chi non vede i fornitori non ha il campo, e non lo scrive**: senza `fornitori.view` il selettore non c'è, un id mandato a mano si ignora, e correggendo un pezzo il fornitore indicato da un altro resta dov'è.
+- Il model rifiuta un pezzo montato che punti al fornitore di un altro Ente, e `Fornitore` rifiuta di cancellarsi finché ha pezzi montati, come già per le macchine.
+
+**Conseguenze.**
+
+- ⚠️ **Il Tecnico oggi non ha `fornitori.view`** (la matrice dice che il fornitore è un dato dell'Ente): registra e corregge i pezzi, ma il campo fornitore non lo vede. Darglielo è una scelta di chi governa i ruoli, dall'editor, non una modifica di codice.
+- Niente «chiudi al click fuori» sul selettore: il bottone di un altro selettore è «fuori», e il suo click aprirebbe quello mentre questo gesto lo richiude. Si chiude scegliendo, con «Chiudi», con Esc o aprendone un altro.
+- Il pannello sta nel flusso del form e non in sovrimpressione: dentro una modale verrebbe tagliato dal suo bordo.
+- Tre testi delle guide scritte dicevano che il fornitore va creato prima: sono aggiornati. I video già registrati mostrano la vecchia tendina finché non si rigirano.
+
+- ⚠️ **Non fatto**: il fornitore sulla voce di catalogo e nella ricerca «dove è montato»; il fornitore proposto da solo quando si riscrive un pezzo già comprato da lui; l'import CSV dei ricambi.
+- **Provato in un browser vero**, sull'ambiente dimostrativo locale: apertura, fuoco sul campo di ricerca, filtro mentre si scrive, frecce, Invio che sceglie senza inviare il form, Esc che chiude il selettore e non la modale, creazione al volo con Invio. È la parte che i test Livewire non vedono.
+- **Prova di mutazione**: 91 mutazioni, tutte rosse. Una condizione (`showInterventoForm` accanto all'esistenza della riga) è risultata ridondante ed è stata tolta invece di essere difesa.
+

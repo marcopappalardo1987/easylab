@@ -4,7 +4,8 @@
         <div>
             <h1 class="text-2xl font-bold tracking-tight text-ink">Fornitori</h1>
             <p class="mt-1 text-sm text-ink-2">
-                Da chi sono state acquistate le macchine. Ogni macchina ha un fornitore solo.
+                Da chi sono state acquistate le macchine e i ricambi. Ogni macchina ha un fornitore solo;
+                per un ricambio lo si indica sul pezzo montato.
             </p>
         </div>
         @can('fornitori.create')
@@ -34,6 +35,7 @@
                         <th class="px-4 py-3 font-semibold">Email</th>
                         <th class="px-4 py-3 font-semibold">Telefono</th>
                         <th class="px-4 py-3 font-semibold">Macchine</th>
+                        <th class="px-4 py-3 font-semibold">Ricambi</th>
                         <th class="px-4 py-3 font-semibold"><span class="sr-only">Azioni</span></th>
                     </tr>
                 </thead>
@@ -47,6 +49,7 @@
                             <td class="px-4 py-3 text-ink-2">{{ $fornitore->email ?: '—' }}</td>
                             <td class="px-4 py-3 text-ink-2">{{ $fornitore->telefono ?: '—' }}</td>
                             <td class="px-4 py-3 tabular-nums text-ink-2">{{ $fornitore->strumenti_count }}</td>
+                            <td class="px-4 py-3 tabular-nums text-ink-2" data-ricambi="{{ $fornitore->ricambi_montati_count }}">{{ $fornitore->ricambi_montati_count }}</td>
                             <td class="px-4 py-3 text-right whitespace-nowrap">
                                 @can('fornitori.update')
                                     <button type="button" wire:click="edit({{ $fornitore->id }})"
@@ -60,7 +63,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ $sedi->isNotEmpty() ? 6 : 5 }}" class="px-4 py-10 text-center text-sm text-ink-3">
+                            <td colspan="{{ $sedi->isNotEmpty() ? 7 : 6 }}" class="px-4 py-10 text-center text-sm text-ink-3">
                                 Nessun fornitore. Aggiungine uno per poterlo associare alle macchine.
                             </td>
                         </tr>
@@ -106,7 +109,7 @@
         <x-ui.modal title="Eliminare il fornitore?">
             <p class="text-sm text-ink-2">
                 L'operazione è reversibile (soft delete). Un fornitore ancora associato a delle macchine
-                non può essere eliminato: vanno prima riassegnate.
+                o a dei ricambi montati non può essere eliminato: vanno prima riassegnati.
             </p>
             <div class="mt-6 flex justify-end gap-3">
                 <x-ui.button variant="secondary" wire:click="$set('deletingId', null)">Annulla</x-ui.button>

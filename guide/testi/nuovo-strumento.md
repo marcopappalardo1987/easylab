@@ -71,8 +71,10 @@ meglio una stima ragionevole che il campo vuoto.
 ## 8
 
 Il fornitore è **obbligatorio**, e non è burocrazia: è a chi si telefona quando
-la macchina si guasta. Si sceglie fra quelli già in anagrafica, quindi se il
-fornitore non c'è va aggiunto prima da «Fornitori».
+la macchina si guasta. Si sceglie dall'elenco di quelli in anagrafica, che si
+può scorrere oppure restringere scrivendo qualche lettera del nome. Se il
+fornitore non c'è, «＋ Nuovo fornitore» lo crea da lì e lo sceglie, senza
+chiudere il modulo: i contatti dell'assistenza si completano poi da «Fornitori».
 
 ## 9
 

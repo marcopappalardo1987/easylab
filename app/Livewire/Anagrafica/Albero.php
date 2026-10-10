@@ -681,9 +681,33 @@ class Albero extends Component
             'enteProprio' => CurrentTenant::id(),
             // Solo a modale aperta e con permesso: a modale chiusa zero query
             // in più, disciplina già seguita in SchedaStrumento::render().
-            'fornitori' => $this->showStrumentoForm && $current && Gate::allows('fornitori.view')
-                ? $this->fornitoriSelezionabili($current->tenant_id)->get()
+            // 🔗 ADR-051: il selettore del fornitore. Il nome di quello scelto
+            // e, solo a selettore aperto, l'elenco fra cui scegliere.
+            'fornitoriScelti' => $this->showStrumentoForm
+                ? $this->fornitoriScelti([$this->strumentoForm['fornitore_id'] ?? null])
                 : collect(),
+            'elencoFornitori' => $this->selettoreFornitore !== null ? $this->elencoFornitori() : null,
         ]);
+    }
+
+    /**
+     * Il solo campo fornitore di questa schermata è quello della macchina che
+     * si sta creando: si sceglie fra i fornitori della sede del nodo aperto
+     * (🔗 ADR-051), che per chi segue più clienti non è la propria.
+     */
+    protected function campoFornitore(string $campo): ?array
+    {
+        if ($campo !== 'strumento' || ! $this->showStrumentoForm) {
+            return null;
+        }
+
+        $nodo = UnitaOrganizzativa::find($this->currentId);
+
+        return $nodo === null ? null : ['tenant' => (int) $nodo->tenant_id, 'corrente' => null];
+    }
+
+    protected function scriviFornitore(string $campo, ?int $id): void
+    {
+        $this->strumentoForm['fornitore_id'] = $id;
     }
 }

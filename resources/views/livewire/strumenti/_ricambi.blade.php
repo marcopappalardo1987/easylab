@@ -36,6 +36,9 @@
                     <th class="px-4 py-3 font-semibold">Q.tà</th>
                     <th class="px-4 py-3 font-semibold">Montaggio</th>
                     <th class="px-4 py-3 font-semibold">Intervento</th>
+                    @can('fornitori.view')
+                        <th class="px-4 py-3 font-semibold">Fornitore</th>
+                    @endcan
                     @if ($vedeGaranzieRicambio)
                         <th class="px-4 py-3 font-semibold">Garanzia</th>
                     @endif
@@ -85,6 +88,21 @@
                                 <span class="text-ink-3">—</span>
                             @endif
                         </td>
+                        {{-- 🔗 ADR-051. La relazione è `withTrashed()`, come quella
+                             della macchina: un fornitore cestinato si legge, con la
+                             sua etichetta, invece di sembrare mai inserito. --}}
+                        @can('fornitori.view')
+                            <td data-etichetta="Fornitore" class="px-4 py-3 text-ink-2">
+                                @if ($utilizzo->fornitore)
+                                    {{ $utilizzo->fornitore->ragione_sociale }}
+                                    @if ($utilizzo->fornitore->trashed())
+                                        <x-ui.badge variant="neutral">cestinato</x-ui.badge>
+                                    @endif
+                                @else
+                                    <span class="text-ink-3">—</span>
+                                @endif
+                            </td>
+                        @endcan
                         @if ($vedeGaranzieRicambio)
                             <td data-etichetta="Garanzia" class="px-4 py-3 whitespace-nowrap text-ink-2">
                                 @if ($utilizzo->garanzia)
@@ -110,7 +128,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="px-4 py-10 text-center text-sm text-ink-3">
+                        <td colspan="7" class="px-4 py-10 text-center text-sm text-ink-3">
                             Nessun ricambio montato su questa macchina.
                         </td>
                     </tr>

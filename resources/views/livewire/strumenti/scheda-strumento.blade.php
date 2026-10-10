@@ -346,6 +346,19 @@
                                             aria-label="Rimuovi questa riga" title="Rimuovi"
                                             class="flex h-11 w-11 shrink-0 items-center justify-center rounded text-bad-dot hover:bg-bad-soft">✕</button>
                                     </div>
+
+                                    {{-- 🔗 ADR-051: da chi è stato comprato il pezzo. Facoltativo. --}}
+                                    @can('fornitori.view')
+                                        <div class="mt-2">
+                                            @include('livewire.fornitori._selettore', [
+                                                'campo' => 'ricambio.'.$i,
+                                                'etichetta' => 'Fornitore del pezzo (facoltativo)',
+                                                'sceltoId' => $riga['fornitore_id'] ?? null,
+                                                'erroreSu' => 'ricambiNuovi.'.$i.'.fornitore_id',
+                                                'facoltativo' => true,
+                                            ])
+                                        </div>
+                                    @endcan
                                 </div>
                             @endforeach
 
@@ -589,6 +602,17 @@
                     <x-ui.input name="ricambioForm.scadenza_garanzia" label="Scadenza garanzia del pezzo" type="date"
                         wire:model="ricambioForm.scadenza_garanzia" />
                 @endif
+
+                {{-- 🔗 ADR-051: da chi è stato comprato il pezzo. Facoltativo. --}}
+                @can('fornitori.view')
+                    @include('livewire.fornitori._selettore', [
+                        'campo' => 'correzione',
+                        'etichetta' => 'Fornitore del pezzo (facoltativo)',
+                        'sceltoId' => $ricambioForm['fornitore_id'] ?? null,
+                        'erroreSu' => 'ricambioForm.fornitore_id',
+                        'facoltativo' => true,
+                    ])
+                @endcan
 
                 <div class="flex justify-end gap-3">
                     <x-ui.button variant="secondary" wire:click="closeRicambioForm">Annulla</x-ui.button>

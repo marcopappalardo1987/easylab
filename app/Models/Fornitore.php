@@ -58,6 +58,13 @@ class Fornitore extends Model
                     'Fornitore: non si cancella un fornitore ancora associato a delle macchine (ADR-023). Riassegnale prima.'
                 );
             }
+
+            // 🔗 ADR-051: lo stesso vale per i pezzi che ha venduto.
+            if ($fornitore->ricambiMontati()->exists()) {
+                throw new RuntimeException(
+                    'Fornitore: non si cancella un fornitore ancora associato a dei ricambi montati (ADR-051). Riassegnali prima.'
+                );
+            }
         });
     }
 
@@ -65,6 +72,16 @@ class Fornitore extends Model
     public function strumenti(): HasMany
     {
         return $this->hasMany(Strumento::class, 'fornitore_id');
+    }
+
+    /**
+     * I pezzi montati comprati da questo fornitore (🔗 ADR-051).
+     *
+     * @return HasMany<RicambioUtilizzo, $this>
+     */
+    public function ricambiMontati(): HasMany
+    {
+        return $this->hasMany(RicambioUtilizzo::class, 'fornitore_id');
     }
 
     protected function nomeDominio(): string
