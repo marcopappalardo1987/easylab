@@ -341,6 +341,10 @@ Chi compila il modulo di `/registrati` non è ancora un `User`, non ha un `Accou
 | `matricola` | string nullable | Seriale costruttore. |
 | `parametri_tecnici` | json nullable | Scheda tecnica flessibile. |
 | `data_installazione` | date nullable | Base del calcolo obsolescenza (ADR-014). |
+| `referente_nome`, `referente_cognome` | string nullable | 🆕 10 Ott 2026 (🔗 ADR-054). La persona del laboratorio a cui la macchina fa capo. **Non è un utente**: non ha account né ruolo, ed è un dato della macchina. |
+| `referente_email` | string nullable | 🆕 10 Ott 2026 (🔗 ADR-054). Sempre minuscola e senza spazi (lo fa il model). Se c'è, **le email che parlano di questa macchina arrivano anche a questo indirizzo** (`App\Support\Notifiche\Referente`). |
+| `referente_cellulare` | string(50) nullable | 🆕 10 Ott 2026 (🔗 ADR-054). |
+| `note` | text nullable | 🆕 10 Ott 2026 (🔗 ADR-054). Testo libero sullo strumento, fino a 2000 caratteri nel form. |
 | `qr_token` | string unique | Token incluso nella URL firmata del QR (ADR-003). |
 | **Override semaforo (ADR-005)** | | |
 | `forced_state` | `string` nullable con **CHECK**: `verde` \| `arancione` \| `rosso` | Se valorizzato, vince sul calcolato. Il vincolo è a **database** dal 26 Ago 2026 — vedi la nota sotto la tabella. |

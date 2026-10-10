@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Models\User;
 use App\Support\Email\CatalogoEmail;
 use App\Support\Email\InterruttoriEmail;
 use App\Support\Mail\MarchioEmail;
@@ -41,14 +42,37 @@ class AvvisoObsolescenza extends Notification implements ShouldQueue
     use Queueable;
 
     /**
+     * `true` per la copia che va al referente della macchina (🔗 ADR-054).
+     *
+     * ⚠️ Proprietà **con un default**, e non un parametro promosso come le
+     * altre: una notifica accodata prima del rilascio non la porta nel proprio
+     * payload, `unserialize` non passa dal costruttore, e una proprietà
+     * tipizzata senza default resterebbe non inizializzata — l'email in coda
+     * in quel momento fallirebbe leggendola.
+     */
+    public bool $alReferente = false;
+
+    /** Come salutare il referente, se la scheda lo dice. Stessa nota qui sopra. */
+    public ?string $nomeReferente = null;
+
+    /**
      * @param  list<RigaObsolescenza>  $righe
+     * @param  bool  $alReferente  `true` per l'avviso che va al referente delle
+     *                             macchine (🔗 ADR-054), alla casella scritta
+     *                             sulla loro scheda.
+     * @param  ?string  $nomeReferente  come salutarlo, se la scheda lo dice.
      */
     public function __construct(
         public readonly int $enteId,
         public readonly string $enteNome,
         public readonly int $soglia,
         public readonly array $righe,
-    ) {}
+        bool $alReferente = false,
+        ?string $nomeReferente = null,
+    ) {
+        $this->alReferente = $alReferente;
+        $this->nomeReferente = $nomeReferente;
+    }
 
     /**
      * In-app sempre, email solo se l'utente non si è opposto (registro
@@ -71,9 +95,16 @@ class AvvisoObsolescenza extends Notification implements ShouldQueue
         // Dal 9 Ott 2026 (ADR-047) le domande sono due: la piattaforma l'ha
         // accesa, e la persona non vi ha rinunciato. La campanella resta in
         // entrambi i casi: spegnere un'email non spegne ciò che si vede entrando.
-        return InterruttoriEmail::parte(CatalogoEmail::AVVISO_OBSOLESCENZA, $notifiable)
-            ? ['database', 'mail']
-            : ['database'];
+        $email = InterruttoriEmail::parte(CatalogoEmail::AVVISO_OBSOLESCENZA, $notifiable);
+
+        // 🔗 ADR-054: il referente è una casella, non una persona di Easy Lab.
+        // Non ha una campanella, e il canale `database` su un destinatario
+        // senza account non ha dove scrivere: farebbe fallire l'invio.
+        if (! $notifiable instanceof User) {
+            return $email ? ['mail'] : [];
+        }
+
+        return $email ? ['database', 'mail'] : ['database'];
     }
 
     public function toMail(object $notifiable): MailMessage
@@ -88,6 +119,8 @@ class AvvisoObsolescenza extends Notification implements ShouldQueue
                 'soglia' => $this->soglia,
                 'righe' => $this->righe,
                 'destinatario' => $notifiable,
+                'alReferente' => $this->alReferente,
+                'nomeReferente' => $this->nomeReferente,
             ]);
     }
 

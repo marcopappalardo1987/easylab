@@ -17,6 +17,7 @@ use App\Support\Semaforo;
 use Database\Factories\StrumentoFactory;
 use Illuminate\Contracts\Database\Query\Builder as BuilderContract;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -82,6 +83,12 @@ class Strumento extends Model implements ReachesStrumento
         'parametri_tecnici',
         'data_installazione',
         'fornitore_id',
+        // 🔗 ADR-054: il referente della macchina, e le note.
+        'referente_nome',
+        'referente_cognome',
+        'referente_email',
+        'referente_cellulare',
+        'note',
     ];
 
     protected function casts(): array
@@ -112,7 +119,37 @@ class Strumento extends Model implements ReachesStrumento
             $strumento->verificaFornitore();
         });
 
-        static::updating(fn (Strumento $strumento) => $strumento->verificaFornitore());
+        static::updating(function (Strumento $strumento): void {
+            $strumento->verificaFornitore();
+            $strumento->lasciaIlReferenteAlVecchioEnte();
+        });
+    }
+
+    /**
+     * Una macchina che cambia Ente non si porta dietro il referente
+     * (🔗 ADR-054; ADR-015 lo spostamento fra Enti).
+     *
+     * Il referente è una persona del laboratorio di prima: lasciato sulla riga
+     * continuerebbe a ricevere le email di una macchina che ora è di un altro
+     * cliente, e il suo cellulare lo leggerebbe chi apre la scheda dall'altra
+     * parte. Il nuovo Ente scrive il proprio: ciò che scrive nello stesso
+     * salvataggio resta, e ogni altro dato del referente di prima se ne va —
+     * campo per campo, o il nome di una persona resterebbe accanto
+     * all'indirizzo di un'altra.
+     *
+     * Le note restano: parlano della macchina, e la sua storia la segue.
+     */
+    protected function lasciaIlReferenteAlVecchioEnte(): void
+    {
+        if (! $this->isDirty('tenant_id')) {
+            return;
+        }
+
+        foreach (['referente_nome', 'referente_cognome', 'referente_email', 'referente_cellulare'] as $campo) {
+            if (! $this->isDirty($campo)) {
+                $this->{$campo} = null;
+            }
+        }
     }
 
     /**
@@ -187,6 +224,38 @@ class Strumento extends Model implements ReachesStrumento
      * inserito» invece che «fornitore cestinato». Il badge che distingue le due
      * cose ha bisogno del nome per poter essere scritto.
      */
+    /**
+     * L'indirizzo del referente si scrive senza maiuscole e senza spazi
+     * (🔗 ADR-054): è ciò con cui si riconosce chi riceve già un'email, e
+     * scritto in due modi sarebbero due destinatari. Sta nel model perché
+     * valga per chiunque lo scriva, non solo per il modulo.
+     *
+     * @return Attribute<?string, ?string>
+     */
+    protected function referenteEmail(): Attribute
+    {
+        return Attribute::make(
+            set: fn (?string $valore) => trim((string) $valore) === '' ? null : mb_strtolower(trim((string) $valore)),
+        );
+    }
+
+    /** True se della macchina si conosce almeno un dato del referente (🔗 ADR-054). */
+    public function haReferente(): bool
+    {
+        return filled($this->referente_nome)
+            || filled($this->referente_cognome)
+            || filled($this->referente_email)
+            || filled($this->referente_cellulare);
+    }
+
+    /** Nome e cognome del referente come si leggono, o `null` se mancano entrambi. */
+    public function referenteNomeCompleto(): ?string
+    {
+        $nome = trim(trim((string) $this->referente_nome).' '.trim((string) $this->referente_cognome));
+
+        return $nome === '' ? null : $nome;
+    }
+
     public function fornitore(): BelongsTo
     {
         return $this->belongsTo(Fornitore::class, 'fornitore_id')->withTrashed();

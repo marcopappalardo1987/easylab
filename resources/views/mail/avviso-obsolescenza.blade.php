@@ -5,9 +5,17 @@
 <x-mail::message :marchio="$marchio" :logo="$marchio->cid($message ?? null)">
 # Macchine oltre la soglia di età — {{ TestoMarkdown::sicuro($ente) }}
 
+{{-- 🔗 ADR-054: il referente è una casella e non ha un `name`, né un Ente
+     «suo» in Easy Lab: lo si saluta col nome scritto sulla scheda, se c'è. --}}
+@if ($alReferente ?? false)
+{{ filled($nomeReferente ?? null) ? 'Ciao '.TestoMarkdown::sicuro($nomeReferente).', la' : 'La' }} soglia di obsolescenza di {{ TestoMarkdown::sicuro($ente) }} è di
+{{ $soglia }} {{ $soglia === 1 ? 'anno' : 'anni' }}: queste macchine, di cui sei
+referente, l'hanno appena superata.
+@else
 Ciao {{ TestoMarkdown::sicuro($destinatario->name) }}, la soglia di obsolescenza del tuo Ente è di
 {{ $soglia }} {{ $soglia === 1 ? 'anno' : 'anni' }}: queste macchine l'hanno
 appena superata.
+@endif
 
 {{-- Il paragrafo che segue è ADR-014 alla lettera, e non è un ammorbidimento
      di cortesia: l'obsolescenza è una SEGNALAZIONE sull'età, non uno stato di
@@ -32,7 +40,11 @@ la manutenzione e non cambia lo stato delle macchine in Easy Lab.
 Apri Easy Lab
 </x-mail::button>
 
+@if ($alReferente ?? false)
+Ricevi questo avviso perché sei indicato come referente di queste macchine per {{ TestoMarkdown::sicuro($ente) }}. Per non riceverlo più, chiedi a chi le gestisce di togliere il tuo indirizzo dalla loro scheda.
+@else
 Ricevi questo avviso perché segui delle macchine su Easy Lab. Puoi disattivare
 le email dalle [preferenze notifiche]({{ route('settings.notifiche') }}); gli
 avvisi resteranno comunque visibili in applicazione.
+@endif
 </x-mail::message>

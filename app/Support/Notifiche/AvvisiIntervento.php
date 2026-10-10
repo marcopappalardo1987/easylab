@@ -11,6 +11,7 @@ use App\Notifications\InterventoProgrammato;
 use App\Support\Email\CatalogoEmail;
 use App\Support\Email\InterruttoriEmail;
 use App\Support\Mail\MarchioEmail;
+use Illuminate\Notifications\Notification;
 
 /**
  * Le email che seguono un gesto su un intervento: programmato, eseguito,
@@ -40,8 +41,10 @@ use App\Support\Mail\MarchioEmail;
  *
  * Programmato ed eseguito: gli stessi del riepilogo delle scadenze
  * (`DestinatariEnte`) — Admin e Tenant per tutto l'Ente, Responsabile Reparto
- * solo se la macchina sta nel suo sotto-albero. **Mai chi ha compiuto il
- * gesto**: lo sa già. Assegnato: la sola persona assegnata, e non a sé stessa.
+ * solo se la macchina sta nel suo sotto-albero — più il **referente della
+ * macchina**, alla sua casella (🔗 ADR-054). **Mai chi ha compiuto il
+ * gesto**: lo sa già. Assegnato: la sola persona assegnata, e non a sé stessa;
+ * il referente non c'entra, è un'email fra chi assegna il lavoro e chi lo fa.
  *
  * ⚠️ Ogni metodo esce subito se l'email è spenta in piattaforma: nasce spenta,
  * e finché lo resta non costa che una lettura.
@@ -58,20 +61,19 @@ final class AvvisiIntervento
         $ubicazione = $strumento->percorsoUbicazione();
         $assegnatario = $intervento->tecnico_id !== null ? User::find($intervento->tecnico_id)?->name : null;
 
-        foreach (self::delCliente($intervento, $strumento) as $utente) {
-            $utente->notify(new InterventoProgrammato(
-                enteId: (int) $intervento->tenant_id,
-                enteNome: $ente,
-                strumentoId: (int) $strumento->id,
-                strumentoNome: (string) $strumento->nome,
-                ubicazione: $ubicazione,
-                tipo: $intervento->tipo->label(),
-                descrizione: (string) $intervento->descrizione,
-                scadenza: $intervento->data_scadenza->format('d/m/Y'),
-                assegnatario: $assegnatario,
-                autore: auth()->user()?->name,
-            ));
-        }
+        self::aChiSegueLaMacchina($strumento, fn (bool $alReferente) => new InterventoProgrammato(
+            enteId: (int) $intervento->tenant_id,
+            enteNome: $ente,
+            strumentoId: (int) $strumento->id,
+            strumentoNome: (string) $strumento->nome,
+            ubicazione: $ubicazione,
+            tipo: $intervento->tipo->label(),
+            descrizione: (string) $intervento->descrizione,
+            scadenza: $intervento->data_scadenza->format('d/m/Y'),
+            assegnatario: $assegnatario,
+            autore: auth()->user()?->name,
+            alReferente: $alReferente,
+        ));
     }
 
     /**
@@ -88,21 +90,20 @@ final class AvvisiIntervento
         $ente = MarchioEmail::perEnte($intervento->tenant_id)->nome;
         $ubicazione = $strumento->percorsoUbicazione();
 
-        foreach (self::delCliente($intervento, $strumento) as $utente) {
-            $utente->notify(new InterventoEseguito(
-                enteId: (int) $intervento->tenant_id,
-                enteNome: $ente,
-                strumentoId: (int) $strumento->id,
-                strumentoNome: (string) $strumento->nome,
-                ubicazione: $ubicazione,
-                tipo: $intervento->tipo->label(),
-                descrizione: (string) $intervento->descrizione,
-                eseguitoIl: ($intervento->data_esecuzione ?? now())->format('d/m/Y'),
-                autore: auth()->user()?->name,
-                conReport: filled($intervento->report_fine_lavoro),
-                prossima: $successiva?->data_scadenza?->format('d/m/Y'),
-            ));
-        }
+        self::aChiSegueLaMacchina($strumento, fn (bool $alReferente) => new InterventoEseguito(
+            enteId: (int) $intervento->tenant_id,
+            enteNome: $ente,
+            strumentoId: (int) $strumento->id,
+            strumentoNome: (string) $strumento->nome,
+            ubicazione: $ubicazione,
+            tipo: $intervento->tipo->label(),
+            descrizione: (string) $intervento->descrizione,
+            eseguitoIl: ($intervento->data_esecuzione ?? now())->format('d/m/Y'),
+            autore: auth()->user()?->name,
+            conReport: filled($intervento->report_fine_lavoro),
+            prossima: $successiva?->data_scadenza?->format('d/m/Y'),
+            alReferente: $alReferente,
+        ));
     }
 
     public static function assegnato(Intervento $intervento, Strumento $strumento): void
@@ -129,18 +130,25 @@ final class AvvisiIntervento
     }
 
     /**
-     * Le persone del cliente che seguono questa macchina, meno chi sta agendo:
-     * la regola sta in `DestinatariEnte::perMacchina()`, condivisa con
-     * `AvvisiStrumento`.
+     * Manda l'email alle persone del cliente che seguono questa macchina e al
+     * suo referente, meno chi sta agendo: la regola sta in
+     * `DestinatariEnte::dellaMacchina()`, condivisa con `AvvisiStrumento`.
      *
-     * @return list<User>
+     * @param  callable(bool): Notification  $avviso  costruisce l'email; `true`
+     *                                                per la copia del referente.
      */
-    private static function delCliente(Intervento $intervento, Strumento $strumento): array
+    private static function aChiSegueLaMacchina(Strumento $strumento, callable $avviso): void
     {
-        return DestinatariEnte::perMacchina(
-            (int) $intervento->tenant_id,
-            (int) $strumento->unita_organizzativa_id,
-            auth()->id(),
-        );
+        /** @var ?User $attore */
+        $attore = auth()->user();
+
+        ['persone' => $persone, 'referente' => $referente] = DestinatariEnte::dellaMacchina($strumento, $attore);
+
+        foreach ($persone as $utente) {
+            $utente->notify($avviso(false));
+        }
+
+        // 🔗 ADR-054: il referente della macchina, alla sua casella.
+        $referente?->casella()->notify($avviso(true));
     }
 }

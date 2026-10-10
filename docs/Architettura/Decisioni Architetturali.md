@@ -1832,3 +1832,44 @@ Le prime due diciture sono le stesse nei due contesti. Le altre due, che Marco h
 - ⚠️ I **video delle guide** già registrati mostrano i nomi di prima finché non si rigirano; i copioni puntano già quelli nuovi.
 - **Prova di mutazione**: 29 mutazioni, tutte rosse. Ogni nome rimesso com'era nell'enum, nell'albero, nel menù, nelle briciole; i due livelli scambiati; il rimando tolto, reso temporaneo, mandato all'indirizzo sbagliato; una frase per ciascuna delle viste, dei sorgenti, delle guide e dei copioni toccati.
 
+---
+
+**ADR-054 — Il referente dello strumento, le note, e le email che gli arrivano**
+
+*Stato: Accettata e attuata il 10 Ott 2026, per decisione di Marco. Estende ADR-011 (lo scheduler delle scadenze), ADR-014 (l'obsolescenza) e ADR-047 (le email che seguono un gesto); non cambia chi le riceve già. Solo su staging.*
+
+**Decisione.** Ogni strumento può avere un **referente** — nome, cognome, email, cellulare — e delle **note**. Si scrivono nel modulo dello strumento, quando lo si registra e quando lo si modifica, e si leggono nella linguetta «Anagrafica» della sua scheda. Sono tutti facoltativi.
+
+Se la scheda porta l'**email** del referente, **le email che parlano di quella macchina arrivano anche a lui**:
+
+| Email | Che cosa riceve il referente |
+|---|---|
+| Macchina segnalata | la stessa email, subito |
+| Intervento programmato | la stessa email, subito |
+| Intervento eseguito | la stessa email, subito |
+| Riepilogo scadenze (06:00) | le sole righe delle macchine di cui è referente |
+| Avviso obsolescenza (06:15) | le sole macchine di cui è referente |
+
+«Intervento assegnato» no: è un'email fra chi assegna il lavoro e chi lo fa.
+
+**Il referente è una casella, non una persona di Easy Lab.** Non ha un account, un ruolo, delle preferenze. Per questo sta sulla riga dello strumento e non in una tabella sua, e per questo le email gli arrivano **per indirizzo**. Ne discendono tre cose:
+
+- **Si aggiunge, non sostituisce.** Admin, Tenant e Responsabili ricevono ciò che ricevevano.
+- **Riceve l'email e nient'altro.** La campanella è delle persone: `DigestScadenze` e `AvvisoObsolescenza`, che a una persona lasciano anche la copia in applicazione, a una casella mandano il solo canale `mail`.
+- **L'ultima riga gli dice perché la riceve e come farla smettere** («chiedi a chi gestisce la macchina di togliere il tuo indirizzo dalla sua scheda»), al posto del rimando a delle preferenze che non ha. Svuotare il campo sulla scheda è l'interruttore.
+
+**Mai due volte alla stessa casella, e mai a chi ha compiuto il gesto.** Il referente il cui indirizzo è quello di una persona del cliente che riceve già queste email **è quella persona**: la riceve una volta sola, da persona, e quindi con le proprie preferenze. Vale anche per un Responsabile indicato come referente di una macchina **fuori dai suoi reparti**: è il solo caso in cui il sotto-albero non decide, e lo decide chi ha scritto quell'indirizzo sulla scheda — indicare qualcuno come referente di una macchina è dirgli che la segue. Per ogni altra macchina resta un Responsabile dei suoi reparti. Il confronto fra indirizzi ignora maiuscole e spazi, e il model scrive l'indirizzo già normalizzato.
+
+**Una fonte sola.** `App\Support\Notifiche\Referente` dice se c'è qualcuno a cui scrivere e a quale casella; `DestinatariEnte::dellaMacchina()` risponde, per una macchina, con le persone **e** il referente. I tre avvisi che seguono un gesto la chiamano tutti; i due programmati raggruppano le righe per casella.
+
+**Conseguenze.**
+
+- 🔴 **Nel riepilogo il referente non riceve mai le garanzie dei pezzi montati.** È il dato che ADR-029 nasconde a chi non ha titolo, e un indirizzo scritto su una scheda un titolo non ce l'ha, qualunque cosa l'Ente abbia scelto per i propri Tenant. Vale anche per il Tenant che è referente: il canale non gli restituisce la riga che il filtro gli ha tolto.
+- **A email spenta in piattaforma il canale non esiste**, né per la casella né per chi è referente da persona: non c'è una campanella da riempire al suo posto.
+- Un riepilogo resta **dentro un Ente**: lo stesso referente su macchine di due clienti riceve due email, mai una che li mescola.
+- ⚠️ **L'email al referente ha gli stessi collegamenti di quella alle persone**, compreso «Apri la scheda della macchina»: a chi non ha un account aprono la pagina di accesso.
+- ⚠️ **Chi può modificare uno strumento può far scrivere Easy Lab a un indirizzo qualunque.** È il dato del cliente e una sua scelta, ma è la prima volta che un'email esce verso qualcuno che non è un utente: va nel registro dei trattamenti (T2, T4).
+- ⚠️ **Non fatto**: il referente nell'importazione da CSV; la sua comparsa nello storico in PDF; la ricerca per referente nell'elenco; un referente per laboratorio da ereditare sulle macchine.
+- **Un'email in coda durante il rilascio parte lo stesso.** Nelle cinque notifiche `alReferente` (e `nomeReferente`) sono proprietà **con un default**, non parametri promossi: una notifica accodata prima del rilascio non le porta nel payload, `unserialize` non passa dal costruttore, e una proprietà tipizzata senza default resterebbe non inizializzata. Un test rifà quel payload e lo consegna.
+- **Prova di mutazione**: 183 mutazioni, tutte rosse. I cinque campi nel `$fillable`, nelle regole, nei nomi che si leggono negli errori, nel modulo e nella scheda; l'indirizzo normalizzato; il referente lasciato al vecchio Ente campo per campo; ogni ramo di `dellaMacchina()` (la persona che è anche referente, chi agisce, il sotto-albero); le tre copie al referente; il canale del riepilogo e dell'obsolescenza riga per riga (email spenta, pezzi montati, una casella per referente, l'Ente); i due `via()`; ogni frase dei cinque modelli; il catalogo; il default e l'assegnazione dei campi nuovi in ciascuna notifica. Una sola equivalente, dichiarata: il `whereNotNull` di `Referente::delleMacchine()` è un risparmio di righe, e a scartare i vuoti è il `filter()`.
+

@@ -42,9 +42,24 @@ class MacchinaSegnalata extends Notification implements ShouldQueue
     public $backoff = [60, 300];
 
     /**
+     * `true` per la copia che va al referente della macchina (🔗 ADR-054).
+     *
+     * ⚠️ Proprietà **con un default**, e non un parametro promosso come le
+     * altre: una notifica accodata prima del rilascio non la porta nel proprio
+     * payload, `unserialize` non passa dal costruttore, e una proprietà
+     * tipizzata senza default resterebbe non inizializzata — l'email in coda
+     * in quel momento fallirebbe leggendola.
+     */
+    public bool $alReferente = false;
+
+    /**
      * @param  bool  $nonIdonea  `true` per il rosso («Non idoneo»), `false` per
      *                           l'arancione («Azione richiesta»): cambia
      *                           l'oggetto e la prima riga.
+     * @param  bool  $alReferente  `true` per la copia che va al referente della
+     *                             macchina (🔗 ADR-054): non è una persona di
+     *                             Easy Lab, e l'ultima riga glielo dice invece
+     *                             di mandarlo a delle preferenze che non ha.
      */
     public function __construct(
         public readonly int $enteId,
@@ -56,7 +71,10 @@ class MacchinaSegnalata extends Notification implements ShouldQueue
         public readonly bool $nonIdonea,
         public readonly ?string $motivo = null,
         public readonly ?string $autore = null,
-    ) {}
+        bool $alReferente = false,
+    ) {
+        $this->alReferente = $alReferente;
+    }
 
     /**
      * Solo email, e solo a chi non vi ha rinunciato. L'interruttore di
@@ -84,6 +102,7 @@ class MacchinaSegnalata extends Notification implements ShouldQueue
                 'nonIdonea' => $this->nonIdonea,
                 'motivo' => $this->motivo,
                 'autore' => $this->autore,
+                'alReferente' => $this->alReferente,
                 'url' => route('strumenti.show', $this->strumentoId),
             ]);
     }

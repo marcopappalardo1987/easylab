@@ -75,6 +75,12 @@ la macchina si guasta. Si sceglie dall'elenco di quelli registrati, che si
 può scorrere oppure restringere scrivendo qualche lettera del nome. Se il
 fornitore non c'è, «＋ Nuovo fornitore» lo crea da lì e lo sceglie, senza
 chiudere il modulo: i contatti dell'assistenza si completano poi da «Fornitori».
+Subito sotto c'è il **referente dello strumento**, cioè la persona del
+laboratorio a cui la macchina fa capo: nome, cognome, email e cellulare. È
+facoltativo, ma l'email conta: se la scrivi, le email che riguardano questa
+macchina — una segnalazione, un intervento programmato o eseguito, una scadenza
+in arrivo — arrivano anche a lui, senza che debba avere un account. In fondo al
+modulo ci sono le **note**, per tutto ciò che non ha un campo suo.
 
 ## 9
 

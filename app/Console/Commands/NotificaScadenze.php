@@ -12,12 +12,16 @@ use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Notifications\DigestScadenze;
+use App\Support\Email\CatalogoEmail;
+use App\Support\Email\InterruttoriEmail;
 use App\Support\Notifiche\DestinatariEnte;
 use App\Support\Notifiche\EntiNotificabili;
+use App\Support\Notifiche\Referente;
 use App\Support\Notifiche\RigaAvviso;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
@@ -133,8 +137,14 @@ class NotificaScadenze extends Command
 
         $destinatari = $this->option('senza-invio') ? [] : $this->destinatari($ente->id, $righe);
 
-        foreach ($destinatari as ['utente' => $utente, 'righe' => $sue]) {
-            $utente->notify(new DigestScadenze($ente->id, $ente->nome, $sue));
+        foreach ($destinatari as ['destinatario' => $destinatario, 'righe' => $sue, 'referente' => $referente]) {
+            $destinatario->notify(new DigestScadenze(
+                $ente->id,
+                $ente->nome,
+                $sue,
+                alReferente: $referente !== null,
+                nomeReferente: $referente?->nome,
+            ));
         }
 
         $scadute = $this->conteggio($righe, TransizioneAvviso::Scaduta);
@@ -314,13 +324,21 @@ class NotificaScadenze extends Command
      *   esterno non ne ha uno (ADR-030).
      * - **Tenant** (dal 25 Ago 2026): tutte le righe del proprio Ente come
      *   l'Admin, **meno** le garanzie ricambio che il suo Ente gli nasconde.
+     * - **Referente della macchina** (dal 10 Ott 2026, 🔗 ADR-054): le righe
+     *   delle sole macchine di cui la scheda lo indica come referente, alla
+     *   casella scritta lì. È una casella e non una persona di Easy Lab: riceve
+     *   l'email e nient'altro. 🔴 **Mai le garanzie dei pezzi montati**: è il
+     *   dato che ADR-029 nasconde a chi non ha titolo, e un indirizzo scritto
+     *   su una scheda un titolo non ce l'ha.
      *
      * Chi rientra da più canali riceve una notifica sola, con l'unione delle
      * proprie righe: un Admin che è anche l'assegnatario non deve ricevere due
-     * email che dicono metà cosa ciascuna.
+     * email che dicono metà cosa ciascuna. Vale anche per il referente il cui
+     * indirizzo è quello di una persona già nota a questo giro: le sue righe
+     * si uniscono a quelle che riceve da persona, e la casella resta fuori.
      *
      * @param  list<RigaAvviso>  $righe
-     * @return list<array{utente: User, righe: list<RigaAvviso>}>
+     * @return list<array{destinatario: User|AnonymousNotifiable, righe: list<RigaAvviso>, referente: ?Referente}>
      */
     private function destinatari(int $tenantId, array $righe): array
     {
@@ -345,7 +363,9 @@ class NotificaScadenze extends Command
         // l'avviso di obsolescenza (27 Ago 2026). Il filtro delle RIGHE resta
         // qui, e con esso il filtro dei ricambi nascosti: è proprio del digest,
         // e l'altro comando non deve ereditarlo per distrazione.
-        foreach (DestinatariEnte::perEnte($tenantId) as ['utente' => $utente, 'nodi' => $nodi]) {
+        $persone = DestinatariEnte::perEnte($tenantId);
+
+        foreach ($persone as ['utente' => $utente, 'nodi' => $nodi]) {
             $sue = $nodi === null
                 ? $righe
                 : array_values(array_filter(
@@ -372,19 +392,96 @@ class NotificaScadenze extends Command
             }
         }
 
+        $tecnici = [];
+
         if ($perTecnico !== []) {
             // Senza `where('tenant_id')`: il tecnico esterno non ne ha uno, e
             // filtrarlo lo taglierebbe fuori dagli avvisi del lavoro che gli è
             // stato assegnato.
             foreach (User::query()->whereIn('id', array_keys($perTecnico))->get() as $tecnico) {
                 $aggiungi($tecnico, $perTecnico[$tecnico->id]);
+                $tecnici[] = $tecnico;
             }
         }
 
-        return array_values(array_map(fn (array $voce) => [
-            'utente' => $voce['utente'],
-            'righe' => array_values($voce['righe']),
-        ], $perUtente));
+        $caselle = $this->caselleDeiReferenti($tenantId, $righe, [...array_column($persone, 'utente'), ...$tecnici], $aggiungi);
+
+        return [
+            ...array_values(array_map(fn (array $voce) => [
+                'destinatario' => $voce['utente'],
+                'righe' => array_values($voce['righe']),
+                'referente' => null,
+            ], $perUtente)),
+            ...array_values(array_map(fn (array $voce) => [
+                'destinatario' => $voce['referente']->casella(),
+                'righe' => $voce['righe'],
+                'referente' => $voce['referente'],
+            ], $caselle)),
+        ];
+    }
+
+    /**
+     * Il canale del referente (🔗 ADR-054): le righe di ogni macchina vanno
+     * anche alla casella che la sua scheda indica.
+     *
+     * Torna le sole caselle che **non** sono già una persona di questo giro.
+     * Un referente il cui indirizzo è quello di un Admin, di un Responsabile o
+     * del tecnico assegnato è quella persona: le righe gli si aggiungono lì
+     * (`$aggiungi`), così riceve un riepilogo solo e valgono le sue preferenze.
+     *
+     * ⚠️ Il canale esiste solo se l'email è accesa in piattaforma: il referente
+     * non ha una campanella, quindi a email spenta non c'è niente da lasciargli.
+     *
+     * @param  list<RigaAvviso>  $righe
+     * @param  list<User>  $persone  chi è già noto a questo giro
+     * @param  callable(User, list<RigaAvviso>): void  $aggiungi
+     * @return array<string, array{referente: Referente, righe: list<RigaAvviso>}>
+     */
+    private function caselleDeiReferenti(int $tenantId, array $righe, array $persone, callable $aggiungi): array
+    {
+        if (! InterruttoriEmail::attiva(CatalogoEmail::RIEPILOGO_SCADENZE)) {
+            return [];
+        }
+
+        $referenti = Referente::delleMacchine(
+            $tenantId,
+            array_values(array_unique(array_map(fn (RigaAvviso $riga) => $riga->strumentoId, $righe))),
+        );
+
+        if ($referenti === []) {
+            return [];
+        }
+
+        $perIndirizzo = [];
+        foreach ($persone as $persona) {
+            $perIndirizzo[mb_strtolower(trim((string) $persona->email))] = $persona;
+        }
+
+        $caselle = [];
+
+        foreach ($righe as $riga) {
+            $referente = $referenti[$riga->strumentoId] ?? null;
+
+            // 🔴 Le garanzie dei pezzi montati non passano da qui, per nessuno:
+            // nemmeno per il referente che è anche un Tenant, a cui il filtro di
+            // ADR-029 le ha appena tolte qualche riga più su.
+            if ($referente === null || $riga->tipo === TipoMotivoSemaforo::GaranziaRicambio) {
+                continue;
+            }
+
+            $persona = $perIndirizzo[$referente->email] ?? null;
+
+            if ($persona !== null) {
+                $aggiungi($persona, [$riga]);
+
+                continue;
+            }
+
+            $caselle[$referente->email] ??= ['referente' => $referente, 'righe' => []];
+            $caselle[$referente->email]['righe'][] = $riga;
+        }
+
+        return $caselle;
     }
 
     /**

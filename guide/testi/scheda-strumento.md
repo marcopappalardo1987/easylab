@@ -77,8 +77,8 @@ ha scaricato cosa e quando.
 
 ## 9
 
-«Anagrafica» tiene i dati fissi — matricola, parametri tecnici, fornitore — e
-lo storico degli spostamenti. Quest'ultimo risponde a una domanda che capita più
+«Anagrafica» tiene i dati fissi — matricola, parametri tecnici, fornitore, il
+referente con i suoi contatti e le note — e lo storico degli spostamenti. Quest'ultimo risponde a una domanda che capita più
 spesso di quanto si creda: non «dov'è», ma «dov'era prima», per esempio quando
 si cerca di capire perché una macchina si è guastata dopo un trasloco.
 

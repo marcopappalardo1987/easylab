@@ -124,6 +124,53 @@
                 </div>
             </dl>
 
+            {{-- 🔗 ADR-054: il referente della macchina. Lo vede chiunque veda
+                 la scheda: è la persona da cercare quando si arriva in
+                 laboratorio, tecnico compreso. --}}
+            <hr class="my-6 border-border">
+            <p class="text-sm font-medium text-ink-2">Referente</p>
+            @if (! $strumento->haReferente())
+                <p class="mt-1 text-sm text-ink-3">Nessun referente indicato.</p>
+            @else
+                <dl class="mt-3 grid gap-x-6 gap-y-4 sm:grid-cols-3" data-referente>
+                    <div>
+                        <dt class="text-xs font-medium tracking-wide text-ink-3 uppercase">Nome</dt>
+                        <dd class="mt-0.5 text-sm text-ink">{{ $strumento->referenteNomeCompleto() ?: '—' }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs font-medium tracking-wide text-ink-3 uppercase">Email</dt>
+                        <dd class="mt-0.5 text-sm break-all text-ink">
+                            @if ($strumento->referente_email)
+                                <a href="mailto:{{ $strumento->referente_email }}" class="text-brand hover:text-brand-hover">{{ $strumento->referente_email }}</a>
+                            @else
+                                —
+                            @endif
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs font-medium tracking-wide text-ink-3 uppercase">Cellulare</dt>
+                        <dd class="mt-0.5 text-sm text-ink">
+                            @if ($strumento->referente_cellulare)
+                                {{-- Nel collegamento restano le sole cifre e il `+`: è
+                                     ciò che un telefono sa comporre. --}}
+                                <a href="tel:{{ preg_replace('/[^0-9+]/', '', $strumento->referente_cellulare) }}" class="text-brand hover:text-brand-hover">{{ $strumento->referente_cellulare }}</a>
+                            @else
+                                —
+                            @endif
+                        </dd>
+                    </div>
+                </dl>
+                @if ($strumento->referente_email)
+                    <p class="mt-3 text-xs text-ink-3">Riceve le email che riguardano questo strumento.</p>
+                @endif
+            @endif
+
+            @if (filled($strumento->note))
+                <hr class="my-6 border-border">
+                <p class="text-sm font-medium text-ink-2">Note</p>
+                <p class="mt-1 text-sm whitespace-pre-line text-ink" data-note-strumento>{{ $strumento->note }}</p>
+            @endif
+
             <hr class="my-6 border-border">
             <p class="text-sm font-medium text-ink-2">Parametri tecnici</p>
             @if (count($parametri) === 0)

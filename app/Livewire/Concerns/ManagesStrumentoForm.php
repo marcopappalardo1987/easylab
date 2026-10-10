@@ -18,13 +18,26 @@ trait ManagesStrumentoForm
     // volo (ADR-051): la definizione di «selezionabile» vive lì.
     use SceglieFornitore;
 
-    /** @var array{nome:string,modello:?string,matricola:?string,data_installazione:?string} */
-    public array $strumentoForm = [
+    /**
+     * I campi vuoti del modulo. Il referente e le note (🔗 ADR-054) sono
+     * stringhe vuote e non `null`: sono campi di testo, e un `null` legato a
+     * un `wire:model` diventa comunque una stringa al primo tasto.
+     */
+    private const FORM_VUOTO = [
         'nome' => '',
         'modello' => '',
         'matricola' => '',
         'data_installazione' => '',
+        'fornitore_id' => null,
+        'referente_nome' => '',
+        'referente_cognome' => '',
+        'referente_email' => '',
+        'referente_cellulare' => '',
+        'note' => '',
     ];
+
+    /** @var array{nome:string,modello:?string,matricola:?string,data_installazione:?string,fornitore_id:?int,referente_nome:string,referente_cognome:string,referente_email:string,referente_cellulare:string,note:string} */
+    public array $strumentoForm = self::FORM_VUOTO;
 
     /** @var list<array{chiave:string,valore:string}> */
     public array $parametri = [];
@@ -54,6 +67,14 @@ trait ManagesStrumentoForm
             'strumentoForm.modello' => ['nullable', 'string', 'max:255'],
             'strumentoForm.matricola' => ['nullable', 'string', 'max:255'],
             'strumentoForm.data_installazione' => ['nullable', 'date'],
+            // 🔗 ADR-054: il referente è facoltativo, campo per campo.
+            // L'indirizzo è ciò che decide se le email dello strumento
+            // arrivano anche a lui, quindi dev'essere un indirizzo.
+            'strumentoForm.referente_nome' => ['nullable', 'string', 'max:255'],
+            'strumentoForm.referente_cognome' => ['nullable', 'string', 'max:255'],
+            'strumentoForm.referente_email' => ['nullable', 'string', 'email', 'max:255'],
+            'strumentoForm.referente_cellulare' => ['nullable', 'string', 'max:50'],
+            'strumentoForm.note' => ['nullable', 'string', 'max:2000'],
             'parametri' => ['array'],
             'parametri.*.chiave' => ['nullable', 'string', 'max:100'],
             'parametri.*.valore' => ['nullable', 'string', 'max:255'],
@@ -79,14 +100,30 @@ trait ManagesStrumentoForm
             'strumentoForm.matricola' => 'matricola',
             'strumentoForm.data_installazione' => 'data di installazione',
             'strumentoForm.fornitore_id' => 'fornitore',
+            'strumentoForm.referente_nome' => 'nome del referente',
+            'strumentoForm.referente_cognome' => 'cognome del referente',
+            'strumentoForm.referente_email' => 'email del referente',
+            'strumentoForm.referente_cellulare' => 'cellulare del referente',
+            'strumentoForm.note' => 'note',
             'parametri.*.chiave' => 'nome del parametro',
             'parametri.*.valore' => 'valore del parametro',
         ];
     }
 
+    /**
+     * Un indirizzo incollato porta spesso uno spazio in coda: non è un errore
+     * di chi scrive, e la regola `email` lo rifiuterebbe.
+     */
+    public function updatedStrumentoForm(mixed $valore, string $chiave): void
+    {
+        if ($chiave === 'referente_email' && is_string($valore)) {
+            $this->strumentoForm['referente_email'] = trim($valore);
+        }
+    }
+
     protected function resetStrumentoForm(): void
     {
-        $this->strumentoForm = ['nome' => '', 'modello' => '', 'matricola' => '', 'data_installazione' => '', 'fornitore_id' => null];
+        $this->strumentoForm = self::FORM_VUOTO;
         $this->parametri = [];
         // Un selettore rimasto aperto riaprirebbe il prossimo form già a metà.
         $this->chiudiFornitori();
@@ -101,6 +138,11 @@ trait ManagesStrumentoForm
             'matricola' => $strumento->matricola,
             'data_installazione' => $strumento->data_installazione?->format('Y-m-d') ?? '',
             'fornitore_id' => $strumento->fornitore_id,
+            'referente_nome' => (string) $strumento->referente_nome,
+            'referente_cognome' => (string) $strumento->referente_cognome,
+            'referente_email' => (string) $strumento->referente_email,
+            'referente_cellulare' => (string) $strumento->referente_cellulare,
+            'note' => (string) $strumento->note,
         ];
 
         $this->parametri = collect($strumento->parametri_tecnici ?? [])
@@ -120,6 +162,14 @@ trait ManagesStrumentoForm
             ->mapWithKeys(fn ($r) => [trim($r['chiave']) => $r['valore'] ?? ''])
             ->all();
 
+        // Uno spazio non è un referente, e un campo svuotato lo toglie: è il
+        // modo in cui si fanno smettere le email (🔗 ADR-054).
+        $testo = function (string $campo): ?string {
+            $valore = trim((string) ($this->strumentoForm[$campo] ?? ''));
+
+            return $valore === '' ? null : $valore;
+        };
+
         $payload = [
             'nome' => $this->strumentoForm['nome'],
             'modello' => $this->strumentoForm['modello'] ?: null,
@@ -127,6 +177,11 @@ trait ManagesStrumentoForm
             'data_installazione' => $this->strumentoForm['data_installazione'] ?: null,
             'fornitore_id' => $this->strumentoForm['fornitore_id'] ?: null,
             'parametri_tecnici' => $parametri === [] ? null : $parametri,
+            'referente_nome' => $testo('referente_nome'),
+            'referente_cognome' => $testo('referente_cognome'),
+            'referente_email' => $testo('referente_email'),
+            'referente_cellulare' => $testo('referente_cellulare'),
+            'note' => $testo('note'),
         ];
 
         // T1a (S7): senza `fornitori.view` la regola del campo è `nullable` e l'id

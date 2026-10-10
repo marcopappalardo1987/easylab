@@ -4,6 +4,7 @@ namespace App\Support\Notifiche;
 
 use App\Enums\StatoSemaforo;
 use App\Models\Strumento;
+use App\Models\User;
 use App\Notifications\MacchinaSegnalata;
 use App\Support\Email\CatalogoEmail;
 use App\Support\Email\InterruttoriEmail;
@@ -24,8 +25,8 @@ use App\Support\Mail\MarchioEmail;
  * è ciò che questa email promette — e non quando la forzatura viene tolta.
  *
  * Destinatari: gli stessi delle email sugli interventi
- * (`DestinatariEnte::perMacchina()`), cioè le persone del cliente che seguono
- * quella macchina, meno chi l'ha segnalata.
+ * (`DestinatariEnte::dellaMacchina()`), cioè le persone del cliente che seguono
+ * quella macchina e il suo referente (🔗 ADR-054), meno chi l'ha segnalata.
  *
  * ⚠️ Esce subito se l'email è spenta in piattaforma: nasce spenta.
  */
@@ -42,19 +43,29 @@ final class AvvisiStrumento
 
         $ente = MarchioEmail::perEnte($strumento->tenant_id)->nome;
         $ubicazione = $strumento->percorsoUbicazione();
+        /** @var ?User $attore */
+        $attore = auth()->user();
 
-        foreach (DestinatariEnte::perMacchina((int) $strumento->tenant_id, (int) $strumento->unita_organizzativa_id, auth()->id()) as $utente) {
-            $utente->notify(new MacchinaSegnalata(
-                enteId: (int) $strumento->tenant_id,
-                enteNome: $ente,
-                strumentoId: (int) $strumento->id,
-                strumentoNome: (string) $strumento->nome,
-                ubicazione: $ubicazione,
-                stato: $stato->etichetta(),
-                nonIdonea: $stato === StatoSemaforo::Rosso,
-                motivo: $strumento->forced_reason,
-                autore: auth()->user()?->name,
-            ));
+        $avviso = fn (bool $alReferente) => new MacchinaSegnalata(
+            enteId: (int) $strumento->tenant_id,
+            enteNome: $ente,
+            strumentoId: (int) $strumento->id,
+            strumentoNome: (string) $strumento->nome,
+            ubicazione: $ubicazione,
+            stato: $stato->etichetta(),
+            nonIdonea: $stato === StatoSemaforo::Rosso,
+            motivo: $strumento->forced_reason,
+            autore: $attore?->name,
+            alReferente: $alReferente,
+        );
+
+        ['persone' => $persone, 'referente' => $referente] = DestinatariEnte::dellaMacchina($strumento, $attore);
+
+        foreach ($persone as $utente) {
+            $utente->notify($avviso(false));
         }
+
+        // 🔗 ADR-054: il referente della macchina, alla sua casella.
+        $referente?->casella()->notify($avviso(true));
     }
 }

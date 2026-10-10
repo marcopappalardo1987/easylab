@@ -2,6 +2,7 @@
 
 namespace App\Support\Notifiche;
 
+use App\Models\Strumento;
 use App\Models\User;
 use App\Support\Tenancy\AccessibleNodes;
 
@@ -55,33 +56,58 @@ final class DestinatariEnte
     }
 
     /**
-     * Le persone del cliente che seguono **questa macchina**, meno chi sta
-     * agendo: è la domanda delle email che seguono un gesto (🔗 ADR-047).
+     * Chi riceve un'email che parla di **questa macchina**, meno chi sta
+     * agendo: è la domanda delle email che seguono un gesto (🔗 ADR-047), e dal
+     * 10 Ott 2026 ha due risposte (🔗 ADR-054).
      *
-     * `nodi === null` è «tutto l'Ente»; una lista è il sotto-albero del
-     * Responsabile, e la macchina deve starci dentro — o l'email diventerebbe
-     * il canale che scavalca `DepartmentScope`.
+     * **Le persone del cliente** che la seguono. `nodi === null` è «tutto
+     * l'Ente»; una lista è il sotto-albero del Responsabile, e la macchina deve
+     * starci dentro — o l'email diventerebbe il canale che scavalca
+     * `DepartmentScope`.
      *
-     * @param  ?int  $escluso  l'id di chi compie il gesto: lo sa già.
-     * @return list<User>
+     * **Il referente della macchina**, se la scheda ne porta l'indirizzo: una
+     * casella, non una persona di Easy Lab. Si aggiunge, non sostituisce
+     * nessuno.
+     *
+     * 🔴 **Mai due volte alla stessa casella, e mai a chi ha compiuto il
+     * gesto.** Il referente il cui indirizzo è quello di una persona del
+     * cliente è *quella persona*: riceve l'email una volta sola, da persona, e
+     * quindi con le proprie preferenze — anche se è un Responsabile e la
+     * macchina sta fuori dai suoi reparti. È il solo caso in cui il
+     * sotto-albero non decide, e lo decide chi ha scritto quell'indirizzo sulla
+     * scheda: indicare qualcuno come referente di una macchina **è** dirgli che
+     * la segue.
+     *
+     * @param  ?User  $attore  chi compie il gesto: lo sa già.
+     * @return array{persone: list<User>, referente: ?Referente}
      */
-    public static function perMacchina(int $tenantId, int $unitaId, ?int $escluso = null): array
+    public static function dellaMacchina(Strumento $strumento, ?User $attore = null): array
     {
+        $referente = Referente::di($strumento);
+        $unitaId = (int) $strumento->unita_organizzativa_id;
         $persone = [];
+        $ePersonaDelCliente = false;
 
-        foreach (self::perEnte($tenantId) as ['utente' => $utente, 'nodi' => $nodi]) {
-            if ($utente->id === $escluso) {
+        foreach (self::perEnte((int) $strumento->tenant_id) as ['utente' => $utente, 'nodi' => $nodi]) {
+            $eIlReferente = $referente !== null && $referente->corrispondeA($utente->email);
+            $ePersonaDelCliente = $ePersonaDelCliente || $eIlReferente;
+
+            if ($utente->id === $attore?->id) {
                 continue;
             }
 
-            if ($nodi !== null && ! in_array($unitaId, $nodi, true)) {
+            if ($nodi !== null && ! in_array($unitaId, $nodi, true) && ! $eIlReferente) {
                 continue;
             }
 
             $persone[] = $utente;
         }
 
-        return $persone;
+        if ($ePersonaDelCliente || ($attore !== null && $referente?->corrispondeA($attore->email))) {
+            $referente = null;
+        }
+
+        return ['persone' => $persone, 'referente' => $referente];
     }
 
     /**
