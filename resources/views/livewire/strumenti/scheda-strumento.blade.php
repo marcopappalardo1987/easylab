@@ -54,6 +54,10 @@
     </div>
 
     {{-- Tab --}}
+    {{-- 🔗 ADR-055: accanto al nome, il numero delle scadenze da gestire che
+         stanno in quel tab. Sono gli stessi motivi che la Panoramica elenca,
+         contati da `MotiviDellaScheda`: nessuna query in più. --}}
+    @php $daGestire = \App\Support\Strumenti\MotiviDellaScheda::contaPerTab($diagnosi); @endphp
     <div class="mt-6 border-b border-border">
         <nav class="-mb-px flex flex-wrap gap-1 text-sm">
             {{-- Panoramica primo e di default (ADR-024): non è gated, perché i
@@ -61,29 +65,29 @@
                  comunque poter sapere perché il semaforo è acceso. --}}
             <button type="button" x-on:click="tab = 'panoramica'"
                 :class="tab === 'panoramica' ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'"
-                class="border-b-2 px-3 py-2 font-medium">Panoramica</button>
+                class="inline-flex items-center border-b-2 px-3 py-2 font-medium" data-tab="panoramica">Panoramica</button>
             <button type="button" x-on:click="tab = 'anagrafica'"
                 :class="tab === 'anagrafica' ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'"
-                class="border-b-2 px-3 py-2 font-medium">Anagrafica</button>
+                class="inline-flex items-center border-b-2 px-3 py-2 font-medium" data-tab="anagrafica">Anagrafica</button>
             @can('interventi.view')
                 <button type="button" x-on:click="tab = 'interventi'"
                     :class="tab === 'interventi' ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'"
-                    class="border-b-2 px-3 py-2 font-medium">Interventi</button>
+                    class="inline-flex items-center border-b-2 px-3 py-2 font-medium" data-tab="interventi">Interventi<x-ui.da-gestire :quante="$daGestire['interventi'] ?? 0" /></button>
             @endcan
             @can('ricambio_utilizzo.view')
                 <button type="button" x-on:click="tab = 'ricambi'"
                     :class="tab === 'ricambi' ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'"
-                    class="border-b-2 px-3 py-2 font-medium">Ricambi</button>
+                    class="inline-flex items-center border-b-2 px-3 py-2 font-medium" data-tab="ricambi">Ricambi<x-ui.da-gestire :quante="$daGestire['ricambi'] ?? 0" /></button>
             @endcan
             @can('documenti.view')
                 <button type="button" x-on:click="tab = 'documenti'"
                     :class="tab === 'documenti' ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'"
-                    class="border-b-2 px-3 py-2 font-medium">Documenti</button>
+                    class="inline-flex items-center border-b-2 px-3 py-2 font-medium" data-tab="documenti">Documenti</button>
             @endcan
             @can('garanzie.macchina.view')
                 <button type="button" x-on:click="tab = 'garanzie'"
                     :class="tab === 'garanzie' ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'"
-                    class="border-b-2 px-3 py-2 font-medium">Garanzie</button>
+                    class="inline-flex items-center border-b-2 px-3 py-2 font-medium" data-tab="garanzie">Garanzie<x-ui.da-gestire :quante="$daGestire['garanzie'] ?? 0" /></button>
             @endcan
         </nav>
     </div>

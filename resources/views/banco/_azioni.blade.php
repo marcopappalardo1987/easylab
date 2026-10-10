@@ -95,6 +95,19 @@
 @endcomponent
 
 @component('banco.pezzo', [
+    'titolo' => 'x-ui.da-gestire — il numerino accanto al nome di un tab',
+    'token' => 'bg-warn-soft · text-warn-soft-ink · h-5 min-w-5 · tabular-nums',
+    'nota' => "Quante scadenze da gestire stanno in quel tab (ADR-055). Con zero non rende NIENTE: l'ultimo tab qui sotto ne è la prova. Oltre 99 scrive «99+», e il conto vero resta nel testo per chi usa uno screen reader.",
+])
+    <div class="flex flex-wrap gap-1 border-b border-border text-sm">
+        <span class="inline-flex items-center border-b-2 border-brand px-3 py-2 font-medium text-brand">Interventi<x-ui.da-gestire :quante="1" /></span>
+        <span class="inline-flex items-center border-b-2 border-transparent px-3 py-2 font-medium text-ink-2">Ricambi<x-ui.da-gestire :quante="12" /></span>
+        <span class="inline-flex items-center border-b-2 border-transparent px-3 py-2 font-medium text-ink-2">Garanzie<x-ui.da-gestire :quante="120" /></span>
+        <span class="inline-flex items-center border-b-2 border-transparent px-3 py-2 font-medium text-ink-2">Documenti<x-ui.da-gestire :quante="0" /></span>
+    </div>
+@endcomponent
+
+@component('banco.pezzo', [
     'titolo' => 'x-ui.modal — aperta, col velo',
     'token' => 'bg-overlay · bg-surface+border-border+shadow-md · chiusura size-11 (44px)',
     'nota' => "⚠️ Due cose sono proprie del banco e non del componente. (1) La modale è `fixed`: qui è contenuta da un antenato con un `transform`, che le fa da blocco di contenimento — nell'app copre la finestra. (2) `close` nomina un metodo Livewire, e qui non c'è un componente Livewire: il bottone non chiude niente, e premere Esc scrive in console un errore di Alpine («Could not find Livewire component»). È atteso, non è un difetto della modale.",

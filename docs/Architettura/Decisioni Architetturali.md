@@ -1873,3 +1873,28 @@ Se la scheda porta l'**email** del referente, **le email che parlano di quella m
 - **Un'email in coda durante il rilascio parte lo stesso.** Nelle cinque notifiche `alReferente` (e `nomeReferente`) sono proprietà **con un default**, non parametri promossi: una notifica accodata prima del rilascio non le porta nel payload, `unserialize` non passa dal costruttore, e una proprietà tipizzata senza default resterebbe non inizializzata. Un test rifà quel payload e lo consegna.
 - **Prova di mutazione**: 183 mutazioni, tutte rosse. I cinque campi nel `$fillable`, nelle regole, nei nomi che si leggono negli errori, nel modulo e nella scheda; l'indirizzo normalizzato; il referente lasciato al vecchio Ente campo per campo; ogni ramo di `dellaMacchina()` (la persona che è anche referente, chi agisce, il sotto-albero); le tre copie al referente; il canale del riepilogo e dell'obsolescenza riga per riga (email spenta, pezzi montati, una casella per referente, l'Ente); i due `via()`; ogni frase dei cinque modelli; il catalogo; il default e l'assegnazione dei campi nuovi in ciascuna notifica. Una sola equivalente, dichiarata: il `whereNotNull` di `Referente::delleMacchine()` è un risparmio di righe, e a scartare i vuoti è il `filter()`.
 
+---
+
+**ADR-055 — I numerini sui tab della scheda: quante scadenze da gestire stanno lì**
+
+*Stato: Accettata e attuata il 10 Ott 2026, per decisione di Marco. Estende ADR-024 (la Panoramica); il semaforo (ADR-005) e la privacy dei pezzi montati (ADR-029) non cambiano. Solo su staging.*
+
+**Decisione.** Nella scheda di una macchina, accanto al nome dei tab «Interventi», «Ricambi» e «Garanzie» compare un numero: quante scadenze da gestire stanno in quel tab. Se non ce ne sono il numero non c'è: uno «0» su ogni tab sarebbe rumore.
+
+| Tab | Che cosa conta |
+|---|---|
+| Interventi | gli interventi scaduti o in scadenza |
+| Garanzie | le garanzie della macchina scadute o in scadenza |
+| Ricambi | le garanzie dei pezzi montati scadute o in scadenza |
+| Panoramica, Anagrafica, Documenti | niente: lì non abita nessuna scadenza |
+
+**Sono i motivi del semaforo, non un secondo conto.** Il numero conta gli stessi motivi che la Panoramica elenca sotto «Motivi (N)», cioè ciò che porta la macchina su «Interventi necessari»: un intervento pianificato fra sei mesi non è una cosa da fare oggi, e non accende nessun numero. La diagnosi è già calcolata per il semaforo, quindi i numeri non costano una query.
+
+**Una fonte sola.** Dove sta la riga che causa un motivo, e chi può vederla, lo dice `App\Support\Strumenti\MotiviDellaScheda`. Fino a oggi quelle due risposte stavano scritte dentro la Panoramica; ora le chiedono lì sia la Panoramica sia la barra dei tab.
+
+**Conseguenze.**
+
+- 🔴 **Un motivo che chi guarda vede in forma neutra non accende nessun numero.** Il Tenant di un Ente che nasconde le garanzie dei pezzi montati legge in Panoramica «Garanzia in scadenza il…» senza sapere di che cosa: un «1» sul tab Ricambi glielo direbbe. Si chiede l'ability della Policy, non il permesso nudo (ADR-029). La somma dei numeri può quindi essere più bassa di «Motivi (N)», mai più alta.
+- **Una forzatura non spegne i numeri**, come non nasconde i motivi (ADR-005): ciò che è da fare resta da fare anche su una macchina dichiarata idonea a mano.
+- Scaduto e in scadenza hanno lo stesso colore, quello dello stato che spiegano; a distinguerli sono le righe del tab. Il numero ha un testo per chi non lo vede («2 scadenze da gestire»), e oltre 99 diventa «99+».
+- **Prova di mutazione**: 30 mutazioni, tutte rosse. Ogni area resa visibile a chiunque, l'ability sostituita dal permesso nudo, ogni motivo contato sul tab sbagliato, il conto che ignora la visibilità, i numeri scambiati fra i tab, lo zero mostrato, il tetto a due cifre, il testo per chi non vede.
