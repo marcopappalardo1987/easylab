@@ -10,6 +10,7 @@ use App\Models\Account;
 use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
+use App\Models\User;
 use App\Support\Billing\TettoStrumenti;
 use App\Support\Billing\TettoStrumentiRaggiunto;
 use App\Support\Notifiche\AvvisiObsolescenza;
@@ -17,6 +18,8 @@ use App\Support\Piani;
 use App\Support\Provisioning\ProvisionaEnte;
 use App\Support\Tenancy\AccessoTecnico;
 use App\Support\Tenancy\CurrentTenant;
+use App\Support\Utenti\AssegnazioneRifiutata;
+use App\Support\Utenti\LaboratoriDelResponsabile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -74,6 +77,13 @@ class Albero extends Component
     public ?string $provenienza = null;
 
     public ?string $notice = null;
+
+    /**
+     * La persona scelta nella tendina «Assegna a» del riquadro Responsabili
+     * (🔗 ADR-057). Una stringa: è il valore di una `<select>`, e arriva dal
+     * browser.
+     */
+    public string $nuovoResponsabile = '';
 
     /** Modale «aggiungi una sede», il gesto del cliente su sé stesso. */
     public bool $showSedeForm = false;
@@ -630,6 +640,80 @@ class Albero extends Component
         $this->showStrumentoForm = false;
     }
 
+    // --- Responsabili del laboratorio corrente (🔗 ADR-057) ---
+
+    /**
+     * Il laboratorio in cui ci si trova, letto dal database.
+     *
+     * 🔴 `findOrFail()` passa dai global scope: è il confine di tenancy di
+     * questa azione. Un Admin trova i soli nodi del proprio Ente, un
+     * Superadmin anche quelli dei clienti che gestisce (`ClientiGestiti`), e
+     * per chiunque altro un id estraneo è un 404. La sede non è un
+     * laboratorio: non si assegna.
+     */
+    private function laboratorioCorrente(): UnitaOrganizzativa
+    {
+        $nodo = UnitaOrganizzativa::findOrFail($this->currentId);
+
+        abort_if($nodo->tipo === TipoUnitaOrganizzativa::Ente, 422);
+
+        return $nodo;
+    }
+
+    /**
+     * Un Responsabile Reparto **dell'Ente di quel laboratorio**, non cestinato.
+     *
+     * `User` non ha uno scope di tenancy: il confine è il `tenant_id` del nodo,
+     * scritto qui a mano. Una persona di un altro Ente, o che non è un
+     * Responsabile, non si trova: 404, cioè «non esiste per te».
+     *
+     * ⚠️ Privato: pubblico, Livewire lo esporrebbe come azione.
+     */
+    private function responsabileDelNodo(UnitaOrganizzativa $nodo, int $id): User
+    {
+        return User::query()
+            ->where('tenant_id', $nodo->tenant_id)
+            ->role(User::DEPARTMENT_SCOPED_ROLE)
+            ->findOrFail($id);
+    }
+
+    public function assegnaResponsabile(): void
+    {
+        $this->authorize('utenti.update');
+
+        $nodo = $this->laboratorioCorrente();
+
+        $this->validate(
+            ['nuovoResponsabile' => ['required', 'integer']],
+            attributes: ['nuovoResponsabile' => 'persona'],
+        );
+
+        $persona = $this->responsabileDelNodo($nodo, (int) $this->nuovoResponsabile);
+
+        try {
+            LaboratoriDelResponsabile::aggiungi($persona, $nodo->id, Auth::user());
+        } catch (AssegnazioneRifiutata $e) {
+            $this->addError('nuovoResponsabile', $e->getMessage());
+
+            return;
+        }
+
+        $this->nuovoResponsabile = '';
+        $this->notice = "{$persona->name} ora segue «{$nodo->nome}», con ciò che contiene.";
+    }
+
+    public function togliResponsabile(int $id): void
+    {
+        $this->authorize('utenti.update');
+
+        $nodo = $this->laboratorioCorrente();
+        $persona = $this->responsabileDelNodo($nodo, $id);
+
+        LaboratoriDelResponsabile::togli($persona, $nodo->id, Auth::user());
+
+        $this->notice = "{$persona->name} non segue più «{$nodo->nome}».";
+    }
+
     public function render()
     {
         $nodes = $this->visibleNodes();
@@ -677,6 +761,12 @@ class Albero extends Component
             'strumenti' => $strumenti,
             'childCounts' => $childCounts,
             'strumentiCounts' => $strumentiCounts,
+            // 🔗 ADR-057: chi segue questo laboratorio, e chi potrebbe. Solo
+            // dentro un laboratorio e solo per chi può vedere le persone: per
+            // gli altri, e alla radice, nessuna query.
+            'responsabili' => ($current && $current->tipo !== TipoUnitaOrganizzativa::Ente && Gate::allows('utenti.view'))
+                ? LaboratoriDelResponsabile::perLaboratorio((int) $current->id, (int) $current->tenant_id)
+                : null,
             // La sede di chi guarda: il «Marchio email» si offre solo lì.
             'enteProprio' => CurrentTenant::id(),
             // Solo a modale aperta e con permesso: a modale chiusa zero query

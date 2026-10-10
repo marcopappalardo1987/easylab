@@ -1920,3 +1920,44 @@ Tre file in `public/`, collegati dal componente `x-brand-icone` nella testa dell
 - ⚠️ `favicon.ico` e `apple-touch-icon.png` sono pixel, e non seguono il tema: su una barra scura il braccio blu profondo della y si legge meno. Chi legge l'SVG non ha il problema.
 - Il `?v=1` nei collegamenti cambia quando cambia il disegno: le icone sono fra le cose che un browser tiene in memoria più a lungo.
 - **Prova di mutazione**: 15 mutazioni, tutte rosse. Il componente tolto da ciascuna impaginazione, ogni collegamento tolto o puntato a un file che non c'è, una forma ritoccata, il riquadro non quadrato, la variante scura tolta, l'`.ico` svuotato, l'icona di iOS della misura sbagliata.
+
+---
+
+**ADR-057 — I laboratori di un Responsabile Reparto si assegnano dall'applicazione**
+
+*Stato: Accettata e attuata il 10 Ott 2026, per decisione di Marco. Dà un'interfaccia al pivot `responsabile_unita` di ADR-006; lo scope di reparto e la matrice dei permessi (ADR-016) non cambiano. Solo su staging.*
+
+**Il difetto.** Un Responsabile Reparto vede solo i laboratori che gli sono assegnati, con ciò che contengono, e **niente** se non ne ha (ADR-006, fail-closed). Il pivot che lo decide esiste dal primo giorno, ma nessuna schermata lo scriveva: lo riempivano i seeder. Un Responsabile invitato da «Persone» entrava e non vedeva nulla, e nessuno poteva rimediare dall'applicazione.
+
+**Decisione.** I laboratori si assegnano da due pagine, che scrivono la stessa cosa:
+
+| Da dove | Che cosa si fa | Chi può |
+|---|---|---|
+| **«Persone»**, azione «Laboratori» sulla riga di un Responsabile | si spuntano, nell'elenco dei laboratori dell'Ente, quelli che la persona segue | chi ha `utenti.update` nell'Ente in cui si trova: l'Admin; il Superadmin per le persone di EasyLab, o impersonando |
+| **«Laboratori»**, riquadro «Responsabili» dentro un laboratorio | si aggiunge una persona fra i Responsabili dell'Ente, o la si toglie | chi ha `utenti.update` e arriva a quel laboratorio: l'Admin nel proprio Ente, e il **Superadmin anche nei clienti che gestisce**, senza impersonare |
+
+Nessun permesso nuovo: è `utenti.update`, lo stesso con cui si cambia un ruolo — chi decide che cosa una persona è, decide che cosa segue. Quindi **nessun riseeding**.
+
+**Le regole stanno in un posto solo**, `App\Support\Utenti\LaboratoriDelResponsabile`, che è l'unica strada verso il pivot:
+
+- si assegna **solo a chi ha il ruolo Responsabile Reparto**: per ogni altro ruolo il pivot non conta, e una riga scritta oggi tornerebbe a contare il giorno in cui la persona cambia ruolo;
+- **solo laboratori dell'Ente della persona**, non cestinati, e **mai la sede**: assegnare la radice farebbe di un Responsabile un Admin che non amministra;
+- si tengono **le sole radici**: chi segue un laboratorio segue già ciò che contiene, e una seconda riga per un sotto-laboratorio resterebbe lì a concedere, da sola, il giorno in cui il laboratorio gli viene tolto;
+- si scrive **una sede alla volta**: chi segue laboratori anche in un'altra sede dello stesso contratto li ritrova quando ci passa, e assegnargli quelli di qui non glieli porta via. Per questo la scrittura non è un `sync()`, che toglierebbe ogni riga fuori dall'elenco — comprese quelle dell'altra sede;
+- ogni cambio lascia una riga nel registro di audit: chi, a chi, da che cosa a che cosa.
+
+Chi può farlo e su quale persona, invece, lo decide la schermata che chiama: `User` non ha uno scope di tenancy, e il confine si scrive a mano dove si sa in quale Ente si trova chi agisce.
+
+**I laboratori sono del ruolo, non della persona.** Chi smette di essere Responsabile li perde — in ogni sede, perché il ruolo non è di una sede — nella stessa transazione che gli cambia ruolo: lasciati sul pivot tornerebbero a contare, senza che nessuno li abbia riassegnati, il giorno in cui lo ridiventa.
+
+**Conseguenze.**
+
+- In «Persone», sotto il ruolo di un Responsabile si legge che cosa segue; se non segue niente c'è scritto «Nessun laboratorio assegnato: non vede nulla». Dopo un invito o un cambio di ruolo che fa di qualcuno un Responsabile, l'esito ricorda che il gesto successivo sono i laboratori.
+- Un Responsabile senza laboratori che apre «Laboratori» non legge più «Nessun ente qui»: legge che non gliene è stato assegnato nessuno, e a chi chiederlo.
+- **Vale subito**, anche per chi è collegato: una scrittura sul pivot azzera la memo dei nodi accessibili (`AccessibleNodesMemo`).
+- Nella pagina di un sotto-laboratorio, chi lo riceve da un laboratorio che lo contiene compare con «tramite …» e senza «Togli»: si toglie da lì.
+- Il riquadro «Responsabili» lo vede solo chi può vedere le persone (`utenti.view`): i nomi dei colleghi sono materia di «Persone».
+- ⚠️ Per un cliente che **non** è gestito da EasyLab il Superadmin non arriva all'albero, quindi nemmeno a questo riquadro: resta l'impersonazione, come per ogni altro gesto su quel cliente.
+- ⚠️ **Non fatto**: scegliere i laboratori nella stessa finestra dell'invito; un riepilogo dei Responsabili sulla pagina della sede; un avviso al Responsabile quando gli cambiano i laboratori.
+- **Una strada sola, e un test che la tiene tale.** Un guardrail legge `app/` e diventa rosso se un file diverso da `LaboratoriDelResponsabile` (e da `EliminaCliente`, che cancella un cliente intero) scrive il pivot: una seconda schermata che facesse `attach()` per conto suo salterebbe tutte le regole qui sopra.
+- **Prova di mutazione**: 115 mutazioni, tutte rosse. Ogni filtro dell'elenco dei laboratori assegnabili (l'Ente, i cestinati, la sede, ciò che è rimasto sotto un nodo cestinato, l'ordine); il ruolo e l'Ente di chi riceve; il rifiuto dei laboratori estranei, tutto o niente; le sole radici; la scrittura, l'aggiunta e la rimozione, una sede alla volta e senza toccare i colleghi; l'audit; il permesso in ciascuna delle cinque azioni, anche sostituito da quello di sola lettura; il confine della persona e del nodo nelle due schermate; la validazione di ciò che arriva dal browser; il ruolo che porta via i laboratori; i promemoria; ciò che le due viste mostrano e a chi. Una equivalente, dichiarata: dalla pagina «Laboratori» l'autore passato all'audit può mancare, perché il registro prende comunque l'utente autenticato.

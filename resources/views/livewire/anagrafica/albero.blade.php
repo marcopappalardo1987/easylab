@@ -162,7 +162,18 @@
 
         @if ($children->isEmpty())
             <div class="mt-3 rounded-lg border border-dashed border-border px-4 py-8 text-center">
-                <p class="text-sm text-ink-3">Nessun {{ mb_strtolower($figli->etichetta()) }} qui.</p>
+                {{-- 🔗 ADR-057: un Responsabile Reparto senza laboratori non
+                     vede nulla (ADR-006, fail-closed), e «Nessun ente qui» non
+                     glielo spiegherebbe. Gli si dice che cosa manca, e a chi
+                     chiederlo. --}}
+                @if (! $current && auth()->user()?->isDepartmentScoped())
+                    <p class="text-sm text-ink-2" data-senza-laboratori>
+                        Non ti è stato ancora assegnato nessun laboratorio, quindi qui non c'è niente da vedere.
+                        Chiedi a chi amministra la sede di assegnartene uno dalla pagina «Persone».
+                    </p>
+                @else
+                    <p class="text-sm text-ink-3">Nessun {{ mb_strtolower($figli->etichetta()) }} qui.</p>
+                @endif
                 @if ($current)
                     @can('unita_organizzativa.create')
                         <x-ui.button variant="secondary" class="mt-3" wire:click="addChild({{ $current->id }})">+ {{ $addLabel }}</x-ui.button>
@@ -203,6 +214,79 @@
             </div>
         @endif
     </section>
+
+    {{-- 🔗 ADR-057: chi segue questo laboratorio. `$responsabili` è `null` alla
+         radice, sulla sede, e per chi non può vedere le persone.
+
+         Chi ha il ruolo Responsabile Reparto vede solo i laboratori che gli sono
+         assegnati (ADR-006): qui si legge chi sono, e chi può cambiare i ruoli
+         (`utenti.update`) ne aggiunge e ne toglie. È la stessa scrittura della
+         finestra «Laboratori» di «Persone», vista dal laboratorio.
+
+         ⚠️ Sta PRIMA degli strumenti: in un laboratorio con quaranta macchine,
+         in fondo all'elenco non lo troverebbe nessuno. --}}
+    @if ($responsabili !== null)
+        <section class="mt-8" data-responsabili>
+            <h2 class="text-xs font-semibold tracking-wide text-ink-3 uppercase">Responsabili ({{ count($responsabili['seguono']) }})</h2>
+            <p class="mt-1 text-sm text-ink-2">
+                Chi ha il ruolo Responsabile Reparto vede solo i laboratori che gli sono assegnati, con ciò che contengono.
+            </p>
+
+            @if ($responsabili['seguono'] === [])
+                <p class="mt-3 rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-ink-3">
+                    Nessun responsabile segue questo laboratorio.
+                </p>
+            @else
+                <ul class="mt-3 divide-y divide-border rounded-lg border border-border bg-surface">
+                    @foreach ($responsabili['seguono'] as $voce)
+                        <li wire:key="responsabile-{{ $voce['persona']->id }}" class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                            <span class="min-w-0">
+                                <span class="block truncate text-sm font-medium text-ink">{{ $voce['persona']->name }}</span>
+                                <span class="block truncate text-xs text-ink-3">{{ $voce['persona']->email }}</span>
+                            </span>
+
+                            @if ($voce['tramite'] !== null)
+                                {{-- Lo riceve da un laboratorio che contiene questo:
+                                     si toglie da lì, non da qui. --}}
+                                <span class="shrink-0 text-xs text-ink-3" data-tramite>tramite {{ $voce['tramite'] }}</span>
+                            @else
+                                @can('utenti.update')
+                                    <x-ui.button variant="ghost" wire:click="togliResponsabile({{ $voce['persona']->id }})">
+                                        Togli
+                                    </x-ui.button>
+                                @endcan
+                            @endif
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+
+            @can('utenti.update')
+                @if ($responsabili['altri'] !== [])
+                    <form wire:submit="assegnaResponsabile" class="mt-3 flex flex-wrap items-end gap-3">
+                        <div class="min-w-56 flex-1">
+                            <label for="nuovoResponsabile" class="block text-sm font-medium text-ink">Assegna questo laboratorio a</label>
+                            <select id="nuovoResponsabile" wire:model="nuovoResponsabile"
+                                    class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-sm text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                                <option value="">Scegli una persona…</option>
+                                @foreach ($responsabili['altri'] as $candidato)
+                                    <option value="{{ $candidato->id }}">{{ $candidato->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <x-ui.button type="submit" variant="secondary">Assegna</x-ui.button>
+                    </form>
+                    @error('nuovoResponsabile')
+                        <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
+                    @enderror
+                @elseif ($responsabili['seguono'] === [])
+                    <p class="mt-3 text-sm text-ink-3" data-nessun-responsabile-in-sede>
+                        In questa sede nessuno ha il ruolo Responsabile Reparto: si dà dalla pagina «Persone».
+                    </p>
+                @endif
+            @endcan
+        </section>
+    @endif
 
     {{-- Strumenti del nodo corrente --}}
     @if ($current && ! $isEnte)

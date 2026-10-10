@@ -104,6 +104,10 @@
                             </td>
 
                         <td class="px-3 py-3" data-etichetta="Ruolo">
+                            {{-- ⚠️ Un solo figlio diretto (DS §7): i badge e, per un
+                                 Responsabile, i suoi laboratori stanno nello stesso
+                                 contenitore, uno sotto l'altro. --}}
+                            <div>
                             <div class="flex flex-wrap gap-1">
                                 {{-- ⛔ La variabile del ciclo NON si chiama `$ruolo`. La
                                      property pubblica del componente si chiama così, e un
@@ -121,6 +125,25 @@
                                          descrivere con un trattino. --}}
                                     <x-ui.badge variant="warning">Senza ruolo</x-ui.badge>
                             @endforelse
+                            </div>
+
+                            {{-- 🔗 ADR-057: che cosa segue un Responsabile Reparto. Il
+                                 ruolo da solo non mostra niente (ADR-006): se non ha
+                                 laboratori va detto qui, o chi amministra lo scopre
+                                 dalla telefonata di chi è entrato e non vede nulla. --}}
+                            @if ($laboratoriDi->has($persona->id))
+                                @php $suoi = $laboratoriDi[$persona->id]; @endphp
+                                @if ($suoi === [])
+                                    <p class="mt-1.5 text-xs font-medium text-warn-soft-ink" data-senza-laboratori>
+                                        <span aria-hidden="true">◐</span> Nessun laboratorio assegnato: non vede nulla
+                                    </p>
+                                @else
+                                    <p class="mt-1.5 max-w-xs text-xs text-ink-2" data-laboratori-di="{{ $persona->id }}">
+                                        <span class="text-ink-3">Segue:</span>
+                                        {{ implode(', ', array_slice($suoi, 0, 3)) }}@if (count($suoi) > 3)<span class="text-ink-3"> e {{ count($suoi) - 3 === 1 ? 'un altro' : 'altri '.(count($suoi) - 3) }}</span>@endif
+                                    </p>
+                                @endif
+                            @endif
                             </div>
                             </td>
 
@@ -164,6 +187,15 @@
                                         @endif
 
                                         @can('utenti.update')
+                                            {{-- 🔗 ADR-057: solo per chi è Responsabile
+                                                 Reparto. Per ogni altro ruolo i laboratori
+                                                 non contano, e l'azione risponde 403. --}}
+                                            @if ($laboratoriDi->has($persona->id))
+                                                <x-ui.button variant="secondary" wire:click="apriLaboratori({{ $persona->id }})" data-apri-laboratori>
+                                                    Laboratori
+                                                </x-ui.button>
+                                            @endif
+
                                             <x-ui.button variant="secondary" wire:click="apriRuolo({{ $persona->id }})">
                                                 Cambia ruolo
                                             </x-ui.button>
@@ -328,6 +360,89 @@
                 <div class="flex justify-end gap-3">
                     <x-ui.button variant="secondary" type="button" wire:click="chiudiRuolo">Annulla</x-ui.button>
                     <x-ui.button type="submit">Salva il ruolo</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
+    @endif
+
+    {{-- Modale «laboratori di un Responsabile» (🔗 ADR-057) --}}
+    @if ($conLaboratori)
+        <x-ui.modal title="Laboratori di {{ $conLaboratori->name }}" close="chiudiLaboratori">
+            <p class="text-sm text-ink-2">
+                <strong class="text-ink">{{ $conLaboratori->name }}</strong> vede e gestisce solo i laboratori
+                scelti qui, con tutto ciò che contengono. Senza nessun laboratorio non vede nulla.
+                Vale subito, anche se in questo momento è collegata.
+            </p>
+
+            <form wire:submit="salvaLaboratori" class="mt-4 space-y-4">
+                @if ($laboratori->isEmpty())
+                    <p class="rounded-md border border-dashed border-border px-3 py-4 text-sm text-ink-3" data-nessun-laboratorio>
+                        Questo Ente non ha ancora laboratori: si creano da
+                        <a href="{{ route('anagrafica.index') }}" wire:navigate class="font-medium text-brand hover:text-brand-hover">{{ \App\Enums\TipoUnitaOrganizzativa::SEZIONE }}</a>.
+                    </p>
+                @else
+                    @php
+                        // Ciò che è spuntato, e ciò che ne discende: un
+                        // sotto-laboratorio di un laboratorio scelto è già
+                        // compreso, e lo si mostra spuntato e fermo.
+                        $scelti = array_map('intval', $laboratoriScelti);
+                        $compresoIn = function (object $nodo) use ($laboratori, $scelti): ?string {
+                            for ($padre = $laboratori->get($nodo->parent_id); $padre !== null; $padre = $laboratori->get($padre->parent_id)) {
+                                if (in_array($padre->id, $scelti, true)) {
+                                    return $padre->percorso;
+                                }
+                            }
+
+                            return null;
+                        };
+                    @endphp
+
+                    <fieldset>
+                        <legend class="sr-only">Laboratori da assegnare</legend>
+
+                        <ul class="max-h-96 divide-y divide-border overflow-y-auto rounded-md border border-border" data-elenco-laboratori>
+                            @foreach ($laboratori as $nodo)
+                                @php $dentro = $compresoIn($nodo); @endphp
+                                <li wire:key="lab-{{ $nodo->id }}">
+                                    <label class="flex min-h-11 items-center gap-3 px-3 py-2 text-sm {{ $dentro !== null ? 'text-ink-3' : 'text-ink hover:bg-surface-sunken' }}">
+                                        @if ($dentro !== null)
+                                            {{-- Compreso in un laboratorio già scelto: non è
+                                                 una scelta a sé, e non si manda.
+
+                                                 ⚠️ Le due caselle hanno una `wire:key` DIVERSA:
+                                                 senza, Livewire trasformerebbe la casella di
+                                                 prima in questa aggiungendole l'attributo
+                                                 `checked` — che su un elemento già esistente
+                                                 non accende la spunta. Con due chiavi la
+                                                 sostituisce, e la spunta c'è. Visto nel
+                                                 browser, non nei test: `Livewire::test()` legge
+                                                 l'HTML, non lo stato della casella. --}}
+                                            <input type="checkbox" checked disabled wire:key="compreso-{{ $nodo->id }}"
+                                                   class="h-4 w-4 shrink-0 rounded border border-border-strong bg-surface text-brand"
+                                                   data-compreso="{{ $nodo->id }}">
+                                            <span>{{ $nodo->percorso }} <span class="text-xs">(compreso in {{ $dentro }})</span></span>
+                                        @else
+                                            <input type="checkbox" wire:model.live="laboratoriScelti" value="{{ $nodo->id }}" wire:key="scelta-{{ $nodo->id }}"
+                                                   class="h-4 w-4 shrink-0 rounded border border-border-strong bg-surface text-brand focus:ring-2 focus:ring-ring">
+                                            <span>{{ $nodo->percorso }}</span>
+                                        @endif
+                                    </label>
+                                </li>
+                            @endforeach
+                        </ul>
+                    </fieldset>
+                @endif
+
+                @error('laboratoriScelti')
+                    <p class="text-sm text-bad-soft-ink">{{ $message }}</p>
+                @enderror
+                @error('laboratoriScelti.*')
+                    <p class="text-sm text-bad-soft-ink">{{ $message }}</p>
+                @enderror
+
+                <div class="flex justify-end gap-3">
+                    <x-ui.button variant="secondary" type="button" wire:click="chiudiLaboratori">Annulla</x-ui.button>
+                    <x-ui.button type="submit">Salva i laboratori</x-ui.button>
                 </div>
             </form>
         </x-ui.modal>

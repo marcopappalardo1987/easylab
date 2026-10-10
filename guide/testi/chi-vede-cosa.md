@@ -41,7 +41,9 @@ Il Responsabile lavora su un perimetro: i reparti che gli sono stati assegnati.
 
 La differenza col ruolo precedente non è tanto nel menù quanto nel **parco**:
 un Responsabile vede solo i reparti che gli sono stati assegnati. Non è un menù
-più corto, è un'applicazione più piccola.
+più corto, è un'applicazione più piccola. Glieli assegna chi amministra la sede,
+dalla pagina «Persone» oppure dalla pagina del laboratorio, nel riquadro
+«Responsabili».
 
 ## 5
 

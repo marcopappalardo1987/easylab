@@ -144,6 +144,8 @@ Restringe il **Responsabile Reparto** al sotto-albero dei nodi assegnati.
 
 *Unique* `(user_id, unita_organizzativa_id)`.
 
+> 🆕 **Dal 10 Ott 2026 il pivot si scrive dall'applicazione** (🔗 ADR-057): da «Persone» (i laboratori di un Responsabile) e da «Laboratori» (i Responsabili di un laboratorio), con `utenti.update`. Prima lo riempivano solo i seeder. L'unica strada è `App\Support\Utenti\LaboratoriDelResponsabile`: solo a chi ha il ruolo Responsabile Reparto, solo nodi vivi del suo Ente, mai la sede, e le sole radici (un sotto-laboratorio di un laboratorio assegnato non ha una riga sua). Chi smette di essere Responsabile perde le proprie righe.
+
 ### 3.3 `tecnico_cliente` (pivot — ADR-007)
 Portafoglio clienti del Tecnico. Grant a livello di Ente.
 
