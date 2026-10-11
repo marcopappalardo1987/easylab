@@ -36,6 +36,23 @@ class InterventoEseguito extends Notification implements ShouldQueue
     /** @var list<int> */
     public $backoff = [60, 300];
 
+    /**
+     * `true` per la copia che va al referente della macchina (🔗 ADR-054).
+     *
+     * ⚠️ Proprietà **con un default**, e non un parametro promosso come le
+     * altre: una notifica accodata prima del rilascio non la porta nel proprio
+     * payload, `unserialize` non passa dal costruttore, e una proprietà
+     * tipizzata senza default resterebbe non inizializzata — l'email in coda
+     * in quel momento fallirebbe leggendola.
+     */
+    public bool $alReferente = false;
+
+    /**
+     * @param  bool  $alReferente  `true` per la copia che va al referente della
+     *                             macchina (🔗 ADR-054): non è una persona di
+     *                             Easy Lab, e l'ultima riga glielo dice invece
+     *                             di mandarlo a delle preferenze che non ha.
+     */
     public function __construct(
         public readonly int $enteId,
         public readonly string $enteNome,
@@ -48,7 +65,10 @@ class InterventoEseguito extends Notification implements ShouldQueue
         public readonly ?string $autore = null,
         public readonly bool $conReport = false,
         public readonly ?string $prossima = null,
-    ) {}
+        bool $alReferente = false,
+    ) {
+        $this->alReferente = $alReferente;
+    }
 
     /**
      * Solo email, e solo a chi non vi ha rinunciato dalle proprie preferenze.
@@ -80,6 +100,7 @@ class InterventoEseguito extends Notification implements ShouldQueue
                 'autore' => $this->autore,
                 'conReport' => $this->conReport,
                 'prossima' => $this->prossima,
+                'alReferente' => $this->alReferente,
                 'url' => route('strumenti.show', $this->strumentoId),
             ]);
     }

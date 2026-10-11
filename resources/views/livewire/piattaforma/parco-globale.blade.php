@@ -113,11 +113,11 @@
             <div>
                 <label for="stato" class="block text-xs font-medium tracking-wide text-ink-3 uppercase">Stato</label>
                 <select id="stato" wire:model.live="stato"
-                    class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none sm:w-52">
+                    class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none sm:w-60">
                     <option value="">Tutti gli stati</option>
-                    <option value="arancione">◐ Azione richiesta</option>
-                    <option value="verde">● In regola</option>
-                    <option value="rosso">■ Non idoneo</option>
+                    <option value="arancione">◐ {{ \App\Enums\StatoSemaforo::Arancione->etichettaInsieme() }}</option>
+                    <option value="verde">● {{ \App\Enums\StatoSemaforo::Verde->etichettaInsieme() }}</option>
+                    <option value="rosso">■ {{ \App\Enums\StatoSemaforo::Rosso->etichettaInsieme() }}</option>
                 </select>
             </div>
 
@@ -137,7 +137,7 @@
             <label class="flex items-center gap-2 py-2.5 text-sm whitespace-nowrap text-ink-2">
                 <input type="checkbox" wire:model.live="soloObsoleti"
                     class="rounded border border-border-strong text-brand focus:ring-ring">
-                ⏳ Solo obsoleti
+                ⏳ Solo {{ mb_strtolower(\App\Models\Strumento::ETICHETTA_OBSOLETI) }}
             </label>
         </div>
     </x-ui.card>
@@ -227,7 +227,7 @@
                                     @if ($obsoleta)
                                         <span class="inline-flex items-center gap-1 rounded-full bg-obs-soft px-2 py-0.5 text-xs font-medium text-obs-soft-ink"
                                               title="Installato il {{ $macchina->data_installazione->format('d/m/Y') }} — oltre la soglia di {{ $sogliaRiga }} anni">
-                                            <span aria-hidden="true">⏳</span> Obsoleto
+                                            <span aria-hidden="true">⏳</span> {{ \App\Models\Strumento::ETICHETTA_OBSOLETO }}
                                         </span>
                                     @endif
                                 </span>

@@ -4,6 +4,7 @@ namespace App\Livewire\Piattaforma\Concerns;
 
 use App\Models\Account;
 use App\Notifications\PropostaPiano;
+use App\Support\Billing\DurataComodato;
 use App\Support\Piani;
 use App\Support\Provisioning\EsitoProvisioning;
 use App\Support\Provisioning\PianiDiNascita;
@@ -78,9 +79,14 @@ trait ProvisionaCliente
         'piano' => '',
         // Spuntato = manutenzione gestita da EasyLab. Solo sul cliente nuovo (ADR-046).
         'gestita' => '',
+        // Quanto dura il comodato d'uso, e fino a che giorno se si sceglie una
+        // data precisa (ADR-058). Solo sul cliente nuovo, e solo se il piano
+        // con cui nasce è in comodato.
+        'comodato' => '',
+        'comodatoData' => '',
     ];
 
-    private const CAMPI_NUOVO = ['nome', 'nomeSede', 'adminEmail', 'adminName', 'piano', 'gestita'];
+    private const CAMPI_NUOVO = ['nome', 'nomeSede', 'adminEmail', 'adminName', 'piano', 'gestita', 'comodato', 'comodatoData'];
 
     public function apriProvisioning(?int $accountId = null): void
     {
@@ -186,6 +192,15 @@ trait ProvisionaCliente
         // un array pubblico, e un array annidato non deve valere «sì».
         $gestita = $account === null && in_array($this->nuovo['gestita'] ?? null, [true, 1, '1', 'on'], true);
 
+        // 🔴 **La durata del comodato si legge SOLO sul cliente nuovo**, per la
+        // stessa ragione del piano: agganciando una sede il campo non c'è, ma
+        // `nuovo` è un array pubblico. La scadenza di un contratto in essere si
+        // cambia dal suo pannello, non di straforo da qui.
+        $this->nuovo['comodato'] = $account === null ? $pulito('comodato') : '';
+        $this->nuovo['comodatoData'] = $account === null && $this->nuovo['comodato'] === DurataComodato::DATA_PRECISA
+            ? $pulito('comodatoData')
+            : null;
+
         $dati = $this->validate([
             'nuovo.nome' => ['required', 'string', 'min:2', 'max:255'],
             'nuovo.nomeSede' => ['nullable', 'string', 'min:2', 'max:255'],
@@ -195,9 +210,14 @@ trait ProvisionaCliente
             // l'apertura della modale e l'invio un piano può essere archiviato,
             // e un codice forgiato non è passato da nessuna tendina.
             'nuovo.piano' => ['nullable', 'string', Rule::in(PianiDiNascita::codici())],
+            ...DurataComodato::regole('nuovo.comodato', 'nuovo.comodatoData'),
         ], [
             'nuovo.piano.in' => 'Il piano scelto non è più fra quelli disponibili: riapri la tendina e scegline uno.',
+            'nuovo.comodatoData.required_if' => 'Scegli il giorno in cui il comodato scade.',
+            'nuovo.comodatoData.after_or_equal' => 'La scadenza del comodato non può essere un giorno già passato.',
         ], [
+            'nuovo.comodato' => 'durata del comodato',
+            'nuovo.comodatoData' => 'scadenza del comodato',
             // L'etichetta dice il vero **nel ramo in cui si sta**: sul cliente
             // nuovo `nome` è la ragione sociale, e chiamarlo «nome della sede»
             // manderebbe l'operatore a correggere il campo sbagliato — accanto
@@ -240,6 +260,17 @@ trait ProvisionaCliente
         // l'account deve esistere, e il limite di piano del provisioning gira
         // su un account che ancora non c'è.
         $notaPiano = $this->applicaIlPianoScelto($esito, $dati['piano'] ?? null);
+
+        // 🔗 ADR-058: la scadenza si scrive DOPO il piano, e solo se il cliente
+        // è nato davvero su un piano in comodato. Con un piano a pagamento
+        // proposto resta sul predefinito in attesa dell'incasso: lì la durata
+        // scelta non vale, perché non è quello il contratto che si sta firmando.
+        $scadenza = DurataComodato::scadenza((string) ($dati['comodato'] ?? ''), $dati['comodatoData'] ?? null);
+
+        if ($scadenza !== null && $esito->accountNuovo && $esito->account->piano_proposto === null && Piani::eGratuito((string) $esito->account->piano)) {
+            $esito->account->impostaScadenzaComodato($scadenza);
+            $notaPiano .= ' Il comodato scade il '.$scadenza->format('d/m/Y').'.';
+        }
 
         // `$gestita` è vero solo sul cliente nuovo, e lì `esigiAccountNuovo`
         // garantisce che l'account sia nato adesso: non serve richiederlo.

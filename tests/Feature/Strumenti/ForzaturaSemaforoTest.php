@@ -261,7 +261,7 @@ it('shows the forzato pill in scheda and elenco, and hides it otherwise', functi
 
     scheda($this->admin, $this->strumento->fresh())
         ->assertSee('⚑')
-        ->assertSee('Non idoneo')
+        ->assertSee('Strumento non idoneo')
         ->assertSee('Guarnizione rotta');   // il tooltip porta chi/quando/perché
 
     Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)->assertSee('⚑');

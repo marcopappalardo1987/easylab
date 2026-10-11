@@ -40,7 +40,7 @@ use Illuminate\Support\Facades\DB;
 class RegistraRicambiIntervento
 {
     /**
-     * @param  list<array{nome:string,scadenza_garanzia:string}>  $nuove
+     * @param  list<array{nome:string,scadenza_garanzia:string,fornitore_id?:?int}>  $nuove
      * @param  list<int>  $rimosse  id di `ricambio_utilizzo`, risolti SOLO dentro $intervento
      * @return array{creati: Collection<int, RicambioUtilizzo>, rimossi: int}
      */
@@ -92,6 +92,9 @@ class RegistraRicambiIntervento
             'strumento_id' => $intervento->strumento_id,
             'ricambio_id' => $ricambio->id,
             'intervento_id' => $intervento->id,
+            // Da chi è stato comprato il pezzo (ADR-051), se chi registra lo
+            // dice. La coerenza col tenant la impone il model.
+            'fornitore_id' => $riga['fornitore_id'] ?? null,
             // Il form non chiede la quantità (wireframe §2.1): due pezzi uguali
             // sullo stesso intervento sono un refuso, e il caso vero
             // ("due guarnizioni") si registra dal tab Ricambi.

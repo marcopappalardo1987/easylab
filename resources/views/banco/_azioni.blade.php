@@ -87,11 +87,24 @@
     'nota' => "`neutral` porta un filo di bordo INTERNO: su una card la superficie incassata è quasi dello stesso colore del fondo, in entrambi i temi, e senza quel filo la pill smetterebbe di essere una pill. `info` e `primary` sono due gradini dello stesso blu, non due blu (ADR-033).",
 ])
     <x-ui.badge>Neutro</x-ui.badge>
-    <x-ui.badge variant="success">In regola</x-ui.badge>
+    <x-ui.badge variant="success">Strumentazione idonea</x-ui.badge>
     <x-ui.badge variant="warning">In scadenza</x-ui.badge>
     <x-ui.badge variant="danger">Scaduto</x-ui.badge>
     <x-ui.badge variant="info">Informativo</x-ui.badge>
     <x-ui.badge variant="primary">Corrente</x-ui.badge>
+@endcomponent
+
+@component('banco.pezzo', [
+    'titolo' => 'x-ui.da-gestire — il numerino accanto al nome di un tab',
+    'token' => 'bg-warn-soft · text-warn-soft-ink · h-5 min-w-5 · tabular-nums',
+    'nota' => "Quante scadenze da gestire stanno in quel tab (ADR-055). Con zero non rende NIENTE: l'ultimo tab qui sotto ne è la prova. Oltre 99 scrive «99+», e il conto vero resta nel testo per chi usa uno screen reader.",
+])
+    <div class="flex flex-wrap gap-1 border-b border-border text-sm">
+        <span class="inline-flex items-center border-b-2 border-brand px-3 py-2 font-medium text-brand">Interventi<x-ui.da-gestire :quante="1" /></span>
+        <span class="inline-flex items-center border-b-2 border-transparent px-3 py-2 font-medium text-ink-2">Ricambi<x-ui.da-gestire :quante="12" /></span>
+        <span class="inline-flex items-center border-b-2 border-transparent px-3 py-2 font-medium text-ink-2">Garanzie<x-ui.da-gestire :quante="120" /></span>
+        <span class="inline-flex items-center border-b-2 border-transparent px-3 py-2 font-medium text-ink-2">Documenti<x-ui.da-gestire :quante="0" /></span>
+    </div>
 @endcomponent
 
 @component('banco.pezzo', [

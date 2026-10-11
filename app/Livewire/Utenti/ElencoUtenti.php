@@ -11,8 +11,10 @@ use App\Notifications\InvitoUtente;
 use App\Support\AuditLog;
 use App\Support\Tenancy\CurrentTenant;
 use App\Support\Tenancy\EntePiattaforma;
+use App\Support\Utenti\AssegnazioneRifiutata;
 use App\Support\Utenti\InvitaUtente;
 use App\Support\Utenti\InvitoRifiutato;
+use App\Support\Utenti\LaboratoriDelResponsabile;
 use App\Support\Utenti\RuoliAssegnabili;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -125,6 +127,18 @@ class ElencoUtenti extends Component
     public ?int $utenteRuolo = null;
 
     public string $nuovoRuolo = '';
+
+    // --- Modale «laboratori di un Responsabile» (🔗 ADR-057) ---
+
+    public ?int $utenteLaboratori = null;
+
+    /**
+     * Gli id dei laboratori spuntati. Arrivano dal browser come stringhe, e
+     * possono arrivare come qualunque cosa: si validano in `salvaLaboratori()`.
+     *
+     * @var array<int, int|string>
+     */
+    public array $laboratoriScelti = [];
 
     // --- Conferma «cestina» ---
 
@@ -445,6 +459,10 @@ class ElencoUtenti extends Component
         if ($this->imponeSecondoFattore($esito->utente->getRoleNames()->first() ?? '')) {
             $this->notice .= ' Al primo accesso le sarà chiesto di configurare il secondo fattore, e non potrà andare altrove finché non l\'avrà fatto.';
         }
+
+        if ($esito->utente->isDepartmentScoped()) {
+            $this->notice .= self::ORA_I_LABORATORI;
+        }
     }
 
     /**
@@ -607,8 +625,18 @@ class ElencoUtenti extends Component
                 }
 
                 $eraAdmin = $persona->hasRole('Admin');
+                $eraResponsabile = $persona->isDepartmentScoped();
                 $precedenti = $persona->getRoleNames()->all();
                 $persona->syncRoles([$this->nuovoRuolo]);
+
+                // 🔗 ADR-057: i laboratori sono del RUOLO, non della persona. A
+                // chi smette di essere Responsabile si tolgono qui, nella
+                // stessa transazione: lasciati sul pivot non conterebbero
+                // oggi, e tornerebbero a contare — senza che nessuno li abbia
+                // riassegnati — il giorno in cui lo ridiventa.
+                if ($eraResponsabile && $this->nuovoRuolo !== User::DEPARTMENT_SCOPED_ROLE) {
+                    LaboratoriDelResponsabile::svuota($persona, Auth::user());
+                }
 
                 // Come nell'invito: chi diventa Admin entra fra i membri
                 // dell'account.
@@ -666,7 +694,116 @@ class ElencoUtenti extends Component
             $this->notice .= ' Al prossimo accesso le sarà chiesto di configurare il secondo fattore, e non potrà andare altrove finché non l\'avrà fatto.';
         }
 
+        if ($ruolo === User::DEPARTMENT_SCOPED_ROLE && ! in_array($ruolo, $precedenti, true)) {
+            $this->notice .= self::ORA_I_LABORATORI;
+        }
+
         $this->chiudiRuolo();
+    }
+
+    // =========================================================================
+    // I laboratori di un Responsabile Reparto (🔗 ADR-057)
+    // =========================================================================
+
+    /**
+     * Detto a chi ha appena fatto di qualcuno un Responsabile: il ruolo da
+     * solo non mostra niente (🔗 ADR-006, fail-closed), e il gesto che manca è
+     * in questa stessa pagina.
+     */
+    private const ORA_I_LABORATORI = ' Ora assegnale i laboratori con «Laboratori»: finché non ne ha, non vede nulla.';
+
+    /**
+     * Una persona del proprio Ente **che è un Responsabile Reparto**.
+     *
+     * Passa da `personaDellEnte()` — il confine di tenancy resta in un punto
+     * solo — e aggiunge il ruolo: per chiunque altro i laboratori non contano,
+     * quindi la modale non si apre e l'azione non scrive.
+     *
+     * ⚠️ Privato come gli altri helper: pubblico, Livewire lo esporrebbe come
+     * azione, e risponderebbe in modo diverso a seconda che un id esista.
+     */
+    private function responsabileDellEnte(mixed $id): User
+    {
+        $persona = $this->personaDellEnte($id);
+
+        abort_unless($persona->isDepartmentScoped(), 403);
+
+        return $persona;
+    }
+
+    public function apriLaboratori(int $id): void
+    {
+        Gate::authorize('utenti.update');
+
+        $persona = $this->responsabileDellEnte($id);
+
+        $this->utenteLaboratori = $persona->id;
+        $this->laboratoriScelti = array_map(
+            'strval',
+            LaboratoriDelResponsabile::assegnati([$persona->id])[$persona->id] ?? [],
+        );
+        $this->errore = null;
+        $this->resetValidation();
+    }
+
+    public function chiudiLaboratori(): void
+    {
+        $this->utenteLaboratori = null;
+        $this->laboratoriScelti = [];
+        $this->resetValidation();
+    }
+
+    /**
+     * L'altra strada per puntare la modale su una persona: la property. Stessa
+     * ragione di `updatingUtenteRuolo()`.
+     */
+    public function updatingUtenteLaboratori(mixed $valore): void
+    {
+        if ($valore !== null && $valore !== '') {
+            Gate::authorize('utenti.update');
+            $this->responsabileDellEnte($valore);
+        }
+    }
+
+    /**
+     * Scrive i laboratori spuntati.
+     *
+     * Riautorizza e rilegge la persona, come ogni azione di questa schermata;
+     * **quali** laboratori siano leciti lo decide
+     * `LaboratoriDelResponsabile`, che è la sola strada verso il pivot e la
+     * stessa della pagina «Laboratori».
+     */
+    public function salvaLaboratori(): void
+    {
+        Gate::authorize('utenti.update');
+
+        $this->notice = null;
+        $this->errore = null;
+
+        // 🔴 La lista arriva dal browser: senza questa riga un valore annidato
+        // arriverebbe fino al cast, e diventerebbe un id.
+        $this->validate([
+            'laboratoriScelti' => ['array'],
+            'laboratoriScelti.*' => ['integer'],
+        ], attributes: ['laboratoriScelti.*' => 'laboratorio']);
+
+        $persona = $this->responsabileDellEnte($this->utenteLaboratori);
+
+        try {
+            ['dopo' => $dopo] = LaboratoriDelResponsabile::imposta($persona, $this->laboratoriScelti, Auth::user());
+        } catch (AssegnazioneRifiutata $e) {
+            $this->addError('laboratoriScelti', $e->getMessage());
+
+            return;
+        }
+
+        $this->notice = match (count($dopo)) {
+            0 => "{$persona->name} non ha più nessun laboratorio: finché non ne ha, non vede nulla.",
+            1 => "{$persona->name} ora segue un laboratorio, con ciò che contiene.",
+            default => "{$persona->name} ora segue ".count($dopo).' laboratori, con ciò che contengono.',
+        };
+
+        $this->chiudiLaboratori();
     }
 
     // =========================================================================
@@ -911,8 +1048,29 @@ class ElencoUtenti extends Component
     {
         $persone = $this->persone();
 
+        // 🔗 ADR-057: i laboratori dei Responsabili di QUESTA pagina. Due query
+        // in tutto, e solo se in pagina ce n'è almeno uno: l'elenco dell'Ente
+        // (che serve anche alla modale) e le righe del pivot.
+        $responsabili = $persone->getCollection()
+            ->filter(fn (User $u) => ! $u->trashed() && $u->isDepartmentScoped())
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        $laboratori = $responsabili === [] ? collect() : LaboratoriDelResponsabile::assegnabili($this->enteId());
+        $assegnati = LaboratoriDelResponsabile::assegnati($responsabili);
+
         return view('livewire.utenti.elenco-utenti', [
             'persone' => $persone,
+            'laboratori' => $laboratori,
+            // Per persona, i percorsi di ciò che segue, nell'ordine in cui la
+            // finestra li elenca; `[]` per chi è Responsabile e non ha ancora
+            // niente.
+            'laboratoriDi' => collect($responsabili)->mapWithKeys(fn (int $id) => [
+                $id => $laboratori->only($assegnati[$id] ?? [])->pluck('percorso')->values()->all(),
+            ]),
+            'conLaboratori' => $this->utenteLaboratori !== null
+                ? $persone->firstWhere('id', $this->utenteLaboratori)
+                : null,
             'adminAttivi' => $this->adminAttivi(),
             // Calcolati server-side e indicizzati per id: i due helper restano
             // privati. Se fossero pubblici, Livewire li esporrebbe come azioni

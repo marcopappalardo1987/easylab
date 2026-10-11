@@ -27,7 +27,7 @@ test('chi vede cosa', async ({ page }) => {
     durata: 8,
   });
 
-  await g.passo("L'Amministratore ha il menù più lungo: anagrafica, persone, fornitori, abbonamento. È chi governa l'Ente.", {
+  await g.passo("L'Amministratore ha il menù più lungo: laboratori, persone, fornitori, abbonamento. È chi governa l'Ente.", {
     su: page.getByRole('navigation', { name: 'Menù principale' }),
     zoom: 1.6,
     durata: 8,

@@ -105,7 +105,11 @@ it('costs the same with 5 and 50 machines on the other list pages, and no more t
     'Admin fornitori' => ['admin', '/fornitori', 5, 'Fornitore 2'],
     'Admin ricambi' => ['admin', '/ricambi?search=Ricambio', 8, 'Ricambio 2'],
     'Responsabile ricambi' => ['responsabile', '/ricambi?search=Ricambio', 9, 'Ricambio 2'],
-    'Admin utenti' => ['admin', '/utenti', 10, 'Utente 1'],
+    // 12 e non più 10 dal 10 Ott 2026 (ADR-057): sotto il ruolo di un
+    // Responsabile Reparto la pagina dice quali laboratori segue. Due letture
+    // per tutta la pagina — l'albero dell'Ente e le righe del pivot — e solo
+    // se in pagina c'è almeno un Responsabile, come qui.
+    'Admin utenti' => ['admin', '/utenti', 12, 'Utente 1'],
     'Tecnico elenco strumenti' => ['tecnico', '/strumenti', 10, 'Macchina 2'],
     'Superadmin parco scadenzario' => ['superadmin', '/piattaforma/parco/scadenzario', 13, 'Macchina 2'],
     'Superadmin parco ricambi' => ['superadmin', '/piattaforma/parco/ricambi', 10, 'Ricambio 2'],

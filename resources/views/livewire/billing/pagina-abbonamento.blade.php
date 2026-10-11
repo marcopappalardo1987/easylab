@@ -105,6 +105,14 @@
                      mentre il provisioning della successiva esplode. --}}
                 <dd class="mt-1 text-sm text-ink">{{ $entiUsati }}@if ($limiteEnti !== null) su {{ $limiteEnti }}@endif</dd>
             </div>
+            {{-- 🔗 ADR-049. Assente su un piano fuori catalogo, per la stessa
+                 ragione del limite di sedi qui sopra. --}}
+            @if ($strumenti !== null)
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wide text-ink-3">Strumenti</dt>
+                    <dd class="mt-1 text-sm text-ink" data-strumenti>{{ $strumenti }}</dd>
+                </div>
+            @endif
         </dl>
     </x-ui.card>
 
@@ -142,8 +150,16 @@
                  vendeva niente. Dal 3 Ott 2026 (ADR-045) sotto questa scheda ci
                  sono i piani attivabili: dirlo due righe sopra sarebbe
                  contraddirsi da soli. --}}
+            {{-- 🔗 ADR-058: la scadenza del comodato, detta al cliente prima
+                 che gliela dica l'email dei trenta giorni. --}}
+            @if ($comodatoScadeIl)
+                <p class="mb-2 text-sm font-medium text-ink" data-comodato-scade>
+                    Il comodato d'uso {{ $comodatoScadeIl->isBefore(today()) ? 'è scaduto il' : 'scade il' }} {{ $comodatoScadeIl->format('d/m/Y') }}.
+                    <span class="font-normal text-ink-2">Per rinnovarlo scrivi a chi ti segue in Easy Lab.</span>
+                </p>
+            @endif
             <p class="text-sm text-ink-2">
-                Il piano Free non ha un portale di fatturazione: è la sua definizione.
+                Un piano in comodato d'uso non ha un portale di fatturazione: non c'è un abbonamento da gestire.
                 @if ($pianiOfferti !== [])
                     Per passare a un piano a pagamento, scegline uno qui sotto.
                 @else
@@ -210,7 +226,8 @@
                         </div>
                         <p class="mt-1 text-sm text-ink-2">
                             {{ $prezzo }} € al mese ·
-                            {{ $riga['maxEnti'] === null ? 'sedi illimitate' : 'fino a '.$riga['maxEnti'].' sedi' }}
+                            {{ $riga['maxEnti'] === null ? 'sedi illimitate' : 'fino a '.$riga['maxEnti'].' sedi' }} ·
+                            {{ $riga['strumenti'] }}
                         </p>
 
                         @if ($puoComprare)

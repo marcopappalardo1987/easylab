@@ -18,7 +18,7 @@ tutti quelli che ricevono posta da quella sede.
 
 ## 1
 
-Ci si arriva da «Anagrafica», col pulsante «Marchio email». Sta lì e non nelle
+Ci si arriva da «Laboratori», col pulsante «Marchio email». Sta lì e non nelle
 impostazioni personali per una ragione precisa: il tema chiaro o scuro riguarda
 solo te, questo riguarda l'immagine con cui il laboratorio si presenta
 all'esterno, e infatti richiede il ruolo di Amministratore.

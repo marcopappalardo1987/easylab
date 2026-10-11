@@ -3,6 +3,8 @@
 namespace App\Livewire\Piattaforma\Concerns;
 
 use App\Models\Account;
+use App\Support\Billing\DurataComodato;
+use App\Support\Piani;
 use App\Support\Piattaforma\EliminaCliente;
 use App\Support\Tenancy\VistaPiattaforma;
 use Illuminate\Support\Facades\Gate;
@@ -70,6 +72,14 @@ trait AmministraAccount
         'codice_destinatario_sdi',
     ];
 
+    /**
+     * Il pannello «Comodato» (🔗 ADR-058): la durata scelta e, per «una data
+     * precisa», il giorno.
+     *
+     * @var array<string,?string>
+     */
+    public array $comodato = ['durata' => '', 'data' => ''];
+
     /** @var array<string,string> */
     public array $fiscali = [
         'ragione_sociale' => '',
@@ -120,6 +130,74 @@ trait AmministraAccount
         $this->accountAmministrabile($this->accountInLavorazione, 'affidaManutenzione')->ritiraManutenzione();
 
         $this->chiudiPannello();
+    }
+
+    /**
+     * 🔗 ADR-058 — la scadenza del comodato d'uso di un cliente già attivo.
+     *
+     * Si apre sulla data che c'è, come «data precisa»: chi apre il pannello
+     * per leggerla non deve trovarsi una tendina su «12 mesi» che, salvata per
+     * distrazione, la sposterebbe.
+     *
+     * ⛔ Solo su un piano in comodato: `impostaScadenzaComodato()` rifiuterebbe
+     * comunque, ma un pannello che si apre per poi dire di no è una porta
+     * finta. Stessa ability dei dati fiscali: è una clausola del contratto.
+     */
+    public function apriComodato(int $accountId): void
+    {
+        $account = $this->accountAmministrabile($accountId, 'manage');
+
+        abort_unless($this->inComodato($account), 422);
+
+        $this->comodato = [
+            'durata' => $account->comodato_scade_il === null ? DurataComodato::SENZA_SCADENZA : DurataComodato::DATA_PRECISA,
+            'data' => (string) $account->comodato_scade_il?->toDateString(),
+        ];
+
+        $this->resetValidation();
+        $this->chiudiOgniModale();
+        $this->accountInLavorazione = $account->id;
+        $this->pannello = 'comodato';
+    }
+
+    public function salvaComodato(): void
+    {
+        $account = $this->accountAmministrabile($this->accountInLavorazione, 'manage');
+
+        abort_unless($this->inComodato($account), 422);
+
+        // `comodato` è una property pubblica: si rilegge campo per campo, e ciò
+        // che non è una stringa vale come vuoto.
+        $durata = is_string($this->comodato['durata'] ?? null) ? trim($this->comodato['durata']) : '';
+        $this->comodato = [
+            'durata' => $durata,
+            'data' => $durata === DurataComodato::DATA_PRECISA && is_string($this->comodato['data'] ?? null) ? trim($this->comodato['data']) : null,
+        ];
+
+        $dati = $this->validate(
+            DurataComodato::regole('comodato.durata', 'comodato.data'),
+            [
+                'comodato.data.required_if' => 'Scegli il giorno in cui il comodato scade.',
+                'comodato.data.after_or_equal' => 'La scadenza del comodato non può essere un giorno già passato.',
+            ],
+            ['comodato.durata' => 'durata del comodato', 'comodato.data' => 'scadenza del comodato'],
+        )['comodato'] ?? [];
+
+        // Nessun `activity()` qui: la colonna è fra gli attributi tracciati di
+        // `Account`, e il trait scrive da sé la riga col prima e il dopo.
+        $account->impostaScadenzaComodato(
+            DurataComodato::scadenza((string) ($dati['durata'] ?? ''), $dati['data'] ?? null),
+        );
+
+        $this->chiudiPannello();
+    }
+
+    /** Il cliente è su un piano in comodato d'uso, e non è l'account di piattaforma. */
+    private function inComodato(Account $account): bool
+    {
+        return ! $account->di_piattaforma
+            && Piani::esiste((string) $account->piano)
+            && Piani::eGratuito((string) $account->piano);
     }
 
     public function apriFiscali(int $accountId): void
@@ -352,6 +430,8 @@ trait AmministraAccount
         $ability = match ($this->pannello) {
             'lockout' => 'lockout',
             'fiscali' => 'manage',
+            // 🔗 ADR-058: una clausola del contratto, come i dati fiscali.
+            'comodato' => 'manage',
             'eliminazione' => 'elimina',
             'manutenzione' => 'affidaManutenzione',
             default => null,

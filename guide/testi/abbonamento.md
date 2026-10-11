@@ -46,7 +46,7 @@ cui un laboratorio cresce è aprendo sedi, non aggiungendo utenti.
 ## 5
 
 Sono i numeri da guardare **prima** di aprire una sede nuova. Se il piano non la
-copre, il momento di parlarne è quello, non quando l'anagrafica è già stata
+copre, il momento di parlarne è quello, non quando la struttura è già stata
 costruita e le macchine caricate.
 
 ## capitolo 3

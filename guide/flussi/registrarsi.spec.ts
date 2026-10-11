@@ -71,7 +71,7 @@ test('registrarsi', async ({ page }) => {
     durata: 8,
   });
 
-  await g.passo("Entrando la prima volta la sede è vuota: il primo gesto è costruire l'anagrafica, poi caricare le macchine.", {
+  await g.passo("Entrando la prima volta la sede è vuota: il primo gesto è costruire la struttura, poi caricare le macchine.", {
     zoom: 1,
     durata: 8,
   });

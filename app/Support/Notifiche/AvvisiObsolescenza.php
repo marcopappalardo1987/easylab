@@ -8,6 +8,8 @@ use App\Models\AvvisoScadenza;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Notifications\AvvisoObsolescenza;
+use App\Support\Email\CatalogoEmail;
+use App\Support\Email\InterruttoriEmail;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -248,12 +250,30 @@ final class AvvisiObsolescenza
             return $esito;
         }
 
-        foreach (DestinatariEnte::perEnte($ente->id) as ['utente' => $utente, 'nodi' => $nodi]) {
+        $persone = DestinatariEnte::perEnte($ente->id);
+
+        // 🔗 ADR-054: i referenti delle macchine di questo avviso, per id di
+        // macchina. ⚠️ Solo se l'email è accesa in piattaforma: il referente è
+        // una casella e non ha una campanella, quindi a email spenta non c'è
+        // niente da lasciargli — e nemmeno da aggiungere a chi lo è da persona.
+        $referenti = InterruttoriEmail::attiva(CatalogoEmail::AVVISO_OBSOLESCENZA)
+            ? Referente::delleMacchine($ente->id, array_map(fn (RigaObsolescenza $riga) => $riga->strumentoId, $nuove))
+            : [];
+
+        $eReferente = fn (RigaObsolescenza $riga, ?string $email): bool => isset($referenti[$riga->strumentoId])
+            && $referenti[$riga->strumentoId]->corrispondeA($email);
+
+        foreach ($persone as ['utente' => $utente, 'nodi' => $nodi]) {
             $sue = $nodi === null
                 ? $nuove
                 : array_values(array_filter(
                     $nuove,
-                    fn (RigaObsolescenza $riga) => $riga->unitaId !== null && in_array($riga->unitaId, $nodi, true),
+                    // Le macchine del proprio sotto-albero, più quelle di cui la
+                    // scheda indica proprio questa persona come referente: le
+                    // riceve qui, da persona, e non una seconda volta per
+                    // indirizzo.
+                    fn (RigaObsolescenza $riga) => ($riga->unitaId !== null && in_array($riga->unitaId, $nodi, true))
+                        || $eReferente($riga, $utente->email),
                 ));
 
             if ($sue === []) {
@@ -265,6 +285,39 @@ final class AvvisiObsolescenza
             // digest — venti email nello stesso minuto sono il modo più veloce
             // per far filtrare il mittente.
             $utente->notify(new AvvisoObsolescenza($ente->id, $ente->nome, $soglia, $sue));
+            $esito['destinatari']++;
+        }
+
+        // Le caselle dei referenti che non sono una delle persone qui sopra:
+        // ciascuna riceve le sole macchine di cui è referente.
+        $caselle = [];
+
+        foreach ($nuove as $riga) {
+            $referente = $referenti[$riga->strumentoId] ?? null;
+
+            if ($referente === null) {
+                continue;
+            }
+
+            foreach ($persone as ['utente' => $utente]) {
+                if ($referente->corrispondeA($utente->email)) {
+                    continue 2;
+                }
+            }
+
+            $caselle[$referente->email] ??= ['referente' => $referente, 'righe' => []];
+            $caselle[$referente->email]['righe'][] = $riga;
+        }
+
+        foreach ($caselle as ['referente' => $referente, 'righe' => $sue]) {
+            $referente->casella()->notify(new AvvisoObsolescenza(
+                $ente->id,
+                $ente->nome,
+                $soglia,
+                $sue,
+                alReferente: true,
+                nomeReferente: $referente->nome,
+            ));
             $esito['destinatari']++;
         }
 

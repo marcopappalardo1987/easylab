@@ -5,17 +5,17 @@
 
 ## premessa
 
-L'anagrafica vale quanto è fedele: se il reparto è cambiato e l'albero no, le
+La struttura vale quanto è fedele: se il reparto è cambiato e l'albero no, le
 macchine risultano dove non sono più, e chi le cerca non le trova. Aggiungere un
-dipartimento o un laboratorio richiede meno di un minuto, e conviene farlo nel
-momento in cui il laboratorio cambia, non a fine anno. Serve il ruolo di
+laboratorio o un sotto-laboratorio richiede meno di un minuto, e conviene farlo
+nel momento in cui la sede cambia, non a fine anno. Serve il ruolo di
 Amministratore: è una modifica alla struttura dell'Ente, non al proprio lavoro.
 
 ## capitolo 1
 
 Il pulsante di aggiunta segue il livello in cui ti trovi, e questa è l'unica
-cosa da capire: alla radice crea un dipartimento, dentro un dipartimento un
-laboratorio.
+cosa da capire: alla radice crea un laboratorio, dentro un laboratorio un
+sotto-laboratorio.
 
 ## 1
 
@@ -42,7 +42,7 @@ macchine: se è un codice, ogni volta qualcuno dovrà tradurlo.
 Le note servono a chi arriverà dopo di te, e la soglia di obsolescenza dice
 dopo quanti anni una macchina di questo reparto va considerata da sostituire.
 Sono impostazioni che si **ereditano** verso il basso, quindi metterle sul
-dipartimento evita di ripeterle su ogni laboratorio.
+laboratorio evita di ripeterle su ogni sotto-laboratorio.
 
 ## 5
 
@@ -58,13 +58,13 @@ modo, un livello più giù.
 
 ## 6
 
-Il nuovo dipartimento compare nell'elenco con zero sotto-unità e zero
+Il nuovo laboratorio compare nell'elenco con zero sotto-unità e zero
 strumenti. Non è uno stato di errore: la struttura si costruisce dall'alto, e le
 macchine arrivano dopo, spostandole da dove sono o creandole qui.
 
 ## 7
 
-Entrando nel dipartimento, il pulsante in alto a destra ha cambiato etichetta:
+Entrando nel laboratorio, il pulsante in alto a destra ha cambiato etichetta:
 adesso propone un sotto-laboratorio. È lo stesso pulsante che si adatta al
 livello, e il modo più semplice per non sbagliare padre è guardare le briciole
 prima di premerlo.
@@ -72,8 +72,8 @@ prima di premerlo.
 ## 8
 
 Il modulo è identico a quello di prima, e anche qui il nome è l'unica cosa
-richiesta. La profondità non ha un limite fisso: se un laboratorio ha bisogno di
-essere diviso ancora, ci si crea dentro un altro nodo.
+richiesta. La profondità non ha un limite fisso: se un sotto-laboratorio ha
+bisogno di essere diviso ancora, ci si crea dentro un altro nodo.
 
 ## capitolo 3
 
@@ -96,6 +96,6 @@ parte.
 ## 11
 
 «Elimina» è l'altra faccia, e porta via **anche quello che sta sotto**: i
-laboratori figli e le macchine che contengono. Prima di usarlo su un nodo
+sotto-laboratori e le macchine che contengono. Prima di usarlo su un nodo
 popolato conviene spostare altrove le macchine, così l'eliminazione riguarda
 solo la struttura vuota.

@@ -40,6 +40,12 @@
         @else
             <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 
+                {{-- 🔗 ADR-052: «Strumentazione idonea» è più lunga di «In regola», e
+                     fra `lg` e `xl` (quattro riquadri stretti) va a capo: il
+                     suo numero scenderebbe sotto gli altri tre. In quella sola
+                     fascia ogni etichetta riserva due righe (`min-h-10`), così
+                     i numeri restano allineati. Da `xl` in su ci sta in una. --}}
+
                 {{-- ⚠️ Ogni riquadro è un LINK all'elenco già filtrato, e il numero
                      deve combaciare con le righe che si trovano arrivando: è la
                      ragione per cui i conteggi passano dagli stessi scope del
@@ -47,7 +53,7 @@
                 <a href="{{ route('strumenti.index', ['stato' => StatoSemaforo::Verde->value]) }}" wire:navigate
                    class="rounded-lg transition hover:border-brand">
                     <x-ui.stat-tile :valore="$parco->verdi" class="h-full hover:border-brand">
-                        <x-ui.semaforo :stato="StatoSemaforo::Verde" :label="true" />
+                        <x-ui.semaforo :stato="StatoSemaforo::Verde" :label="true" :insieme="true" class="lg:max-xl:min-h-10 lg:max-xl:items-start" />
                     </x-ui.stat-tile>
                 </a>
 
@@ -60,14 +66,14 @@
                     ]) }}" wire:navigate
                    class="rounded-lg transition hover:border-brand">
                     <x-ui.stat-tile :valore="$parco->arancioni" class="h-full hover:border-brand">
-                        <x-ui.semaforo :stato="StatoSemaforo::Arancione" :label="true" />
+                        <x-ui.semaforo :stato="StatoSemaforo::Arancione" :label="true" :insieme="true" class="lg:max-xl:min-h-10 lg:max-xl:items-start" />
                     </x-ui.stat-tile>
                 </a>
 
                 <a href="{{ route('strumenti.index', ['stato' => StatoSemaforo::Rosso->value]) }}" wire:navigate
                    class="rounded-lg transition hover:border-brand">
                     <x-ui.stat-tile :valore="$parco->rossi" class="h-full hover:border-brand">
-                        <x-ui.semaforo :stato="StatoSemaforo::Rosso" :label="true" />
+                        <x-ui.semaforo :stato="StatoSemaforo::Rosso" :label="true" :insieme="true" class="lg:max-xl:min-h-10 lg:max-xl:items-start" />
                     </x-ui.stat-tile>
                 </a>
 
@@ -79,8 +85,8 @@
                    class="rounded-lg transition hover:border-brand">
                     <x-ui.stat-tile :valore="$parco->obsoleti" :dettaglio="$parco->dettaglioObsoleti()"
                                     class="h-full hover:border-brand">
-                        <span class="inline-flex items-center gap-1.5 text-obs-dot">
-                            <span aria-hidden="true">⏳</span> Obsoleti
+                        <span class="inline-flex items-center gap-1.5 text-obs-dot lg:max-xl:min-h-10 lg:max-xl:items-start">
+                            <span aria-hidden="true">⏳</span> {{ \App\Models\Strumento::ETICHETTA_OBSOLETI }}
                         </span>
                     </x-ui.stat-tile>
                 </a>
@@ -95,8 +101,8 @@
                  torna, come già fa la cabina di regia coi propri KPI. --}}
             <p class="mt-2 text-xs text-ink-3">
                 Le prime tre coprono tutte le {{ number_format($parco->totale(), 0, ',', '.') }} macchine che vedi.
-                Gli <span class="text-obs-dot">obsoleti</span> sono una segnalazione sull'età e non uno stato
-                manutentivo: sono già contati in una delle tre.
+                Gli <span class="text-obs-dot">strumenti obsoleti</span> sono una segnalazione sull'età e non uno
+                stato manutentivo: sono già contati in una delle tre.
             </p>
         @endif
     @endcan

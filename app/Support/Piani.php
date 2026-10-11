@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Enums\ConteggioStrumenti;
 use App\Models\Piano;
 use App\Support\Listino\CatalogoPiani;
 use InvalidArgumentException;
@@ -129,6 +130,27 @@ class Piani
         $max = self::risolvi($piano)->max_enti;
 
         return $max === null ? null : (int) $max;
+    }
+
+    /**
+     * Quanti strumenti consente questo piano (🔗 ADR-049).
+     *
+     * `null` significa **illimitato**, come per `maxEnti()`. A che cosa si
+     * applichi il numero lo dice `conteggioStrumenti()`; chi deve decidere se
+     * uno strumento in più ci sta non compone le due cose a mano, passa da
+     * `App\Support\Billing\TettoStrumenti`.
+     */
+    public static function maxStrumenti(string $piano): ?int
+    {
+        $max = self::risolvi($piano)->max_strumenti;
+
+        return $max === null ? null : (int) $max;
+    }
+
+    /** Se il tetto di strumenti vale per ogni sede o per il cliente in tutto. */
+    public static function conteggioStrumenti(string $piano): ConteggioStrumenti
+    {
+        return self::risolvi($piano)->conteggio_strumenti;
     }
 
     /**

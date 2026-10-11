@@ -66,13 +66,20 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     // non arriverebbe a `render()`, e qui non c'è un `can:` di rotta a
     // raccoglierla.
     Route::get('/dashboard', DashboardHome::class)->name('dashboard');
-    Route::get('/anagrafica', Albero::class)
+    // 🔗 ADR-053: la sezione si chiama «Laboratori», e l'indirizzo con lei. Il
+    // NOME della rotta resta `anagrafica.index`: è un identificatore, e
+    // rinominarlo toccherebbe cento chiamate per una stringa che nessuno legge.
+    // Gli indirizzi di prima rimandano a quelli nuovi: sono nei segnalibri, e
+    // nelle email già spedite.
+    Route::get('/laboratori', Albero::class)
         ->middleware('can:unita_organizzativa.view')
         ->name('anagrafica.index');
+    Route::permanentRedirect('/anagrafica', '/laboratori');
+    Route::permanentRedirect('/anagrafica/marchio', '/laboratori/marchio');
     // Il marchio dell'Ente nelle email. `unita_organizzativa.update` e non un
     // permesso nuovo: è un'impostazione del nodo Ente, come la soglia di
     // obsolescenza, e chi rinomina l'Ente ne governa già l'identità.
-    Route::get('/anagrafica/marchio', MarchioEnte::class)
+    Route::get('/laboratori/marchio', MarchioEnte::class)
         ->middleware('can:unita_organizzativa.update')
         ->name('anagrafica.marchio');
     Route::get('/strumenti', ElencoStrumenti::class)

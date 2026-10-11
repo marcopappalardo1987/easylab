@@ -19,7 +19,7 @@ intestazioni, e due sole obbligatorie.
 ## 1
 
 Ci si arriva da «Importa CSV», in cima all'elenco degli strumenti. È una strada
-diversa da «Aggiungi strumento» dell'anagrafica: quella crea una macchina alla
+diversa da «Aggiungi strumento» di «Laboratori»: quella crea una macchina alla
 volta nel posto in cui ti trovi, questa ne crea molte insieme, e ognuna porta
 scritta la propria ubicazione.
 
@@ -64,7 +64,7 @@ che sono anche il numero che comparirà sul pulsante di importazione.
 
 Gli errori tipici sono due. Il primo è un **campo obbligatorio vuoto**: una riga
 senza nome, o senza ubicazione, non può diventare una macchina. Il secondo, e di
-gran lunga il più frequente, è un'**ubicazione che nell'anagrafica non esiste**:
+gran lunga il più frequente, è un'**ubicazione che fra i laboratori non esiste**:
 il foglio dice «Reparto di Cardiologia» e in Easy Lab quel nodo si chiama
 diversamente, o non è ancora stato creato.
 
@@ -91,4 +91,4 @@ buon fine, o tenere un file separato per le correzioni.
 La prima volta conviene caricare un lotto piccolo, cinque o dieci righe, e
 guardare l'esito. Se le ubicazioni combaciano, il resto del file passerà; se non
 combaciano, l'hai scoperto su dieci righe invece che su trecento, ed è il
-momento giusto per sistemare l'anagrafica prima di continuare.
+momento giusto per sistemare la struttura prima di continuare.

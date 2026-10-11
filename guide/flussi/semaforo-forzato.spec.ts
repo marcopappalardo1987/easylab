@@ -5,7 +5,7 @@ import { accedi } from '../lib/accesso';
 /**
  * Guida C6 — «Forzare il semaforo».
  *
- * ⚠️ Lo stato NON si punta con `getByText('Non idoneo')`: quel testo è anche
+ * ⚠️ Lo stato NON si punta con `getByText('Strumento non idoneo')`: quel testo è anche
  * un `<option>` della tendina appena chiusa, che Livewire stacca dal DOM mentre
  * Playwright ci sta puntando. Si punta il titolo, che resta.
  *
@@ -28,7 +28,7 @@ test('semaforo forzato', async ({ page }) => {
   await page.waitForLoadState('networkidle');
 
   await g.passo('Il semaforo di solito lo calcola Easy Lab dalle scadenze aperte: è una conseguenza, non una scelta.', {
-    su: page.getByText('Azione richiesta').first(),
+    su: page.getByText('Interventi necessari').first(),
     zoom: 2.3,
     durata: 8,
   });

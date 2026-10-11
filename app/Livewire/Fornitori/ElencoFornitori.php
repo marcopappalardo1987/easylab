@@ -2,8 +2,10 @@
 
 namespace App\Livewire\Fornitori;
 
+use App\Livewire\Concerns\SceglieSede;
 use App\Models\Fornitore;
 use App\Models\UnitaOrganizzativa;
+use App\Support\Fornitori\RegoleFornitore;
 use App\Support\Tenancy\CurrentTenant;
 use App\Support\Tenancy\SediSeguite;
 use Illuminate\Support\Collection;
@@ -28,6 +30,8 @@ use RuntimeException;
 #[Layout('components.layouts.app')]
 class ElencoFornitori extends Component
 {
+    use SceglieSede;
+
     public bool $showForm = false;
 
     public ?int $editingId = null;
@@ -75,12 +79,8 @@ class ElencoFornitori extends Component
     {
         $this->authorize($this->editingId === null ? 'fornitori.create' : 'fornitori.update');
 
-        $regole = [
-            'form.ragione_sociale' => ['required', 'string', 'max:255'],
-            'form.email' => ['nullable', 'email', 'max:255'],
-            'form.telefono' => ['nullable', 'string', 'max:50'],
-            'form.note' => ['nullable', 'string', 'max:1000'],
-        ];
+        // Le stesse del selettore che crea un fornitore al volo (ADR-051).
+        $regole = RegoleFornitore::per('form');
 
         // 🔴 ADR-046: il catalogo fornitori è per sede, e un fornitore nuovo non
         // ha un genitore da cui ereditarla. Chi ne segue più di una la dichiara;
@@ -92,7 +92,7 @@ class ElencoFornitori extends Component
             $regole['sedeId'] = ['required', Rule::in($this->sedi()->modelKeys())];
         }
 
-        $validato = $this->validate($regole, attributes: ['sedeId' => 'sede'])['form'];
+        $validato = $this->validate($regole, attributes: ['sedeId' => 'laboratorio'])['form'];
 
         if ($this->editingId !== null) {
             Fornitore::findOrFail($this->editingId)->update($validato);
@@ -137,6 +137,7 @@ class ElencoFornitori extends Component
     protected function resetForm(): void
     {
         $this->reset(['editingId', 'form', 'sedeId']);
+        $this->chiudiSedi();
         $this->resetValidation();
     }
 
@@ -182,9 +183,13 @@ class ElencoFornitori extends Component
         return view('livewire.fornitori.elenco-fornitori', [
             // `withCount`: la colonna «macchine» serve a capire perché un
             // fornitore non si può cancellare, senza una query per riga.
-            'fornitori' => Fornitore::withCount('strumenti')->orderBy('ragione_sociale')->get(),
+            // «Ricambi» conta i pezzi montati comprati da lui (ADR-051): è
+            // l'altra ragione per cui un fornitore non si può cancellare.
+            'fornitori' => Fornitore::withCount(['strumenti', 'ricambiMontati'])->orderBy('ragione_sociale')->get(),
             // Vuota per chi lavora su una sede sola: niente colonna, niente tendina.
             'sedi' => $this->sedi()->count() > 1 ? $this->sedi()->keyBy('id') : collect(),
+            // 🔗 ADR-061: la tendina filtrabile, solo a modulo aperto.
+            'sceltaSede' => $this->showForm ? $this->selettoreSedi() : null,
         ]);
     }
 }

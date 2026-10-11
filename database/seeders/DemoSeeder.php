@@ -728,7 +728,7 @@ class DemoSeeder extends Seeder
     private function forzaAlcuniSemafori(UnitaOrganizzativa $ente, User $admin, array $strumentiIds): void
     {
         $motivi = [
-            'Non idoneo: perdita dal circuito, in attesa del ricambio',
+            'Strumento non idoneo: perdita dal circuito, in attesa del ricambio',
             'Fuori servizio dopo il collaudo di sicurezza elettrica',
         ];
 

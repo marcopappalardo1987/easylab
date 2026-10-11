@@ -24,7 +24,7 @@ test('listino', async ({ page }) => {
     durata: 8,
   });
 
-  await g.passo("Un piano senza prezzo agganciato a Stripe non è vendibile, e la registrazione pubblica lo dice invece di ripiegare su qualcosa di gratuito.", {
+  await g.passo("Un piano senza prezzo agganciato a Stripe non è vendibile, e la registrazione pubblica lo dice invece di ripiegare su un piano in comodato d'uso.", {
     zoom: 1,
     durata: 8,
   });

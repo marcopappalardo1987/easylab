@@ -144,6 +144,8 @@ Restringe il **Responsabile Reparto** al sotto-albero dei nodi assegnati.
 
 *Unique* `(user_id, unita_organizzativa_id)`.
 
+> 🆕 **Dal 10 Ott 2026 il pivot si scrive dall'applicazione** (🔗 ADR-057): da «Persone» (i laboratori di un Responsabile) e da «Laboratori» (i Responsabili di un laboratorio), con `utenti.update`. Prima lo riempivano solo i seeder. L'unica strada è `App\Support\Utenti\LaboratoriDelResponsabile`: solo a chi ha il ruolo Responsabile Reparto, solo nodi vivi del suo Ente, mai la sede, e le sole radici (un sotto-laboratorio di un laboratorio assegnato non ha una riga sua). Chi smette di essere Responsabile perde le proprie righe.
+
 ### 3.3 `tecnico_cliente` (pivot — ADR-007)
 Portafoglio clienti del Tecnico. Grant a livello di Ente.
 
@@ -224,6 +226,8 @@ L'intestatario del rapporto commerciale: il cliente che paga EasyLab e possiede 
 | `stripe_locked_at` / `stripe_lock_reason` | datetime / string nullable | Sorgente **automatica** (webhook). Separate dalle precedenti perché i gesti sono idempotenti come no-op: con un motivo solo, un pagamento riuscito riaprirebbe un blocco messo a mano per contenzioso (ADR-013, note 21 Ago). Annotazione interna: non si mostra al bloccato. |
 | `piano` | string default `'free'` indicizzata | Codice del piano a catalogo (`config/easylab.php` → `App\Support\Piani`). Dal 21 Ago 2026 il catalogo porta anche `prezzo_mensile_cent` (centesimi interi): **l'MRR è derivato**, non una colonna — ed è a listino, non incassato. **Unica fonte del piano**: non si deduce da `subscribed()`, perché il Free non ha subscription. Fuori `$fillable`, scritta solo da `Account::cambiaPiano()`. ⚠️ **Dal 27 Ago 2026 (🔗 ADR-035) quel codice nomina una riga di `piani`, non più una chiave di `config/easylab.php`**: la config è rimasta come **bootstrap** e la legge una volta sola la migration di backfill. La colonna resta però una **stringa senza FK e senza CHECK**, ed è deliberato — il perché sta qui sotto, in `piani`. `App\Support\Piani` è sempre l'unica porta: sono cambiate le viscere, non l'API. |
 | `piano_proposto` | string nullable | Il piano **a pagamento** che la cabina ha proposto e che il cliente non ha ancora pagato (ADR-045). **Non è `piano`**, ed è la ragione per cui esiste: un account marcato pagante senza subscription è un cliente che risulta pagante e non paga, quindi chi nasce «su un piano a pagamento» nasce in realtà sul predefinito con questa colonna valorizzata. La scrive `Account::proponiPiano()` (solo piani non gratuiti a catalogo) e la azzera `Account::cambiaPiano()`, a ogni cambio di piano. Stringa senza FK né CHECK, come `piano`. Tracciata dall'audit; esce nell'export GDPR accanto a `piano`. |
+| `comodato_scade_il` | date nullable | 🆕 11 Ott 2026 (🔗 ADR-058). Fino a quando vale il comodato d'uso; `null` = senza scadenza. Fuori da `$fillable`: si scrive solo con `Account::impostaScadenzaComodato()`, e cade passando a un piano a pagamento. |
+| `comodato_avvisato_per` | date nullable | 🆕 11 Ott 2026 (🔗 ADR-058). La scadenza di cui l'avviso dei trenta giorni è già partito: una data e non un flag, così spostare la scadenza lo riarma. |
 | `manutenzione_gestita` | boolean, default `false` | Il cliente la cui manutenzione è **gestita da EasyLab** (ADR-046). 🔴 **Apre i dati**: sulle sedi di un account col segno il Superadmin vede e scrive come sul proprio Ente, senza impersonare (`ClientiGestiti`). Fuori da `$fillable`: lo scrivono solo `Account::affidaManutenzione()` / `ritiraManutenzione()`, e ogni cambio è una riga di audit. Indipendente dal piano; rifiutato sull'account di piattaforma. |
 | `di_piattaforma` | boolean default false | **L'account che è EasyLab**, non un cliente (S6): la cabina di regia lo esclude da tutti i KPI, o «Clienti» conterebbe uno in più. Lo marca il `SuperadminSeeder`, e un backfill one-shot nella migration lo mette sugli ambienti già esistenti — `migrate` porta lo schema, non i dati. Fuori da `$fillable`, tracciata dall'audit. |
 | `stripe_id` | string nullable **unique** | Il customer Stripe. UNIQUE e non solo indicizzata: è l'**unico** filtro che protegge l'handler del webhook, dove nessuno scope è attivo. NULL su un account Free, che un customer non ce l'ha. |
@@ -273,6 +277,8 @@ Fino al 27 Ago 2026 il catalogo era `config('easylab.piani.catalogo')`: cambiarl
 | `codice` | string(30) **unique** | È ciò che `accounts.piano` conserva, quindi la chiave vera del listino: vincolata a DB e non solo validata in PHP. **Immutabile dopo la creazione** (`App\Support\Listino\GovernoListino`): rinominarla non aggiornerebbe nessun account e li renderebbe tutti «fuori catalogo» in un colpo solo. |
 | `etichetta` | string | |
 | `max_enti` | unsigned int **nullable** | `null` = **illimitato**, non «non lo so»: è la forma che avrebbe un piano Enterprise, dichiarata perché domani non la si esprima con un numero grande a caso. Lo legge `Account::puoAggiungereEnte()` (ADR-032), quindi abbassarlo su un piano già venduto mette dei clienti sopra il proprio limite. |
+| `max_strumenti` | unsigned int **nullable** | 🆕 10 Ott 2026 (🔗 ADR-049). Quanti strumenti consente il piano; `null` = **illimitato**, come `max_enti`. Lo fa rispettare `TettoStrumenti` nei due gesti che creano uno strumento (albero e import CSV), come condizione d'ingresso: chi è sopra tiene ciò che ha. |
+| `conteggio_strumenti` | enum(`per_sede`, `per_cliente`), default `per_sede` | 🆕 10 Ott 2026 (🔗 ADR-049). A che cosa si applica `max_strumenti`: a ogni sede per conto suo, o al cliente in tutto, sommando le sedi del contratto. Sta sul piano e non sull'Account: si decide nel listino. CHECK in colonna su entrambi i driver. |
 | `gratuito` | boolean default false | La gratuità si **dichiara**, non si deduce dal prezzo a zero: un piano omaggiato non ha customer né subscription (ADR-002), un SaaS in promozione a 0 € sì. Immutabile dopo la creazione — ribaltarla su un piano già venduto marcherebbe come paganti clienti che non hanno alcuna subscription. |
 | `prezzo_mensile_cent` | unsigned int | 💶 **Centesimi interi, mai float**: un MRR su decine di clienti in virgola mobile accumula errore, ed è la riga che nessuno rilegge. È prezzo **di listino**, non incassato. |
 | `valuta` | char(3) default `eur` | Fino a qui la valuta viveva **solo** in `cashier.currency`, e il commento di `config/easylab.php` la dichiarava come divergenza non presidiata. Sulla riga rende possibile il confronto con Stripe senza indovinare. |
@@ -339,6 +345,10 @@ Chi compila il modulo di `/registrati` non è ancora un `User`, non ha un `Accou
 | `matricola` | string nullable | Seriale costruttore. |
 | `parametri_tecnici` | json nullable | Scheda tecnica flessibile. |
 | `data_installazione` | date nullable | Base del calcolo obsolescenza (ADR-014). |
+| `referente_nome`, `referente_cognome` | string nullable | 🆕 10 Ott 2026 (🔗 ADR-054). La persona del laboratorio a cui la macchina fa capo. **Non è un utente**: non ha account né ruolo, ed è un dato della macchina. |
+| `referente_email` | string nullable | 🆕 10 Ott 2026 (🔗 ADR-054). Sempre minuscola e senza spazi (lo fa il model). Se c'è, **le email che parlano di questa macchina arrivano anche a questo indirizzo** (`App\Support\Notifiche\Referente`). |
+| `referente_cellulare` | string(50) nullable | 🆕 10 Ott 2026 (🔗 ADR-054). |
+| `note` | text nullable | 🆕 10 Ott 2026 (🔗 ADR-054). Testo libero sullo strumento, fino a 2000 caratteri nel form. |
 | `qr_token` | string unique | Token incluso nella URL firmata del QR (ADR-003). |
 | **Override semaforo (ADR-005)** | | |
 | `forced_state` | `string` nullable con **CHECK**: `verde` \| `arancione` \| `rosso` | Se valorizzato, vince sul calcolato. Il vincolo è a **database** dal 26 Ago 2026 — vedi la nota sotto la tabella. |
@@ -502,6 +512,7 @@ Registra "questo pezzo è montato su questa macchina". Base della **ricerca incr
 | `strumento_id` | bigint FK → `strumenti.id` | |
 | `ricambio_id` | bigint FK → `ricambi.id` | Voce di catalogo. |
 | `intervento_id` | bigint nullable FK → `interventi.id` | Intervento in cui è stato montato (visibile anche dal tab "Ricambi"). Valorizzato per le righe create dal form intervento (ADR-022); nullable per gli inserimenti diretti dal tab Ricambi. |
+| `fornitore_id` | bigint **nullable** FK → `fornitori.id` | 🆕 10 Ott 2026 (🔗 ADR-051). Da chi è stato comprato **questo pezzo**. Sta qui e non sulla voce di catalogo, che è un nome: lo stesso pezzo si compra da fornitori diversi in anni diversi. Facoltativo, senza backfill e senza `cascade`; il model esige che il fornitore sia dello stesso Ente della riga, e `Fornitore` rifiuta di cancellarsi finché ha pezzi montati. |
 | `quantita` | integer default 1 | Il form intervento scrive sempre 1 (wireframe §2.1 non chiede la quantità): due pezzi uguali sullo stesso intervento sono un refuso, e il caso vero si registra dal tab Ricambi. `>= 1` imposta nel model e **non** con `unsignedInteger` — SQLite ignora l'unsigned, quindi il vincolo esisterebbe solo su Postgres. |
 | `data` | date **nullable** | **Quando il pezzo è stato montato**, cioè la `data_esecuzione` dell'intervento. **NULL finché l'intervento è pianificato**: il pezzo non è ancora stato montato, e qualunque data sarebbe un'affermazione falsa — la riga comparirebbe in ogni ricerca per periodo (§7.2 è la base della ricerca incrociata). `Intervento::segnaFatto()` la riempie alla chiusura, insieme alla `data_inizio` della garanzia. ⚠️ Una prima stesura ci scriveva *oggi* come segnaposto correggendolo poi alla chiusura: non basta — correggere a valle un valore inventato a monte non lo rende vero, e fino a quel momento la scheda dichiarava «montato il \<oggi\>». Gli ordinamenti su questa colonna portano un CASE esplicito che mette i NULL **in cima** (sono le righe che aspettano qualcosa): senza, l'ordine cambierebbe fra SQLite e Postgres. |
 | timestamps, `deleted_at` | | soft delete — vedi la nota qui sotto. |
@@ -520,6 +531,7 @@ Anagrafica dei fornitori **di ciascun Ente**: tabella di business a tutti gli ef
 |---|---|---|
 | `id` | bigint PK | |
 | `tenant_id` / `reseller_id` | scoping | |
+| `globale_id` | FK → `fornitori` nullable | 🆕 11 Ott 2026 (🔗 ADR-062). Da quale fornitore di EasyLab è stata copiata la riga; `null` per quelli inseriti dal cliente e per quelli di EasyLab stessa. Fuori da `$fillable`: lo scrive solo `FornitoriGlobali`. Unico con `tenant_id`: una copia per catalogo. |
 | `ragione_sociale` | string | |
 | `contatti` | email / telefono / note | Campi separati o `json`, a scelta in implementazione. |
 | timestamps, `deleted_at` | | soft delete. |

@@ -31,7 +31,13 @@
 <x-mail::message :marchio="$marchio" :logo="$marchio->cid($message ?? null)">
 # Scadenze di {{ TestoMarkdown::sicuro($ente) }}
 
+{{-- 🔗 ADR-054: il referente è una casella e non ha un `name`: lo si saluta
+     col nome scritto sulla scheda della macchina, se c'è. --}}
+@if ($alReferente ?? false)
+{{ filled($nomeReferente ?? null) ? 'Ciao '.TestoMarkdown::sicuro($nomeReferente).', ecco' : 'Ecco' }} cosa è cambiato oggi sulle macchine di cui sei referente.
+@else
 Ciao {{ TestoMarkdown::sicuro($destinatario->name) }}, ecco cosa è cambiato oggi sulle macchine che segui.
+@endif
 
 @if (count($scadute) > 0)
 ## Scadenze superate
@@ -61,7 +67,11 @@ Ciao {{ TestoMarkdown::sicuro($destinatario->name) }}, ecco cosa è cambiato ogg
 Apri Easy Lab
 </x-mail::button>
 
+@if ($alReferente ?? false)
+Ricevi questo riepilogo perché sei indicato come referente di queste macchine per {{ TestoMarkdown::sicuro($ente) }}. Per non riceverlo più, chiedi a chi le gestisce di togliere il tuo indirizzo dalla loro scheda.
+@else
 Ricevi questo riepilogo perché segui delle macchine su Easy Lab. Puoi disattivare
 le email dalle [preferenze notifiche]({{ route('settings.notifiche') }}); gli
 avvisi resteranno comunque visibili in applicazione.
+@endif
 </x-mail::message>

@@ -52,6 +52,11 @@
     </script>
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+
+    {{-- ⚠️ **Sotto** `@vite`, non sopra: lo script del tema qui sopra deve
+         restare la prima cosa che il browser incontra, prima di qualunque
+         `<link>` (`TemaUtenteTest` lo misura). Un'icona non ha fretta. --}}
+    <x-brand-icone />
 </head>
 {{-- Il fondo e l'inchiostro vengono dai **semantici** (DS §8.2): `bg-canvas`
      e `text-ink` cambiano col tema senza una sola variante `dark:`, ed è ciò

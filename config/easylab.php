@@ -99,7 +99,9 @@ return [
 
         'catalogo' => [
             'free' => [
-                'etichetta' => 'Free',
+                // 🔗 ADR-050: davanti al cliente il piano senza canone è in
+                // comodato d'uso. `free` resta il codice, che il cliente non vede.
+                'etichetta' => 'Comodato d\'uso',
                 'max_enti' => 1,
                 // La gratuità si DICHIARA, non si deduce dall'assenza del
                 // prezzo: «piano omaggiato» e «price id non ancora configurato»

@@ -50,7 +50,11 @@ l'accesso resta senza via di recupero.
 Il ruolo si assegna adesso ed è la decisione che conta. Non è irreversibile — si
 cambia in qualsiasi momento — ma è quello con cui la persona vedrà Easy Lab al
 primo accesso, e un ruolo troppo largo dato «per non avere problemi» è la strada
-più comune per aprire dati a chi non serve.
+più comune per aprire dati a chi non serve. Per un **Responsabile Reparto** il
+ruolo da solo non basta: vede soltanto i laboratori che gli vengono assegnati, e
+finché non ne ha non vede nulla. Si assegnano subito dopo, con «Laboratori»
+nella sua riga, spuntando quelli che segue: chi segue un laboratorio segue anche
+tutto ciò che contiene.
 
 ## 6
 
@@ -67,7 +71,8 @@ Il ruolo si cambia, l'accesso si toglie, il passato resta.
 Il ruolo di una persona si modifica in qualsiasi momento e ha effetto subito:
 alla prossima pagina che apre vedrà l'applicazione secondo il ruolo nuovo. È
 utile quando qualcuno cambia mansione, e serve anche in senso opposto — restringere
-un ruolo dato troppo largo all'inizio.
+un ruolo dato troppo largo all'inizio. Chi smette di essere Responsabile Reparto
+perde i laboratori che seguiva: se un giorno torna a esserlo, vanno riassegnati.
 
 ## 8
 

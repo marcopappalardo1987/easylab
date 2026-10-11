@@ -431,7 +431,7 @@ class SchedaStrumento extends Component
 
     public function addRicambio(): void
     {
-        $this->ricambiNuovi[] = ['nome' => '', 'scadenza_garanzia' => ''];
+        $this->ricambiNuovi[] = ['nome' => '', 'scadenza_garanzia' => '', 'fornitore_id' => null];
     }
 
     public function removeRicambio(int $index): void
@@ -442,6 +442,9 @@ class SchedaStrumento extends Component
         $this->ricambiNuovi = array_values($this->ricambiNuovi);
         $this->suggerimenti = [];
         $this->ricambioAttivo = null;
+        // Gli indici sono appena cambiati: un selettore aperto su «ricambio.2»
+        // ora punterebbe alla riga che era la terza.
+        $this->chiudiFornitori();
     }
 
     /** Segna una riga SALVATA per la rimozione: effettiva solo al salvataggio. */
@@ -532,15 +535,29 @@ class SchedaStrumento extends Component
      * Righe compilate del repeater. Le righe interamente vuote si scartano
      * (come per `parametri`): una riga aggiunta e mai toccata non è un errore.
      *
-     * @return list<array{nome:string,scadenza_garanzia:string}>
+     * 🔗 ADR-051: il fornitore della riga esce di qui solo per chi ha
+     * `fornitori.view`. Chi il campo non lo vede non lo scrive, come per il
+     * fornitore della macchina: senza il permesso la regola è `nullable` e
+     * l'id non è validato da nulla.
+     *
+     * @return list<array{nome:string,scadenza_garanzia:string,fornitore_id:?int}>
      */
     private function righeRicambiPulite(): array
     {
-        return array_values(array_filter(
-            $this->ricambiNuovi,
-            fn (array $riga) => trim((string) preg_replace('/[\p{Z}\s]+/u', ' ', $riga['nome'] ?? '')) !== ''
-                || trim($riga['scadenza_garanzia'] ?? '') !== ''
-        ));
+        $vedeFornitori = Gate::allows('fornitori.view');
+
+        return array_map(
+            fn (array $riga) => [
+                'nome' => $riga['nome'] ?? '',
+                'scadenza_garanzia' => $riga['scadenza_garanzia'] ?? '',
+                'fornitore_id' => $vedeFornitori ? (((int) ($riga['fornitore_id'] ?? 0)) ?: null) : null,
+            ],
+            array_values(array_filter(
+                $this->ricambiNuovi,
+                fn (array $riga) => trim((string) preg_replace('/[\p{Z}\s]+/u', ' ', $riga['nome'] ?? '')) !== ''
+                    || trim($riga['scadenza_garanzia'] ?? '') !== ''
+            )),
+        );
     }
 
     /**
@@ -929,6 +946,8 @@ class SchedaStrumento extends Component
             'ricambiNuovi.*.scadenza_garanzia' => $this->ricambiEffettuati
                 ? ['required', 'date', 'after:'.$this->dataMontaggio()]
                 : ['nullable'],
+            // 🔗 ADR-051: facoltativo, e fra i soli fornitori vivi della sede.
+            'ricambiNuovi.*.fornitore_id' => $this->regolaFornitore((int) $this->strumento->tenant_id),
             'ricambiRimossi' => ['array'],
             'ricambiRimossi.*' => ['integer'],
         ];
@@ -976,6 +995,7 @@ class SchedaStrumento extends Component
         $this->ricambiRimossi = [];
         $this->suggerimenti = [];
         $this->ricambioAttivo = null;
+        $this->chiudiFornitori();
         $this->resetValidation();
     }
 
@@ -1067,9 +1087,11 @@ class SchedaStrumento extends Component
             // extra su users (il test N+1 del punto 2 lo congela).
             // Solo a modale aperta: a modale chiusa zero query in più (il test
             // N+1 sulla scheda lo congela).
-            'fornitori' => $this->showForm && Gate::allows('fornitori.view')
-                ? $this->fornitoriSelezionabili($this->strumento->tenant_id, $this->strumento->fornitore_id)->get()
-                : collect(),
+            // 🔗 ADR-051: i selettori del fornitore (macchina, righe dei
+            // ricambi, correzione di un pezzo). Il nome di quelli scelti in una
+            // query, e l'elenco solo a selettore aperto.
+            'fornitoriScelti' => $this->fornitoriScelti($this->idFornitoriNeiForm()),
+            'elencoFornitori' => $this->selettoreFornitore !== null ? $this->elencoFornitori() : null,
             // 🔗 ADR-038: le persone dell'Ente ∪ i tecnici EasyLab **in
             // portafoglio su questa sede** — non più «ogni tecnico ovunque».
             // Stessa sorgente della validazione in `saveIntervento()`.
@@ -1255,6 +1277,65 @@ class SchedaStrumento extends Component
             'copertiDaGaranzia' => $montati
                 ->filter(fn (RicambioUtilizzo $r) => $r->garanzia !== null && ! $r->garanzia->isScaduta())
                 ->count(),
+        ];
+    }
+
+    // --- Il selettore del fornitore (🔗 ADR-051) ---
+
+    /**
+     * I tre campi fornitore di questa schermata: la macchina, ogni riga dei
+     * ricambi del form intervento, la correzione di un pezzo montato. Tutti
+     * scelgono fra i fornitori della sede **della macchina**.
+     *
+     * Un campo esiste solo se il suo form è aperto, o la sua riga c'è:
+     * `ricambio.7` senza un'ottava riga non è un campo, è una chiave inventata.
+     */
+    protected function campoFornitore(string $campo): ?array
+    {
+        $tenant = (int) $this->strumento->tenant_id;
+
+        if ($campo === 'strumento') {
+            return $this->showForm ? ['tenant' => $tenant, 'corrente' => $this->strumento->fornitore_id] : null;
+        }
+
+        if ($campo === 'correzione') {
+            return $this->showRicambioForm && $this->editingUtilizzoId !== null
+                ? ['tenant' => $tenant, 'corrente' => $this->fornitoreDelPezzoInCorrezione()]
+                : null;
+        }
+
+        if (preg_match('/^ricambio\.(\d+)$/', $campo, $m) === 1) {
+            // Le righe esistono solo a form intervento aperto: chiuderlo le
+            // azzera, quindi basta chiedere se la riga c'è.
+            return isset($this->ricambiNuovi[(int) $m[1]])
+                ? ['tenant' => $tenant, 'corrente' => null]
+                : null;
+        }
+
+        return null;
+    }
+
+    protected function scriviFornitore(string $campo, ?int $id): void
+    {
+        match (true) {
+            $campo === 'strumento' => $this->strumentoForm['fornitore_id'] = $id,
+            $campo === 'correzione' => $this->ricambioForm['fornitore_id'] = $id,
+            default => $this->ricambiNuovi[(int) substr($campo, strlen('ricambio.'))]['fornitore_id'] = $id,
+        };
+    }
+
+    /**
+     * Gli id scelti nei form aperti, per scriverne il nome sui selettori chiusi.
+     * A form chiusi è vuoto, e la query non parte.
+     *
+     * @return list<mixed>
+     */
+    private function idFornitoriNeiForm(): array
+    {
+        return [
+            $this->showForm ? ($this->strumentoForm['fornitore_id'] ?? null) : null,
+            $this->showRicambioForm ? ($this->ricambioForm['fornitore_id'] ?? null) : null,
+            ...($this->showInterventoForm ? array_column($this->ricambiNuovi, 'fornitore_id') : []),
         ];
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Piattaforma;
 
+use App\Enums\ConteggioStrumenti;
 use App\Models\Account;
 use App\Models\Piano;
 use App\Support\Listino\CatalogoPiani;
@@ -10,6 +11,8 @@ use App\Support\Listino\LinkDiPagamento;
 use App\Support\Piani;
 use App\Support\Tenancy\VistaPiattaforma;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -132,6 +135,9 @@ class Listino extends Component
         'codice' => '',
         'etichetta' => '',
         'max_enti' => '',
+        // Il tetto di strumenti e a che cosa si applica (🔗 ADR-049).
+        'max_strumenti' => '',
+        'conteggio_strumenti' => 'per_sede',
         'prezzo_mensile_cent' => '0',
         'gratuito' => false,
         'ordine' => '',
@@ -144,6 +150,8 @@ class Listino extends Component
     public array $modifica = [
         'etichetta' => '',
         'max_enti' => '',
+        'max_strumenti' => '',
+        'conteggio_strumenti' => 'per_sede',
         'prezzo_mensile_cent' => '',
         'ordine' => '',
     ];
@@ -226,6 +234,8 @@ class Listino extends Component
             'codice' => $this->nuovo['codice'],
             'etichetta' => $this->nuovo['etichetta'],
             'max_enti' => $this->nuovo['max_enti'],
+            'max_strumenti' => $this->nuovo['max_strumenti'],
+            'conteggio_strumenti' => $this->nuovo['conteggio_strumenti'],
             'gratuito' => (bool) $this->nuovo['gratuito'],
             'prezzo_mensile_cent' => (int) $this->nuovo['prezzo_mensile_cent'],
             'ordine' => (int) ($this->nuovo['ordine'] === '' ? 0 : $this->nuovo['ordine']),
@@ -256,6 +266,8 @@ class Listino extends Component
             // `null` = illimitato, e in un campo numerico si scrive **vuoto**.
             // Uno zero direbbe «nessuna sede», che è un piano inutilizzabile.
             'max_enti' => $modello->max_enti === null ? '' : (string) $modello->max_enti,
+            'max_strumenti' => $modello->max_strumenti === null ? '' : (string) $modello->max_strumenti,
+            'conteggio_strumenti' => $modello->conteggio_strumenti->value,
             'prezzo_mensile_cent' => (string) $modello->prezzo_mensile_cent,
             'ordine' => (string) $modello->ordine,
         ];
@@ -279,7 +291,7 @@ class Listino extends Component
 
         $modello = $this->pianoInLavorazione();
 
-        $nuovoMax = self::maxEntiDalForm($this->modifica['max_enti']);
+        $nuovoMax = self::tettoDalForm($this->modifica['max_enti']);
 
         // 🔴 **Due condizioni, non una: il tetto deve SCENDERE, e sotto qualcuno
         // deve esserci.** Guardare solo la seconda è la forma di difetto che il
@@ -296,15 +308,31 @@ class Listino extends Component
 
         $oltre = $scende ? self::accountOltreIlTetto($modello, $nuovoMax) : 0;
 
+        // 🔗 ADR-049: lo stesso per il tetto di **strumenti**, che ha due leve
+        // e non una. Il modo scelto nel form si legge con `tryFrom`: un valore
+        // che non è uno dei due lo rifiuta `GovernoListino` al salvataggio, e
+        // qui serve solo a contare.
+        $nuovoMaxStrumenti = self::tettoDalForm($this->modifica['max_strumenti']);
+        $nuovoConteggio = ConteggioStrumenti::tryFrom((string) $this->modifica['conteggio_strumenti'])
+            ?? $modello->conteggio_strumenti;
+        $oltreStrumenti = self::accountSpintiOltreIlTettoStrumenti($modello, $nuovoMaxStrumenti, $nuovoConteggio);
+
         // Si chiede **solo** se qualcuno ci finisce davvero sotto. Una modale che
         // comparisse comunque sarebbe un ostacolo, non una decisione — e il
         // prezzo di un ostacolo è che lo si preme senza leggerlo.
-        if ($oltre > 0) {
+        if ($oltre > 0 || $oltreStrumenti > 0) {
             $this->conferma = [
                 'codice' => $modello->codice,
-                'da' => $modello->max_enti === null ? 'illimitato' : (string) $modello->max_enti,
-                'a' => $this->modifica['max_enti'] === '' ? 'illimitato' : (string) (int) $this->modifica['max_enti'],
-                'account' => $oltre,
+                'enti' => $oltre > 0 ? [
+                    'da' => $modello->max_enti === null ? 'illimitato' : (string) $modello->max_enti,
+                    'a' => (string) $nuovoMax,
+                    'account' => $oltre,
+                ] : null,
+                'strumenti' => $oltreStrumenti > 0 ? [
+                    'da' => $modello->tettoStrumentiInParole(),
+                    'a' => $nuovoConteggio->tetto($nuovoMaxStrumenti),
+                    'account' => $oltreStrumenti,
+                ] : null,
             ];
 
             return;
@@ -546,6 +574,55 @@ class Listino extends Component
     }
 
     /**
+     * Quanti clienti che **oggi stanno nel tetto di strumenti** ne uscirebbero
+     * con la regola nuova (🔗 ADR-049).
+     *
+     * 🔴 «Spinti oltre» e non «oltre», ed è ciò che per il tetto di Enti fa la
+     * condizione `$scende`. Qui le leve sono due, il numero e il modo di
+     * contare, quindi «scende» non si può leggere da un confronto fra interi:
+     * passare da «50 per sede» a «100 in tutto» restringe chi ha tre sedi piene
+     * e allarga chi ne ha una. Si guarda allora l'effetto: conta chi era dentro
+     * e si ritrova fuori. Chi era già sopra (grandfathering) non riapre la
+     * domanda a ogni salvataggio dell'etichetta, e un tetto che si allarga non
+     * fa comparire una modale che parla di restringerlo.
+     *
+     * Una query sola, raggruppata per sede: i cestinati non contano, né fra
+     * gli strumenti né fra le sedi.
+     */
+    private static function accountSpintiOltreIlTettoStrumenti(Piano $piano, ?int $nuovoMax, ConteggioStrumenti $nuovoConteggio): int
+    {
+        return DB::table('strumenti')
+            ->join('unita_organizzativa as sede', 'sede.id', '=', 'strumenti.tenant_id')
+            ->whereNull('strumenti.deleted_at')
+            ->whereNull('sede.deleted_at')
+            ->whereIn('sede.account_id', VistaPiattaforma::accounts()->where('piano', $piano->codice)->select('id'))
+            ->groupBy('sede.account_id', 'sede.id')
+            ->selectRaw('sede.account_id as account_id, count(*) as n')
+            ->get()
+            ->groupBy('account_id')
+            ->filter(fn (Collection $sedi) => self::sopraIlTetto($sedi, $nuovoMax, $nuovoConteggio)
+                && ! self::sopraIlTetto($sedi, $piano->max_strumenti, $piano->conteggio_strumenti))
+            ->count();
+    }
+
+    /**
+     * Il cliente è sopra il tetto? Per sede basta **una** sede che lo superi;
+     * in tutto conta la somma.
+     *
+     * @param  Collection<int, object{n: int}>  $sedi
+     */
+    private static function sopraIlTetto(Collection $sedi, ?int $max, ConteggioStrumenti $conteggio): bool
+    {
+        if ($max === null) {
+            return false;
+        }
+
+        $strumenti = $conteggio === ConteggioStrumenti::PerSede ? $sedi->max('n') : $sedi->sum('n');
+
+        return (int) $strumenti > $max;
+    }
+
+    /**
      * Il piano su cui si sta lavorando, risolto **dal database**.
      *
      * `$pianoInModifica` arriva dal browser: è un id, non una promessa. Si
@@ -572,6 +649,8 @@ class Listino extends Component
         GovernoListino::aggiornaAnagrafica($modello, [
             'etichetta' => $this->modifica['etichetta'],
             'max_enti' => $this->modifica['max_enti'],
+            'max_strumenti' => $this->modifica['max_strumenti'],
+            'conteggio_strumenti' => $this->modifica['conteggio_strumenti'],
             'ordine' => (int) ($this->modifica['ordine'] === '' ? 0 : $this->modifica['ordine']),
         ]);
 
@@ -600,7 +679,7 @@ class Listino extends Component
     }
 
     /** Una stringa vuota è `null`, cioè «illimitato»: è così che si scrive «nessun tetto» in un campo numerico. */
-    private static function maxEntiDalForm(string $grezzo): ?int
+    private static function tettoDalForm(string $grezzo): ?int
     {
         return trim($grezzo) === '' ? null : (int) $grezzo;
     }

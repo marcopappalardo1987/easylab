@@ -2,6 +2,7 @@
 
 namespace App\Support\Email;
 
+use App\Enums\StatoSemaforo;
 use InvalidArgumentException;
 
 /**
@@ -48,6 +49,8 @@ final class CatalogoEmail
 
     public const PIANO_CAMBIATO = 'piano_cambiato';
 
+    public const COMODATO_IN_SCADENZA = 'comodato_in_scadenza';
+
     public const INVITO = 'invito';
 
     public const PROPOSTA_PIANO = 'proposta_piano';
@@ -77,7 +80,7 @@ final class CatalogoEmail
                 chiave: self::RIEPILOGO_SCADENZE,
                 nome: 'Riepilogo scadenze',
                 quando: 'Ogni giorno alle 06:00, solo se un intervento o una garanzia è appena scaduto o è entrato nei 30 giorni dalla scadenza. Non ripete mai un avviso già dato.',
-                aChi: 'Admin e Tenant per tutto l\'Ente, Responsabile Reparto per i suoi reparti, chi ha un intervento assegnato per i soli suoi.',
+                aChi: 'Admin e Tenant per tutto l\'Ente, Responsabile Reparto per i suoi reparti, chi ha un intervento assegnato per i soli suoi. Il referente di una macchina, per quella sola.',
                 sospendibile: true,
                 preferenza: 'riceve_email_scadenze',
             ),
@@ -85,15 +88,15 @@ final class CatalogoEmail
                 chiave: self::AVVISO_OBSOLESCENZA,
                 nome: 'Avviso obsolescenza',
                 quando: 'Ogni giorno alle 06:15, con le macchine che hanno appena superato la soglia di età dell\'Ente. Anche subito, quando la soglia viene abbassata.',
-                aChi: 'Admin e Tenant per tutto l\'Ente, Responsabile Reparto per i suoi reparti.',
+                aChi: 'Admin e Tenant per tutto l\'Ente, Responsabile Reparto per i suoi reparti. Il referente di una macchina, per quella sola.',
                 sospendibile: true,
                 preferenza: 'riceve_email_scadenze',
             ),
             new TipoEmail(
                 chiave: self::MACCHINA_SEGNALATA,
                 nome: 'Macchina segnalata',
-                quando: 'Quando qualcuno segnala una macchina portando il semaforo a mano su «Azione richiesta» o «Non idoneo». Porta il motivo scritto da chi la segnala.',
-                aChi: 'Admin e Tenant dell\'Ente, Responsabile Reparto se la macchina è nei suoi reparti. Mai a chi l\'ha segnalata.',
+                quando: 'Quando qualcuno segnala una macchina portando il semaforo a mano su «'.StatoSemaforo::Arancione->etichetta().'» o «'.StatoSemaforo::Rosso->etichetta().'». Porta il motivo scritto da chi la segnala.',
+                aChi: 'Admin e Tenant dell\'Ente, Responsabile Reparto se la macchina è nei suoi reparti, e il referente della macchina. Mai a chi l\'ha segnalata.',
                 sospendibile: true,
                 nataAccesa: false,
                 preferenza: 'riceve_email_macchine_segnalate',
@@ -102,7 +105,7 @@ final class CatalogoEmail
                 chiave: self::INTERVENTO_PROGRAMMATO,
                 nome: 'Intervento programmato',
                 quando: 'Quando qualcuno pianifica un intervento su una macchina. Non parte per gli interventi inseriti già eseguiti.',
-                aChi: 'Admin e Tenant dell\'Ente, Responsabile Reparto se la macchina è nei suoi reparti. Mai a chi lo ha pianificato.',
+                aChi: 'Admin e Tenant dell\'Ente, Responsabile Reparto se la macchina è nei suoi reparti, e il referente della macchina. Mai a chi lo ha pianificato.',
                 sospendibile: true,
                 nataAccesa: false,
                 preferenza: 'riceve_email_interventi_programmati',
@@ -111,7 +114,7 @@ final class CatalogoEmail
                 chiave: self::INTERVENTO_ESEGUITO,
                 nome: 'Intervento eseguito',
                 quando: 'Quando un intervento viene chiuso come eseguito.',
-                aChi: 'Admin e Tenant dell\'Ente, Responsabile Reparto se la macchina è nei suoi reparti. Mai a chi lo ha chiuso.',
+                aChi: 'Admin e Tenant dell\'Ente, Responsabile Reparto se la macchina è nei suoi reparti, e il referente della macchina. Mai a chi lo ha chiuso.',
                 sospendibile: true,
                 nataAccesa: false,
                 preferenza: 'riceve_email_interventi_eseguiti',
@@ -136,10 +139,20 @@ final class CatalogoEmail
             new TipoEmail(
                 chiave: self::PIANO_CAMBIATO,
                 nome: 'Piano cambiato',
-                quando: 'Quando cambia il piano di un account che esiste già: attivazione, cambio, ritorno al piano gratuito dopo una disdetta.',
+                quando: 'Quando cambia il piano di un account che esiste già: attivazione, cambio, ritorno al piano in comodato d\'uso dopo una disdetta.',
                 aChi: 'Tutti i membri dell\'account.',
                 sospendibile: true,
                 nataAccesa: false,
+            ),
+            // 🔗 ADR-058. Nasce ACCESA, a differenza delle altre di questo
+            // gruppo: nessun cliente ha una scadenza finché qualcuno non gliela
+            // scrive dalla cabina, quindi un deploy non fa partire niente.
+            new TipoEmail(
+                chiave: self::COMODATO_IN_SCADENZA,
+                nome: 'Comodato in scadenza',
+                quando: 'Ogni giorno alle 06:30, quando al comodato d\'uso di un cliente mancano 30 giorni o meno. Una volta sola per scadenza: spostare la data la fa ripartire.',
+                aChi: 'I membri dell\'account del cliente, e tutti i Superadmin.',
+                sospendibile: true,
             ),
             new TipoEmail(
                 chiave: self::INVITO,

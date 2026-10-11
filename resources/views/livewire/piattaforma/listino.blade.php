@@ -174,7 +174,7 @@
 
                                 <span class="mt-1 flex flex-wrap gap-1">
                                     @if ($piano->gratuito)
-                                        <x-ui.badge variant="neutral">gratuito</x-ui.badge>
+                                        <x-ui.badge variant="neutral">comodato d'uso</x-ui.badge>
                                     @endif
                                     @if ($codice === $predefinito)
                                         {{-- Detto **prima** del click: è il piano
@@ -208,6 +208,8 @@
                                         fino a {{ $piano->max_enti }} {{ $piano->max_enti === 1 ? 'sede' : 'sedi' }}
                                     @endif
                                 </span>
+                                {{-- 🔗 ADR-049: il tetto di strumenti, con a che cosa si applica. --}}
+                                <span class="block text-xs text-ink-3" data-tetto-strumenti>{{ $piano->tettoStrumentiInParole() }}</span>
                             </td>
 
                             <td class="px-3 py-3 text-ink-2 tabular-nums" data-clienti="{{ $clientiPerPiano[$codice] ?? 0 }}">
@@ -345,7 +347,7 @@
                                          porta da cui ci si fa un Ente e un ruolo
                                          Admin senza pagare. Detto, perché è una
                                          regola e non un guasto. --}}
-                                    <span class="text-xs text-ink-3" title="Un piano a 0 € non si vende da un link pubblico: sarebbe un account gratuito per chiunque">
+                                    <span class="text-xs text-ink-3" title="Un piano a 0 € non si vende da un link pubblico: sarebbe un account senza pagare per chiunque">
                                         nessuno: è a 0 €
                                     </span>
                                 @endif
@@ -501,6 +503,27 @@
                 <x-ui.input name="max_enti" label="Tetto di Enti" type="number" wire:model="nuovo.max_enti"
                             placeholder="vuoto = illimitato" />
 
+                {{-- 🔗 ADR-049. Quanti strumenti, e a che cosa si applica il numero. --}}
+                <x-ui.input name="max_strumenti" label="Tetto di strumenti" type="number"
+                            wire:model="nuovo.max_strumenti" placeholder="vuoto = illimitato" />
+
+                <div>
+                    <label for="nuovo-conteggio-strumenti" class="block text-sm font-medium text-ink">Il tetto di strumenti vale</label>
+                    <select id="nuovo-conteggio-strumenti" wire:model="nuovo.conteggio_strumenti"
+                            class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                        @foreach (\App\Enums\ConteggioStrumenti::cases() as $modo)
+                            <option value="{{ $modo->value }}">{{ $modo->label() }}</option>
+                        @endforeach
+                    </select>
+                    @error('conteggio_strumenti')
+                        <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
+                    @enderror
+                    <p class="mt-1 text-xs text-ink-3">
+                        Per sede: ogni sede del cliente ha il suo tetto. Per cliente: il tetto è uno solo e
+                        somma gli strumenti di tutte le sue sedi. Su un piano da una sede sola è lo stesso.
+                    </p>
+                </div>
+
                 <x-ui.input name="prezzo_mensile_cent" label="Prezzo mensile, in centesimi interi"
                             type="number" wire:model="nuovo.prezzo_mensile_cent" />
                 <p class="-mt-3 text-xs text-ink-3">
@@ -512,7 +535,7 @@
                     <input type="checkbox" wire:model="nuovo.gratuito"
                            class="mt-0.5 rounded border border-border-strong bg-surface text-brand focus:ring-ring">
                     <span>
-                        Piano <strong>gratuito</strong>: nessun customer e nessuna subscription su Stripe (ADR-002).
+                        Piano in <strong>comodato d'uso</strong>: nessun customer e nessuna subscription su Stripe (ADR-002).
                         <span class="mt-0.5 block text-xs text-ink-3">
                             Non è «costa zero»: un piano a pagamento a 0 € — una promozione — ha una
                             subscription vera e va lasciato senza spunta. Anche questo non si potrà più cambiare.
@@ -534,9 +557,9 @@
         <x-ui.modal title="Modifica il piano" close="chiudiModifica">
             <div class="space-y-4" data-form-modifica>
                 <p class="text-sm text-ink-2">
-                    Il <strong>codice</strong> e la <strong>gratuità</strong> non compaiono qui perché non si
+                    Il <strong>codice</strong> e il <strong>comodato d&rsquo;uso</strong> non compaiono qui perché non si
                     cambiano dopo la creazione: il primo vive in <code class="text-xs">accounts.piano</code>,
-                    la seconda marcherebbe come paganti dei clienti senza subscription. Per l&rsquo;altro
+                    il secondo marcherebbe come paganti dei clienti senza subscription. Per l&rsquo;altro
                     comportamento si crea un piano nuovo.
                 </p>
 
@@ -544,6 +567,27 @@
 
                 <x-ui.input name="max_enti" label="Tetto di Enti" type="number"
                             wire:model="modifica.max_enti" placeholder="vuoto = illimitato" />
+
+                {{-- 🔗 ADR-049. Quanti strumenti, e a che cosa si applica il numero. --}}
+                <x-ui.input name="max_strumenti" label="Tetto di strumenti" type="number"
+                            wire:model="modifica.max_strumenti" placeholder="vuoto = illimitato" />
+
+                <div>
+                    <label for="modifica-conteggio-strumenti" class="block text-sm font-medium text-ink">Il tetto di strumenti vale</label>
+                    <select id="modifica-conteggio-strumenti" wire:model="modifica.conteggio_strumenti"
+                            class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink shadow-sm focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                        @foreach (\App\Enums\ConteggioStrumenti::cases() as $modo)
+                            <option value="{{ $modo->value }}">{{ $modo->label() }}</option>
+                        @endforeach
+                    </select>
+                    @error('conteggio_strumenti')
+                        <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
+                    @enderror
+                    <p class="mt-1 text-xs text-ink-3">
+                        Per sede: ogni sede del cliente ha il suo tetto. Per cliente: il tetto è uno solo e
+                        somma gli strumenti di tutte le sue sedi. Su un piano da una sede sola è lo stesso.
+                    </p>
+                </div>
 
                 <x-ui.input name="prezzo_mensile_cent" label="Prezzo mensile, in centesimi interi"
                             type="number" wire:model="modifica.prezzo_mensile_cent" />
@@ -572,29 +616,51 @@
          **sapere quanti** ci finiscono, che è l&rsquo;unica cosa che trasforma
          il gesto in una decisione. --}}
     @if ($conferma)
-        <x-ui.modal :title="'Abbassare il tetto di Enti di «'.$conferma['codice'].'»?'" close="annulla">
-            <div data-conferma-tetto="{{ $conferma['account'] }}">
-                <p class="text-sm text-ink-2">
-                    Il tetto passa da <strong>{{ $conferma['da'] }}</strong> a
-                    <strong>{{ $conferma['a'] }}</strong> Enti.
-                </p>
+        <x-ui.modal :title="'Restringere il piano «'.$conferma['codice'].'»?'" close="annulla">
+            <div>
+                @if ($conferma['enti'])
+                    <div data-conferma-tetto="{{ $conferma['enti']['account'] }}">
+                        <p class="text-sm text-ink-2">
+                            Il tetto di Enti passa da <strong>{{ $conferma['enti']['da'] }}</strong> a
+                            <strong>{{ $conferma['enti']['a'] }}</strong>.
+                        </p>
 
-                <p class="mt-3 rounded-md bg-warn-soft p-3 text-sm text-warn-soft-ink">
-                    <span aria-hidden="true">⚠️</span>
-                    <strong>{{ $conferma['account'] }}</strong>
-                    {{ $conferma['account'] === 1 ? 'cliente si troverà' : 'clienti si troveranno' }}
-                    sopra il limite.
-                </p>
+                        <p class="mt-3 rounded-md bg-warn-soft p-3 text-sm text-warn-soft-ink">
+                            <span aria-hidden="true">⚠️</span>
+                            <strong>{{ $conferma['enti']['account'] }}</strong>
+                            {{ $conferma['enti']['account'] === 1 ? 'cliente si troverà' : 'clienti si troveranno' }}
+                            sopra il limite di sedi.
+                        </p>
+                    </div>
+                @endif
+
+                {{-- 🔗 ADR-049. Stessa informazione per il tetto di strumenti: conta
+                     chi oggi sta nel tetto e con la regola nuova ne esce. --}}
+                @if ($conferma['strumenti'])
+                    <div class="{{ $conferma['enti'] ? 'mt-4' : '' }}" data-conferma-strumenti="{{ $conferma['strumenti']['account'] }}">
+                        <p class="text-sm text-ink-2">
+                            Il tetto di strumenti passa da <strong>{{ $conferma['strumenti']['da'] }}</strong> a
+                            <strong>{{ $conferma['strumenti']['a'] }}</strong>.
+                        </p>
+
+                        <p class="mt-3 rounded-md bg-warn-soft p-3 text-sm text-warn-soft-ink">
+                            <span aria-hidden="true">⚠️</span>
+                            <strong>{{ $conferma['strumenti']['account'] }}</strong>
+                            {{ $conferma['strumenti']['account'] === 1 ? 'cliente che oggi rientra nel tetto si troverà' : 'clienti che oggi rientrano nel tetto si troveranno' }}
+                            sopra il limite di strumenti.
+                        </p>
+                    </div>
+                @endif
 
                 <p class="mt-3 text-sm text-ink-2">
-                    Nessuna sede viene chiusa e nessun account viene bloccato: chi è sopra il tetto
-                    tiene tutto ciò che ha e semplicemente <strong>non ne apre altre</strong> finché
-                    non risale di piano.
+                    Nessuna sede viene chiusa, nessuno strumento viene tolto e nessun account viene bloccato:
+                    chi è sopra un tetto tiene tutto ciò che ha e semplicemente
+                    <strong>non ne aggiunge</strong> finché non risale di piano.
                 </p>
 
                 <div class="mt-4 flex justify-end gap-2">
                     <x-ui.button variant="secondary" wire:click="annulla">Annulla</x-ui.button>
-                    <x-ui.button wire:click="procedi" data-procedi>Abbassa il tetto</x-ui.button>
+                    <x-ui.button wire:click="procedi" data-procedi>Restringi il piano</x-ui.button>
                 </div>
             </div>
         </x-ui.modal>

@@ -46,9 +46,9 @@ garanzia — e sono informazioni che non si possono mettere insieme.
 
 ## 5
 
-Ogni riga ha il nome del pezzo e, facoltativa, la sua scadenza di garanzia. Il
-resto — chi, quando, su quale macchina — lo eredita dall'intervento, e non c'è
-niente da ripetere.
+Ogni riga ha il nome del pezzo, la sua scadenza di garanzia e, se lo si vuole
+dire, il fornitore da cui è stato comprato. Il resto — chi, quando, su quale
+macchina — lo eredita dall'intervento, e non c'è niente da ripetere.
 
 ## 6
 

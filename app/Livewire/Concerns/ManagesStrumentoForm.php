@@ -2,11 +2,8 @@
 
 namespace App\Livewire\Concerns;
 
-use App\Models\Fornitore;
 use App\Models\Strumento;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\Rule;
 
 /**
  * Form condiviso dello Strumento (create in Albero, edit in SchedaStrumento).
@@ -17,13 +14,30 @@ use Illuminate\Validation\Rule;
  */
 trait ManagesStrumentoForm
 {
-    /** @var array{nome:string,modello:?string,matricola:?string,data_installazione:?string} */
-    public array $strumentoForm = [
+    // Il campo fornitore del form è un selettore con ricerca e creazione al
+    // volo (ADR-051): la definizione di «selezionabile» vive lì.
+    use SceglieFornitore;
+
+    /**
+     * I campi vuoti del modulo. Il referente e le note (🔗 ADR-054) sono
+     * stringhe vuote e non `null`: sono campi di testo, e un `null` legato a
+     * un `wire:model` diventa comunque una stringa al primo tasto.
+     */
+    private const FORM_VUOTO = [
         'nome' => '',
         'modello' => '',
         'matricola' => '',
         'data_installazione' => '',
+        'fornitore_id' => null,
+        'referente_nome' => '',
+        'referente_cognome' => '',
+        'referente_email' => '',
+        'referente_cellulare' => '',
+        'note' => '',
     ];
+
+    /** @var array{nome:string,modello:?string,matricola:?string,data_installazione:?string,fornitore_id:?int,referente_nome:string,referente_cognome:string,referente_email:string,referente_cellulare:string,note:string} */
+    public array $strumentoForm = self::FORM_VUOTO;
 
     /** @var list<array{chiave:string,valore:string}> */
     public array $parametri = [];
@@ -39,31 +53,6 @@ trait ManagesStrumentoForm
         $this->parametri = array_values($this->parametri);
     }
 
-    /**
-     * Fornitori selezionabili per un Ente (ADR-023): **una sola definizione**,
-     * usata dal select del form e dalla validazione al salvataggio.
-     *
-     * È il precedente di `SchedaStrumento::assegnabili()`, e la ragione è la
-     * stessa: se la whitelist del select e il controllo al save fossero due
-     * query diverse, un `fornitore_id` forgiato dal browser passerebbe il
-     * secondo pur non comparendo nel primo — e le due copie potrebbero
-     * divergere alla prima modifica.
-     *
-     * `$correnteId` riammette il fornitore già associato anche se cestinato:
-     * senza, modificare una macchina il cui fornitore è stato cestinato
-     * fallirebbe la validazione su un campo che l'utente non ha toccato.
-     *
-     * @return Builder<Fornitore>
-     */
-    protected function fornitoriSelezionabili(int $tenantId, ?int $correnteId = null): Builder
-    {
-        return Fornitore::withTrashed()
-            ->where('tenant_id', $tenantId)
-            ->where(fn (Builder $q) => $q->whereNull('deleted_at')
-                ->when($correnteId !== null, fn (Builder $q) => $q->orWhere('id', $correnteId)))
-            ->orderBy('ragione_sociale');
-    }
-
     protected function strumentoFormRules(?int $tenantId = null, ?int $correnteId = null): array
     {
         return [
@@ -71,19 +60,21 @@ trait ManagesStrumentoForm
             // riguarda chi inserisce a mano, non le righe storiche né l'import.
             // La regola è condizionata al permesso: un ruolo che il campo non lo
             // vede nemmeno non può essere bloccato da un campo che non ha.
-            'strumentoForm.fornitore_id' => Gate::allows('fornitori.view')
-                // T1a (S7): la stessa lista della tendina — vivi del tenant, più il
-                // cestinato già associato. Prima un id cestinato forgiato passava.
-                ? ['required', 'integer', Rule::exists('fornitori', 'id')->where(
-                    fn ($q) => $q->where('tenant_id', $tenantId)
-                        ->where(fn ($q) => $q->whereNull('deleted_at')
-                            ->when($correnteId !== null, fn ($q) => $q->orWhere('id', $correnteId)))
-                )]
-                : ['nullable'],
+            // T1a (S7): la stessa lista del selettore — vivi del tenant, più il
+            // cestinato già associato. Prima un id cestinato forgiato passava.
+            'strumentoForm.fornitore_id' => $this->regolaFornitore((int) $tenantId, $correnteId, obbligatorio: true),
             'strumentoForm.nome' => ['required', 'string', 'max:255'],
             'strumentoForm.modello' => ['nullable', 'string', 'max:255'],
             'strumentoForm.matricola' => ['nullable', 'string', 'max:255'],
             'strumentoForm.data_installazione' => ['nullable', 'date'],
+            // 🔗 ADR-054: il referente è facoltativo, campo per campo.
+            // L'indirizzo è ciò che decide se le email dello strumento
+            // arrivano anche a lui, quindi dev'essere un indirizzo.
+            'strumentoForm.referente_nome' => ['nullable', 'string', 'max:255'],
+            'strumentoForm.referente_cognome' => ['nullable', 'string', 'max:255'],
+            'strumentoForm.referente_email' => ['nullable', 'string', 'email', 'max:255'],
+            'strumentoForm.referente_cellulare' => ['nullable', 'string', 'max:50'],
+            'strumentoForm.note' => ['nullable', 'string', 'max:2000'],
             'parametri' => ['array'],
             'parametri.*.chiave' => ['nullable', 'string', 'max:100'],
             'parametri.*.valore' => ['nullable', 'string', 'max:255'],
@@ -109,15 +100,33 @@ trait ManagesStrumentoForm
             'strumentoForm.matricola' => 'matricola',
             'strumentoForm.data_installazione' => 'data di installazione',
             'strumentoForm.fornitore_id' => 'fornitore',
+            'strumentoForm.referente_nome' => 'nome del referente',
+            'strumentoForm.referente_cognome' => 'cognome del referente',
+            'strumentoForm.referente_email' => 'email del referente',
+            'strumentoForm.referente_cellulare' => 'cellulare del referente',
+            'strumentoForm.note' => 'note',
             'parametri.*.chiave' => 'nome del parametro',
             'parametri.*.valore' => 'valore del parametro',
         ];
     }
 
+    /**
+     * Un indirizzo incollato porta spesso uno spazio in coda: non è un errore
+     * di chi scrive, e la regola `email` lo rifiuterebbe.
+     */
+    public function updatedStrumentoForm(mixed $valore, string $chiave): void
+    {
+        if ($chiave === 'referente_email' && is_string($valore)) {
+            $this->strumentoForm['referente_email'] = trim($valore);
+        }
+    }
+
     protected function resetStrumentoForm(): void
     {
-        $this->strumentoForm = ['nome' => '', 'modello' => '', 'matricola' => '', 'data_installazione' => '', 'fornitore_id' => null];
+        $this->strumentoForm = self::FORM_VUOTO;
         $this->parametri = [];
+        // Un selettore rimasto aperto riaprirebbe il prossimo form già a metà.
+        $this->chiudiFornitori();
         $this->resetValidation();
     }
 
@@ -129,6 +138,11 @@ trait ManagesStrumentoForm
             'matricola' => $strumento->matricola,
             'data_installazione' => $strumento->data_installazione?->format('Y-m-d') ?? '',
             'fornitore_id' => $strumento->fornitore_id,
+            'referente_nome' => (string) $strumento->referente_nome,
+            'referente_cognome' => (string) $strumento->referente_cognome,
+            'referente_email' => (string) $strumento->referente_email,
+            'referente_cellulare' => (string) $strumento->referente_cellulare,
+            'note' => (string) $strumento->note,
         ];
 
         $this->parametri = collect($strumento->parametri_tecnici ?? [])
@@ -148,6 +162,14 @@ trait ManagesStrumentoForm
             ->mapWithKeys(fn ($r) => [trim($r['chiave']) => $r['valore'] ?? ''])
             ->all();
 
+        // Uno spazio non è un referente, e un campo svuotato lo toglie: è il
+        // modo in cui si fanno smettere le email (🔗 ADR-054).
+        $testo = function (string $campo): ?string {
+            $valore = trim((string) ($this->strumentoForm[$campo] ?? ''));
+
+            return $valore === '' ? null : $valore;
+        };
+
         $payload = [
             'nome' => $this->strumentoForm['nome'],
             'modello' => $this->strumentoForm['modello'] ?: null,
@@ -155,6 +177,11 @@ trait ManagesStrumentoForm
             'data_installazione' => $this->strumentoForm['data_installazione'] ?: null,
             'fornitore_id' => $this->strumentoForm['fornitore_id'] ?: null,
             'parametri_tecnici' => $parametri === [] ? null : $parametri,
+            'referente_nome' => $testo('referente_nome'),
+            'referente_cognome' => $testo('referente_cognome'),
+            'referente_email' => $testo('referente_email'),
+            'referente_cellulare' => $testo('referente_cellulare'),
+            'note' => $testo('note'),
         ];
 
         // T1a (S7): senza `fornitori.view` la regola del campo è `nullable` e l'id

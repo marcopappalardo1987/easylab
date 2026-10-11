@@ -104,6 +104,7 @@
                                                 @else
                                                     · sedi illimitate
                                                 @endif
+                                                · {{ $unPiano->tettoStrumentiInParole() }}
                                             </span>
                                         </span>
                                     </label>

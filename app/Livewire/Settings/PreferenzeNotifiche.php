@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Settings;
 
+use App\Enums\StatoSemaforo;
 use App\Enums\TemaUtente;
 use App\Livewire\Settings\Concerns\ScegliTema;
 use App\Models\User;
@@ -123,7 +124,7 @@ class PreferenzeNotifiche extends Component
                 'riguarda' => $delCliente,
                 'proprieta' => 'riceveEmailMacchineSegnalate',
                 'titolo' => 'Macchina segnalata',
-                'testo' => 'Un\'email quando qualcuno segnala una macchina che segui come «Azione richiesta» o «Non idoneo».',
+                'testo' => 'Un\'email quando qualcuno segnala una macchina che segui come «'.StatoSemaforo::Arancione->etichetta().'» o «'.StatoSemaforo::Rosso->etichetta().'».',
             ],
             [
                 'chiave' => CatalogoEmail::INTERVENTO_PROGRAMMATO,

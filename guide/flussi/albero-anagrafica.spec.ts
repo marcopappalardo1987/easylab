@@ -3,29 +3,29 @@ import { Regista } from '../lib/regista';
 import { accedi } from '../lib/accesso';
 
 /**
- * Guida B1 — «L'albero dell'anagrafica».
+ * Guida B1 — «L'albero dei laboratori».
  *
  * ⚠️ Girata con l'**Admin**: un Responsabile Reparto vede solo i nodi che gli
  * sono assegnati, quindi l'albero che ritrarrebbe sarebbe un ramo e non la
  * struttura. La guida parla della struttura.
  */
-test('albero anagrafica', async ({ page }) => {
-  const g = new Regista(page, 'albero-anagrafica', "L'albero dell'anagrafica", 'Dove sta ogni macchina: sede, dipartimento, laboratorio');
+test('albero laboratori', async ({ page }) => {
+  const g = new Regista(page, 'albero-anagrafica', "L'albero dei laboratori", 'Dove sta ogni macchina: sede, laboratorio, sotto-laboratorio');
 
   await accedi(page, 'maria.conti@aurora.test');
 
   g.capitolo('Parte 1 di 3', 'La sede come è fatta davvero');
 
-  await page.goto('/anagrafica');
+  await page.goto('/laboratori');
   await page.waitForLoadState('networkidle');
 
-  await g.passo("«Anagrafica» apre la sede alla sua radice: è la struttura del laboratorio, non un elenco di macchine.", {
+  await g.passo("«Laboratori» apre la sede alla sua radice: è la struttura della sede, non un elenco di macchine.", {
     su: page.getByRole('heading').first(),
     zoom: 1.7,
     durata: 6,
   });
 
-  await g.passo('Al primo livello ci sono i dipartimenti.', {
+  await g.passo('Al primo livello ci sono i laboratori.', {
     su: page.getByText('Genetica Medica').first(),
     zoom: 2.1,
     durata: 5,
@@ -39,7 +39,7 @@ test('albero anagrafica', async ({ page }) => {
 
   g.capitolo('Parte 2 di 3', 'Scendere un livello alla volta');
 
-  await g.passo('Si apre un dipartimento cliccandolo.', {
+  await g.passo('Si apre un laboratorio cliccandolo.', {
     su: page.getByText('Genetica Medica').first(),
     click: true,
     zoom: 2.2,
@@ -47,7 +47,7 @@ test('albero anagrafica', async ({ page }) => {
 
   await page.waitForLoadState('networkidle');
 
-  await g.passo('Dentro ci sono i suoi laboratori, e la pagina si è spostata: adesso stai guardando il dipartimento.', {
+  await g.passo('Dentro ci sono i suoi sotto-laboratori, e la pagina si è spostata: adesso stai guardando il laboratorio.', {
     su: page.getByRole('heading').first(),
     zoom: 1.8,
     durata: 7,
@@ -87,7 +87,7 @@ test('albero anagrafica', async ({ page }) => {
   });
 
   g.chiusura('Da ricordare', [
-    "L'anagrafica risponde alla domanda «dove», l'elenco degli strumenti alla domanda «quale».",
+    "«Laboratori» risponde alla domanda «dove», l'elenco degli strumenti alla domanda «quale».",
     'Il conteggio di una riga comprende tutto quello che sta sotto, non solo il livello immediato.',
     'Il percorso in alto è la via di ritorno: dice dove sei e riporta indietro di un passo.',
   ]);

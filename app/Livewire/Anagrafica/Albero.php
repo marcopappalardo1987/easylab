@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Anagrafica;
 
+use App\Enums\SoggettoGaranzia;
 use App\Enums\TipoSpostamento;
 use App\Enums\TipoUnitaOrganizzativa;
 use App\Enums\VisibilitaGaranzieRicambio;
@@ -10,11 +11,17 @@ use App\Models\Account;
 use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
+use App\Models\User;
+use App\Support\Billing\TettoStrumenti;
+use App\Support\Billing\TettoStrumentiRaggiunto;
 use App\Support\Notifiche\AvvisiObsolescenza;
 use App\Support\Piani;
 use App\Support\Provisioning\ProvisionaEnte;
 use App\Support\Tenancy\AccessoTecnico;
 use App\Support\Tenancy\CurrentTenant;
+use App\Support\Testo\Ricerca;
+use App\Support\Utenti\AssegnazioneRifiutata;
+use App\Support\Utenti\LaboratoriDelResponsabile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -68,10 +75,30 @@ class Albero extends Component
     // Modale create strumento
     public bool $showStrumentoForm = false;
 
+    // 🔗 ADR-060: il filtro di testo sulle card del livello aperto. Si svuota
+    // cambiando livello: ciò che si cercava fra le sedi non vale fra i laboratori.
+    public string $cerca = '';
+
     // Provenienza esterna opzionale (ente off-platform) alla creazione.
     public ?string $provenienza = null;
 
+    /**
+     * La garanzia della macchina, chiesta già nel modulo con cui la si registra
+     * (🔗 ADR-059; ADR-019 «inizio + durata»). Facoltativa: a decidere se c'è
+     * è la durata. Dopo si modifica dal tab Garanzie della scheda, come sempre.
+     *
+     * @var array{data_inizio: ?string, durata_mesi: int|string|null}
+     */
+    public array $garanziaNuova = ['data_inizio' => '', 'durata_mesi' => ''];
+
     public ?string $notice = null;
+
+    /**
+     * La persona scelta nella tendina «Assegna a» del riquadro Responsabili
+     * (🔗 ADR-057). Una stringa: è il valore di una `<select>`, e arriva dal
+     * browser.
+     */
+    public string $nuovoResponsabile = '';
 
     /** Modale «aggiungi una sede», il gesto del cliente su sé stesso. */
     public bool $showSedeForm = false;
@@ -296,11 +323,33 @@ class Albero extends Component
     public function open(int $id): void
     {
         $this->currentId = UnitaOrganizzativa::findOrFail($id)->id;
+        $this->cerca = '';
     }
 
     public function goTo(?int $id): void
     {
         $this->currentId = $id !== null ? UnitaOrganizzativa::findOrFail($id)->id : null;
+        $this->cerca = '';
+    }
+
+    public function togliCerca(): void
+    {
+        $this->cerca = '';
+    }
+
+    /**
+     * Le card il cui nome contiene ogni parola cercata, senza badare a
+     * maiuscole e accenti (🔗 ADR-060). Si filtra ciò che `visibleNodes()` ha
+     * già caricato: il filtro restringe, non può mostrare un nodo in più.
+     *
+     * @param  Collection<int, UnitaOrganizzativa>  $nodi
+     * @return Collection<int, UnitaOrganizzativa>
+     */
+    private function filtraPerNome(Collection $nodi): Collection
+    {
+        return $nodi
+            ->filter(fn (UnitaOrganizzativa $n) => Ricerca::contiene((string) $n->nome, $this->cerca))
+            ->values();
     }
 
     // --- CRUD nodi ---
@@ -539,12 +588,25 @@ class Albero extends Component
 
         $node = UnitaOrganizzativa::findOrFail($this->currentId);
         if ($node->tipo === TipoUnitaOrganizzativa::Ente) {
-            $this->notice = 'Aggiungi gli strumenti a un dipartimento o sotto-laboratorio, non all\'Ente.';
+            $this->notice = 'Aggiungi gli strumenti a un laboratorio o a un sotto-laboratorio, non all\'Ente.';
+
+            return;
+        }
+
+        // 🔗 ADR-049: il tetto del piano si dice **prima** del form, coi numeri.
+        // Lasciar compilare una scheda per poi rifiutarla al salvataggio
+        // sarebbe far lavorare qualcuno per niente. Non è la guardia: quella
+        // sta in `saveStrumento()`, dentro la transazione.
+        $tetto = TettoStrumenti::dellEnte((int) $node->tenant_id);
+
+        if (! $tetto->consente()) {
+            $this->notice = $tetto->spiegazione();
 
             return;
         }
 
         $this->provenienza = null;
+        $this->garanziaNuova = ['data_inizio' => '', 'durata_mesi' => ''];
         $this->resetStrumentoForm();
         $this->showStrumentoForm = true;
     }
@@ -560,35 +622,80 @@ class Albero extends Component
             [
                 ...$this->strumentoFormRules($node->tenant_id),
                 'provenienza' => ['nullable', 'string', 'max:255'],
+                // 🔗 ADR-059: stessi confini del tab Garanzie. La durata è ciò
+                // che dice «c'è una garanzia»: un inizio senza durata è una
+                // garanzia scritta a metà, e si dice invece di scartarla.
+                'garanziaNuova.data_inizio' => ['nullable', 'date'],
+                'garanziaNuova.durata_mesi' => ['nullable', 'required_with:garanziaNuova.data_inizio', 'integer', 'min:1', 'max:600'],
             ],
-            attributes: [
+            [
+                'garanziaNuova.durata_mesi.required_with' => 'Scrivi quanti mesi dura la garanzia, o togli la data di inizio.',
+            ],
+            [
                 ...$this->strumentoFormAttributi(),
                 'provenienza' => 'provenienza',
+                'garanziaNuova.data_inizio' => 'inizio della garanzia',
+                'garanziaNuova.durata_mesi' => 'durata della garanzia',
             ],
         );
 
-        DB::transaction(function () use ($node) {
-            $strumento = Strumento::create([
-                'tenant_id' => $node->tenant_id,
-                'unita_organizzativa_id' => $node->id,
-                ...$this->strumentoPayload(),
-            ]);
+        try {
+            DB::transaction(function () use ($node) {
+                // 🔴 ADR-049: la guardia del tetto di strumenti, **dentro** la
+                // transazione. Il controllo di `addStrumento()` è già passato
+                // da un pezzo quando si arriva qui, e l'azione si può chiamare
+                // senza passare dal bottone.
+                TettoStrumenti::esigi((int) $node->tenant_id);
 
-            // Provenienza esterna → registra un movimento di ingresso (ADR-015).
-            if (filled($this->provenienza)) {
-                SpostamentoStrumento::create([
-                    'tenant_id' => $node->tenant_id,
-                    'strumento_id' => $strumento->id,
-                    'da_esterno' => trim($this->provenienza),
-                    'a_nodo_id' => $node->id,
-                    'tipo_spostamento' => TipoSpostamento::Ingresso,
-                    'data' => now()->toDateString(),
-                    'eseguito_da' => auth()->id(),
-                ]);
-            }
-        });
+                $this->creaStrumento($node);
+            });
+        } catch (TettoStrumentiRaggiunto $pieno) {
+            $this->closeStrumentoForm();
+            $this->notice = $pieno->getMessage();
+
+            return;
+        }
 
         $this->closeStrumentoForm();
+    }
+
+    private function creaStrumento(UnitaOrganizzativa $node): void
+    {
+        $strumento = Strumento::create([
+            'tenant_id' => $node->tenant_id,
+            'unita_organizzativa_id' => $node->id,
+            ...$this->strumentoPayload(),
+        ]);
+
+        // Provenienza esterna → registra un movimento di ingresso (ADR-015).
+        if (filled($this->provenienza)) {
+            SpostamentoStrumento::create([
+                'tenant_id' => $node->tenant_id,
+                'strumento_id' => $strumento->id,
+                'da_esterno' => trim($this->provenienza),
+                'a_nodo_id' => $node->id,
+                'tipo_spostamento' => TipoSpostamento::Ingresso,
+                'data' => now()->toDateString(),
+                'eseguito_da' => auth()->id(),
+            ]);
+        }
+
+        // 🔗 ADR-059: la garanzia nasce con la macchina, nella stessa
+        // transazione. ⛔ Solo per chi può gestirla: il blocco del modulo è
+        // dietro lo stesso permesso, ma `garanziaNuova` è una property
+        // pubblica. Senza una data di inizio vale quella di installazione, e
+        // senza nemmeno quella oggi. Soggetto, Ente e strumento vengono dal
+        // contesto, mai dal payload; la scadenza la calcola il model.
+        $mesi = (int) ($this->garanziaNuova['durata_mesi'] ?? 0);
+
+        if ($mesi > 0 && Gate::allows('garanzie.macchina.manage')) {
+            $strumento->garanzie()->create([
+                'tenant_id' => $node->tenant_id,
+                'soggetto' => SoggettoGaranzia::Macchina,
+                'data_inizio' => ($this->garanziaNuova['data_inizio'] ?? '') ?: ($strumento->data_installazione?->toDateString() ?? today()->toDateString()),
+                'durata_mesi' => $mesi,
+            ]);
+        }
     }
 
     public function closeStrumentoForm(): void
@@ -596,6 +703,80 @@ class Albero extends Component
         $this->provenienza = null;
         $this->resetStrumentoForm();
         $this->showStrumentoForm = false;
+    }
+
+    // --- Responsabili del laboratorio corrente (🔗 ADR-057) ---
+
+    /**
+     * Il laboratorio in cui ci si trova, letto dal database.
+     *
+     * 🔴 `findOrFail()` passa dai global scope: è il confine di tenancy di
+     * questa azione. Un Admin trova i soli nodi del proprio Ente, un
+     * Superadmin anche quelli dei clienti che gestisce (`ClientiGestiti`), e
+     * per chiunque altro un id estraneo è un 404. La sede non è un
+     * laboratorio: non si assegna.
+     */
+    private function laboratorioCorrente(): UnitaOrganizzativa
+    {
+        $nodo = UnitaOrganizzativa::findOrFail($this->currentId);
+
+        abort_if($nodo->tipo === TipoUnitaOrganizzativa::Ente, 422);
+
+        return $nodo;
+    }
+
+    /**
+     * Un Responsabile Reparto **dell'Ente di quel laboratorio**, non cestinato.
+     *
+     * `User` non ha uno scope di tenancy: il confine è il `tenant_id` del nodo,
+     * scritto qui a mano. Una persona di un altro Ente, o che non è un
+     * Responsabile, non si trova: 404, cioè «non esiste per te».
+     *
+     * ⚠️ Privato: pubblico, Livewire lo esporrebbe come azione.
+     */
+    private function responsabileDelNodo(UnitaOrganizzativa $nodo, int $id): User
+    {
+        return User::query()
+            ->where('tenant_id', $nodo->tenant_id)
+            ->role(User::DEPARTMENT_SCOPED_ROLE)
+            ->findOrFail($id);
+    }
+
+    public function assegnaResponsabile(): void
+    {
+        $this->authorize('utenti.update');
+
+        $nodo = $this->laboratorioCorrente();
+
+        $this->validate(
+            ['nuovoResponsabile' => ['required', 'integer']],
+            attributes: ['nuovoResponsabile' => 'persona'],
+        );
+
+        $persona = $this->responsabileDelNodo($nodo, (int) $this->nuovoResponsabile);
+
+        try {
+            LaboratoriDelResponsabile::aggiungi($persona, $nodo->id, Auth::user());
+        } catch (AssegnazioneRifiutata $e) {
+            $this->addError('nuovoResponsabile', $e->getMessage());
+
+            return;
+        }
+
+        $this->nuovoResponsabile = '';
+        $this->notice = "{$persona->name} ora segue «{$nodo->nome}», con ciò che contiene.";
+    }
+
+    public function togliResponsabile(int $id): void
+    {
+        $this->authorize('utenti.update');
+
+        $nodo = $this->laboratorioCorrente();
+        $persona = $this->responsabileDelNodo($nodo, $id);
+
+        LaboratoriDelResponsabile::togli($persona, $nodo->id, Auth::user());
+
+        $this->notice = "{$persona->name} non segue più «{$nodo->nome}».";
     }
 
     public function render()
@@ -625,6 +806,9 @@ class Albero extends Component
             ? $childrenByParent->get($current->id, collect())->values()
             : $roots;
 
+        $quantiInTutto = $children->count();
+        $children = $this->filtraPerNome($children);
+
         $strumenti = ($current && $current->tipo !== TipoUnitaOrganizzativa::Ente)
             ? Strumento::where('unita_organizzativa_id', $current->id)->orderBy('nome')->get()
             : collect();
@@ -642,16 +826,47 @@ class Albero extends Component
             'current' => $current,
             'breadcrumb' => $breadcrumb,
             'children' => $children,
+            'quantiInTutto' => $quantiInTutto,
             'strumenti' => $strumenti,
             'childCounts' => $childCounts,
             'strumentiCounts' => $strumentiCounts,
+            // 🔗 ADR-057: chi segue questo laboratorio, e chi potrebbe. Solo
+            // dentro un laboratorio e solo per chi può vedere le persone: per
+            // gli altri, e alla radice, nessuna query.
+            'responsabili' => ($current && $current->tipo !== TipoUnitaOrganizzativa::Ente && Gate::allows('utenti.view'))
+                ? LaboratoriDelResponsabile::perLaboratorio((int) $current->id, (int) $current->tenant_id)
+                : null,
             // La sede di chi guarda: il «Marchio email» si offre solo lì.
             'enteProprio' => CurrentTenant::id(),
             // Solo a modale aperta e con permesso: a modale chiusa zero query
             // in più, disciplina già seguita in SchedaStrumento::render().
-            'fornitori' => $this->showStrumentoForm && $current && Gate::allows('fornitori.view')
-                ? $this->fornitoriSelezionabili($current->tenant_id)->get()
+            // 🔗 ADR-051: il selettore del fornitore. Il nome di quello scelto
+            // e, solo a selettore aperto, l'elenco fra cui scegliere.
+            'fornitoriScelti' => $this->showStrumentoForm
+                ? $this->fornitoriScelti([$this->strumentoForm['fornitore_id'] ?? null])
                 : collect(),
+            'elencoFornitori' => $this->selettoreFornitore !== null ? $this->elencoFornitori() : null,
         ]);
+    }
+
+    /**
+     * Il solo campo fornitore di questa schermata è quello della macchina che
+     * si sta creando: si sceglie fra i fornitori della sede del nodo aperto
+     * (🔗 ADR-051), che per chi segue più clienti non è la propria.
+     */
+    protected function campoFornitore(string $campo): ?array
+    {
+        if ($campo !== 'strumento' || ! $this->showStrumentoForm) {
+            return null;
+        }
+
+        $nodo = UnitaOrganizzativa::find($this->currentId);
+
+        return $nodo === null ? null : ['tenant' => (int) $nodo->tenant_id, 'corrente' => null];
+    }
+
+    protected function scriviFornitore(string $campo, ?int $id): void
+    {
+        $this->strumentoForm['fornitore_id'] = $id;
     }
 }

@@ -20,7 +20,7 @@
             <h1 class="text-2xl font-bold tracking-tight text-ink">Tecnici e gestori</h1>
             <p class="mt-1 text-sm text-ink-2">
                 Le persone di EasyLab che lavorano sulle macchine dei clienti, e su quali clienti lavora ciascuna.
-                Il tecnico esegue gli interventi; il gestore tiene anche l'anagrafica e la pianificazione.
+                Il tecnico esegue gli interventi; il gestore tiene anche i laboratori e la pianificazione.
             </p>
         </div>
 

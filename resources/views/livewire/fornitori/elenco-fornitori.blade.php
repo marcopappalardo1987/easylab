@@ -4,7 +4,8 @@
         <div>
             <h1 class="text-2xl font-bold tracking-tight text-ink">Fornitori</h1>
             <p class="mt-1 text-sm text-ink-2">
-                Da chi sono state acquistate le macchine. Ogni macchina ha un fornitore solo.
+                Da chi sono state acquistate le macchine e i ricambi. Ogni macchina ha un fornitore solo;
+                per un ricambio lo si indica sul pezzo montato.
             </p>
         </div>
         @can('fornitori.create')
@@ -34,19 +35,27 @@
                         <th class="px-4 py-3 font-semibold">Email</th>
                         <th class="px-4 py-3 font-semibold">Telefono</th>
                         <th class="px-4 py-3 font-semibold">Macchine</th>
+                        <th class="px-4 py-3 font-semibold">Ricambi</th>
                         <th class="px-4 py-3 font-semibold"><span class="sr-only">Azioni</span></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-border">
                     @forelse ($fornitori as $fornitore)
                         <tr wire:key="forn-{{ $fornitore->id }}">
-                            <td class="px-4 py-3 font-medium text-ink">{{ $fornitore->ragione_sociale }}</td>
+                            <td class="px-4 py-3 font-medium text-ink">
+                                {{ $fornitore->ragione_sociale }}
+                                {{-- 🔗 ADR-062: una copia di un fornitore di EasyLab. --}}
+                                @if ($fornitore->vieneDaEasyLab())
+                                    <x-ui.badge variant="neutral" class="ml-1" data-da-easylab="{{ $fornitore->id }}">da EasyLab</x-ui.badge>
+                                @endif
+                            </td>
                             @if ($sedi->isNotEmpty())
                                 <td class="px-4 py-3 text-ink-2" data-sede-fornitore="{{ $fornitore->id }}">{{ $sedi->has($fornitore->tenant_id) ? \App\Support\Tenancy\SediSeguite::etichetta($sedi[$fornitore->tenant_id]) : '—' }}</td>
                             @endif
                             <td class="px-4 py-3 text-ink-2">{{ $fornitore->email ?: '—' }}</td>
                             <td class="px-4 py-3 text-ink-2">{{ $fornitore->telefono ?: '—' }}</td>
                             <td class="px-4 py-3 tabular-nums text-ink-2">{{ $fornitore->strumenti_count }}</td>
+                            <td class="px-4 py-3 tabular-nums text-ink-2" data-ricambi="{{ $fornitore->ricambi_montati_count }}">{{ $fornitore->ricambi_montati_count }}</td>
                             <td class="px-4 py-3 text-right whitespace-nowrap">
                                 @can('fornitori.update')
                                     <button type="button" wire:click="edit({{ $fornitore->id }})"
@@ -60,7 +69,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ $sedi->isNotEmpty() ? 6 : 5 }}" class="px-4 py-10 text-center text-sm text-ink-3">
+                            <td colspan="{{ $sedi->isNotEmpty() ? 7 : 6 }}" class="px-4 py-10 text-center text-sm text-ink-3">
                                 Nessun fornitore. Aggiungine uno per poterlo associare alle macchine.
                             </td>
                         </tr>
@@ -75,18 +84,14 @@
             <form wire:submit="save" class="space-y-5">
                 {{-- Solo alla creazione: un fornitore non cambia sede. --}}
                 @if (! $editingId && $sedi->isNotEmpty())
-                    <div>
-                        <label for="sede-fornitore" class="block text-sm font-medium text-ink">Sede</label>
-                        <select id="sede-fornitore" wire:model="sedeId"
-                                class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-sm text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
-                            <option value="">Scegli la sede…</option>
-                            @foreach ($sedi as $sede)
-                                <option value="{{ $sede->id }}">{{ \App\Support\Tenancy\SediSeguite::etichetta($sede) }}</option>
-                            @endforeach
-                        </select>
-                        <p class="mt-1 text-xs text-ink-3">Il fornitore entra nel catalogo di questa sede, e solo lì si può scegliere su una macchina.</p>
-                        @error('sedeId') <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p> @enderror
-                    </div>
+                    {{-- 🔗 ADR-061: una tendina in cui si scrive per filtrare. --}}
+                    @include('livewire.tenancy._selettore-sede', [
+                        'selettore' => $sceltaSede,
+                        'idDom' => 'sede-fornitore',
+                        'etichetta' => 'Laboratorio',
+                        'segnaposto' => 'Scegli il laboratorio…',
+                        'aiuto' => 'Il fornitore entra nel catalogo di questo laboratorio, e solo lì si può scegliere su una macchina.',
+                    ])
                 @endif
                 <x-ui.input name="form.ragione_sociale" label="Ragione sociale" wire:model="form.ragione_sociale"
                     placeholder="es. Thermo Fisher Italia" autofocus />
@@ -106,7 +111,7 @@
         <x-ui.modal title="Eliminare il fornitore?">
             <p class="text-sm text-ink-2">
                 L'operazione è reversibile (soft delete). Un fornitore ancora associato a delle macchine
-                non può essere eliminato: vanno prima riassegnate.
+                o a dei ricambi montati non può essere eliminato: vanno prima riassegnati.
             </p>
             <div class="mt-6 flex justify-end gap-3">
                 <x-ui.button variant="secondary" wire:click="$set('deletingId', null)">Annulla</x-ui.button>

@@ -184,6 +184,7 @@ return [
         'ricambiNuovi' => 'ricambi',
         'ricambiNuovi.*.nome' => 'nome del ricambio',
         'ricambiNuovi.*.scadenza_garanzia' => 'scadenza garanzia',
+        'ricambiNuovi.*.fornitore_id' => 'fornitore',
 
         // Garanzie
         'garanziaForm.data_inizio' => 'data di inizio',

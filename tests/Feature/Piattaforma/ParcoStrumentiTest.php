@@ -1827,8 +1827,8 @@ it('shows the obsolescence badge on the row, with the threshold of ITS OWN site'
 
     $html = Livewire::test(ParcoGlobale::class)->set('perPage', 100)->html();
 
-    expect(rigaDelParco($html, $cappaRossi->id))->toContain('Obsoleto');
-    expect(rigaDelParco($html, $cappaBianchi->id))->not->toContain('Obsoleto');
+    expect(rigaDelParco($html, $cappaRossi->id))->toContain('Strumento obsoleto');
+    expect(rigaDelParco($html, $cappaBianchi->id))->not->toContain('Strumento obsoleto');
 
     // Il tooltip dice la soglia VERA della sede, non il fallback a 10: è la
     // frase che rende la selezione leggibile invece che arbitraria.
@@ -1878,7 +1878,7 @@ it('badges on the row exactly the machines the obsolescence filter selects', fun
     $html = $tutte->html();
 
     $conBadge = $tutte->viewData('strumenti')->getCollection()
-        ->filter(fn (Strumento $s) => str_contains(rigaDelParco($html, $s->id), 'Obsoleto'))
+        ->filter(fn (Strumento $s) => str_contains(rigaDelParco($html, $s->id), 'Strumento obsoleto'))
         ->pluck('id')->sort()->values()->all();
 
     $dalFiltro = Livewire::test(ParcoGlobale::class)

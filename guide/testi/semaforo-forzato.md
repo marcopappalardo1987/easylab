@@ -43,7 +43,7 @@ Due campi: lo stato che vuoi mostrare e il perché. Il secondo non è un optiona
 
 ## 4
 
-Si sceglie fra i tre stati normali — in regola, azione richiesta, non idoneo —
+Si sceglie fra i tre stati normali — strumentazione idonea, interventi necessari, strumento non idoneo —
 perché la forzatura non inventa un quarto colore: sostituisce il calcolo, non il
 vocabolario. Chi guarda l'elenco vedrà un pallino uguale a tutti gli altri.
 

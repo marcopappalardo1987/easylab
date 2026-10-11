@@ -20,14 +20,15 @@ che chiede attenzione oggi?
 
 ## 2
 
-Gli stati sono tre e non si sovrappongono: **verde** in regola, **giallo**
-azione richiesta, **rosso** non idoneo. Ogni macchina sta in uno e uno solo, e
+Gli stati sono tre e non si sovrappongono: **verde** strumentazione idonea,
+**giallo** interventi necessari, **rosso** strumenti non idonei. Ogni macchina
+sta in uno e uno solo, e
 i tre insieme coprono tutto il parco: se sommi i numeri dei riquadri ottieni il
 totale delle macchine, senza avanzi e senza doppioni.
 
 ## 3
 
-Gli obsoleti sono contati a parte perché rispondono a una domanda diversa. Non
+Gli strumenti obsoleti sono contati a parte perché rispondono a una domanda diversa. Non
 dicono che la macchina abbia una manutenzione scaduta, ma che ha superato l'età
 oltre la quale conviene programmarne la sostituzione: uno strumento può essere
 verde e obsoleto insieme, e sono due informazioni entrambe vere.
@@ -59,9 +60,9 @@ riguardano.
 
 ## 7
 
-«Anagrafica» è la struttura della sede rappresentata com'è davvero: dentro la
-sede ci sono i dipartimenti, dentro i dipartimenti i laboratori, e dentro i
-laboratori le macchine. È il posto in cui si guarda quando la domanda comincia
+«Laboratori» è la struttura della sede rappresentata com'è davvero: dentro la
+sede ci sono i laboratori, dentro i laboratori i sotto-laboratori, e dentro
+quelli le macchine. È il posto in cui si guarda quando la domanda comincia
 con «dove», e non con «quale».
 
 ## 8

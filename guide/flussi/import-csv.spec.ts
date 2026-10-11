@@ -66,7 +66,7 @@ test('import csv', async ({ page }) => {
     durata: 8,
   });
 
-  await g.passo("Gli errori tipici sono due: un campo obbligatorio vuoto, e un'ubicazione che nell'anagrafica non esiste.", {
+  await g.passo("Gli errori tipici sono due: un campo obbligatorio vuoto, e un'ubicazione che fra i laboratori non esiste.", {
     zoom: 1,
     durata: 8,
   });
@@ -94,7 +94,7 @@ test('import csv', async ({ page }) => {
 
   g.chiusura('Da ricordare', [
     "L'analisi non scrive niente: si vede sempre l'esito prima di importare.",
-    "L'ubicazione va scritta come nell'anagrafica, nella forma «Dipartimento > Laboratorio»: è l'errore più frequente.",
+    "L'ubicazione va scritta come in «Laboratori», nella forma «Laboratorio > Sotto-laboratorio»: è l'errore più frequente.",
     'Le righe scartate restano nel tuo foglio: si correggono e si ricarica, senza rifare le altre.',
   ]);
 

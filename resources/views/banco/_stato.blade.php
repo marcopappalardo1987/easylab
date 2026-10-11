@@ -66,7 +66,7 @@
 @component('banco.pezzo', [
     'titolo' => 'x-ui.semaforo-forzato — la pill ⚑, accanto al semaforo',
     'token' => 'bg-warn-soft · text-warn-soft-ink · glifo ⚑ + sr-only col dettaglio',
-    'nota' => "È un elemento SEPARATO dal pallino, non una sua variante: «■ Non idoneo ⚑». Il `title` porta chi, quando e perché (ADR-005). ⚠️ Su uno strumento non forzato il componente non rende NULLA — il secondo esempio è quel caso, ed è vuoto di proposito.",
+    'nota' => "È un elemento SEPARATO dal pallino, non una sua variante: «■ Strumento non idoneo ⚑». Il `title` porta chi, quando e perché (ADR-005). ⚠️ Su uno strumento non forzato il componente non rende NULLA — il secondo esempio è quel caso, ed è vuoto di proposito.",
 ])
     <span class="inline-flex items-center gap-1.5">
         <x-ui.semaforo :stato="$forzato->statoSemaforoEffettivo()" size="md" label />

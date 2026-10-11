@@ -2,8 +2,12 @@
     use App\Enums\TipoUnitaOrganizzativa;
 
     $isEnte = $current && $current->tipo === TipoUnitaOrganizzativa::Ente;
-    $childLabel = $current ? ($isEnte ? 'Dipartimenti' : 'Sotto-laboratori') : 'Enti';
-    $addLabel = $isEnte ? 'Aggiungi dipartimento' : 'Aggiungi sotto-laboratorio';
+    // 🔗 ADR-053: i nomi dei livelli li dà l'enum. Sotto la sede ci sono i
+    // laboratori (fino al 10 Ott 2026 «dipartimenti»), e sotto quelli i
+    // sotto-laboratori.
+    $figli = $current ? ($isEnte ? TipoUnitaOrganizzativa::Dipartimento : TipoUnitaOrganizzativa::Sottolaboratorio) : TipoUnitaOrganizzativa::Ente;
+    $childLabel = $figli->plurale();
+    $addLabel = 'Aggiungi '.mb_strtolower($figli->etichetta());
 @endphp
 
 <div class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
@@ -11,7 +15,7 @@
     {{-- Intestazione + breadcrumb --}}
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">
-            <h1 class="text-2xl font-bold tracking-tight text-ink">Anagrafica</h1>
+            <h1 class="text-2xl font-bold tracking-tight text-ink">{{ TipoUnitaOrganizzativa::SEZIONE }}</h1>
 
             @if ($breadcrumb->isNotEmpty())
                 <nav aria-label="Percorso" class="mt-1 flex flex-wrap items-center gap-1 text-sm text-ink-3">
@@ -154,11 +158,44 @@
 
     {{-- Sotto-nodi --}}
     <section class="mt-6">
-        <h2 class="text-xs font-semibold tracking-wide text-ink-3 uppercase">{{ $childLabel }}</h2>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-baseline gap-2">
+                <h2 class="text-xs font-semibold tracking-wide text-ink-3 uppercase">{{ $childLabel }}</h2>
+                @if (trim($cerca) !== '' && $quantiInTutto > 0)
+                    <span class="text-xs text-ink-3" data-cerca-conto>({{ $children->count() }} di {{ $quantiInTutto }})</span>
+                @endif
+            </div>
 
-        @if ($children->isEmpty())
+            {{-- 🔗 ADR-060: il filtro di testo. C'è quando c'è qualcosa da
+                 filtrare, a ogni livello dell'albero. --}}
+            @if ($quantiInTutto > 0)
+                <div class="w-full sm:w-72">
+                    <label for="cerca-nodi" class="sr-only">Filtra per nome</label>
+                    <input id="cerca-nodi" type="search" wire:model.live.debounce.300ms="cerca" placeholder="Filtra per nome…"
+                        class="block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none" />
+                </div>
+            @endif
+        </div>
+
+        @if ($quantiInTutto > 0 && $children->isEmpty())
+            <div class="mt-3 rounded-lg border border-dashed border-border px-4 py-8 text-center" data-cerca-vuota>
+                <p class="text-sm text-ink-2">Nessun nome contiene «{{ trim($cerca) }}».</p>
+                <x-ui.button variant="secondary" class="mt-3" wire:click="togliCerca">Togli il filtro</x-ui.button>
+            </div>
+        @elseif ($children->isEmpty())
             <div class="mt-3 rounded-lg border border-dashed border-border px-4 py-8 text-center">
-                <p class="text-sm text-ink-3">Nessun {{ $isEnte ? 'dipartimento' : ($current ? 'sotto-laboratorio' : 'ente') }} qui.</p>
+                {{-- 🔗 ADR-057: un Responsabile Reparto senza laboratori non
+                     vede nulla (ADR-006, fail-closed), e «Nessun ente qui» non
+                     glielo spiegherebbe. Gli si dice che cosa manca, e a chi
+                     chiederlo. --}}
+                @if (! $current && auth()->user()?->isDepartmentScoped())
+                    <p class="text-sm text-ink-2" data-senza-laboratori>
+                        Non ti è stato ancora assegnato nessun laboratorio, quindi qui non c'è niente da vedere.
+                        Chiedi a chi amministra la sede di assegnartene uno dalla pagina «Persone».
+                    </p>
+                @else
+                    <p class="text-sm text-ink-3">Nessun {{ mb_strtolower($figli->etichetta()) }} qui.</p>
+                @endif
                 @if ($current)
                     @can('unita_organizzativa.create')
                         <x-ui.button variant="secondary" class="mt-3" wire:click="addChild({{ $current->id }})">+ {{ $addLabel }}</x-ui.button>
@@ -200,6 +237,79 @@
         @endif
     </section>
 
+    {{-- 🔗 ADR-057: chi segue questo laboratorio. `$responsabili` è `null` alla
+         radice, sulla sede, e per chi non può vedere le persone.
+
+         Chi ha il ruolo Responsabile Reparto vede solo i laboratori che gli sono
+         assegnati (ADR-006): qui si legge chi sono, e chi può cambiare i ruoli
+         (`utenti.update`) ne aggiunge e ne toglie. È la stessa scrittura della
+         finestra «Laboratori» di «Persone», vista dal laboratorio.
+
+         ⚠️ Sta PRIMA degli strumenti: in un laboratorio con quaranta macchine,
+         in fondo all'elenco non lo troverebbe nessuno. --}}
+    @if ($responsabili !== null)
+        <section class="mt-8" data-responsabili>
+            <h2 class="text-xs font-semibold tracking-wide text-ink-3 uppercase">Responsabili ({{ count($responsabili['seguono']) }})</h2>
+            <p class="mt-1 text-sm text-ink-2">
+                Chi ha il ruolo Responsabile Reparto vede solo i laboratori che gli sono assegnati, con ciò che contengono.
+            </p>
+
+            @if ($responsabili['seguono'] === [])
+                <p class="mt-3 rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-ink-3">
+                    Nessun responsabile segue questo laboratorio.
+                </p>
+            @else
+                <ul class="mt-3 divide-y divide-border rounded-lg border border-border bg-surface">
+                    @foreach ($responsabili['seguono'] as $voce)
+                        <li wire:key="responsabile-{{ $voce['persona']->id }}" class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                            <span class="min-w-0">
+                                <span class="block truncate text-sm font-medium text-ink">{{ $voce['persona']->name }}</span>
+                                <span class="block truncate text-xs text-ink-3">{{ $voce['persona']->email }}</span>
+                            </span>
+
+                            @if ($voce['tramite'] !== null)
+                                {{-- Lo riceve da un laboratorio che contiene questo:
+                                     si toglie da lì, non da qui. --}}
+                                <span class="shrink-0 text-xs text-ink-3" data-tramite>tramite {{ $voce['tramite'] }}</span>
+                            @else
+                                @can('utenti.update')
+                                    <x-ui.button variant="ghost" wire:click="togliResponsabile({{ $voce['persona']->id }})">
+                                        Togli
+                                    </x-ui.button>
+                                @endcan
+                            @endif
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+
+            @can('utenti.update')
+                @if ($responsabili['altri'] !== [])
+                    <form wire:submit="assegnaResponsabile" class="mt-3 flex flex-wrap items-end gap-3">
+                        <div class="min-w-56 flex-1">
+                            <label for="nuovoResponsabile" class="block text-sm font-medium text-ink">Assegna questo laboratorio a</label>
+                            <select id="nuovoResponsabile" wire:model="nuovoResponsabile"
+                                    class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-sm text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
+                                <option value="">Scegli una persona…</option>
+                                @foreach ($responsabili['altri'] as $candidato)
+                                    <option value="{{ $candidato->id }}">{{ $candidato->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <x-ui.button type="submit" variant="secondary">Assegna</x-ui.button>
+                    </form>
+                    @error('nuovoResponsabile')
+                        <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p>
+                    @enderror
+                @elseif ($responsabili['seguono'] === [])
+                    <p class="mt-3 text-sm text-ink-3" data-nessun-responsabile-in-sede>
+                        In questa sede nessuno ha il ruolo Responsabile Reparto: si dà dalla pagina «Persone».
+                    </p>
+                @endif
+            @endcan
+        </section>
+    @endif
+
     {{-- Strumenti del nodo corrente --}}
     @if ($current && ! $isEnte)
         <section class="mt-8">
@@ -235,7 +345,7 @@
 
     {{-- Modale create/edit unità --}}
     @if ($showForm)
-        @php $tipoLabel = ['dipartimento' => 'Dipartimento', 'sottolaboratorio' => 'Sotto-laboratorio'][$tipo] ?? ucfirst($tipo); @endphp
+        @php $tipoLabel = TipoUnitaOrganizzativa::tryFrom((string) $tipo)?->etichetta() ?? ucfirst((string) $tipo); @endphp
         <x-ui.modal :title="$editingId ? 'Rinomina' : 'Nuovo '.strtolower($tipoLabel)" close="closeForm">
             <form wire:submit="save" class="space-y-5">
                 @unless ($editingId)
@@ -251,7 +361,7 @@
                         <x-ui.input name="sogliaObsolescenzaAnni" label="Soglia obsolescenza (anni)"
                             type="number" min="1" max="50" wire:model="sogliaObsolescenzaAnni" />
                         <p class="mt-1 text-xs text-ink-3">
-                            Oltre questa età uno strumento è segnalato ⏳ Obsoleto.
+                            Oltre questa età uno strumento è segnalato fra gli ⏳ {{ mb_strtolower(\App\Models\Strumento::ETICHETTA_OBSOLETI) }}.
                             È solo una segnalazione: non blocca la manutenzione.
                         </p>
                     </div>
@@ -307,6 +417,23 @@
         <x-ui.modal title="Nuovo strumento" close="closeStrumentoForm">
             <form wire:submit="saveStrumento" class="space-y-5">
                 @include('livewire.strumenti._form-fields')
+
+                {{-- 🔗 ADR-059: la garanzia si scrive qui, mentre si registra la
+                     macchina, e non in un secondo momento. Dopo si modifica dal
+                     tab Garanzie della scheda. Dietro lo stesso permesso di quel
+                     tab: chi non la gestisce non la vede nemmeno qui. --}}
+                @can('garanzie.macchina.manage')
+                    <fieldset class="space-y-3" data-garanzia-nuova>
+                        <legend class="block text-sm font-medium text-ink">Garanzia della macchina <span class="font-normal text-ink-3">(facoltativa)</span></legend>
+
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <x-ui.input name="garanziaNuova.data_inizio" label="Inizio" type="date" wire:model="garanziaNuova.data_inizio" />
+                            <x-ui.input name="garanziaNuova.durata_mesi" label="Durata (mesi)" type="number" min="1" max="600" wire:model="garanziaNuova.durata_mesi" placeholder="Es. 24" />
+                        </div>
+
+                        <p class="text-xs text-ink-3">Basta la durata: senza una data di inizio vale quella di installazione. Poi si modifica dalla scheda, nel tab Garanzie.</p>
+                    </fieldset>
+                @endcan
 
                 <x-ui.input name="provenienza" label="Provenienza (ente esterno, opzionale)" wire:model="provenienza"
                     placeholder="Es. Ospedale San Paolo (esterno)" />

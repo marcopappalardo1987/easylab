@@ -2,6 +2,7 @@
 
 namespace App\Support\Listino;
 
+use App\Enums\ConteggioStrumenti;
 use App\Models\Piano;
 use App\Models\PrezzoPiano;
 use App\Support\Listino\Stripe\DivergenzaListino;
@@ -92,6 +93,8 @@ final class GovernoListino
         $gratuito = (bool) ($dati['gratuito'] ?? false);
         $prezzo = (int) ($dati['prezzo_mensile_cent'] ?? 0);
         $maxEnti = self::maxEntiValidato($dati);
+        $maxStrumenti = self::maxStrumentiValidato($dati);
+        $conteggio = self::conteggioStrumentiValidato($dati, ConteggioStrumenti::PerSede);
 
         if (preg_match(self::CODICE_VALIDO, $codice) !== 1) {
             throw ValidationException::withMessages([
@@ -110,11 +113,11 @@ final class GovernoListino
 
         if ($gratuito && $prezzo !== 0) {
             throw ValidationException::withMessages([
-                'prezzo_mensile_cent' => 'Un piano gratuito non può avere un prezzo: «gratuito» significa nessun customer e nessuna subscription (ADR-002). Un piano a pagamento a 0 € — una promozione — è invece ammesso: togliere la spunta.',
+                'prezzo_mensile_cent' => 'Un piano in comodato d\'uso non può avere un prezzo: significa nessun customer e nessuna subscription (ADR-002). Un piano a pagamento a 0 € — una promozione — è invece ammesso: togliere la spunta.',
             ]);
         }
 
-        $piano = DB::transaction(function () use ($codice, $etichetta, $gratuito, $prezzo, $maxEnti, $dati) {
+        $piano = DB::transaction(function () use ($codice, $etichetta, $gratuito, $prezzo, $maxEnti, $maxStrumenti, $conteggio, $dati) {
             $piano = new Piano;
 
             // `forceFill()` per le colonne fuori-`$fillable`: `codice`,
@@ -129,6 +132,8 @@ final class GovernoListino
                 'gratuito' => $gratuito,
                 'prezzo_mensile_cent' => $prezzo,
                 'max_enti' => $maxEnti,
+                'max_strumenti' => $maxStrumenti,
+                'conteggio_strumenti' => $conteggio,
                 'valuta' => (string) config('cashier.currency', 'eur'),
                 'attivo' => true,
                 'ordine' => (int) ($dati['ordine'] ?? 0),
@@ -143,7 +148,7 @@ final class GovernoListino
     }
 
     /**
-     * L'anagrafica: etichetta, tetto di Enti, ordine.
+     * L'anagrafica: etichetta, tetto di Enti, tetto di strumenti, ordine.
      *
      * Rifiuta ogni tentativo di cambiare `codice` o `gratuito`, **anche quando
      * il valore passato è uguale a quello attuale**? No: un valore identico è
@@ -158,6 +163,11 @@ final class GovernoListino
      * stato legittimo e documentato). La conseguenza va **mostrata prima del
      * click**, con il conteggio degli account che finirebbero sopra il limite:
      * è una decisione da far prendere a un umano, non una guardia.
+     *
+     * Lo stesso vale per il tetto di **strumenti** e per il modo di contarlo
+     * (🔗 ADR-049): abbassare il numero, o passare da «per sede» a «in tutto»,
+     * non toglie uno strumento a nessuno. Chi resta sopra tiene ciò che ha e
+     * non ne aggiunge (`TettoStrumenti`).
      */
     public static function aggiornaAnagrafica(Piano $piano, array $dati): Piano
     {
@@ -169,7 +179,7 @@ final class GovernoListino
 
         if (array_key_exists('gratuito', $dati) && (bool) $dati['gratuito'] !== (bool) $piano->gratuito) {
             throw ValidationException::withMessages([
-                'gratuito' => 'La gratuità di un piano non si cambia dopo la creazione: ribaltarla su un piano già venduto marcherebbe come paganti dei clienti senza subscription, o il contrario (ADR-002). Si crea un piano nuovo.',
+                'gratuito' => 'Il comodato d\'uso di un piano non si cambia dopo la creazione: ribaltarlo su un piano già venduto marcherebbe come paganti dei clienti senza subscription, o il contrario (ADR-002). Si crea un piano nuovo.',
             ]);
         }
 
@@ -177,11 +187,15 @@ final class GovernoListino
         self::verificaEtichetta($etichetta);
 
         $maxEnti = array_key_exists('max_enti', $dati) ? self::maxEntiValidato($dati) : $piano->max_enti;
+        $maxStrumenti = array_key_exists('max_strumenti', $dati) ? self::maxStrumentiValidato($dati) : $piano->max_strumenti;
+        $conteggio = self::conteggioStrumentiValidato($dati, $piano->conteggio_strumenti);
 
-        DB::transaction(function () use ($piano, $etichetta, $maxEnti, $dati) {
+        DB::transaction(function () use ($piano, $etichetta, $maxEnti, $maxStrumenti, $conteggio, $dati) {
             $piano->forceFill([
                 'etichetta' => $etichetta,
                 'max_enti' => $maxEnti,
+                'max_strumenti' => $maxStrumenti,
+                'conteggio_strumenti' => $conteggio,
                 'ordine' => (int) ($dati['ordine'] ?? $piano->ordine),
             ])->save();
         });
@@ -206,7 +220,7 @@ final class GovernoListino
 
         if ($piano->gratuito && $importoCent !== 0) {
             throw ValidationException::withMessages([
-                'prezzo_mensile_cent' => 'Un piano gratuito non può avere un prezzo (ADR-002). Per venderlo si crea un piano nuovo: la gratuità non si ribalta.',
+                'prezzo_mensile_cent' => 'Un piano in comodato d\'uso non può avere un prezzo (ADR-002). Per venderlo si crea un piano nuovo: il comodato non si ribalta.',
             ]);
         }
 
@@ -671,7 +685,7 @@ final class GovernoListino
 
         if ($piano->gratuito) {
             throw ValidationException::withMessages([
-                'price_id' => "«{$piano->codice}» è un piano gratuito: per definizione non ha né customer né subscription su Stripe (ADR-002).",
+                'price_id' => "«{$piano->codice}» è un piano in comodato d'uso: per definizione non ha né customer né subscription su Stripe (ADR-002).",
             ]);
         }
 
@@ -785,6 +799,12 @@ final class GovernoListino
                 'etichetta' => "L'etichetta è ciò che il cliente legge in pagina: non può essere vuota.",
             ]);
         }
+
+        // 🔗 ADR-050: l'etichetta finisce in pagina, nelle email e nel
+        // messaggio del tetto. Rifiutarla qui è ciò che rende vero «mai».
+        if (LessicoCommerciale::vietato($etichetta)) {
+            throw ValidationException::withMessages(['etichetta' => LessicoCommerciale::ETICHETTA_RIFIUTATA]);
+        }
     }
 
     private static function verificaPrezzo(int $prezzo): void
@@ -818,5 +838,49 @@ final class GovernoListino
         }
 
         return $max;
+    }
+
+    /** Come `maxEntiValidato()`: vuoto è «illimitato», e zero non è un tetto (🔗 ADR-049). */
+    private static function maxStrumentiValidato(array $dati): ?int
+    {
+        $grezzo = $dati['max_strumenti'] ?? null;
+
+        if ($grezzo === null || $grezzo === '') {
+            return null;
+        }
+
+        $max = (int) $grezzo;
+
+        if ($max < 1) {
+            throw ValidationException::withMessages([
+                'max_strumenti' => 'Il tetto di strumenti è almeno 1, oppure vuoto per «illimitato». Un piano da zero strumenti non servirebbe a nessuno.',
+            ]);
+        }
+
+        return $max;
+    }
+
+    /**
+     * Il modo di contare gli strumenti, o `$seAssente` quando il form non lo
+     * manda. Un valore che non è uno dei due si rifiuta: `tryFrom` e non
+     * `from`, o un valore forgiato diventerebbe un 500 invece di un errore di
+     * campo.
+     */
+    private static function conteggioStrumentiValidato(array $dati, ConteggioStrumenti $seAssente): ConteggioStrumenti
+    {
+        if (! array_key_exists('conteggio_strumenti', $dati)) {
+            return $seAssente;
+        }
+
+        $grezzo = $dati['conteggio_strumenti'];
+        $conteggio = is_string($grezzo) ? ConteggioStrumenti::tryFrom($grezzo) : null;
+
+        if ($conteggio === null) {
+            throw ValidationException::withMessages([
+                'conteggio_strumenti' => 'Il tetto di strumenti si conta per sede o per cliente: scegli uno dei due.',
+            ]);
+        }
+
+        return $conteggio;
     }
 }

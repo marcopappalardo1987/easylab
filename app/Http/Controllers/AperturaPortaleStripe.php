@@ -165,7 +165,7 @@ class AperturaPortaleStripe extends Controller
     private function messaggioSenzaCustomer(Account $account): string
     {
         if (Piani::esiste($account->piano) && Piani::eGratuito($account->piano)) {
-            return 'Il piano Free non ha un portale di fatturazione: è la sua definizione.';
+            return 'Un piano in comodato d\'uso non ha un portale di fatturazione: non c\'è un abbonamento da gestire.';
         }
 
         Log::warning('Account su piano a pagamento senza customer Stripe: portale non apribile.', [

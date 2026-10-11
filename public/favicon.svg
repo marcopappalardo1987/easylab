@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- L'icona di Easy Lab: la «yL» del logo (ADR-056). Sono i tre pezzi di
+     brand/easylab-logo-compatto.svg, presi così come sono: il braccio della y,
+     la curva sfumata che sale nella L, e la L. Su fondo scuro il blu profondo
+     si alza a #AFD6EF, come nella variante scura del logo (ADR-033/034).
+     ⚠️ Generata dal logo: se quello cambia, questa va rifatta, insieme a
+     favicon.ico e apple-touch-icon.png che ne sono la copia in pixel. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="181.14 -32.47 170.6 170.6"><style>.p{fill:#06589c}.a{fill:#2997d4}.s0{stop-color:#06589c}.s1{stop-color:#2997d4}@media (prefers-color-scheme:dark){.p{fill:#afd6ef}.s0{stop-color:#afd6ef}}</style><defs><linearGradient id="g" x1="218.18" y1="117.26" x2="288.3" y2="-9.24" gradientUnits="userSpaceOnUse"><stop class="s0" offset=".22"/><stop class="s1" offset=".77"/></linearGradient></defs><polygon class="p" points="201.45 21.09 222.32 21.09 240.68 58.32 230.47 78.61 201.45 21.09"/><path fill="url(#g)" d="M305.06,22.53c-7.2-7.93-16.51-8.21-22.31,1.43-10.61,17.63-19.31,38.73-29.24,57.06-5.93,10.94-14.45,24.44-28.79,24.44h-33.34l8.23-16.7c13.54-1.45,26.03,4.71,34.23-9.18,11.74-19.88,20.06-43.73,31.81-63.61,8.47-14.34,23.94-19.55,39.41-12.86v19.41Z"/><path class="a" d="M305.06,67.11h36.45v16.3h-56.6V27.08c0-.31,1.37-3.08,1.71-3.56,3.77-5.3,11.93-4.16,15.56.69.81,1.08,2.88,5.59,2.88,6.71v36.19Z"/></svg>

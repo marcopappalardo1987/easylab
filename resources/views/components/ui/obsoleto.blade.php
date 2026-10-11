@@ -21,6 +21,6 @@
 @if ($strumento->isObsoleto())
     <span {{ $attributes->merge(['class' => 'inline-flex items-center gap-1 rounded-full bg-obs-soft px-2 py-0.5 text-xs font-medium text-obs-soft-ink']) }}
         title="Installato il {{ $strumento->data_installazione->format('d/m/Y') }} — oltre la soglia di {{ $strumento->sogliaObsolescenza() }} anni">
-        <span aria-hidden="true">⏳</span> Obsoleto
+        <span aria-hidden="true">⏳</span> {{ \App\Models\Strumento::ETICHETTA_OBSOLETO }}
     </span>
 @endif

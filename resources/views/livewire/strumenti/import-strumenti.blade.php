@@ -33,7 +33,7 @@ Autoclave AC-200;AC-200;SN-0001;2015-03-01;Terapia intensiva;
 Incubatrice INC-9;INC-9;SN-0002;01/07/2020;Neonatologia &gt; Terapia intensiva;Ospedale San Paolo</pre>
         <ul class="mt-3 space-y-1 text-sm text-ink-2">
             <li>• <strong>nome</strong> e <strong>ubicazione</strong> sono obbligatori; gli altri campi sono facoltativi.</li>
-            <li>• <strong>ubicazione</strong>: nome del dipartimento/laboratorio. Se esistono nodi omonimi, usa il percorso (<code class="rounded bg-surface-code px-1">Dipartimento &gt; Laboratorio</code>).</li>
+            <li>• <strong>ubicazione</strong>: nome del laboratorio o del sotto-laboratorio. Se esistono nodi omonimi, usa il percorso (<code class="rounded bg-surface-code px-1">Laboratorio &gt; Sotto-laboratorio</code>).</li>
             <li>• <strong>data_installazione</strong>: <code class="rounded bg-surface-code px-1">AAAA-MM-GG</code> oppure <code class="rounded bg-surface-code px-1">GG/MM/AAAA</code>.</li>
             <li>• <strong>provenienza</strong>: ente esterno da cui arriva la macchina → registra un movimento di <em>ingresso</em>.</li>
             <li>• Massimo {{ \App\Livewire\Strumenti\ImportStrumenti::MAX_RIGHE }} righe per file (max 2 MB).</li>
@@ -48,16 +48,13 @@ Incubatrice INC-9;INC-9;SN-0002;01/07/2020;Neonatologia &gt; Terapia intensiva;O
                  più sedi dichiara prima in quale sta importando. --}}
             @if ($sedi->isNotEmpty())
                 <div class="mb-4">
-                    <label for="sede-import" class="block text-sm font-medium text-ink">Sede in cui importare</label>
-                    <select id="sede-import" wire:model="sedeId"
-                            class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-sm text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
-                        <option value="">Scegli la sede…</option>
-                        @foreach ($sedi as $sede)
-                            <option value="{{ $sede->id }}">{{ \App\Support\Tenancy\SediSeguite::etichetta($sede) }}</option>
-                        @endforeach
-                    </select>
-                    <p class="mt-1 text-xs text-ink-3">Le ubicazioni del file vengono cercate fra i reparti di questa sede.</p>
-                    @error('sedeId') <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p> @enderror
+                    @include('livewire.tenancy._selettore-sede', [
+                        'selettore' => $sceltaSede,
+                        'idDom' => 'sede-import',
+                        'etichetta' => 'Sede in cui importare',
+                        'segnaposto' => 'Scegli la sede…',
+                        'aiuto' => 'Le ubicazioni del file vengono cercate fra i reparti di questa sede.',
+                    ])
                 </div>
             @endif
             <label for="file" class="block text-sm font-medium text-ink">File CSV</label>
@@ -85,13 +82,23 @@ Incubatrice INC-9;INC-9;SN-0002;01/07/2020;Neonatologia &gt; Terapia intensiva;O
                 </div>
                 <div class="flex gap-2">
                     <x-ui.button variant="secondary" wire:click="ricarica">Carica un altro file</x-ui.button>
-                    @if ($valide > 0)
+                    @if ($oltreIlTetto)
+                        <x-ui.button disabled>Oltre il tetto del piano</x-ui.button>
+                    @elseif ($valide > 0)
                         <x-ui.button wire:click="importa">Importa {{ $valide }} righe valide</x-ui.button>
                     @else
                         <x-ui.button disabled>Nessuna riga valida</x-ui.button>
                     @endif
                 </div>
             </div>
+
+            {{-- 🔗 ADR-049. Il tetto di strumenti del piano: l'import è tutto o
+                 niente, e qui si dice quanti ce ne stanno ancora. --}}
+            @if ($oltreIlTetto)
+                <p class="mt-3 rounded-md border border-warn-dot bg-warn-soft px-3 py-2 text-sm text-warn-soft-ink" data-oltre-il-tetto>
+                    {{ $oltreIlTetto }}
+                </p>
+            @endif
 
             @if ($troncato)
                 <p class="mt-3 rounded-md border border-warn-dot bg-warn-soft px-3 py-2 text-sm text-warn-soft-ink">

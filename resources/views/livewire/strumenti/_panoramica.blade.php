@@ -2,41 +2,18 @@
     use App\Enums\TipoMotivoSemaforo;
     use App\Support\MotivoSemaforo;
     use App\Support\Semaforo;
+    use App\Support\Strumenti\MotiviDellaScheda;
     use Illuminate\Support\Facades\Gate;
 
-    // Ogni motivo porta con sé la propria area di provenienza: chi non ha il
-    // permesso di quell'area vede il motivo in forma NEUTRA — la scadenza sì,
-    // il dettaglio e il link no (ADR-024). Il pallino è un aggregato dovuto a
-    // tutti; la riga che lo causa non lo è.
-    $areaVisibile = fn (MotivoSemaforo $m) => match ($m->tipo) {
-        TipoMotivoSemaforo::Intervento => Gate::allows('interventi.view'),
-        TipoMotivoSemaforo::GaranziaMacchina => Gate::allows('garanzie.macchina.view'),
-        // ADR-029: l'ability della Policy, NON il permesso nudo — che spatie
-        // concede prima che l'impostazione dell'Ente sia letta. Un test lo
-        // congela, ed è così che questa riga è stata trovata.
-        TipoMotivoSemaforo::GaranziaRicambio => Gate::allows('view', App\Models\Garanzia::class),
-    };
+    // Dove sta la riga che causa ciascun motivo, e se chi guarda può vederla:
+    // lo dice `MotiviDellaScheda`, che è la stessa fonte dei numerini sui tab
+    // (🔗 ADR-055). Chi non ha il permesso dell'area vede il motivo in forma
+    // NEUTRA — la scadenza sì, il dettaglio e il link no (ADR-024): il pallino
+    // è un aggregato dovuto a tutti, la riga che lo causa non lo è.
+    $areaVisibile = MotiviDellaScheda::areaVisibile(...);
 
     // Dove porta la freccia «›».
-    //
-    // La garanzia ricambio ha una destinazione da quando esiste il tab Ricambi
-    // (S4 blocco 5): fino ad allora era `null`, e mandare al tab Garanzie
-    // sarebbe stato peggio di non linkare — quel tab mostra le sole righe
-    // macchina (clausola `strumento_id` di Strumento::garanzie()), quindi
-    // l'utente ci sarebbe arrivato senza trovare la riga cercata.
-    //
-    // ⚠️ Il permesso da chiedere è quello del TAB di destinazione, che non è
-    // quello che rende visibile il motivo: il motivo si vede con l'ability di
-    // ADR-029 sulla garanzia, il tab Ricambi è gated su `ricambio_utilizzo.view`
-    // (scheda-strumento.blade.php). Oggi nessun ruolo di `config/rbac.php` ha
-    // l'uno senza l'altro — verificato — ma un ruolo creato dalla UI di S6
-    // potrebbe, e si ritroverebbe una freccia che non apre nulla. Una porta si
-    // mostra solo se dietro c'è una stanza.
-    $tabDelMotivo = fn (MotivoSemaforo $m) => match ($m->tipo) {
-        TipoMotivoSemaforo::Intervento => 'interventi',
-        TipoMotivoSemaforo::GaranziaMacchina => 'garanzie',
-        TipoMotivoSemaforo::GaranziaRicambio => Gate::allows('ricambio_utilizzo.view') ? 'ricambi' : null,
-    };
+    $tabDelMotivo = MotiviDellaScheda::tab(...);
 
     // ⚠️ La garanzia ricambio è l'unico motivo il cui TESTO dipende dal
     // permesso: «Garanzia ricambio» rivela che sulla macchina c'è un pezzo

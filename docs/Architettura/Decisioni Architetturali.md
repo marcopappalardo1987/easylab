@@ -1675,3 +1675,397 @@ Guardando le prime cinque guide pubblicate, però, la regola produceva una guida
 - Restano invariati: `utenti.impersonate` chiesto dentro l'azione, il Developer mai impersonabile, nessun candidato per chi sta già impersonando.
 - **Prova di mutazione**: le due porte della scelta, la rilettura dell'account, il flag di piattaforma, i due `deleted_at`, l'ordinamento, il ruolo e la precedenza del ripiego, le condizioni della voce di menù rendono rosso un test di `ImpersonazioneUiTest` o di `ConferireSuperadminTest`.
 
+---
+
+**ADR-049 — Il tetto di strumenti è un attributo del piano, e il piano dice anche come si conta**
+
+*Stato: Accettata e attuata il 10 Ott 2026, per decisione di Marco. Gemella di ADR-032 (il tetto di Enti) e figlia di ADR-035 (il listino a database). Solo su staging: la promozione in produzione è una decisione a parte.*
+
+**Contesto.** Un piano limitava una cosa sola, il numero di sedi (`max_enti`). Per vendere piani diversi serviva una seconda leva: quante macchine un cliente può tenere a sistema.
+
+**Decisione.** Due colonne su `piani`, perché sono due decisioni:
+
+1. **`max_strumenti`**: quanti. `null` significa illimitato, come per `max_enti`, ed è il valore di ogni piano esistente: la migration non mette un tetto a nessuno.
+2. **`conteggio_strumenti`**: a che cosa si applica il numero. `per_sede`, ogni sede (Ente) ha il suo tetto; `per_cliente`, il tetto è uno solo e somma gli strumenti di tutte le sedi dello stesso contratto. Su un piano da una sede sola i due modi coincidono.
+
+🔴 **Entrambe stanno sul piano e non sul contratto.** La prima stesura metteva il modo di contare sull'Account, scelto alla nascita del cliente: Marco l'ha corretta lo stesso giorno. Si decide nel listino, quando il piano nasce, e chi lo attiva lo trova già deciso. È la ragione per cui la cabina e il provisioning non hanno nessun campo nuovo.
+
+**Dove si fa rispettare.** La regola vive in `App\Support\Billing\TettoStrumenti`, e la consumano i due soli gesti che fanno nascere uno strumento: l'albero dell'anagrafica e l'import CSV. Un guardrail legge `app/` e diventa rosso se un terzo `Strumento::create` compare in un file che non la chiama.
+
+- **L'albero** dice il tetto *prima* di aprire il form, coi numeri («Il piano SaaS include fino a 50 strumenti per sede, e questa sede ne ha già 50»), e lo richiede di nuovo dentro la transazione del salvataggio.
+- **L'import** è tutto o niente: se le righe valide non ci stanno tutte, l'anteprima dice quante ne stanno ancora e il bottone non c'è. Importarne «quante ce ne stanno» lascerebbe a chi ha caricato il file il compito di scoprire quali sono rimaste fuori.
+- **Il conteggio non passa dagli scope.** `Strumento` ha `TenantScope` e `DepartmentScope`: contando con quelli, un Responsabile di reparto vedrebbe solo i propri strumenti, cioè un tetto che per lui non si riempie mai. Il tetto è della sede o del cliente, non di chi guarda. Per la stessa ragione si legge il piano della sede in cui lo strumento finisce: il Superadmin che lavora su un cliente gestito (ADR-046) risponde al tetto di quel cliente.
+- 🔴 **Il lock.** Dentro la transazione si blocca la riga dell'Account prima di contare, o due salvataggi insieme leggerebbero ciascuno «c'è ancora un posto». Sull'account e non sulla sede, perché col conteggio per cliente le sedi si contendono lo stesso tetto. Solo quando un tetto c'è: su un piano illimitato creare uno strumento non prende lock e non conta niente.
+
+**Conseguenze.**
+
+- **Una condizione d'ingresso, non un'espulsione** (grandfathering, come ADR-032). Chi è sopra il tetto, perché il piano è stato ristretto o perché è sceso di piano, tiene tutti gli strumenti che ha e non ne aggiunge. I cestinati non contano: eliminare uno strumento libera il suo posto.
+- **Quando il tetto non c'è**: piano illimitato, sede senza contratto, piano uscito dal catalogo. Quest'ultimo è un dato da riparare dalla cabina, e non deve fermare il lavoro di un laboratorio che non ne ha colpa: qui si ripiega su «nessun tetto», al contrario del provisioning di una sede, che rifiuta spiegando.
+- **Il listino chiede prima di restringere.** Abbassare il numero o cambiare il modo di contare è permesso; se la regola nuova mette fuori dal tetto qualcuno che oggi ci sta dentro, la modale lo dice col conteggio, accanto a quella del tetto di Enti. Conta chi viene *spinto* oltre, non chi era già sopra: con due leve «scende» non si legge da un confronto fra numeri (da «50 per sede» a «100 in tutto» restringe chi ha tre sedi piene e allarga chi ne ha una), e chi era già sopra non deve riaprire la domanda a ogni salvataggio dell'etichetta.
+- **Lo si dichiara dove si sceglie un piano**: riga del listino, pagina pubblica di registrazione, pagina Abbonamento (che dice anche quanti ne sono occupati, «12 su 50 in questa sede» o «34 su 100 fra tutte le sedi»). La frase è una sola, `ConteggioStrumenti::tetto()`.
+- Le due colonne sono nel `$fillable` di `Piano`, quindi ogni modifica lascia una riga nel registro di audit coi due valori.
+
+- ⚠️ **Non fatto**: il numero di strumenti accanto a ogni cliente nella cabina e nell'esportazione; un avviso al cliente quando si avvicina al tetto; un'opzione del comando `easylab:provision-tenant`, che non ne ha bisogno perché il contratto non decide niente.
+- **Prova di mutazione**: 74 mutazioni, tutte rosse. Il confine del tetto (riempirlo esattamente è permesso), i due modi di contare, i cestinati e le sedi chiuse, i tre casi senza tetto, il lock, le due guardie dell'albero e la sede a cui si chiede, il tutto-o-niente dell'import, la validazione del listino, chi viene spinto oltre e chi no, l'audit, e ogni pagina che dichiara il tetto rendono rosso un test di `TettoStrumentiTest`, `ListinoTest` o `GovernoListinoTest`.
+
+---
+
+**ADR-050 — Il piano senza canone è in comodato d'uso: «free», «gratis» e «gratuito» non si scrivono**
+
+*Stato: Accettata e attuata il 10 Ott 2026, per decisione di Marco: «i piani free non devono comparire come free o gratuito ma come comodato d'uso. Il cliente mai dovrà leggere free o gratis». Precisa ADR-002 nel nome, non nella sostanza. Solo su staging.*
+
+**Contesto.** ADR-002 chiamava «Free» il piano che accompagna un contratto di manutenzione, e la parola era finita ovunque: nell'etichetta del piano, in due frasi della pagina Abbonamento, nei testi del listino. Ma quel piano non è un regalo: il software è dato in comodato d'uso a fronte di un contratto, e «gratis» davanti al cliente racconta un'altra cosa.
+
+**Decisione.**
+
+1. **L'etichetta del piano di partenza è «Comodato d'uso»**, nel bootstrap (`config/easylab.php`) e, con una migration, nei database che esistono già. La migration tocca la riga solo se porta ancora il nome di partenza: un nome scelto da una persona dal listino non si sovrascrive.
+2. **Il tipo di piano si chiama «comodato d'uso»** dove prima si leggeva «gratuito»: distintivo e casella del listino, messaggi di validazione, testo d'aiuto della cabina, catalogo delle email.
+3. **Le tre parole stanno in un posto solo**, `App\Support\Listino\LessicoCommerciale`, che le definisce come parole intere e in qualunque maiuscola («freezer» e «Freemium» non sono «free»).
+4. **Il listino rifiuta un'etichetta che ne contiene una**, alla nascita del piano e a ogni modifica. È l'unico punto in cui la parola la scrive una persona e non il codice, quindi è lì che «mai» si rende vero.
+
+**Che cosa NON cambia.** `free` resta il **codice** del piano in `accounts.piano`, e `gratuito` il nome della colonna e del flag (`Piani::eGratuito()`). Sono identificatori, e rinominarli vorrebbe dire migrare ogni account, la config, i webhook e mezza suite per una stringa che il cliente non vede. Ciò che conta è che non gli arrivi, ed è ciò che i guardrail sorvegliano.
+
+**Dove il codice sarebbe arrivato al cliente.** Un posto solo: l'archivio dei suoi dati (`easylab:esporta-tenant`), dove `account.csv` portava `accounts.piano` com'è. Ora il piano e il piano proposto escono col nome che il cliente legge in pagina; un piano uscito dal catalogo non ha un nome da dare e resta com'è.
+
+**Conseguenze.**
+
+- **Tre guardrail leggono ciò che l'applicazione scrive**: il testo di ogni vista (compilata, così i commenti spariscono e resta l'HTML che arriva nel browser), ogni frase di `app/`, `config/`, `lang/`, dei seeder e delle rotte, e i testi e le didascalie delle guide. Una frase scritta di fretta con una delle tre parole rende rossa la suite.
+- ⚠️ **Il limite dichiarato dei guardrail.** Un letterale PHP che è solo l'identificatore (`'free'`, `'gratuito'`) non si distingue da un codice o da una colonna, e passa. La rete per una parola nuda stampata in pagina è il test che apre le pagine del cliente (Abbonamento, anagrafica, dashboard, strumenti) e ne legge il testo.
+- **La tendina dei piani in cabina** non dice più «gratuito» accanto al piano: dice che cosa fa la scelta, «attivo da subito», accanto a «da proporre al cliente» dei piani a pagamento.
+- La frase sul portale di fatturazione non nomina più il piano: «Un piano in comodato d'uso non ha un portale di fatturazione: non c'è un abbonamento da gestire», nella pagina e nel rifiuto del controller.
+
+- ⚠️ **Non fatto, e non si può fare dal codice**: i **video delle guide** già registrati sono immagini, e se inquadrano la pagina Abbonamento o il listino mostrano il nome di prima finché non si rigirano. La didascalia della guida al listino è corretta nel copione e cambierà in pagina alla prossima registrazione. Un piano creato a mano con una delle tre parole nel nome resta com'è finché non lo si rinomina: il listino lo rifiuta al primo salvataggio.
+- **Prova di mutazione**: 26 mutazioni, tutte rosse. Ogni parola dell'elenco, i confini di parola, le maiuscole, il rifiuto dell'etichetta, le due condizioni della migration, ogni frase rimessa com'era (vista, controller, listino, cabina, guida, didascalia, email di prova) e le quattro guardie dell'esportazione.
+
+---
+
+**ADR-051 — Il fornitore anche sui ricambi, e un selettore che si filtra e crea al volo**
+
+*Stato: Accettata e attuata il 10 Ott 2026, su richiesta di Marco. Estende ADR-023 (il fornitore della macchina) e tocca ADR-008/022 (i ricambi). Solo su staging.*
+
+**Contesto.** Tre richieste nella stessa frase. I fornitori devono potersi associare anche ai ricambi. Registrando una macchina o un ricambio, un fornitore che non c'è costringeva a chiudere il form, andare in «Fornitori», crearlo, tornare e ricominciare. E il campo era una `<select>`: con trenta fornitori si scorre, con trecento no.
+
+**Decisione.**
+
+1. **Il fornitore di un ricambio sta sul pezzo montato** (`ricambio_utilizzo.fornitore_id`), non sulla voce di catalogo. La voce è un nome («Guarnizione portello»), e lo stesso pezzo si compra da fornitori diversi in anni diversi; con il collega-o-crea per nome, un fornitore sulla voce verrebbe riscritto a ogni montaggio. A sapere da chi è arrivato è il pezzo montato quel giorno, che è anche quello che porta la propria garanzia. **Facoltativo**: un pezzo si registra anche senza dirlo.
+2. **Il campo fornitore è un selettore, non una tendina**, uguale per la macchina e per i ricambi (`SceglieFornitore` e la vista `fornitori/_selettore`): un bottone che mostra la scelta e, aperto, un campo di ricerca sopra un elenco che scorre. Scrivendo l'elenco si restringe, senza distinguere maiuscole e ovunque cada il testo nel nome; mostra cinquanta voci alla volta e dice quando ce ne sono altre.
+3. **«＋ Nuovo fornitore» dentro il selettore**: un mini-form (ragione sociale, email, telefono) crea il fornitore nella sede della macchina e lo sceglie, lasciando aperto il form da cui si è partiti con tutto ciò che c'era scritto. Parte già compilato con ciò che si stava cercando.
+
+**Dove compare.** Nel form della macchina (creazione dall'albero, modifica dalla scheda), in ogni riga dei ricambi del form intervento, e nella correzione di un pezzo dal tab Ricambi. Il tab mostra il fornitore di ogni pezzo; la pagina Fornitori conta, accanto alle macchine, i ricambi montati.
+
+**Le regole che lo tengono fermo.**
+
+- 🔴 **Lo stato «aperto» sta sul server**, non in Alpine: è la regola di `TendineLivewireGuardrailTest`. L'elenco arriva con un giro sul server, e uno stato tenuto nel browser ripartirebbe da capo proprio quando Livewire ridisegna per riempirlo. Alpine porta il fuoco nel campo di ricerca e muove l'evidenziazione con le frecce; Invio fa `click()` sul bottone evidenziato, quindi la strada per scegliere resta una sola, quella che i test percorrono.
+- 🔴 **Una sola definizione di «selezionabile»**: i fornitori vivi della sede, più quello già associato anche se cestinato. Riempie l'elenco, decide se una scelta è accettata (fuori c'è un 404, non un 403) e, detta in SQL da `regolaFornitore()`, valida il salvataggio: la property del form è pubblica, e un id forgiato ci arriva senza passare da nessun selettore.
+- 🔴 **Creare un fornitore chiede `fornitori.create`**, non il permesso del form ospite: poter registrare una macchina non è poter allargare l'anagrafica. Le regole del mini-form sono quelle della pagina Fornitori (`RegoleFornitore`), in un posto solo.
+- **La sede è quella della macchina**, non di chi lavora: il Superadmin che registra una macchina in un cliente gestito (ADR-046) sceglie fra i fornitori di quel cliente, e quello che crea nasce lì. Se `BelongsToTenant` riscrivesse la sede con un'altra, il fornitore non viene creato.
+- **Chi non vede i fornitori non ha il campo, e non lo scrive**: senza `fornitori.view` il selettore non c'è, un id mandato a mano si ignora, e correggendo un pezzo il fornitore indicato da un altro resta dov'è.
+- Il model rifiuta un pezzo montato che punti al fornitore di un altro Ente, e `Fornitore` rifiuta di cancellarsi finché ha pezzi montati, come già per le macchine.
+
+**Conseguenze.**
+
+- ⚠️ **Il Tecnico oggi non ha `fornitori.view`** (la matrice dice che il fornitore è un dato dell'Ente): registra e corregge i pezzi, ma il campo fornitore non lo vede. Darglielo è una scelta di chi governa i ruoli, dall'editor, non una modifica di codice.
+- Niente «chiudi al click fuori» sul selettore: il bottone di un altro selettore è «fuori», e il suo click aprirebbe quello mentre questo gesto lo richiude. Si chiude scegliendo, con «Chiudi», con Esc o aprendone un altro.
+- Il pannello sta nel flusso del form e non in sovrimpressione: dentro una modale verrebbe tagliato dal suo bordo.
+- Tre testi delle guide scritte dicevano che il fornitore va creato prima: sono aggiornati. I video già registrati mostrano la vecchia tendina finché non si rigirano.
+
+- ⚠️ **Non fatto**: il fornitore sulla voce di catalogo e nella ricerca «dove è montato»; il fornitore proposto da solo quando si riscrive un pezzo già comprato da lui; l'import CSV dei ricambi.
+- **Provato in un browser vero**, sull'ambiente dimostrativo locale: apertura, fuoco sul campo di ricerca, filtro mentre si scrive, frecce, Invio che sceglie senza inviare il form, Esc che chiude il selettore e non la modale, creazione al volo con Invio. È la parte che i test Livewire non vedono.
+- **Prova di mutazione**: 91 mutazioni, tutte rosse. Una condizione (`showInterventoForm` accanto all'esistenza della riga) è risultata ridondante ed è stata tolta invece di essere difesa.
+
+---
+
+**ADR-052 — Le diciture degli stati: «Strumentazione idonea», «Interventi necessari», «Strumenti non idonei», «Strumenti obsoleti»**
+
+*Stato: Accettata e attuata il 10 Ott 2026, per decisione di Marco. Supera le tre parole di Design System §4 («In regola», «Azione richiesta», «Non idoneo») e la dicitura «Obsoleti» di ADR-014; colori, glifi e regole del semaforo (ADR-005, ADR-020) non cambiano. Solo su staging.*
+
+**Decisione.** I tre stati del semaforo e la segnalazione di obsolescenza cambiano nome, ovunque compaiano:
+
+| | Sopra un conteggio, in un filtro | Sulla scheda di una macchina |
+|---|---|---|
+| verde | Strumentazione idonea | Strumentazione idonea |
+| arancione | Interventi necessari | Interventi necessari |
+| rosso | Strumenti non idonei | Strumento non idoneo |
+| obsolescenza | Strumenti obsoleti | Strumento obsoleto |
+
+Le prime due diciture sono le stesse nei due contesti. Le altre due, che Marco ha dato al plurale, **sulla macchina singola vanno al singolare**: «Strumenti non idonei» sopra un numero, «Strumento non idoneo» accanto al nome di un'autoclave.
+
+**Una fonte sola.** Fino a oggi ogni vista aveva la propria copia delle tre parole, e il commento sull'enum lo diceva: «chi ne cambia una qui le cambi anche là». Ora le dà `StatoSemaforo` (`etichetta()` per una macchina, `etichettaInsieme()` per l'insieme) e, per l'obsolescenza, due costanti di `Strumento`. Il componente `x-ui.semaforo`, i filtri dei due elenchi, la forzatura, il badge ⏳, la dashboard e le email leggono da lì.
+
+**Dove cambiano.** I quattro riquadri della dashboard e la nota sotto; il filtro di stato e la spunta «Solo strumenti obsoleti» dell'elenco strumenti e del parco di piattaforma; la scheda della macchina (intestazione, panoramica, forzatura del semaforo); il badge ⏳ per riga; l'email «macchina segnalata», che ora ha per titolo la dicitura dello stato; le preferenze notifiche e il catalogo delle email; i testi e i copioni delle guide.
+
+**Conseguenze.**
+
+- La tendina del filtro passa da `w-52` a `w-60`: «Strumentazione idonea» è più lunga di «In regola», e una tendina la taglierebbe.
+- 🔴 **L'arancione si chiama «Interventi necessari» anche quando ad accenderlo è una garanzia in scadenza.** È il nome dello stato, non la sua causa, e resta vero ciò che ADR-020 vieta: la dashboard non scompone l'arancione per causa. Il test che lo sorveglia cercava la parola «interventi» in pagina; ora toglie il nome dello stato e cerca in ciò che resta.
+- Un guardrail legge viste, sorgenti e guide e diventa rosso se una delle diciture di prima viene riscritta a mano.
+- ⚠️ I **video delle guide** già registrati mostrano le diciture di prima finché non si rigirano; i copioni puntano già quelle nuove, quindi la prossima registrazione le trova.
+- ⚠️ Restano com'erano le frasi che non sono il nome dello stato: l'oggetto dell'email («… non è idonea», «… richiede un intervento») e la prosa che dice «in regola» di altro (le tarature, i pagamenti di una sede).
+- **Prova di mutazione**: 25 mutazioni, tutte rosse. Ogni dicitura rimessa com'era, il singolare e il plurale scambiati nei riquadri, nei filtri, nella forzatura e nei badge, il titolo dell'email, i testi delle preferenze, una guida e un copione.
+
+---
+
+**ADR-053 — «Laboratori» al posto di «Anagrafica», e «laboratorio» al posto di «dipartimento»**
+
+*Stato: Accettata e attuata il 10 Ott 2026, per decisione di Marco. Cambia i nomi che ERD §4.1 dà alla struttura di una sede; la struttura stessa (ADR-001, ADR-006) non cambia. Solo su staging.*
+
+**Decisione.** La sezione che mostra la struttura di una sede si chiama **«Laboratori»** e non più «Anagrafica»: nel menù, nel titolo della pagina, nelle briciole, nelle guide. Il livello sotto la sede si chiama **«laboratorio»** e non più «dipartimento»; ciò che sta dentro un laboratorio resta un **«sotto-laboratorio»**.
+
+| | Prima | Ora |
+|---|---|---|
+| la sezione | Anagrafica | Laboratori |
+| il primo livello sotto la sede | Dipartimento, Dipartimenti | Laboratorio, Laboratori |
+| ciò che sta dentro | Sotto-laboratorio | Sotto-laboratorio |
+| l'indirizzo | `/anagrafica` | `/laboratori` |
+
+**Una fonte sola.** I nomi li dà `TipoUnitaOrganizzativa`: `SEZIONE`, `etichetta()`, `plurale()`. La vista dell'albero, il menù e le briciole li leggono lì invece di tenerne una copia ciascuno.
+
+**Ciò che NON cambia, perché nessuno lo legge.** `dipartimento` resta il valore della colonna `unita_organizzativa.tipo` e il nome del case; `anagrafica.index` e `anagrafica.marchio` restano i nomi delle rotte; `App\Livewire\Anagrafica` resta il namespace; `albero-anagrafica` resta lo slug della guida. Sono identificatori: rinominarli avrebbe voluto dire una migration su ogni nodo di ogni cliente, e cento chiamate toccate, per parole che non arrivano mai in pagina. È la stessa scelta di ADR-050 per `free`.
+
+**Conseguenze.**
+
+- Gli indirizzi di prima **rimandano** a quelli nuovi con un 301 (`/anagrafica`, `/anagrafica/marchio`): sono nei segnalibri e nelle email già spedite.
+- 🔴 **La linguetta «Anagrafica» della scheda di una macchina resta.** È un'altra cosa: tiene i dati fissi dello strumento (matricola, parametri, fornitore, referente), non la struttura della sede, e chiamarla «Laboratori» sarebbe stato sbagliato. Se deve cambiare nome, è una decisione a parte.
+- Un guardrail legge viste, sorgenti e guide e diventa rosso se «dipartimento» o «anagrafica» tornano in un testo. Le eccezioni sono elencate una per una (la linguetta e lo slug), e un'eccezione che non serve più fa fallire il test: non resta lì a coprire un ritorno.
+- Le parole di prima restano fra le **chiavi di ricerca** delle guide: chi ha in testa «anagrafica» o «dipartimento» deve trovare la pagina lo stesso.
+- ⚠️ L'esportazione dei dati di un cliente (`EsportazioneTenant`) è una copia delle tabelle, e nella colonna `tipo` porta il valore com'è scritto: `dipartimento`.
+- ⚠️ I **video delle guide** già registrati mostrano i nomi di prima finché non si rigirano; i copioni puntano già quelli nuovi.
+- **Prova di mutazione**: 29 mutazioni, tutte rosse. Ogni nome rimesso com'era nell'enum, nell'albero, nel menù, nelle briciole; i due livelli scambiati; il rimando tolto, reso temporaneo, mandato all'indirizzo sbagliato; una frase per ciascuna delle viste, dei sorgenti, delle guide e dei copioni toccati.
+
+---
+
+**ADR-054 — Il referente dello strumento, le note, e le email che gli arrivano**
+
+*Stato: Accettata e attuata il 10 Ott 2026, per decisione di Marco. Estende ADR-011 (lo scheduler delle scadenze), ADR-014 (l'obsolescenza) e ADR-047 (le email che seguono un gesto); non cambia chi le riceve già. Solo su staging.*
+
+**Decisione.** Ogni strumento può avere un **referente** — nome, cognome, email, cellulare — e delle **note**. Si scrivono nel modulo dello strumento, quando lo si registra e quando lo si modifica, e si leggono nella linguetta «Anagrafica» della sua scheda. Sono tutti facoltativi.
+
+Se la scheda porta l'**email** del referente, **le email che parlano di quella macchina arrivano anche a lui**:
+
+| Email | Che cosa riceve il referente |
+|---|---|
+| Macchina segnalata | la stessa email, subito |
+| Intervento programmato | la stessa email, subito |
+| Intervento eseguito | la stessa email, subito |
+| Riepilogo scadenze (06:00) | le sole righe delle macchine di cui è referente |
+| Avviso obsolescenza (06:15) | le sole macchine di cui è referente |
+
+«Intervento assegnato» no: è un'email fra chi assegna il lavoro e chi lo fa.
+
+**Il referente è una casella, non una persona di Easy Lab.** Non ha un account, un ruolo, delle preferenze. Per questo sta sulla riga dello strumento e non in una tabella sua, e per questo le email gli arrivano **per indirizzo**. Ne discendono tre cose:
+
+- **Si aggiunge, non sostituisce.** Admin, Tenant e Responsabili ricevono ciò che ricevevano.
+- **Riceve l'email e nient'altro.** La campanella è delle persone: `DigestScadenze` e `AvvisoObsolescenza`, che a una persona lasciano anche la copia in applicazione, a una casella mandano il solo canale `mail`.
+- **L'ultima riga gli dice perché la riceve e come farla smettere** («chiedi a chi gestisce la macchina di togliere il tuo indirizzo dalla sua scheda»), al posto del rimando a delle preferenze che non ha. Svuotare il campo sulla scheda è l'interruttore.
+
+**Mai due volte alla stessa casella, e mai a chi ha compiuto il gesto.** Il referente il cui indirizzo è quello di una persona del cliente che riceve già queste email **è quella persona**: la riceve una volta sola, da persona, e quindi con le proprie preferenze. Vale anche per un Responsabile indicato come referente di una macchina **fuori dai suoi reparti**: è il solo caso in cui il sotto-albero non decide, e lo decide chi ha scritto quell'indirizzo sulla scheda — indicare qualcuno come referente di una macchina è dirgli che la segue. Per ogni altra macchina resta un Responsabile dei suoi reparti. Il confronto fra indirizzi ignora maiuscole e spazi, e il model scrive l'indirizzo già normalizzato.
+
+**Una fonte sola.** `App\Support\Notifiche\Referente` dice se c'è qualcuno a cui scrivere e a quale casella; `DestinatariEnte::dellaMacchina()` risponde, per una macchina, con le persone **e** il referente. I tre avvisi che seguono un gesto la chiamano tutti; i due programmati raggruppano le righe per casella.
+
+**Conseguenze.**
+
+- 🔴 **Nel riepilogo il referente non riceve mai le garanzie dei pezzi montati.** È il dato che ADR-029 nasconde a chi non ha titolo, e un indirizzo scritto su una scheda un titolo non ce l'ha, qualunque cosa l'Ente abbia scelto per i propri Tenant. Vale anche per il Tenant che è referente: il canale non gli restituisce la riga che il filtro gli ha tolto.
+- **A email spenta in piattaforma il canale non esiste**, né per la casella né per chi è referente da persona: non c'è una campanella da riempire al suo posto.
+- Un riepilogo resta **dentro un Ente**: lo stesso referente su macchine di due clienti riceve due email, mai una che li mescola.
+- ⚠️ **L'email al referente ha gli stessi collegamenti di quella alle persone**, compreso «Apri la scheda della macchina»: a chi non ha un account aprono la pagina di accesso.
+- ⚠️ **Chi può modificare uno strumento può far scrivere Easy Lab a un indirizzo qualunque.** È il dato del cliente e una sua scelta, ma è la prima volta che un'email esce verso qualcuno che non è un utente: va nel registro dei trattamenti (T2, T4).
+- ⚠️ **Non fatto**: il referente nell'importazione da CSV; la sua comparsa nello storico in PDF; la ricerca per referente nell'elenco; un referente per laboratorio da ereditare sulle macchine.
+- **Un'email in coda durante il rilascio parte lo stesso.** Nelle cinque notifiche `alReferente` (e `nomeReferente`) sono proprietà **con un default**, non parametri promossi: una notifica accodata prima del rilascio non le porta nel payload, `unserialize` non passa dal costruttore, e una proprietà tipizzata senza default resterebbe non inizializzata. Un test rifà quel payload e lo consegna.
+- **Prova di mutazione**: 183 mutazioni, tutte rosse. I cinque campi nel `$fillable`, nelle regole, nei nomi che si leggono negli errori, nel modulo e nella scheda; l'indirizzo normalizzato; il referente lasciato al vecchio Ente campo per campo; ogni ramo di `dellaMacchina()` (la persona che è anche referente, chi agisce, il sotto-albero); le tre copie al referente; il canale del riepilogo e dell'obsolescenza riga per riga (email spenta, pezzi montati, una casella per referente, l'Ente); i due `via()`; ogni frase dei cinque modelli; il catalogo; il default e l'assegnazione dei campi nuovi in ciascuna notifica. Una sola equivalente, dichiarata: il `whereNotNull` di `Referente::delleMacchine()` è un risparmio di righe, e a scartare i vuoti è il `filter()`.
+
+---
+
+**ADR-055 — I numerini sui tab della scheda: quante scadenze da gestire stanno lì**
+
+*Stato: Accettata e attuata il 10 Ott 2026, per decisione di Marco. Estende ADR-024 (la Panoramica); il semaforo (ADR-005) e la privacy dei pezzi montati (ADR-029) non cambiano. Solo su staging.*
+
+**Decisione.** Nella scheda di una macchina, accanto al nome dei tab «Interventi», «Ricambi» e «Garanzie» compare un numero: quante scadenze da gestire stanno in quel tab. Se non ce ne sono il numero non c'è: uno «0» su ogni tab sarebbe rumore.
+
+| Tab | Che cosa conta |
+|---|---|
+| Interventi | gli interventi scaduti o in scadenza |
+| Garanzie | le garanzie della macchina scadute o in scadenza |
+| Ricambi | le garanzie dei pezzi montati scadute o in scadenza |
+| Panoramica, Anagrafica, Documenti | niente: lì non abita nessuna scadenza |
+
+**Sono i motivi del semaforo, non un secondo conto.** Il numero conta gli stessi motivi che la Panoramica elenca sotto «Motivi (N)», cioè ciò che porta la macchina su «Interventi necessari»: un intervento pianificato fra sei mesi non è una cosa da fare oggi, e non accende nessun numero. La diagnosi è già calcolata per il semaforo, quindi i numeri non costano una query.
+
+**Una fonte sola.** Dove sta la riga che causa un motivo, e chi può vederla, lo dice `App\Support\Strumenti\MotiviDellaScheda`. Fino a oggi quelle due risposte stavano scritte dentro la Panoramica; ora le chiedono lì sia la Panoramica sia la barra dei tab.
+
+**Conseguenze.**
+
+- 🔴 **Un motivo che chi guarda vede in forma neutra non accende nessun numero.** Il Tenant di un Ente che nasconde le garanzie dei pezzi montati legge in Panoramica «Garanzia in scadenza il…» senza sapere di che cosa: un «1» sul tab Ricambi glielo direbbe. Si chiede l'ability della Policy, non il permesso nudo (ADR-029). La somma dei numeri può quindi essere più bassa di «Motivi (N)», mai più alta.
+- **Una forzatura non spegne i numeri**, come non nasconde i motivi (ADR-005): ciò che è da fare resta da fare anche su una macchina dichiarata idonea a mano.
+- Scaduto e in scadenza hanno lo stesso colore, quello dello stato che spiegano; a distinguerli sono le righe del tab. Il numero ha un testo per chi non lo vede («2 scadenze da gestire»), e oltre 99 diventa «99+».
+- **Prova di mutazione**: 30 mutazioni, tutte rosse. Ogni area resa visibile a chiunque, l'ability sostituita dal permesso nudo, ogni motivo contato sul tab sbagliato, il conto che ignora la visibilità, i numeri scambiati fra i tab, lo zero mostrato, il tetto a due cifre, il testo per chi non vede.
+
+---
+
+**ADR-056 — L'icona nella scheda del browser: la «yL» del logo**
+
+*Stato: Accettata e attuata il 10 Ott 2026, per decisione di Marco. Completa ADR-033 (il marchio) e ADR-034 (i due temi). Solo su staging.*
+
+**Decisione.** L'icona di Easy Lab è la **«yL» del logo**: il braccio della y, la curva sfumata che sale nella L, e la L. Non è ridisegnata: sono le tre forme di `brand/easylab-logo-compatto.svg`, prese così come sono e messe in un riquadro quadrato.
+
+Tre file in `public/`, collegati dal componente `x-brand-icone` nella testa delle due impaginazioni (chi è dentro, chi è fuori):
+
+- `favicon.svg` per i browser che la leggono: vettoriale, e **su tema scuro alza il blu profondo** a `#AFD6EF`, come la variante scura del logo;
+- `favicon.ico` (16, 32 e 48 pixel) per chi non legge l'SVG e per chi la chiede alla radice senza guardare la pagina;
+- `apple-touch-icon.png` (180 pixel, su fondo bianco) per la schermata Home di iOS.
+
+**Conseguenze.**
+
+- 🔴 **Prima l'icona c'era, ed era un file di zero byte.** `public/favicon.ico` esisteva dal primo giorno, vuoto: nessun errore, e nessuna icona. Il test non chiede solo che i file esistano: chiede che pesino, che l'`.ico` contenga davvero tre immagini della misura dichiarata, e che l'SVG sia fatto delle forme del logo.
+- ⚠️ I tre file sono **generati dal logo**: se il logo cambia, vanno rifatti. Il test che confronta le forme lo rende rosso.
+- ⚠️ `favicon.ico` e `apple-touch-icon.png` sono pixel, e non seguono il tema: su una barra scura il braccio blu profondo della y si legge meno. Chi legge l'SVG non ha il problema.
+- Il `?v=1` nei collegamenti cambia quando cambia il disegno: le icone sono fra le cose che un browser tiene in memoria più a lungo.
+- **Prova di mutazione**: 15 mutazioni, tutte rosse. Il componente tolto da ciascuna impaginazione, ogni collegamento tolto o puntato a un file che non c'è, una forma ritoccata, il riquadro non quadrato, la variante scura tolta, l'`.ico` svuotato, l'icona di iOS della misura sbagliata.
+
+---
+
+**ADR-057 — I laboratori di un Responsabile Reparto si assegnano dall'applicazione**
+
+*Stato: Accettata e attuata il 10 Ott 2026, per decisione di Marco. Dà un'interfaccia al pivot `responsabile_unita` di ADR-006; lo scope di reparto e la matrice dei permessi (ADR-016) non cambiano. Solo su staging.*
+
+**Il difetto.** Un Responsabile Reparto vede solo i laboratori che gli sono assegnati, con ciò che contengono, e **niente** se non ne ha (ADR-006, fail-closed). Il pivot che lo decide esiste dal primo giorno, ma nessuna schermata lo scriveva: lo riempivano i seeder. Un Responsabile invitato da «Persone» entrava e non vedeva nulla, e nessuno poteva rimediare dall'applicazione.
+
+**Decisione.** I laboratori si assegnano da due pagine, che scrivono la stessa cosa:
+
+| Da dove | Che cosa si fa | Chi può |
+|---|---|---|
+| **«Persone»**, azione «Laboratori» sulla riga di un Responsabile | si spuntano, nell'elenco dei laboratori dell'Ente, quelli che la persona segue | chi ha `utenti.update` nell'Ente in cui si trova: l'Admin; il Superadmin per le persone di EasyLab, o impersonando |
+| **«Laboratori»**, riquadro «Responsabili» dentro un laboratorio | si aggiunge una persona fra i Responsabili dell'Ente, o la si toglie | chi ha `utenti.update` e arriva a quel laboratorio: l'Admin nel proprio Ente, e il **Superadmin anche nei clienti che gestisce**, senza impersonare |
+
+Nessun permesso nuovo: è `utenti.update`, lo stesso con cui si cambia un ruolo — chi decide che cosa una persona è, decide che cosa segue. Quindi **nessun riseeding**.
+
+**Le regole stanno in un posto solo**, `App\Support\Utenti\LaboratoriDelResponsabile`, che è l'unica strada verso il pivot:
+
+- si assegna **solo a chi ha il ruolo Responsabile Reparto**: per ogni altro ruolo il pivot non conta, e una riga scritta oggi tornerebbe a contare il giorno in cui la persona cambia ruolo;
+- **solo laboratori dell'Ente della persona**, non cestinati, e **mai la sede**: assegnare la radice farebbe di un Responsabile un Admin che non amministra;
+- si tengono **le sole radici**: chi segue un laboratorio segue già ciò che contiene, e una seconda riga per un sotto-laboratorio resterebbe lì a concedere, da sola, il giorno in cui il laboratorio gli viene tolto;
+- si scrive **una sede alla volta**: chi segue laboratori anche in un'altra sede dello stesso contratto li ritrova quando ci passa, e assegnargli quelli di qui non glieli porta via. Per questo la scrittura non è un `sync()`, che toglierebbe ogni riga fuori dall'elenco — comprese quelle dell'altra sede;
+- ogni cambio lascia una riga nel registro di audit: chi, a chi, da che cosa a che cosa.
+
+Chi può farlo e su quale persona, invece, lo decide la schermata che chiama: `User` non ha uno scope di tenancy, e il confine si scrive a mano dove si sa in quale Ente si trova chi agisce.
+
+**I laboratori sono del ruolo, non della persona.** Chi smette di essere Responsabile li perde — in ogni sede, perché il ruolo non è di una sede — nella stessa transazione che gli cambia ruolo: lasciati sul pivot tornerebbero a contare, senza che nessuno li abbia riassegnati, il giorno in cui lo ridiventa.
+
+**Conseguenze.**
+
+- In «Persone», sotto il ruolo di un Responsabile si legge che cosa segue; se non segue niente c'è scritto «Nessun laboratorio assegnato: non vede nulla». Dopo un invito o un cambio di ruolo che fa di qualcuno un Responsabile, l'esito ricorda che il gesto successivo sono i laboratori.
+- Un Responsabile senza laboratori che apre «Laboratori» non legge più «Nessun ente qui»: legge che non gliene è stato assegnato nessuno, e a chi chiederlo.
+- **Vale subito**, anche per chi è collegato: una scrittura sul pivot azzera la memo dei nodi accessibili (`AccessibleNodesMemo`).
+- Nella pagina di un sotto-laboratorio, chi lo riceve da un laboratorio che lo contiene compare con «tramite …» e senza «Togli»: si toglie da lì.
+- Il riquadro «Responsabili» lo vede solo chi può vedere le persone (`utenti.view`): i nomi dei colleghi sono materia di «Persone».
+- ⚠️ Per un cliente che **non** è gestito da EasyLab il Superadmin non arriva all'albero, quindi nemmeno a questo riquadro: resta l'impersonazione, come per ogni altro gesto su quel cliente.
+- ⚠️ **Non fatto**: scegliere i laboratori nella stessa finestra dell'invito; un riepilogo dei Responsabili sulla pagina della sede; un avviso al Responsabile quando gli cambiano i laboratori.
+- **Una strada sola, e un test che la tiene tale.** Un guardrail legge `app/` e diventa rosso se un file diverso da `LaboratoriDelResponsabile` (e da `EliminaCliente`, che cancella un cliente intero) scrive il pivot: una seconda schermata che facesse `attach()` per conto suo salterebbe tutte le regole qui sopra.
+- **Prova di mutazione**: 115 mutazioni, tutte rosse. Ogni filtro dell'elenco dei laboratori assegnabili (l'Ente, i cestinati, la sede, ciò che è rimasto sotto un nodo cestinato, l'ordine); il ruolo e l'Ente di chi riceve; il rifiuto dei laboratori estranei, tutto o niente; le sole radici; la scrittura, l'aggiunta e la rimozione, una sede alla volta e senza toccare i colleghi; l'audit; il permesso in ciascuna delle cinque azioni, anche sostituito da quello di sola lettura; il confine della persona e del nodo nelle due schermate; la validazione di ciò che arriva dal browser; il ruolo che porta via i laboratori; i promemoria; ciò che le due viste mostrano e a chi. Una equivalente, dichiarata: dalla pagina «Laboratori» l'autore passato all'audit può mancare, perché il registro prende comunque l'utente autenticato.
+
+---
+
+**ADR-058 — Un comodato d'uso ha una scadenza, e trenta giorni prima lo si dice**
+
+*Stato: Accettata e attuata l'11 Ott 2026, per decisione di Marco. Estende ADR-002 (il piano senza canone) e ADR-050 (il suo nome); i piani a pagamento e Stripe (ADR-045) non cambiano. Solo su staging.*
+
+**Decisione.** Un piano in comodato d'uso può avere una **scadenza**. Si sceglie quando lo si assegna a un cliente e si cambia dopo, anche su un comodato già attivo:
+
+- **12, 24 o 36 mesi** da oggi;
+- **una data precisa**, per chi non segue i mesi;
+- **senza scadenza**, che è ciò che ogni cliente era fino a oggi.
+
+Si imposta dalla cabina: nella finestra con cui nasce un cliente, e col pulsante «Comodato» nella riga di un cliente già attivo. La riga dice fino a quando vale, e lo dice diversamente se manca poco o se è passata. Il cliente la legge nella propria pagina «Abbonamento».
+
+**L'email.** Ogni mattina alle 06:30 `easylab:notifica-comodato` scrive, per i comodati a cui mancano **trenta giorni o meno**, a chi amministra il contratto del cliente (i membri dell'account) e a **tutti i Superadmin**. Una volta sola per scadenza: `accounts.comodato_avvisato_per` porta la data di cui si è già scritto, quindi spostare la scadenza la rende, da sola, una scadenza di cui non si è ancora scritto. Al cliente l'email dice di farsi sentire per il rinnovo; a chi governa dice dove si sposta la data.
+
+**Dove sta.** Due colonne su `accounts` (`comodato_scade_il`, `comodato_avvisato_per`), fuori da `$fillable` come il piano: la scadenza si scrive solo con `Account::impostaScadenzaComodato()`, che la rifiuta su un piano a pagamento e sull'account di piattaforma. Le durate fra cui scegliere, la loro validazione e i trenta giorni stanno in `App\Support\Billing\DurataComodato`.
+
+**Conseguenze.**
+
+- 🔴 **Alla scadenza non succede niente da solo.** Il cliente continua a lavorare: nessun blocco, nessun cambio di piano. Che cosa fare di un comodato scaduto lo decide chi ha firmato il contratto; il blocco resta il gesto manuale di ADR-013.
+- **La scadenza è del comodato, non dell'account.** Chi passa a un piano a pagamento la perde, insieme alla memoria dell'avviso: lasciata lì, tornerebbe a valere con la data di un contratto chiuso il giorno in cui l'abbonamento finisce e l'account ricade sul piano senza canone.
+- **«Il tenant» è chi amministra il contratto**, cioè i membri dell'account: gli stessi dell'email «piano cambiato». Non chi ha il ruolo Tenant, per cui il piano non è affar suo.
+- I mesi si contano da oggi e senza sforare (dodici mesi dal 29 febbraio sono il 28). Una data precisa non può essere già passata: di una scadenza trascorsa non partirebbe nessun avviso.
+- L'email nasce **accesa**, a differenza delle altre aggiunte da ADR-047: nessun cliente ha una scadenza finché qualcuno non gliela scrive, quindi un deploy non fa partire niente. A email spenta il comando non segna gli avvisi come dati: chi la riaccende li trova ancora da mandare.
+- Un comodato già scaduto non riceve l'avviso: è un preavviso. In cabina resta scritto «comodato scaduto il…».
+- La data è un giorno civile (ADR-041): `Account` usa `SerializzaGiorniCivili`, o il registro di audit la scriverebbe al giorno prima.
+- ⚠️ **Non fatto**: un secondo avviso alla scadenza o dopo; il rinnovo con un clic; la scadenza nell'esportazione dei clienti e fra i filtri della cabina.
+- **Prova di mutazione**: 61 mutazioni, tutte rosse. Chi può avere una scadenza e chi no; la scadenza che cade passando a un piano a pagamento e resta fra due piani in comodato; i mesi, le date che non esistono, la data già passata; ogni filtro del comando (la piattaforma, chi paga, i già scaduti, i lontani, i trenta giorni esatti); la memoria dell'avviso e il suo riarmo; i destinatari e le due copie; l'email spenta; il pannello, la nascita del cliente e ciò che legge il cliente; la pianificazione.
+
+---
+
+**ADR-059 — La garanzia della macchina si scrive mentre la si registra**
+
+*Stato: Accettata e attuata l'11 Ott 2026, per decisione di Marco. Estende ADR-019 (la garanzia «inizio + durata»); il tab Garanzie della scheda non cambia. Solo su staging.*
+
+**Decisione.** Il modulo «Nuovo strumento» chiede anche la **garanzia della macchina**: inizio e durata in mesi. È facoltativa, e a dire che c'è è la durata: senza una data di inizio vale quella di installazione, e senza nemmeno quella il giorno in cui la si registra. Nasce nella stessa transazione della macchina. Dopo si modifica, si aggiunge o si toglie dal tab Garanzie, come sempre.
+
+**Conseguenze.**
+
+- **Stesso permesso del tab** (`garanzie.macchina.manage`): chi registra macchine ma non gestisce le garanzie non vede il blocco, e una richiesta costruita a mano non la crea (`garanziaNuova` è una property pubblica, quindi la guardia sta nel salvataggio e non solo nella vista).
+- Soggetto, Ente e strumento vengono dal contesto; la scadenza effettiva la calcola il model, come per ogni garanzia.
+- Un inizio senza durata è un errore detto, non una garanzia scartata in silenzio.
+- Una sola garanzia alla nascita: le altre (un'estensione, un rinnovo) si aggiungono dalla scheda.
+- ⚠️ **Non fatto**: la garanzia nell'importazione massiva degli strumenti.
+
+**Il difetto corretto nello stesso giro.** Nel modulo «Modifica strumento» il pulsante «+ Aggiungi» dei parametri tecnici non faceva comparire la riga. La vista della scheda dichiarava una variabile `$parametri` (i parametri salvati, per la linguetta Anagrafica) con lo stesso nome della property del modulo: da quel punto in giù la copriva, e il modulo disegnava i salvati invece delle righe in corso. La riga veniva aggiunta sul server e non si vedeva mai; su uno strumento che i parametri li aveva già, le righe uscivano con le chiavi al posto degli indici. Il modulo «Nuovo strumento» non ne soffriva. La variabile ora si chiama `$parametriSalvati`.
+
+- **Prova di mutazione**: 19 mutazioni, tutte rosse. Il difetto rimesso apposta; chi può e chi no; l'inizio, l'installazione e oggi; i confini della durata; il modulo che si ripulisce fra una macchina e l'altra.
+
+---
+
+**ADR-060 — Le card di «Laboratori» si filtrano per nome**
+
+*Stato: Accettata e attuata l'11 Ott 2026, per decisione di Marco. Solo su staging.*
+
+**Decisione.** Sopra le card della pagina «Laboratori» c'è un campo «Filtra per nome». Vale a ogni livello dell'albero (le sedi, i laboratori, i sotto-laboratori) e compare dove c'è almeno una card. Tiene le card il cui nome contiene **ogni parola** scritta, in qualunque ordine, senza badare a maiuscole e accenti. Accanto al titolo dice quante ne restano («3 di 14»); se non ne resta nessuna lo dice e offre «Togli il filtro», invece del messaggio di un posto vuoto.
+
+**Conseguenze.**
+
+- Filtra ciò che la pagina ha **già caricato** per quella persona: nessuna query in più, e nessun modo di far comparire un nodo che lo scoping (ADR-006/057) non le mostra.
+- Cerca nel livello aperto, non in tutto l'albero: entrando in una card o risalendo il filtro si svuota.
+- ⚠️ **Non fatto**: la ricerca in profondità (un laboratorio trovato da sopra la sua sede), la paginazione delle card, il filtro nell'indirizzo della pagina.
+- **Prova di mutazione**: 16 mutazioni, tutte rosse.
+
+---
+
+**ADR-061 — Dove si lavora si sceglie da una tendina in cui si scrive per filtrare**
+
+*Stato: Accettata e attuata l'11 Ott 2026, per decisione di Marco. Estende ADR-046 (chi segue più clienti dichiara dove lavora); stessa forma del selettore del fornitore (ADR-051). Solo su staging.*
+
+**Decisione.** La `<select>` con cui chi segue più clienti sceglie dove sta lavorando diventa una tendina con un campo di testo: scrivendo, l'elenco si restringe ai nomi che contengono ogni parola, senza badare a maiuscole e accenti, cercando sia nel nome del cliente sia in quello della sede. Sta nel modulo «Nuovo fornitore» e nella pagina di importazione degli strumenti. Stato e azioni in `App\Livewire\Concerns\SceglieSede`, vista `livewire.tenancy._selettore-sede`, confronto in `App\Support\Testo\Ricerca` (lo stesso del filtro di ADR-060).
+
+Nel modulo «Nuovo fornitore» il campo si chiama **«Laboratorio»** e non più «Sede», come chiesto.
+
+**Conseguenze.**
+
+- 🔴 L'id della scelta arriva dal browser: si rilegge dall'elenco delle sedi che la persona segue, e fuori da quello c'è un 404. Il filtro lavora su quell'elenco: non può far comparire altro. La validazione al salvataggio resta quella di prima.
+- «Aperto» lo dice il server e non Alpine (`TendineLivewireGuardrailTest`).
+- ⚠️ **Aperto, da decidere con Marco**: in ADR-053 «laboratorio» è il primo livello *dentro* una sede. Qui la stessa parola indica la sede. Nella pagina di importazione è rimasto «Sede», e così nel resto dell'applicazione: se «sede» deve diventare «laboratorio» ovunque, serve un nome diverso per il livello di sotto.
+- ⚠️ **Non coperto dai test** (non eseguono Alpine): frecce, Invio, Esc e il fuoco sul campo.
+- **Prova di mutazione**: 24 mutazioni, tutte rosse; una riga morta trovata e tolta.
+
+---
+
+**ADR-062 — I fornitori di EasyLab si usano nel catalogo di qualunque cliente, per copia**
+
+*Stato: Accettata e attuata l'11 Ott 2026, per decisione di Marco. Estende ADR-023 (il catalogo fornitori è dell'Ente), ADR-046 (chi segue più clienti) e ADR-051 (il selettore). ADR-001/006/018 non cambiano: nessuno scope impara un'eccezione. Solo su staging.*
+
+**Il bisogno.** EasyLab compra dagli stessi fornitori per tutti i clienti che gestisce, e oggi dovrebbe reinserirli in ogni catalogo. Il cliente, però, deve vedere solo i fornitori che ha inserito lui e quelli che EasyLab ha usato da lui: non l'intero elenco di EasyLab.
+
+**Decisione.** «Globale» è un fornitore che sta nel catalogo di una sede di EasyLab (l'account `di_piattaforma`): si crea come ogni altro, scegliendo «EasyLab» nel modulo «Nuovo fornitore». Quando il **Superadmin** o il **Gestore** aprono il selettore del fornitore sulla macchina (o sul pezzo) di un cliente, sotto il catalogo del cliente trovano «Dai fornitori di EasyLab». Sceglierne uno lo **copia** nel catalogo di quel cliente e sceglie la copia. Da lì in poi è una riga del cliente come le altre; sulla pagina Fornitori porta il segno «da EasyLab».
+
+**Perché una copia e non un catalogo condiviso.** Un fornitore visibile a più Enti chiederebbe a `TenantScope` un'eccezione, e a ogni regola che oggi dice «il fornitore è dello stesso Ente della macchina» un secondo ramo. Con la copia il confine resta quello di sempre: il cliente legge il proprio catalogo, e ci trova esattamente ciò che la richiesta descrive.
+
+**Conseguenze.**
+
+- 🔴 **Una sola lettura fuori dal confine**, in `App\Support\Fornitori\FornitoriGlobali`: il catalogo di EasyLab, letto da chi lavora per EasyLab, col `tenant_id` nella query. Il Gestore non ha quelle sedi nel proprio perimetro, e senza quella lettura non li vedrebbe.
+- 🔴 **Il passaggio è in una direzione sola**: da EasyLab al cliente. Il fornitore di un cliente non diventa mai globale, e non passa a un altro cliente.
+- 🔴 **Si scrive solo dove chi scrive lavora**: il catalogo di destinazione si rilegge attraverso `TenantScope` (portafoglio del Gestore, clienti gestiti del Superadmin). Conta per il Gestore, che non ha un Ente proprio e a cui `BelongsToTenant` non riscrive niente.
+- **Le note non si copiano**: sono appunti di EasyLab. Passano ragione sociale, email e telefono.
+- **Una copia per catalogo** (`fornitori.globale_id`, unico con `tenant_id`): un globale già portato non viene più offerto, e nemmeno uno che il cliente ha già sotto lo stesso nome. Una copia cestinata si ripristina invece di farne una seconda.
+- **Non il Tecnico**: lavora per portafoglio ma non amministra cataloghi.
+- ⚠️ **La copia è una fotografia.** Cambiare email o telefono del fornitore di EasyLab non aggiorna le copie già fatte, e il cliente può modificare la propria. **Da decidere con Marco** se le copie debbano seguire l'originale.
+- ⚠️ **Non fatto**: una pagina che mostri in quali clienti è stato usato un fornitore di EasyLab; il porta-in-blocco di più fornitori; i globali nell'importazione massiva degli strumenti.
+- **Prova di mutazione**: 32 mutazioni, tutte rosse. Chi li riceve e chi no; quali fornitori contano come di EasyLab; il già copiato, lo stesso nome, la copia cestinata (propria e altrui); il catalogo di destinazione; le note; il legame; `globale_id` fuori da ciò che un form può scrivere.
+

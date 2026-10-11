@@ -5,7 +5,7 @@
 
 ## premessa
 
-L'anagrafica dei fornitori esiste per rispondere a una domanda sola, e sempre
+L'elenco dei fornitori esiste per rispondere a una domanda sola, e sempre
 nello stesso momento: la macchina è ferma, a chi telefono? Tutto il resto —
 quante macchine ha fornito, quanto pesa sul parco — viene di conseguenza. È un
 elenco corto e va tenuto pulito, perché lo si consulta quando si ha fretta.
@@ -17,14 +17,15 @@ Chi vende e chi assiste le macchine della sede, con i loro contatti.
 ## 1
 
 «Fornitori» nel menù apre l'elenco di quelli registrati per la sede in cui ti
-trovi. Sono anagrafiche dell'Ente, non condivise fra clienti diversi: ogni
+trovi. Sono dell'Ente, non condivisi fra clienti diversi: ogni
 laboratorio ha i propri, con i propri contatti e i propri contratti.
 
 ## 2
 
-Ogni riga porta i contatti e il numero di macchine collegate. Quel numero è
-l'informazione che nessun'altra pagina dà: dice quanta parte del parco dipende
-da quel fornitore, e quindi quanto pesa un suo disservizio.
+Ogni riga porta i contatti e due numeri: le macchine collegate e i ricambi
+montati comprati da lui. Il primo è l'informazione che nessun'altra pagina dà:
+dice quanta parte del parco dipende da quel fornitore, e quindi quanto pesa un
+suo disservizio.
 
 ## 3
 
@@ -39,10 +40,10 @@ Quattro campi, e tre di loro vanno riempiti pensando al giorno del guasto.
 
 ## 4
 
-Se ne aggiunge uno quando arriva una macchina di una marca nuova, e conviene
-farlo **prima** di registrare la macchina: il campo «Fornitore» della scheda
-pesca da questo elenco, e se il fornitore non c'è bisogna interrompere e tornare
-qui.
+Se ne aggiunge uno quando arriva una macchina di una marca nuova. Lo si può fare
+da qui, con tutti i contatti, oppure al volo dal campo «Fornitore» mentre si
+registra la macchina o un ricambio: in quel caso nasce con la ragione sociale e
+poco altro, e i contatti dell'assistenza vanno completati da questa pagina.
 
 ## 5
 
@@ -91,4 +92,4 @@ alla creazione, quindi ogni macchina ha sempre un fornitore.
 
 Da quel momento il conteggio in questa pagina sale, e soprattutto dalla scheda
 della macchina si arriva a chi chiamare senza aprire una rubrica. È il giro che
-questa anagrafica esiste per rendere possibile.
+questo elenco esiste per rendere possibile.

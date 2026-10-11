@@ -60,6 +60,20 @@ Schedule::command('easylab:notifica-obsolescenza')
     ->onOneServer();
 
 /*
+ * L'avviso che un comodato d'uso sta per scadere (🔗 ADR-058): trenta giorni
+ * prima, al cliente e a chi governa la piattaforma.
+ *
+ * **06:30**, dopo le due email operative: questa parla del contratto, non delle
+ * macchine. L'idempotenza non dipende dal lock — sta in
+ * `accounts.comodato_avvisato_per`, scritta prima dell'invio.
+ */
+Schedule::command('easylab:notifica-comodato')
+    ->dailyAt('06:30')
+    ->timezone('Europe/Rome')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+/*
  * 🔴 **La potatura, ed è QUI che una retention smette di essere un'intenzione.**
  *
  * È la «rotazione» che il registro dei trattamenti dichiara per T4 (avvisi) e

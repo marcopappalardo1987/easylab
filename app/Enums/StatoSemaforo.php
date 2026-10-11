@@ -15,19 +15,33 @@ enum StatoSemaforo: string
     case Rosso = 'rosso';
 
     /**
-     * Come si chiama lo stato per chi legge (Design System §4): le stesse tre
-     * parole del componente `x-ui.semaforo`.
+     * Come si chiama lo stato di **una** macchina, per chi legge
+     * (🔗 ADR-052; Design System §4).
      *
-     * ⚠️ Le viste hanno ancora le loro copie di queste etichette: questo
-     * metodo è nato il 9 Ott 2026 per le email (🔗 ADR-047), che non passano
-     * da un componente Blade. Chi ne cambia una qui le cambi anche là.
+     * Le diciture sono di Marco, del 10 Ott 2026, e sostituiscono «In regola»,
+     * «Azione richiesta» e «Non idoneo». Questo metodo e `etichettaInsieme()`
+     * sono la **sola** fonte: il componente `x-ui.semaforo`, i filtri degli
+     * elenchi, la forzatura e le email leggono da qui. Fino a quel giorno ogni
+     * vista ne aveva una copia, e cambiarle voleva dire cercarle una per una.
      */
     public function etichetta(): string
     {
         return match ($this) {
-            self::Verde => 'In regola',
-            self::Arancione => 'Azione richiesta',
-            self::Rosso => 'Non idoneo',
+            self::Verde => 'Strumentazione idonea',
+            self::Arancione => 'Interventi necessari',
+            self::Rosso => 'Strumento non idoneo',
         };
+    }
+
+    /**
+     * Come si chiama l'**insieme** delle macchine in questo stato: i riquadri
+     * della dashboard, le voci dei filtri, le legende.
+     *
+     * Cambia solo il rosso, che lì è un plurale: «Strumenti non idonei» sopra
+     * un conteggio, «Strumento non idoneo» sulla scheda di una macchina.
+     */
+    public function etichettaInsieme(): string
+    {
+        return $this === self::Rosso ? 'Strumenti non idonei' : $this->etichetta();
     }
 }

@@ -76,7 +76,7 @@ arriveranno gli avvisi e, il giorno che servisse, il recupero della password.
 ## 9
 
 Entrando la prima volta la sede è vuota, ed è normale. L'ordine giusto è:
-prima l'anagrafica — dipartimenti e laboratori come sono davvero — poi le
+prima la struttura — laboratori e sotto-laboratori come sono davvero — poi le
 macchine, a mano o con l'importazione da CSV, che le mette nel posto giusto solo
 se i reparti esistono già.
 

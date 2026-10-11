@@ -19,7 +19,7 @@ test('spostare strumento', async ({ page }) => {
   await page.goto('/strumenti/55');
   await page.waitForLoadState('networkidle');
 
-  await g.passo("L'ubicazione completa è sotto il nome: sede, dipartimento, laboratorio.", {
+  await g.passo("L'ubicazione completa è sotto il nome: sede, laboratorio, sotto-laboratorio.", {
     su: page.getByText(/Sede di Milano ›/).first(),
     zoom: 2,
     durata: 7,
@@ -35,7 +35,7 @@ test('spostare strumento', async ({ page }) => {
 
   g.capitolo('Parte 2 di 3', 'La destinazione');
 
-  await g.passo("La destinazione si sceglie dall'albero dell'anagrafica: un dipartimento o un laboratorio, non un indirizzo scritto a mano.", {
+  await g.passo("La destinazione si sceglie dall'albero dei laboratori: un laboratorio o un sotto-laboratorio, non un indirizzo scritto a mano.", {
     su: page.locator('#destinazioneId'),
     zoom: 2.1,
     durata: 8,
@@ -82,7 +82,7 @@ test('spostare strumento', async ({ page }) => {
 
   g.chiusura('Da ricordare', [
     '«Sposta» cambia dove sta la macchina; «Modifica» cambia che cosa è. Sono due gesti diversi.',
-    "La destinazione si sceglie dall'albero: se il laboratorio non c'è, va prima creato in anagrafica.",
+    "La destinazione si sceglie dall'albero: se il laboratorio non c'è, va prima creato in «Laboratori».",
     'Ogni trasloco resta nello storico con la sua data: il passato non si sovrascrive.',
   ]);
 

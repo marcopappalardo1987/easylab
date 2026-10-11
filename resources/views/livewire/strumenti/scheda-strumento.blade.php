@@ -1,11 +1,16 @@
 @php
     use App\Enums\TipoIntervento;
-    $parametri = $strumento->parametri_tecnici ?? [];
+    // ⛔ NON `$parametri`: è il nome della property del modulo di modifica
+    // (`ManagesStrumentoForm`), e una variabile con quel nome qui la copre per
+    // tutto il resto della vista. Il modulo leggeva i parametri SALVATI invece
+    // delle righe in corso: «+ Aggiungi» scriveva la riga e non compariva mai
+    // (segnalato da Marco l'11 Ott 2026).
+    $parametriSalvati = $strumento->parametri_tecnici ?? [];
 @endphp
 
 <div class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6" x-data="{ tab: 'panoramica' }">
 
-    <a href="{{ route('anagrafica.index') }}" wire:navigate class="text-sm text-ink-2 hover:text-ink">‹ Torna all'anagrafica</a>
+    <a href="{{ route('anagrafica.index') }}" wire:navigate class="text-sm text-ink-2 hover:text-ink">‹ Torna ai laboratori</a>
 
     {{-- Header --}}
     <div class="mt-3 flex flex-wrap items-start justify-between gap-3">
@@ -54,6 +59,10 @@
     </div>
 
     {{-- Tab --}}
+    {{-- 🔗 ADR-055: accanto al nome, il numero delle scadenze da gestire che
+         stanno in quel tab. Sono gli stessi motivi che la Panoramica elenca,
+         contati da `MotiviDellaScheda`: nessuna query in più. --}}
+    @php $daGestire = \App\Support\Strumenti\MotiviDellaScheda::contaPerTab($diagnosi); @endphp
     <div class="mt-6 border-b border-border">
         <nav class="-mb-px flex flex-wrap gap-1 text-sm">
             {{-- Panoramica primo e di default (ADR-024): non è gated, perché i
@@ -61,29 +70,29 @@
                  comunque poter sapere perché il semaforo è acceso. --}}
             <button type="button" x-on:click="tab = 'panoramica'"
                 :class="tab === 'panoramica' ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'"
-                class="border-b-2 px-3 py-2 font-medium">Panoramica</button>
+                class="inline-flex items-center border-b-2 px-3 py-2 font-medium" data-tab="panoramica">Panoramica</button>
             <button type="button" x-on:click="tab = 'anagrafica'"
                 :class="tab === 'anagrafica' ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'"
-                class="border-b-2 px-3 py-2 font-medium">Anagrafica</button>
+                class="inline-flex items-center border-b-2 px-3 py-2 font-medium" data-tab="anagrafica">Anagrafica</button>
             @can('interventi.view')
                 <button type="button" x-on:click="tab = 'interventi'"
                     :class="tab === 'interventi' ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'"
-                    class="border-b-2 px-3 py-2 font-medium">Interventi</button>
+                    class="inline-flex items-center border-b-2 px-3 py-2 font-medium" data-tab="interventi">Interventi<x-ui.da-gestire :quante="$daGestire['interventi'] ?? 0" /></button>
             @endcan
             @can('ricambio_utilizzo.view')
                 <button type="button" x-on:click="tab = 'ricambi'"
                     :class="tab === 'ricambi' ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'"
-                    class="border-b-2 px-3 py-2 font-medium">Ricambi</button>
+                    class="inline-flex items-center border-b-2 px-3 py-2 font-medium" data-tab="ricambi">Ricambi<x-ui.da-gestire :quante="$daGestire['ricambi'] ?? 0" /></button>
             @endcan
             @can('documenti.view')
                 <button type="button" x-on:click="tab = 'documenti'"
                     :class="tab === 'documenti' ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'"
-                    class="border-b-2 px-3 py-2 font-medium">Documenti</button>
+                    class="inline-flex items-center border-b-2 px-3 py-2 font-medium" data-tab="documenti">Documenti</button>
             @endcan
             @can('garanzie.macchina.view')
                 <button type="button" x-on:click="tab = 'garanzie'"
                     :class="tab === 'garanzie' ? 'border-brand text-brand' : 'border-transparent text-ink-2 hover:text-ink'"
-                    class="border-b-2 px-3 py-2 font-medium">Garanzie</button>
+                    class="inline-flex items-center border-b-2 px-3 py-2 font-medium" data-tab="garanzie">Garanzie<x-ui.da-gestire :quante="$daGestire['garanzie'] ?? 0" /></button>
             @endcan
         </nav>
     </div>
@@ -124,13 +133,60 @@
                 </div>
             </dl>
 
+            {{-- 🔗 ADR-054: il referente della macchina. Lo vede chiunque veda
+                 la scheda: è la persona da cercare quando si arriva in
+                 laboratorio, tecnico compreso. --}}
+            <hr class="my-6 border-border">
+            <p class="text-sm font-medium text-ink-2">Referente</p>
+            @if (! $strumento->haReferente())
+                <p class="mt-1 text-sm text-ink-3">Nessun referente indicato.</p>
+            @else
+                <dl class="mt-3 grid gap-x-6 gap-y-4 sm:grid-cols-3" data-referente>
+                    <div>
+                        <dt class="text-xs font-medium tracking-wide text-ink-3 uppercase">Nome</dt>
+                        <dd class="mt-0.5 text-sm text-ink">{{ $strumento->referenteNomeCompleto() ?: '—' }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs font-medium tracking-wide text-ink-3 uppercase">Email</dt>
+                        <dd class="mt-0.5 text-sm break-all text-ink">
+                            @if ($strumento->referente_email)
+                                <a href="mailto:{{ $strumento->referente_email }}" class="text-brand hover:text-brand-hover">{{ $strumento->referente_email }}</a>
+                            @else
+                                —
+                            @endif
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs font-medium tracking-wide text-ink-3 uppercase">Cellulare</dt>
+                        <dd class="mt-0.5 text-sm text-ink">
+                            @if ($strumento->referente_cellulare)
+                                {{-- Nel collegamento restano le sole cifre e il `+`: è
+                                     ciò che un telefono sa comporre. --}}
+                                <a href="tel:{{ preg_replace('/[^0-9+]/', '', $strumento->referente_cellulare) }}" class="text-brand hover:text-brand-hover">{{ $strumento->referente_cellulare }}</a>
+                            @else
+                                —
+                            @endif
+                        </dd>
+                    </div>
+                </dl>
+                @if ($strumento->referente_email)
+                    <p class="mt-3 text-xs text-ink-3">Riceve le email che riguardano questo strumento.</p>
+                @endif
+            @endif
+
+            @if (filled($strumento->note))
+                <hr class="my-6 border-border">
+                <p class="text-sm font-medium text-ink-2">Note</p>
+                <p class="mt-1 text-sm whitespace-pre-line text-ink" data-note-strumento>{{ $strumento->note }}</p>
+            @endif
+
             <hr class="my-6 border-border">
             <p class="text-sm font-medium text-ink-2">Parametri tecnici</p>
-            @if (count($parametri) === 0)
+            @if (count($parametriSalvati) === 0)
                 <p class="mt-1 text-sm text-ink-3">Nessun parametro tecnico.</p>
             @else
                 <dl class="mt-3 divide-y divide-border">
-                    @foreach ($parametri as $chiave => $valore)
+                    @foreach ($parametriSalvati as $chiave => $valore)
                         <div class="flex justify-between gap-4 py-2 text-sm">
                             <dt class="text-ink-3">{{ $chiave }}</dt>
                             <dd class="text-right font-medium text-ink">{{ $valore }}</dd>
@@ -346,6 +402,19 @@
                                             aria-label="Rimuovi questa riga" title="Rimuovi"
                                             class="flex h-11 w-11 shrink-0 items-center justify-center rounded text-bad-dot hover:bg-bad-soft">✕</button>
                                     </div>
+
+                                    {{-- 🔗 ADR-051: da chi è stato comprato il pezzo. Facoltativo. --}}
+                                    @can('fornitori.view')
+                                        <div class="mt-2">
+                                            @include('livewire.fornitori._selettore', [
+                                                'campo' => 'ricambio.'.$i,
+                                                'etichetta' => 'Fornitore del pezzo (facoltativo)',
+                                                'sceltoId' => $riga['fornitore_id'] ?? null,
+                                                'erroreSu' => 'ricambiNuovi.'.$i.'.fornitore_id',
+                                                'facoltativo' => true,
+                                            ])
+                                        </div>
+                                    @endcan
                                 </div>
                             @endforeach
 
@@ -461,7 +530,7 @@
                     <label for="destinazioneId" class="block text-sm font-medium text-ink">Destinazione</label>
                     <select id="destinazioneId" wire:model="destinazioneId"
                         class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
-                        <option value="">— Scegli dipartimento o laboratorio —</option>
+                        <option value="">— Scegli laboratorio o sotto-laboratorio —</option>
                         @foreach ($nodiDestinazione as $nodo)
                             <option value="{{ $nodo->id }}">{{ $nodo->nome }}</option>
                         @endforeach
@@ -521,16 +590,16 @@
                     {{-- .live: cambiando stato, il campo motivo diventa obbligatorio sul rosso --}}
                     <select id="forzaStato" wire:model.live="forzaForm.stato"
                         class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
-                        <option value="{{ App\Enums\StatoSemaforo::Verde->value }}">● In regola</option>
-                        <option value="{{ App\Enums\StatoSemaforo::Arancione->value }}">◐ Azione richiesta</option>
-                        <option value="{{ App\Enums\StatoSemaforo::Rosso->value }}">■ Non idoneo</option>
+                        <option value="{{ App\Enums\StatoSemaforo::Verde->value }}">● {{ App\Enums\StatoSemaforo::Verde->etichetta() }}</option>
+                        <option value="{{ App\Enums\StatoSemaforo::Arancione->value }}">◐ {{ App\Enums\StatoSemaforo::Arancione->etichetta() }}</option>
+                        <option value="{{ App\Enums\StatoSemaforo::Rosso->value }}">■ {{ App\Enums\StatoSemaforo::Rosso->etichetta() }}</option>
                     </select>
                     @error('forzaForm.stato') <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p> @enderror
                 </div>
 
                 @php $richiedeMotivo = $forzaForm['stato'] === App\Enums\StatoSemaforo::Rosso->value; @endphp
                 <x-ui.textarea name="forzaForm.motivo" wire:model="forzaForm.motivo"
-                    :label="$richiedeMotivo ? 'Motivo (obbligatorio per «non idoneo»)' : 'Motivo (opzionale)'" />
+                    :label="$richiedeMotivo ? 'Motivo (obbligatorio per «'.mb_strtolower(App\Enums\StatoSemaforo::Rosso->etichetta()).'»)' : 'Motivo (opzionale)'" />
 
                 <div class="flex items-center justify-between gap-3">
                     <div>
@@ -589,6 +658,17 @@
                     <x-ui.input name="ricambioForm.scadenza_garanzia" label="Scadenza garanzia del pezzo" type="date"
                         wire:model="ricambioForm.scadenza_garanzia" />
                 @endif
+
+                {{-- 🔗 ADR-051: da chi è stato comprato il pezzo. Facoltativo. --}}
+                @can('fornitori.view')
+                    @include('livewire.fornitori._selettore', [
+                        'campo' => 'correzione',
+                        'etichetta' => 'Fornitore del pezzo (facoltativo)',
+                        'sceltoId' => $ricambioForm['fornitore_id'] ?? null,
+                        'erroreSu' => 'ricambioForm.fornitore_id',
+                        'facoltativo' => true,
+                    ])
+                @endcan
 
                 <div class="flex justify-end gap-3">
                     <x-ui.button variant="secondary" wire:click="closeRicambioForm">Annulla</x-ui.button>
@@ -666,7 +746,7 @@
         <x-ui.modal title="Rimuovere il ricambio?">
             <p class="text-sm text-ink-2">
                 La riga di montaggio e la garanzia del pezzo verranno cestinate insieme.
-                Se quella garanzia teneva acceso il semaforo, lo strumento tornerà in regola.
+                Se quella garanzia teneva acceso il semaforo, lo strumento tornerà idoneo.
             </p>
             <div class="mt-6 flex justify-end gap-3">
                 <x-ui.button variant="secondary" wire:click="$set('deletingUtilizzoId', null)">Annulla</x-ui.button>

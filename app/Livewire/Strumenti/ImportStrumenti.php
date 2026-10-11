@@ -4,9 +4,12 @@ namespace App\Livewire\Strumenti;
 
 use App\Enums\TipoSpostamento;
 use App\Enums\TipoUnitaOrganizzativa;
+use App\Livewire\Concerns\SceglieSede;
 use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
+use App\Support\Billing\TettoStrumenti;
+use App\Support\Billing\TettoStrumentiRaggiunto;
 use App\Support\Tenancy\SediSeguite;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
@@ -28,6 +31,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 #[Layout('components.layouts.app')]
 class ImportStrumenti extends Component
 {
+    use SceglieSede;
     use WithFileUploads;
 
     public const MAX_RIGHE = 1000;
@@ -146,42 +150,101 @@ class ImportStrumenti extends Component
             return;
         }
 
-        DB::transaction(function () use ($valide) {
-            foreach ($valide as $riga) {
-                $nodo = UnitaOrganizzativa::findOrFail($riga['nodoId']); // in scope
-                $dati = $riga['dati'];
-
-                $strumento = Strumento::create([
-                    'tenant_id' => $nodo->tenant_id,
-                    'unita_organizzativa_id' => $nodo->id,
-                    'nome' => $dati['nome'],
-                    'modello' => $dati['modello'] ?: null,
-                    'matricola' => $dati['matricola'] ?: null,
-                    'data_installazione' => $this->parseData($dati['data_installazione']),
-                ]);
-
-                if (filled($dati['provenienza'])) {
-                    SpostamentoStrumento::create([
-                        'tenant_id' => $nodo->tenant_id,
-                        'strumento_id' => $strumento->id,
-                        'da_esterno' => trim($dati['provenienza']),
-                        'a_nodo_id' => $nodo->id,
-                        'tipo_spostamento' => TipoSpostamento::Ingresso,
-                        'data' => now()->toDateString(),
-                        'eseguito_da' => auth()->id(),
-                    ]);
-                }
-            }
-        });
+        try {
+            DB::transaction(fn () => $this->scrivi($valide));
+        } catch (TettoStrumentiRaggiunto) {
+            // Niente da dire qui: l'anteprima resta aperta e `render()` rilegge
+            // il tetto, quindi la spiegazione è già sotto gli occhi di chi ha
+            // premuto. Non si è scritta nessuna riga.
+            return;
+        }
 
         $this->importate = $valide->count();
         $this->scartate = count($this->righe) - $this->importate;
         $this->reset(['righe', 'file', 'analizzato']);
     }
 
+    /**
+     * Le sedi toccate dalle righe valide, con quante righe ciascuna.
+     *
+     * Oggi è sempre una sola: l'import lavora su una sede alla volta. Si
+     * raggruppa lo stesso, perché il tetto di strumenti (🔗 ADR-049) si chiede
+     * alla sede in cui la riga finisce davvero, non a quella che ci si aspetta.
+     *
+     * @param  Collection<int,array{nodoId:?int}>  $valide
+     * @return array<int,int> id della sede → righe
+     */
+    private function righePerSede(Collection $valide): array
+    {
+        $sedeDelNodo = UnitaOrganizzativa::whereKey($valide->pluck('nodoId')->unique()->all())
+            ->pluck('tenant_id', 'id');
+
+        // `get()` e non l'indice: un reparto sparito fra l'analisi e l'import
+        // non deve diventare un errore qui. Lo dice il `findOrFail` di
+        // `scrivi()`, col 404 di sempre.
+        return $valide
+            ->countBy(fn (array $riga) => (int) $sedeDelNodo->get($riga['nodoId']))
+            ->all();
+    }
+
+    /**
+     * Che cosa impedisce l'import, se il piano non ha posto per tutte le righe
+     * valide. `null` = si può importare.
+     */
+    private function oltreIlTetto(Collection $valide): ?string
+    {
+        foreach ($this->righePerSede($valide) as $sede => $nuovi) {
+            $tetto = TettoStrumenti::dellEnte($sede);
+
+            if (! $tetto->consente($nuovi)) {
+                return $tetto->spiegazione($nuovi);
+            }
+        }
+
+        return null;
+    }
+
+    /** @param  Collection<int,array{dati:array<string,string>,nodoId:?int}>  $valide */
+    private function scrivi(Collection $valide): void
+    {
+        // 🔴 ADR-049: tutto o niente, e **prima** della prima riga. Importarne
+        // «quante ce ne stanno» lascerebbe a chi ha caricato il file il compito
+        // di scoprire quali sono rimaste fuori.
+        foreach ($this->righePerSede($valide) as $sede => $nuovi) {
+            TettoStrumenti::esigi($sede, $nuovi);
+        }
+
+        foreach ($valide as $riga) {
+            $nodo = UnitaOrganizzativa::findOrFail($riga['nodoId']); // in scope
+            $dati = $riga['dati'];
+
+            $strumento = Strumento::create([
+                'tenant_id' => $nodo->tenant_id,
+                'unita_organizzativa_id' => $nodo->id,
+                'nome' => $dati['nome'],
+                'modello' => $dati['modello'] ?: null,
+                'matricola' => $dati['matricola'] ?: null,
+                'data_installazione' => $this->parseData($dati['data_installazione']),
+            ]);
+
+            if (filled($dati['provenienza'])) {
+                SpostamentoStrumento::create([
+                    'tenant_id' => $nodo->tenant_id,
+                    'strumento_id' => $strumento->id,
+                    'da_esterno' => trim($dati['provenienza']),
+                    'a_nodo_id' => $nodo->id,
+                    'tipo_spostamento' => TipoSpostamento::Ingresso,
+                    'data' => now()->toDateString(),
+                    'eseguito_da' => auth()->id(),
+                ]);
+            }
+        }
+    }
+
     public function ricarica(): void
     {
         $this->reset(['file', 'righe', 'analizzato', 'importate', 'scartate', 'troncato', 'sedeId']);
+        $this->chiudiSedi();
     }
 
     // --- Parsing ---
@@ -334,7 +397,7 @@ class ImportStrumenti extends Component
                 if ($candidati->isEmpty()) {
                     $errori[] = 'Ubicazione non trovata: '.Str::limit($dati['ubicazione'], self::ANTEPRIMA_SCARTATE);
                 } elseif ($candidati->count() > 1) {
-                    $errori[] = 'Ubicazione ambigua: usa il percorso (es. "Dipartimento > '.$dati['ubicazione'].'")';
+                    $errori[] = 'Ubicazione ambigua: usa il percorso (es. "Laboratorio > '.$dati['ubicazione'].'")';
                 } else {
                     $nodo = $candidati->first();
                 }
@@ -382,13 +445,19 @@ class ImportStrumenti extends Component
 
     public function render()
     {
-        $valide = collect($this->righe)->filter(fn ($r) => $r['errori'] === [])->count();
+        $righeValide = collect($this->righe)->filter(fn ($r) => $r['errori'] === []);
+        $valide = $righeValide->count();
 
         return view('livewire.strumenti.import-strumenti', [
             'valide' => $valide,
             'conErrori' => count($this->righe) - $valide,
+            // 🔗 ADR-049: se il piano non ha posto per tutte le righe valide lo
+            // si dice nell'anteprima, al posto del bottone. Solo con righe da
+            // importare: prima dell'analisi non costa nessuna query.
+            'oltreIlTetto' => $valide > 0 ? $this->oltreIlTetto($righeValide) : null,
             // Vuota per chi lavora su una sede sola: niente tendina.
             'sedi' => $this->sedi()->count() > 1 ? $this->sedi() : collect(),
+            'sceltaSede' => $this->selettoreSedi(),
         ]);
     }
 
