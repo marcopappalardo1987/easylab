@@ -19,13 +19,13 @@ use App\Support\Piani;
 use App\Support\Provisioning\ProvisionaEnte;
 use App\Support\Tenancy\AccessoTecnico;
 use App\Support\Tenancy\CurrentTenant;
+use App\Support\Testo\Ricerca;
 use App\Support\Utenti\AssegnazioneRifiutata;
 use App\Support\Utenti\LaboratoriDelResponsabile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Lab404\Impersonate\Services\ImpersonateManager;
 use Livewire\Attributes\Layout;
@@ -347,15 +347,8 @@ class Albero extends Component
      */
     private function filtraPerNome(Collection $nodi): Collection
     {
-        $piega = fn (string $testo): string => Str::lower(Str::ascii($testo));
-        $parole = array_values(array_filter(preg_split('/\s+/', trim($piega($this->cerca))) ?: []));
-
-        if ($parole === []) {
-            return $nodi;
-        }
-
         return $nodi
-            ->filter(fn (UnitaOrganizzativa $n) => Str::containsAll($piega((string) $n->nome), $parole))
+            ->filter(fn (UnitaOrganizzativa $n) => Ricerca::contiene((string) $n->nome, $this->cerca))
             ->values();
     }
 

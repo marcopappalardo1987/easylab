@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Fornitori;
 
+use App\Livewire\Concerns\SceglieSede;
 use App\Models\Fornitore;
 use App\Models\UnitaOrganizzativa;
 use App\Support\Fornitori\RegoleFornitore;
@@ -29,6 +30,8 @@ use RuntimeException;
 #[Layout('components.layouts.app')]
 class ElencoFornitori extends Component
 {
+    use SceglieSede;
+
     public bool $showForm = false;
 
     public ?int $editingId = null;
@@ -89,7 +92,7 @@ class ElencoFornitori extends Component
             $regole['sedeId'] = ['required', Rule::in($this->sedi()->modelKeys())];
         }
 
-        $validato = $this->validate($regole, attributes: ['sedeId' => 'sede'])['form'];
+        $validato = $this->validate($regole, attributes: ['sedeId' => 'laboratorio'])['form'];
 
         if ($this->editingId !== null) {
             Fornitore::findOrFail($this->editingId)->update($validato);
@@ -134,6 +137,7 @@ class ElencoFornitori extends Component
     protected function resetForm(): void
     {
         $this->reset(['editingId', 'form', 'sedeId']);
+        $this->chiudiSedi();
         $this->resetValidation();
     }
 
@@ -184,6 +188,8 @@ class ElencoFornitori extends Component
             'fornitori' => Fornitore::withCount(['strumenti', 'ricambiMontati'])->orderBy('ragione_sociale')->get(),
             // Vuota per chi lavora su una sede sola: niente colonna, niente tendina.
             'sedi' => $this->sedi()->count() > 1 ? $this->sedi()->keyBy('id') : collect(),
+            // 🔗 ADR-061: la tendina filtrabile, solo a modulo aperto.
+            'sceltaSede' => $this->showForm ? $this->selettoreSedi() : null,
         ]);
     }
 }

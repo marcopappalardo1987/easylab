@@ -48,16 +48,13 @@ Incubatrice INC-9;INC-9;SN-0002;01/07/2020;Neonatologia &gt; Terapia intensiva;O
                  più sedi dichiara prima in quale sta importando. --}}
             @if ($sedi->isNotEmpty())
                 <div class="mb-4">
-                    <label for="sede-import" class="block text-sm font-medium text-ink">Sede in cui importare</label>
-                    <select id="sede-import" wire:model="sedeId"
-                            class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-sm text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
-                        <option value="">Scegli la sede…</option>
-                        @foreach ($sedi as $sede)
-                            <option value="{{ $sede->id }}">{{ \App\Support\Tenancy\SediSeguite::etichetta($sede) }}</option>
-                        @endforeach
-                    </select>
-                    <p class="mt-1 text-xs text-ink-3">Le ubicazioni del file vengono cercate fra i reparti di questa sede.</p>
-                    @error('sedeId') <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p> @enderror
+                    @include('livewire.tenancy._selettore-sede', [
+                        'selettore' => $sceltaSede,
+                        'idDom' => 'sede-import',
+                        'etichetta' => 'Sede in cui importare',
+                        'segnaposto' => 'Scegli la sede…',
+                        'aiuto' => 'Le ubicazioni del file vengono cercate fra i reparti di questa sede.',
+                    ])
                 </div>
             @endif
             <label for="file" class="block text-sm font-medium text-ink">File CSV</label>

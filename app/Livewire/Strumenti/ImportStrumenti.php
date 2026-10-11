@@ -4,6 +4,7 @@ namespace App\Livewire\Strumenti;
 
 use App\Enums\TipoSpostamento;
 use App\Enums\TipoUnitaOrganizzativa;
+use App\Livewire\Concerns\SceglieSede;
 use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
@@ -30,6 +31,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 #[Layout('components.layouts.app')]
 class ImportStrumenti extends Component
 {
+    use SceglieSede;
     use WithFileUploads;
 
     public const MAX_RIGHE = 1000;
@@ -242,6 +244,7 @@ class ImportStrumenti extends Component
     public function ricarica(): void
     {
         $this->reset(['file', 'righe', 'analizzato', 'importate', 'scartate', 'troncato', 'sedeId']);
+        $this->chiudiSedi();
     }
 
     // --- Parsing ---
@@ -454,6 +457,7 @@ class ImportStrumenti extends Component
             'oltreIlTetto' => $valide > 0 ? $this->oltreIlTetto($righeValide) : null,
             // Vuota per chi lavora su una sede sola: niente tendina.
             'sedi' => $this->sedi()->count() > 1 ? $this->sedi() : collect(),
+            'sceltaSede' => $this->selettoreSedi(),
         ]);
     }
 

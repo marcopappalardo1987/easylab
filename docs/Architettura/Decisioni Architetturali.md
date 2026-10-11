@@ -2027,3 +2027,21 @@ Si imposta dalla cabina: nella finestra con cui nasce un cliente, e col pulsante
 - ⚠️ **Non fatto**: la ricerca in profondità (un laboratorio trovato da sopra la sua sede), la paginazione delle card, il filtro nell'indirizzo della pagina.
 - **Prova di mutazione**: 16 mutazioni, tutte rosse.
 
+---
+
+**ADR-061 — Dove si lavora si sceglie da una tendina in cui si scrive per filtrare**
+
+*Stato: Accettata e attuata l'11 Ott 2026, per decisione di Marco. Estende ADR-046 (chi segue più clienti dichiara dove lavora); stessa forma del selettore del fornitore (ADR-051). Solo su staging.*
+
+**Decisione.** La `<select>` con cui chi segue più clienti sceglie dove sta lavorando diventa una tendina con un campo di testo: scrivendo, l'elenco si restringe ai nomi che contengono ogni parola, senza badare a maiuscole e accenti, cercando sia nel nome del cliente sia in quello della sede. Sta nel modulo «Nuovo fornitore» e nella pagina di importazione degli strumenti. Stato e azioni in `App\Livewire\Concerns\SceglieSede`, vista `livewire.tenancy._selettore-sede`, confronto in `App\Support\Testo\Ricerca` (lo stesso del filtro di ADR-060).
+
+Nel modulo «Nuovo fornitore» il campo si chiama **«Laboratorio»** e non più «Sede», come chiesto.
+
+**Conseguenze.**
+
+- 🔴 L'id della scelta arriva dal browser: si rilegge dall'elenco delle sedi che la persona segue, e fuori da quello c'è un 404. Il filtro lavora su quell'elenco: non può far comparire altro. La validazione al salvataggio resta quella di prima.
+- «Aperto» lo dice il server e non Alpine (`TendineLivewireGuardrailTest`).
+- ⚠️ **Aperto, da decidere con Marco**: in ADR-053 «laboratorio» è il primo livello *dentro* una sede. Qui la stessa parola indica la sede. Nella pagina di importazione è rimasto «Sede», e così nel resto dell'applicazione: se «sede» deve diventare «laboratorio» ovunque, serve un nome diverso per il livello di sotto.
+- ⚠️ **Non coperto dai test** (non eseguono Alpine): frecce, Invio, Esc e il fuoco sul campo.
+- **Prova di mutazione**: 24 mutazioni, tutte rosse; una riga morta trovata e tolta.
+

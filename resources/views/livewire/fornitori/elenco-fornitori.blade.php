@@ -78,18 +78,14 @@
             <form wire:submit="save" class="space-y-5">
                 {{-- Solo alla creazione: un fornitore non cambia sede. --}}
                 @if (! $editingId && $sedi->isNotEmpty())
-                    <div>
-                        <label for="sede-fornitore" class="block text-sm font-medium text-ink">Sede</label>
-                        <select id="sede-fornitore" wire:model="sedeId"
-                                class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-sm text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
-                            <option value="">Scegli la sede…</option>
-                            @foreach ($sedi as $sede)
-                                <option value="{{ $sede->id }}">{{ \App\Support\Tenancy\SediSeguite::etichetta($sede) }}</option>
-                            @endforeach
-                        </select>
-                        <p class="mt-1 text-xs text-ink-3">Il fornitore entra nel catalogo di questa sede, e solo lì si può scegliere su una macchina.</p>
-                        @error('sedeId') <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p> @enderror
-                    </div>
+                    {{-- 🔗 ADR-061: una tendina in cui si scrive per filtrare. --}}
+                    @include('livewire.tenancy._selettore-sede', [
+                        'selettore' => $sceltaSede,
+                        'idDom' => 'sede-fornitore',
+                        'etichetta' => 'Laboratorio',
+                        'segnaposto' => 'Scegli il laboratorio…',
+                        'aiuto' => 'Il fornitore entra nel catalogo di questo laboratorio, e solo lì si può scegliere su una macchina.',
+                    ])
                 @endif
                 <x-ui.input name="form.ragione_sociale" label="Ragione sociale" wire:model="form.ragione_sociale"
                     placeholder="es. Thermo Fisher Italia" autofocus />
