@@ -3,10 +3,12 @@
 namespace App\Models;
 
 use App\Models\Concerns\AuditsDomainWrites;
+use App\Models\Concerns\SerializzaGiorniCivili;
 use App\Models\Scopes\DepartmentScope;
 use App\Models\Scopes\TenantScope;
 use App\Support\Notifiche\AvvisiAccount;
 use App\Support\Piani;
+use Carbon\CarbonInterface;
 use Database\Factories\AccountFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -47,7 +49,9 @@ use RuntimeException;
 class Account extends Model
 {
     /** @use HasFactory<AccountFactory> */
-    use AuditsDomainWrites, Billable, HasFactory, SoftDeletes;
+    // `SerializzaGiorniCivili` (ADR-041) per la scadenza del comodato: senza,
+    // il registro di audit la scriverebbe al giorno prima (ADR-058).
+    use AuditsDomainWrites, Billable, HasFactory, SerializzaGiorniCivili, SoftDeletes;
 
     /**
      * Solo l'anagrafica commerciale: sono dati di form (onboarding, dashboard
@@ -105,6 +109,9 @@ class Account extends Model
             // `$this->trial_ends_at->isFuture()`. Senza cast è una stringa, e
             // ogni chiamata a `onTrial()`/`subscribed()` va in fatal.
             'trial_ends_at' => 'datetime',
+            // 🔗 ADR-058: giorni, non istanti. Un comodato scade «il 12 ottobre».
+            'comodato_scade_il' => 'date',
+            'comodato_avvisato_per' => 'date',
         ];
     }
 
@@ -131,6 +138,8 @@ class Account extends Model
             'stripe_locked_at',
             'stripe_lock_reason',
             'piano',
+            // 🔗 ADR-058: fuori-fillable come il piano, e nel registro come lui.
+            'comodato_scade_il',
             // Ciò che la cabina ha chiesto al cliente di attivare (ADR-045):
             // un gesto commerciale, e senza traccia nessuno saprebbe chi lo ha
             // proposto né quando è stato onorato.
@@ -290,7 +299,17 @@ class Account extends Model
 
         $precedente = (string) $this->piano;
 
-        $this->forceFill(['piano' => $piano, 'piano_proposto' => null])->save();
+        $this->forceFill(['piano' => $piano, 'piano_proposto' => null]);
+
+        // 🔗 ADR-058: la scadenza è del COMODATO, non dell'account. Chi passa
+        // a un piano a pagamento non ha più niente che scada: lasciata lì,
+        // tornerebbe a valere — con la data di un contratto chiuso — il giorno
+        // in cui l'abbonamento finisce e l'account ricade sul piano senza canone.
+        if (! Piani::eGratuito($piano)) {
+            $this->forceFill(['comodato_scade_il' => null, 'comodato_avvisato_per' => null]);
+        }
+
+        $this->save();
 
         // L'email «piano cambiato» (ADR-047). `$annuncia: false` è per la
         // **nascita** dell'account, dove il piano non cambia — si assegna — e
@@ -299,6 +318,32 @@ class Account extends Model
         if ($annuncia) {
             rescue(fn () => AvvisiAccount::pianoCambiato($this, $precedente));
         }
+    }
+
+    /**
+     * Fino a quando vale il comodato d'uso di questo cliente, o `null` per
+     * «senza scadenza» (🔗 ADR-058).
+     *
+     * Fuori da `$fillable` e con un metodo suo, come il piano: è una clausola
+     * del rapporto, e chi la scrive passa da qui.
+     *
+     * ⛔ Solo su un piano in comodato: un abbonamento a pagamento ha le proprie
+     * scadenze, e le tiene Stripe. E non sull'account di piattaforma, che non è
+     * un cliente.
+     *
+     * Non tocca `comodato_avvisato_per`, e non serve: quella colonna porta la
+     * data di cui si è già scritto, quindi una scadenza diversa è — da sola —
+     * una scadenza di cui non si è ancora scritto.
+     */
+    public function impostaScadenzaComodato(?CarbonInterface $scadeIl): void
+    {
+        if ($this->di_piattaforma || ! Piani::esiste((string) $this->piano) || ! Piani::eGratuito((string) $this->piano)) {
+            throw new InvalidArgumentException(
+                'La scadenza del comodato si imposta solo su un cliente con un piano in comodato d\'uso.'
+            );
+        }
+
+        $this->forceFill(['comodato_scade_il' => $scadeIl?->toDateString()])->save();
     }
 
     /**

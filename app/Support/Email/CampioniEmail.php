@@ -12,6 +12,7 @@ use App\Notifications\AccountEliminato;
 use App\Notifications\AccountGiaEsistente;
 use App\Notifications\AvvisoObsolescenza;
 use App\Notifications\BenvenutoRegistrazione;
+use App\Notifications\ComodatoInScadenza;
 use App\Notifications\DigestScadenze;
 use App\Notifications\InterventoAssegnato;
 use App\Notifications\InterventoEseguito;
@@ -123,6 +124,7 @@ final class CampioniEmail
 
             CatalogoEmail::ACCOUNT_BLOCCATO => [new AccountBloccato(self::CLIENTE), $persona],
             CatalogoEmail::PIANO_CAMBIATO => [new PianoCambiato(self::CLIENTE, 'Comodato d\'uso', 'SaaS'), $persona],
+            CatalogoEmail::COMODATO_IN_SCADENZA => [new ComodatoInScadenza(self::CLIENTE, 'Comodato d\'uso', today()->addDays(30)->format('d/m/Y'), 30), $persona],
             CatalogoEmail::INVITO => [new InvitoUtente(self::ENTE, $indirizzo, $ente ?: null), $persona],
             CatalogoEmail::PROPOSTA_PIANO => [new PropostaPiano(self::CLIENTE, 'SaaS', 4900, $indirizzo), $persona],
             CatalogoEmail::VERIFICA_INDIRIZZO => [new VerificaEmailRegistrazione($indirizzo), self::richiedente()],

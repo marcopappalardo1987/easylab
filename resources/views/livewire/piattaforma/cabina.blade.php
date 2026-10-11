@@ -562,6 +562,25 @@
                                      ha, questa riga cosa gli è stato chiesto. Chi
                                      guarda la colonna vede chi deve ancora pagare
                                      senza doversi ricordare a chi l'aveva proposto. --}}
+                                {{-- 🔗 ADR-058 — fino a quando vale il comodato d'uso.
+                                     Col simbolo e la parola, non col solo colore:
+                                     «scaduto» e «scade fra poco» sono due cose da
+                                     fare diverse. --}}
+                                @if ($aCatalogo && $cliente->comodato_scade_il && Piani::eGratuito($cliente->piano))
+                                    @php
+                                        $giorniAlComodato = (int) today()->diffInDays($cliente->comodato_scade_il, false);
+                                    @endphp
+                                    <p class="mt-1 text-xs {{ $giorniAlComodato <= \App\Support\Billing\DurataComodato::GIORNI_DI_PREAVVISO ? 'font-medium text-warn-soft-ink' : 'text-ink-3' }}" data-comodato-scade>
+                                        @if ($giorniAlComodato < 0)
+                                            <span aria-hidden="true">✗</span> comodato scaduto il {{ $cliente->comodato_scade_il->format('d/m/Y') }}
+                                        @elseif ($giorniAlComodato <= \App\Support\Billing\DurataComodato::GIORNI_DI_PREAVVISO)
+                                            <span aria-hidden="true">◐</span> comodato in scadenza il {{ $cliente->comodato_scade_il->format('d/m/Y') }}
+                                        @else
+                                            comodato fino al {{ $cliente->comodato_scade_il->format('d/m/Y') }}
+                                        @endif
+                                    </p>
+                                @endif
+
                                 @if ($cliente->piano_proposto)
                                     <p class="mt-1 text-xs text-warn-soft-ink" data-piano-proposto>
                                         In attesa di pagamento:
@@ -681,6 +700,18 @@
                                             title="{{ $cliente->manutenzione_gestita ? 'La manutenzione è gestita da EasyLab' : 'Affida a EasyLab la manutenzione di questo cliente' }}">
                                         <span aria-hidden="true">🛠</span> Gestione
                                     </button>
+                                @endcan
+
+                                {{-- 🔗 ADR-058: solo su un piano in comodato. Su un
+                                     abbonamento a pagamento le scadenze le tiene Stripe. --}}
+                                @can('manage', $cliente)
+                                    @if ($aCatalogo && Piani::eGratuito($cliente->piano))
+                                        <button type="button" wire:click="apriComodato({{ $cliente->id }})"
+                                                class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-2 hover:bg-surface-sunken hover:text-ink"
+                                                title="Scadenza del comodato d'uso">
+                                            <span aria-hidden="true">📅</span> Comodato
+                                        </button>
+                                    @endif
                                 @endcan
 
                                 @can('manage', $cliente)
@@ -889,6 +920,16 @@
                         @enderror
                     </div>
 
+                    {{-- 🔗 ADR-058. Vale solo se il cliente nasce su un piano in
+                         comodato d'uso: con un piano a pagamento proposto la
+                         durata scelta qui non si applica, e lo si dice. --}}
+                    <div wire:key="prov-comodato">
+                        @include('livewire.piattaforma._durata-comodato', ['proprieta' => 'nuovo.comodato', 'proprietaData' => 'nuovo.comodatoData', 'scelta' => $nuovo['comodato'] ?? '', 'id' => 'prov-comodato'])
+                        <p class="mt-1 text-xs text-ink-3">
+                            Vale per un piano in comodato d'uso. Trenta giorni prima della scadenza parte un'email al cliente e ai Superadmin.
+                        </p>
+                    </div>
+
                     {{-- 🔗 ADR-046. Solo sul cliente nuovo, come il piano: su uno
                          che c'è già il gesto ha il suo pannello («Gestione»). --}}
                     <label wire:key="prov-gestita" class="flex items-start gap-2 text-sm text-ink-2">
@@ -1017,6 +1058,36 @@
                     <x-ui.button wire:click="affidaManutenzione">Affida a EasyLab</x-ui.button>
                 </div>
             @endif
+        </x-ui.modal>
+    @endif
+
+    {{-- ─── La scadenza del comodato d'uso (🔗 ADR-058) ──────────────────── --}}
+    @if ($inLavorazione && $pannello === 'comodato')
+        <x-ui.modal :title="'Comodato d\'uso — '.$inLavorazione->ragione_sociale" close="chiudiPannello">
+            <p class="text-sm text-ink-2">
+                Fino a quando vale il piano
+                <strong class="text-ink">{{ Piani::esiste($inLavorazione->piano) ? Piani::etichetta($inLavorazione->piano) : $inLavorazione->piano }}</strong>
+                di questo cliente.
+                @if ($inLavorazione->comodato_scade_il)
+                    Oggi scade il <strong class="text-ink">{{ $inLavorazione->comodato_scade_il->format('d/m/Y') }}</strong>.
+                @else
+                    Oggi non ha una scadenza.
+                @endif
+            </p>
+
+            @include('livewire.piattaforma._durata-comodato', ['proprieta' => 'comodato.durata', 'proprietaData' => 'comodato.data', 'scelta' => $comodato['durata'] ?? '', 'id' => 'comodato'])
+
+            <p class="mt-3 text-xs text-ink-3">
+                Trenta giorni prima della scadenza parte un'email al cliente e ai Superadmin, una volta sola.
+                Spostare la data la fa ripartire. Alla scadenza il cliente continua a lavorare: nulla si blocca da solo.
+            </p>
+
+            <div class="mt-4 flex justify-end gap-2">
+                <button type="button" wire:click="chiudiPannello"
+                        class="rounded-md px-3 py-1.5 text-sm font-medium text-ink-2 hover:bg-surface-sunken hover:text-ink">Annulla</button>
+                <button type="button" wire:click="salvaComodato"
+                        class="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-brand-ink hover:bg-brand-hover">Salva</button>
+            </div>
         </x-ui.modal>
     @endif
 

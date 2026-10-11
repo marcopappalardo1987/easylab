@@ -17,6 +17,7 @@ use App\Models\UnitaOrganizzativa;
 use App\Notifications\AccountBloccato;
 use App\Notifications\AvvisoObsolescenza;
 use App\Notifications\BenvenutoRegistrazione;
+use App\Notifications\ComodatoInScadenza;
 use App\Notifications\DigestScadenze;
 use App\Notifications\InterventoAssegnato;
 use App\Notifications\InterventoEseguito;
@@ -275,6 +276,8 @@ final class Matrice
             MacchinaSegnalata::class => 't:Email/EmailMacchinaSegnalataTest.php::builds the email with the brand and the name of the ente in its payload, whatever the context on the worker',
             AccountBloccato::class => $senzaEnte,
             PianoCambiato::class => $senzaEnte,
+            // 🔗 ADR-058: parla di un contratto, non di un Ente; marchio di piattaforma e soli scalari.
+            ComodatoInScadenza::class => $senzaEnte,
             InviaAllertaErrore::class => 't:Notifiche/MarchioEmailTest.php::never brands the platform alert with a tenant, by construction and not by convention',
         ];
     }

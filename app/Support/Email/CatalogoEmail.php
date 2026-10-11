@@ -49,6 +49,8 @@ final class CatalogoEmail
 
     public const PIANO_CAMBIATO = 'piano_cambiato';
 
+    public const COMODATO_IN_SCADENZA = 'comodato_in_scadenza';
+
     public const INVITO = 'invito';
 
     public const PROPOSTA_PIANO = 'proposta_piano';
@@ -141,6 +143,16 @@ final class CatalogoEmail
                 aChi: 'Tutti i membri dell\'account.',
                 sospendibile: true,
                 nataAccesa: false,
+            ),
+            // 🔗 ADR-058. Nasce ACCESA, a differenza delle altre di questo
+            // gruppo: nessun cliente ha una scadenza finché qualcuno non gliela
+            // scrive dalla cabina, quindi un deploy non fa partire niente.
+            new TipoEmail(
+                chiave: self::COMODATO_IN_SCADENZA,
+                nome: 'Comodato in scadenza',
+                quando: 'Ogni giorno alle 06:30, quando al comodato d\'uso di un cliente mancano 30 giorni o meno. Una volta sola per scadenza: spostare la data la fa ripartire.',
+                aChi: 'I membri dell\'account del cliente, e tutti i Superadmin.',
+                sospendibile: true,
             ),
             new TipoEmail(
                 chiave: self::INVITO,

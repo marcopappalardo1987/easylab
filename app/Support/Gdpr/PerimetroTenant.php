@@ -88,16 +88,21 @@ final class PerimetroTenant
      * `manutenzione_gestita` esce anch'essa (ADR-046): dice al cliente che
      * EasyLab lavora sui suoi dati, ed è proprio ciò che ha diritto di sapere.
      *
+     * `comodato_scade_il` esce (ADR-058): è una clausola del contratto, e il
+     * cliente la legge già su `/abbonamento`. `comodato_avvisato_per` no: è la
+     * memoria di un comando, non un dato suo.
+     *
      * @var list<string>
      */
     public const COLONNE_ACCOUNT = [
         'id', 'ragione_sociale', 'partita_iva', 'codice_fiscale', 'pec', 'codice_destinatario_sdi',
-        'piano', 'piano_proposto', 'manutenzione_gestita', 'is_locked', 'locked_at', 'stripe_locked_at', 'created_at', 'updated_at', 'deleted_at',
+        'piano', 'piano_proposto', 'comodato_scade_il', 'manutenzione_gestita', 'is_locked', 'locked_at', 'stripe_locked_at', 'created_at', 'updated_at', 'deleted_at',
     ];
 
     /** @var list<string> */
     public const COLONNE_ACCOUNT_ESCLUSE = [
         'locked_reason', 'stripe_lock_reason', 'stripe_id', 'pm_type', 'pm_last_four', 'trial_ends_at', 'di_piattaforma',
+        'comodato_avvisato_per',
     ];
 
     /**

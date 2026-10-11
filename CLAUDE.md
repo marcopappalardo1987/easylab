@@ -49,6 +49,7 @@ Vivono in console perché l'amministrazione degli account è cross-tenant per na
 - `easylab:lockout {account} [--sblocca] --motivo=` — la leva **manuale** del blocco per insoluto.
 - `easylab:abbona {account} [--piano=saas]` — attiva l'abbonamento su Stripe. ⚠️ Crea oggetti di fatturazione **veri**: in produzione chiede conferma.
 - `easylab:notifica-scadenze [--senza-invio]` — il digest giornaliero. Il **primo run in produzione va fatto con `--senza-invio`**.
+- `easylab:notifica-comodato [--senza-invio]` — l'avviso che un comodato d'uso scade fra trenta giorni, al cliente e ai Superadmin (ADR-058). Gira ogni mattina alle 06:30; la scadenza si imposta dalla cabina e si scrive solo con `Account::impostaScadenzaComodato()`.
 
 ## Verifiche prima di dire "fatto"
 

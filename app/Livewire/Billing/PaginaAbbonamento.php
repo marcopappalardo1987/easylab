@@ -149,6 +149,10 @@ class PaginaAbbonamento extends Component
                 : null,
             'ragioneSociale' => $account->ragione_sociale,
             'etichettaPiano' => $pianoNoto ? Piani::etichetta($account->piano) : $account->piano,
+            // 🔗 ADR-058: fino a quando vale il comodato, se ha una scadenza. Solo
+            // su un piano in comodato: il dato scritto da fuori su chi paga non
+            // si mostra.
+            'comodatoScadeIl' => $pianoNoto && Piani::eGratuito($account->piano) ? $account->comodato_scade_il : null,
             // ⛔ `null` NON è il ripiego del piano ignoto, ed è la riga che
             // il difetto ha attraversato: per `Piani::maxEnti()` `null` significa
             // **illimitato** (la forma di un Enterprise), e la vista lo stampa

@@ -72,6 +72,8 @@ it('partitions the catalogue into informative and service emails, with nothing l
 
     expect($sospendibili)->toEqualCanonicalizing([
         CatalogoEmail::RIEPILOGO_SCADENZE, CatalogoEmail::AVVISO_OBSOLESCENZA, ...EMAIL_NUOVE,
+        // 🔗 ADR-058: sospendibile, ma nata accesa (nessuno ha una scadenza finché non gliela si scrive).
+        CatalogoEmail::COMODATO_IN_SCADENZA,
     ])->and(array_keys(CatalogoEmail::tutte()))->toEqualCanonicalizing([...$sospendibili, ...EMAIL_DI_SERVIZIO]);
 });
 

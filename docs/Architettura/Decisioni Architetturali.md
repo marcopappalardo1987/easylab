@@ -1961,3 +1961,33 @@ Chi può farlo e su quale persona, invece, lo decide la schermata che chiama: `U
 - ⚠️ **Non fatto**: scegliere i laboratori nella stessa finestra dell'invito; un riepilogo dei Responsabili sulla pagina della sede; un avviso al Responsabile quando gli cambiano i laboratori.
 - **Una strada sola, e un test che la tiene tale.** Un guardrail legge `app/` e diventa rosso se un file diverso da `LaboratoriDelResponsabile` (e da `EliminaCliente`, che cancella un cliente intero) scrive il pivot: una seconda schermata che facesse `attach()` per conto suo salterebbe tutte le regole qui sopra.
 - **Prova di mutazione**: 115 mutazioni, tutte rosse. Ogni filtro dell'elenco dei laboratori assegnabili (l'Ente, i cestinati, la sede, ciò che è rimasto sotto un nodo cestinato, l'ordine); il ruolo e l'Ente di chi riceve; il rifiuto dei laboratori estranei, tutto o niente; le sole radici; la scrittura, l'aggiunta e la rimozione, una sede alla volta e senza toccare i colleghi; l'audit; il permesso in ciascuna delle cinque azioni, anche sostituito da quello di sola lettura; il confine della persona e del nodo nelle due schermate; la validazione di ciò che arriva dal browser; il ruolo che porta via i laboratori; i promemoria; ciò che le due viste mostrano e a chi. Una equivalente, dichiarata: dalla pagina «Laboratori» l'autore passato all'audit può mancare, perché il registro prende comunque l'utente autenticato.
+
+---
+
+**ADR-058 — Un comodato d'uso ha una scadenza, e trenta giorni prima lo si dice**
+
+*Stato: Accettata e attuata l'11 Ott 2026, per decisione di Marco. Estende ADR-002 (il piano senza canone) e ADR-050 (il suo nome); i piani a pagamento e Stripe (ADR-045) non cambiano. Solo su staging.*
+
+**Decisione.** Un piano in comodato d'uso può avere una **scadenza**. Si sceglie quando lo si assegna a un cliente e si cambia dopo, anche su un comodato già attivo:
+
+- **12, 24 o 36 mesi** da oggi;
+- **una data precisa**, per chi non segue i mesi;
+- **senza scadenza**, che è ciò che ogni cliente era fino a oggi.
+
+Si imposta dalla cabina: nella finestra con cui nasce un cliente, e col pulsante «Comodato» nella riga di un cliente già attivo. La riga dice fino a quando vale, e lo dice diversamente se manca poco o se è passata. Il cliente la legge nella propria pagina «Abbonamento».
+
+**L'email.** Ogni mattina alle 06:30 `easylab:notifica-comodato` scrive, per i comodati a cui mancano **trenta giorni o meno**, a chi amministra il contratto del cliente (i membri dell'account) e a **tutti i Superadmin**. Una volta sola per scadenza: `accounts.comodato_avvisato_per` porta la data di cui si è già scritto, quindi spostare la scadenza la rende, da sola, una scadenza di cui non si è ancora scritto. Al cliente l'email dice di farsi sentire per il rinnovo; a chi governa dice dove si sposta la data.
+
+**Dove sta.** Due colonne su `accounts` (`comodato_scade_il`, `comodato_avvisato_per`), fuori da `$fillable` come il piano: la scadenza si scrive solo con `Account::impostaScadenzaComodato()`, che la rifiuta su un piano a pagamento e sull'account di piattaforma. Le durate fra cui scegliere, la loro validazione e i trenta giorni stanno in `App\Support\Billing\DurataComodato`.
+
+**Conseguenze.**
+
+- 🔴 **Alla scadenza non succede niente da solo.** Il cliente continua a lavorare: nessun blocco, nessun cambio di piano. Che cosa fare di un comodato scaduto lo decide chi ha firmato il contratto; il blocco resta il gesto manuale di ADR-013.
+- **La scadenza è del comodato, non dell'account.** Chi passa a un piano a pagamento la perde, insieme alla memoria dell'avviso: lasciata lì, tornerebbe a valere con la data di un contratto chiuso il giorno in cui l'abbonamento finisce e l'account ricade sul piano senza canone.
+- **«Il tenant» è chi amministra il contratto**, cioè i membri dell'account: gli stessi dell'email «piano cambiato». Non chi ha il ruolo Tenant, per cui il piano non è affar suo.
+- I mesi si contano da oggi e senza sforare (dodici mesi dal 29 febbraio sono il 28). Una data precisa non può essere già passata: di una scadenza trascorsa non partirebbe nessun avviso.
+- L'email nasce **accesa**, a differenza delle altre aggiunte da ADR-047: nessun cliente ha una scadenza finché qualcuno non gliela scrive, quindi un deploy non fa partire niente. A email spenta il comando non segna gli avvisi come dati: chi la riaccende li trova ancora da mandare.
+- Un comodato già scaduto non riceve l'avviso: è un preavviso. In cabina resta scritto «comodato scaduto il…».
+- La data è un giorno civile (ADR-041): `Account` usa `SerializzaGiorniCivili`, o il registro di audit la scriverebbe al giorno prima.
+- ⚠️ **Non fatto**: un secondo avviso alla scadenza o dopo; il rinnovo con un clic; la scadenza nell'esportazione dei clienti e fra i filtri della cabina.
+- **Prova di mutazione**: 61 mutazioni, tutte rosse. Chi può avere una scadenza e chi no; la scadenza che cade passando a un piano a pagamento e resta fra due piani in comodato; i mesi, le date che non esistono, la data già passata; ogni filtro del comando (la piattaforma, chi paga, i già scaduti, i lontani, i trenta giorni esatti); la memoria dell'avviso e il suo riarmo; i destinatari e le due copie; l'email spenta; il pannello, la nascita del cliente e ciò che legge il cliente; la pianificazione.
