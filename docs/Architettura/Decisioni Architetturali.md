@@ -2045,3 +2045,27 @@ Nel modulo «Nuovo fornitore» il campo si chiama **«Laboratorio»** e non più
 - ⚠️ **Non coperto dai test** (non eseguono Alpine): frecce, Invio, Esc e il fuoco sul campo.
 - **Prova di mutazione**: 24 mutazioni, tutte rosse; una riga morta trovata e tolta.
 
+---
+
+**ADR-062 — I fornitori di EasyLab si usano nel catalogo di qualunque cliente, per copia**
+
+*Stato: Accettata e attuata l'11 Ott 2026, per decisione di Marco. Estende ADR-023 (il catalogo fornitori è dell'Ente), ADR-046 (chi segue più clienti) e ADR-051 (il selettore). ADR-001/006/018 non cambiano: nessuno scope impara un'eccezione. Solo su staging.*
+
+**Il bisogno.** EasyLab compra dagli stessi fornitori per tutti i clienti che gestisce, e oggi dovrebbe reinserirli in ogni catalogo. Il cliente, però, deve vedere solo i fornitori che ha inserito lui e quelli che EasyLab ha usato da lui: non l'intero elenco di EasyLab.
+
+**Decisione.** «Globale» è un fornitore che sta nel catalogo di una sede di EasyLab (l'account `di_piattaforma`): si crea come ogni altro, scegliendo «EasyLab» nel modulo «Nuovo fornitore». Quando il **Superadmin** o il **Gestore** aprono il selettore del fornitore sulla macchina (o sul pezzo) di un cliente, sotto il catalogo del cliente trovano «Dai fornitori di EasyLab». Sceglierne uno lo **copia** nel catalogo di quel cliente e sceglie la copia. Da lì in poi è una riga del cliente come le altre; sulla pagina Fornitori porta il segno «da EasyLab».
+
+**Perché una copia e non un catalogo condiviso.** Un fornitore visibile a più Enti chiederebbe a `TenantScope` un'eccezione, e a ogni regola che oggi dice «il fornitore è dello stesso Ente della macchina» un secondo ramo. Con la copia il confine resta quello di sempre: il cliente legge il proprio catalogo, e ci trova esattamente ciò che la richiesta descrive.
+
+**Conseguenze.**
+
+- 🔴 **Una sola lettura fuori dal confine**, in `App\Support\Fornitori\FornitoriGlobali`: il catalogo di EasyLab, letto da chi lavora per EasyLab, col `tenant_id` nella query. Il Gestore non ha quelle sedi nel proprio perimetro, e senza quella lettura non li vedrebbe.
+- 🔴 **Il passaggio è in una direzione sola**: da EasyLab al cliente. Il fornitore di un cliente non diventa mai globale, e non passa a un altro cliente.
+- 🔴 **Si scrive solo dove chi scrive lavora**: il catalogo di destinazione si rilegge attraverso `TenantScope` (portafoglio del Gestore, clienti gestiti del Superadmin). Conta per il Gestore, che non ha un Ente proprio e a cui `BelongsToTenant` non riscrive niente.
+- **Le note non si copiano**: sono appunti di EasyLab. Passano ragione sociale, email e telefono.
+- **Una copia per catalogo** (`fornitori.globale_id`, unico con `tenant_id`): un globale già portato non viene più offerto, e nemmeno uno che il cliente ha già sotto lo stesso nome. Una copia cestinata si ripristina invece di farne una seconda.
+- **Non il Tecnico**: lavora per portafoglio ma non amministra cataloghi.
+- ⚠️ **La copia è una fotografia.** Cambiare email o telefono del fornitore di EasyLab non aggiorna le copie già fatte, e il cliente può modificare la propria. **Da decidere con Marco** se le copie debbano seguire l'originale.
+- ⚠️ **Non fatto**: una pagina che mostri in quali clienti è stato usato un fornitore di EasyLab; il porta-in-blocco di più fornitori; i globali nell'importazione massiva degli strumenti.
+- **Prova di mutazione**: 32 mutazioni, tutte rosse. Chi li riceve e chi no; quali fornitori contano come di EasyLab; il già copiato, lo stesso nome, la copia cestinata (propria e altrui); il catalogo di destinazione; le note; il legame; `globale_id` fuori da ciò che un form può scrivere.
+

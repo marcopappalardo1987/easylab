@@ -3,8 +3,10 @@
 namespace App\Livewire\Concerns;
 
 use App\Models\Fornitore;
+use App\Support\Fornitori\FornitoriGlobali;
 use App\Support\Fornitori\RegoleFornitore;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -160,6 +162,29 @@ trait SceglieFornitore
         $this->chiudiFornitori();
     }
 
+    /**
+     * Sceglie un fornitore **di EasyLab**: lo copia nel catalogo della sede del
+     * campo e sceglie la copia (🔗 ADR-062).
+     *
+     * 🔴 Chi può, quale fornitore e in quale catalogo lo decide
+     * `FornitoriGlobali::portaIn()`, che rilegge tutto: fuori di lì è un 404.
+     */
+    public function scegliFornitoreGlobale(int $id): void
+    {
+        Gate::authorize('fornitori.view');
+
+        [$campo, $contesto] = $this->selettoreInUso();
+
+        try {
+            $copia = FornitoriGlobali::portaIn($id, $contesto['tenant']);
+        } catch (ModelNotFoundException) {
+            abort(404);
+        }
+
+        $this->scriviFornitore($campo, (int) $copia->id);
+        $this->chiudiFornitori();
+    }
+
     /** «Nessun fornitore»: svuota il campo e chiude. */
     public function togliFornitore(): void
     {
@@ -246,14 +271,14 @@ trait SceglieFornitore
      * un'azione che il browser può chiamare, e questa restituirebbe dei dati.
      * La vista la riceve da `render()`.
      *
-     * @return array{righe: Collection<int, Fornitore>, altri: bool}
+     * @return array{righe: Collection<int, Fornitore>, altri: bool, globali: Collection<int, Fornitore>}
      */
     protected function elencoFornitori(): array
     {
         $contesto = $this->selettoreFornitore === null ? null : $this->campoFornitore($this->selettoreFornitore);
 
         if ($contesto === null || ! Gate::allows('fornitori.view')) {
-            return ['righe' => new Collection, 'altri' => false];
+            return ['righe' => new Collection, 'altri' => false, 'globali' => new Collection];
         }
 
         $cercato = addcslashes(mb_strtolower(trim($this->cercaFornitore)), '%_\\');
@@ -265,9 +290,20 @@ trait SceglieFornitore
             ->limit(self::FORNITORI_IN_ELENCO + 1)
             ->get();
 
+        // 🔗 ADR-062: i fornitori di EasyLab che in questo catalogo non ci
+        // sono ancora. Solo per chi lavora per EasyLab: per gli altri la query
+        // non parte nemmeno.
+        $globali = FornitoriGlobali::perChiGuarda()
+            ? FornitoriGlobali::offribiliA($contesto['tenant'])
+                ->when($cercato !== '', fn (Builder $q) => $q->whereRaw("LOWER(fornitori.ragione_sociale) LIKE ? ESCAPE '\\'", ["%{$cercato}%"]))
+                ->limit(self::FORNITORI_IN_ELENCO + 1)
+                ->get()
+            : new Collection;
+
         return [
             'righe' => $righe->take(self::FORNITORI_IN_ELENCO),
-            'altri' => $righe->count() > self::FORNITORI_IN_ELENCO,
+            'altri' => $righe->count() > self::FORNITORI_IN_ELENCO || $globali->count() > self::FORNITORI_IN_ELENCO,
+            'globali' => $globali->take(self::FORNITORI_IN_ELENCO),
         ];
     }
 

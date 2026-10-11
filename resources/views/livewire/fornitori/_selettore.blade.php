@@ -96,7 +96,7 @@
                            x-init="$nextTick(() => $refs.cerca.focus())"
                            wire:model.live.debounce.250ms="cercaFornitore"
                            x-on:input="riapri()"
-                           x-on:keydown.arrow-down.prevent="giu({{ $elencoFornitori['righe']->count() }})"
+                           x-on:keydown.arrow-down.prevent="giu({{ $elencoFornitori['righe']->count() + $elencoFornitori['globali']->count() }})"
                            x-on:keydown.arrow-up.prevent="su()"
                            x-on:keydown.enter.prevent="scegli($refs.lista)"
                            class="block min-h-[44px] w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
@@ -115,6 +115,26 @@
                             {{ $cercato !== '' ? 'Nessun fornitore con questo nome.' : 'Nessun fornitore registrato.' }}
                         </li>
                     @endforelse
+
+                    {{-- 🔗 ADR-062: i fornitori di EasyLab che in questo catalogo
+                         non ci sono ancora. Solo chi lavora per EasyLab li
+                         riceve; sceglierne uno lo copia qui. Gli indici
+                         proseguono quelli sopra: le frecce scorrono un elenco
+                         solo. --}}
+                    @if ($elencoFornitori['globali']->isNotEmpty())
+                        <li role="presentation" class="border-t border-border px-3 pt-3 pb-1 text-xs font-semibold tracking-wide text-ink-3 uppercase" data-fornitori-globali>
+                            Dai fornitori di EasyLab
+                        </li>
+                        @foreach ($elencoFornitori['globali'] as $j => $globale)
+                            @php $k = $elencoFornitori['righe']->count() + $j; @endphp
+                            <li role="option" wire:key="{{ $idDom }}-glob-{{ $globale->id }}"
+                                :aria-selected="attivo === {{ $k }} ? 'true' : 'false'">
+                                <button type="button" wire:click="scegliFornitoreGlobale({{ $globale->id }})"
+                                        class="flex min-h-[44px] w-full items-center px-3 text-left text-sm text-ink hover:bg-brand-soft"
+                                        :class="attivo === {{ $k }} && 'bg-brand-soft font-medium'">{{ $globale->ragione_sociale }}</button>
+                            </li>
+                        @endforeach
+                    @endif
                 </ul>
 
                 @if ($elencoFornitori['altri'])

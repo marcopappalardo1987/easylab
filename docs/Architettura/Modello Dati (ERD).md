@@ -531,6 +531,7 @@ Anagrafica dei fornitori **di ciascun Ente**: tabella di business a tutti gli ef
 |---|---|---|
 | `id` | bigint PK | |
 | `tenant_id` / `reseller_id` | scoping | |
+| `globale_id` | FK → `fornitori` nullable | 🆕 11 Ott 2026 (🔗 ADR-062). Da quale fornitore di EasyLab è stata copiata la riga; `null` per quelli inseriti dal cliente e per quelli di EasyLab stessa. Fuori da `$fillable`: lo scrive solo `FornitoriGlobali`. Unico con `tenant_id`: una copia per catalogo. |
 | `ragione_sociale` | string | |
 | `contatti` | email / telefono / note | Campi separati o `json`, a scelta in implementazione. |
 | timestamps, `deleted_at` | | soft delete. |

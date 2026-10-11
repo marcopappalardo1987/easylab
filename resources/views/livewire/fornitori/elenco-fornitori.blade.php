@@ -42,7 +42,13 @@
                 <tbody class="divide-y divide-border">
                     @forelse ($fornitori as $fornitore)
                         <tr wire:key="forn-{{ $fornitore->id }}">
-                            <td class="px-4 py-3 font-medium text-ink">{{ $fornitore->ragione_sociale }}</td>
+                            <td class="px-4 py-3 font-medium text-ink">
+                                {{ $fornitore->ragione_sociale }}
+                                {{-- 🔗 ADR-062: una copia di un fornitore di EasyLab. --}}
+                                @if ($fornitore->vieneDaEasyLab())
+                                    <x-ui.badge variant="neutral" class="ml-1" data-da-easylab="{{ $fornitore->id }}">da EasyLab</x-ui.badge>
+                                @endif
+                            </td>
                             @if ($sedi->isNotEmpty())
                                 <td class="px-4 py-3 text-ink-2" data-sede-fornitore="{{ $fornitore->id }}">{{ $sedi->has($fornitore->tenant_id) ? \App\Support\Tenancy\SediSeguite::etichetta($sedi[$fornitore->tenant_id]) : '—' }}</td>
                             @endif

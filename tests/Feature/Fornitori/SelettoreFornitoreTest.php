@@ -398,7 +398,7 @@ it('creates the supplier in the sede of the customer when EasyLab works there, n
     $sede = UnitaOrganizzativa::factory()->ente()->perAccount($cliente)->create(['nome' => 'Sede cliente']);
     $reparto = UnitaOrganizzativa::factory()->dipartimento()->under($sede)->create();
     Fornitore::factory()->forTenant($sede)->create(['ragione_sociale' => 'Fornitore del cliente']);
-    Fornitore::factory()->forTenant($enteEasylab)->create(['ragione_sociale' => 'Fornitore di EasyLab']);
+    $diEasylab = Fornitore::factory()->forTenant($enteEasylab)->create(['ragione_sociale' => 'Fornitore di EasyLab']);
 
     $superadmin = ($this->utente)('Superadmin', $enteEasylab);
 
@@ -406,7 +406,10 @@ it('creates the supplier in the sede of the customer when EasyLab works there, n
         ->call('apriFornitori', 'strumento')
         // L'elenco è quello della sede della macchina, non di chi guarda.
         ->assertSee('Fornitore del cliente')
-        ->assertDontSee('Fornitore di EasyLab')
+        // Quello di EasyLab non è una riga di questo catalogo: dal 11 Ott 2026
+        // è offerto a parte, e sceglierlo lo copia qui (ADR-062,
+        // `FornitoriGlobaliTest`).
+        ->assertDontSeeHtml('wire:click="scegliFornitore('.$diEasylab->id.')"')
         ->set('cercaFornitore', 'Epsilon')
         ->call('apriNuovoFornitore')
         ->call('creaFornitore')

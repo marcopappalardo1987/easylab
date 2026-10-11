@@ -68,6 +68,15 @@ class Fornitore extends Model
         });
     }
 
+    /**
+     * True se la riga è la copia di un fornitore di EasyLab (🔗 ADR-062).
+     * `globale_id` è fuori da `$fillable`: lo scrive solo `FornitoriGlobali`.
+     */
+    public function vieneDaEasyLab(): bool
+    {
+        return $this->globale_id !== null;
+    }
+
     /** @return HasMany<Strumento, $this> */
     public function strumenti(): HasMany
     {
