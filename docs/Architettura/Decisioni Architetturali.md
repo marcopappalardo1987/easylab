@@ -1991,3 +1991,24 @@ Si imposta dalla cabina: nella finestra con cui nasce un cliente, e col pulsante
 - La data è un giorno civile (ADR-041): `Account` usa `SerializzaGiorniCivili`, o il registro di audit la scriverebbe al giorno prima.
 - ⚠️ **Non fatto**: un secondo avviso alla scadenza o dopo; il rinnovo con un clic; la scadenza nell'esportazione dei clienti e fra i filtri della cabina.
 - **Prova di mutazione**: 61 mutazioni, tutte rosse. Chi può avere una scadenza e chi no; la scadenza che cade passando a un piano a pagamento e resta fra due piani in comodato; i mesi, le date che non esistono, la data già passata; ogni filtro del comando (la piattaforma, chi paga, i già scaduti, i lontani, i trenta giorni esatti); la memoria dell'avviso e il suo riarmo; i destinatari e le due copie; l'email spenta; il pannello, la nascita del cliente e ciò che legge il cliente; la pianificazione.
+
+---
+
+**ADR-059 — La garanzia della macchina si scrive mentre la si registra**
+
+*Stato: Accettata e attuata l'11 Ott 2026, per decisione di Marco. Estende ADR-019 (la garanzia «inizio + durata»); il tab Garanzie della scheda non cambia. Solo su staging.*
+
+**Decisione.** Il modulo «Nuovo strumento» chiede anche la **garanzia della macchina**: inizio e durata in mesi. È facoltativa, e a dire che c'è è la durata: senza una data di inizio vale quella di installazione, e senza nemmeno quella il giorno in cui la si registra. Nasce nella stessa transazione della macchina. Dopo si modifica, si aggiunge o si toglie dal tab Garanzie, come sempre.
+
+**Conseguenze.**
+
+- **Stesso permesso del tab** (`garanzie.macchina.manage`): chi registra macchine ma non gestisce le garanzie non vede il blocco, e una richiesta costruita a mano non la crea (`garanziaNuova` è una property pubblica, quindi la guardia sta nel salvataggio e non solo nella vista).
+- Soggetto, Ente e strumento vengono dal contesto; la scadenza effettiva la calcola il model, come per ogni garanzia.
+- Un inizio senza durata è un errore detto, non una garanzia scartata in silenzio.
+- Una sola garanzia alla nascita: le altre (un'estensione, un rinnovo) si aggiungono dalla scheda.
+- ⚠️ **Non fatto**: la garanzia nell'importazione massiva degli strumenti.
+
+**Il difetto corretto nello stesso giro.** Nel modulo «Modifica strumento» il pulsante «+ Aggiungi» dei parametri tecnici non faceva comparire la riga. La vista della scheda dichiarava una variabile `$parametri` (i parametri salvati, per la linguetta Anagrafica) con lo stesso nome della property del modulo: da quel punto in giù la copriva, e il modulo disegnava i salvati invece delle righe in corso. La riga veniva aggiunta sul server e non si vedeva mai; su uno strumento che i parametri li aveva già, le righe uscivano con le chiavi al posto degli indici. Il modulo «Nuovo strumento» non ne soffriva. La variabile ora si chiama `$parametriSalvati`.
+
+- **Prova di mutazione**: 19 mutazioni, tutte rosse. Il difetto rimesso apposta; chi può e chi no; l'inizio, l'installazione e oggi; i confini della durata; il modulo che si ripulisce fra una macchina e l'altra.
+

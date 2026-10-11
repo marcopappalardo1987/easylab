@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Anagrafica;
 
+use App\Enums\SoggettoGaranzia;
 use App\Enums\TipoSpostamento;
 use App\Enums\TipoUnitaOrganizzativa;
 use App\Enums\VisibilitaGaranzieRicambio;
@@ -75,6 +76,15 @@ class Albero extends Component
 
     // Provenienza esterna opzionale (ente off-platform) alla creazione.
     public ?string $provenienza = null;
+
+    /**
+     * La garanzia della macchina, chiesta già nel modulo con cui la si registra
+     * (🔗 ADR-059; ADR-019 «inizio + durata»). Facoltativa: a decidere se c'è
+     * è la durata. Dopo si modifica dal tab Garanzie della scheda, come sempre.
+     *
+     * @var array{data_inizio: ?string, durata_mesi: int|string|null}
+     */
+    public array $garanziaNuova = ['data_inizio' => '', 'durata_mesi' => ''];
 
     public ?string $notice = null;
 
@@ -569,6 +579,7 @@ class Albero extends Component
         }
 
         $this->provenienza = null;
+        $this->garanziaNuova = ['data_inizio' => '', 'durata_mesi' => ''];
         $this->resetStrumentoForm();
         $this->showStrumentoForm = true;
     }
@@ -584,10 +595,20 @@ class Albero extends Component
             [
                 ...$this->strumentoFormRules($node->tenant_id),
                 'provenienza' => ['nullable', 'string', 'max:255'],
+                // 🔗 ADR-059: stessi confini del tab Garanzie. La durata è ciò
+                // che dice «c'è una garanzia»: un inizio senza durata è una
+                // garanzia scritta a metà, e si dice invece di scartarla.
+                'garanziaNuova.data_inizio' => ['nullable', 'date'],
+                'garanziaNuova.durata_mesi' => ['nullable', 'required_with:garanziaNuova.data_inizio', 'integer', 'min:1', 'max:600'],
             ],
-            attributes: [
+            [
+                'garanziaNuova.durata_mesi.required_with' => 'Scrivi quanti mesi dura la garanzia, o togli la data di inizio.',
+            ],
+            [
                 ...$this->strumentoFormAttributi(),
                 'provenienza' => 'provenienza',
+                'garanziaNuova.data_inizio' => 'inizio della garanzia',
+                'garanziaNuova.durata_mesi' => 'durata della garanzia',
             ],
         );
 
@@ -629,6 +650,23 @@ class Albero extends Component
                 'tipo_spostamento' => TipoSpostamento::Ingresso,
                 'data' => now()->toDateString(),
                 'eseguito_da' => auth()->id(),
+            ]);
+        }
+
+        // 🔗 ADR-059: la garanzia nasce con la macchina, nella stessa
+        // transazione. ⛔ Solo per chi può gestirla: il blocco del modulo è
+        // dietro lo stesso permesso, ma `garanziaNuova` è una property
+        // pubblica. Senza una data di inizio vale quella di installazione, e
+        // senza nemmeno quella oggi. Soggetto, Ente e strumento vengono dal
+        // contesto, mai dal payload; la scadenza la calcola il model.
+        $mesi = (int) ($this->garanziaNuova['durata_mesi'] ?? 0);
+
+        if ($mesi > 0 && Gate::allows('garanzie.macchina.manage')) {
+            $strumento->garanzie()->create([
+                'tenant_id' => $node->tenant_id,
+                'soggetto' => SoggettoGaranzia::Macchina,
+                'data_inizio' => ($this->garanziaNuova['data_inizio'] ?? '') ?: ($strumento->data_installazione?->toDateString() ?? today()->toDateString()),
+                'durata_mesi' => $mesi,
             ]);
         }
     }

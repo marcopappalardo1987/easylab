@@ -1,6 +1,11 @@
 @php
     use App\Enums\TipoIntervento;
-    $parametri = $strumento->parametri_tecnici ?? [];
+    // ⛔ NON `$parametri`: è il nome della property del modulo di modifica
+    // (`ManagesStrumentoForm`), e una variabile con quel nome qui la copre per
+    // tutto il resto della vista. Il modulo leggeva i parametri SALVATI invece
+    // delle righe in corso: «+ Aggiungi» scriveva la riga e non compariva mai
+    // (segnalato da Marco l'11 Ott 2026).
+    $parametriSalvati = $strumento->parametri_tecnici ?? [];
 @endphp
 
 <div class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6" x-data="{ tab: 'panoramica' }">
@@ -177,11 +182,11 @@
 
             <hr class="my-6 border-border">
             <p class="text-sm font-medium text-ink-2">Parametri tecnici</p>
-            @if (count($parametri) === 0)
+            @if (count($parametriSalvati) === 0)
                 <p class="mt-1 text-sm text-ink-3">Nessun parametro tecnico.</p>
             @else
                 <dl class="mt-3 divide-y divide-border">
-                    @foreach ($parametri as $chiave => $valore)
+                    @foreach ($parametriSalvati as $chiave => $valore)
                         <div class="flex justify-between gap-4 py-2 text-sm">
                             <dt class="text-ink-3">{{ $chiave }}</dt>
                             <dd class="text-right font-medium text-ink">{{ $valore }}</dd>
