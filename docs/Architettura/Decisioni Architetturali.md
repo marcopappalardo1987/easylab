@@ -2012,3 +2012,18 @@ Si imposta dalla cabina: nella finestra con cui nasce un cliente, e col pulsante
 
 - **Prova di mutazione**: 19 mutazioni, tutte rosse. Il difetto rimesso apposta; chi può e chi no; l'inizio, l'installazione e oggi; i confini della durata; il modulo che si ripulisce fra una macchina e l'altra.
 
+---
+
+**ADR-060 — Le card di «Laboratori» si filtrano per nome**
+
+*Stato: Accettata e attuata l'11 Ott 2026, per decisione di Marco. Solo su staging.*
+
+**Decisione.** Sopra le card della pagina «Laboratori» c'è un campo «Filtra per nome». Vale a ogni livello dell'albero (le sedi, i laboratori, i sotto-laboratori) e compare dove c'è almeno una card. Tiene le card il cui nome contiene **ogni parola** scritta, in qualunque ordine, senza badare a maiuscole e accenti. Accanto al titolo dice quante ne restano («3 di 14»); se non ne resta nessuna lo dice e offre «Togli il filtro», invece del messaggio di un posto vuoto.
+
+**Conseguenze.**
+
+- Filtra ciò che la pagina ha **già caricato** per quella persona: nessuna query in più, e nessun modo di far comparire un nodo che lo scoping (ADR-006/057) non le mostra.
+- Cerca nel livello aperto, non in tutto l'albero: entrando in una card o risalendo il filtro si svuota.
+- ⚠️ **Non fatto**: la ricerca in profondità (un laboratorio trovato da sopra la sua sede), la paginazione delle card, il filtro nell'indirizzo della pagina.
+- **Prova di mutazione**: 16 mutazioni, tutte rosse.
+

@@ -158,9 +158,31 @@
 
     {{-- Sotto-nodi --}}
     <section class="mt-6">
-        <h2 class="text-xs font-semibold tracking-wide text-ink-3 uppercase">{{ $childLabel }}</h2>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-baseline gap-2">
+                <h2 class="text-xs font-semibold tracking-wide text-ink-3 uppercase">{{ $childLabel }}</h2>
+                @if (trim($cerca) !== '' && $quantiInTutto > 0)
+                    <span class="text-xs text-ink-3" data-cerca-conto>({{ $children->count() }} di {{ $quantiInTutto }})</span>
+                @endif
+            </div>
 
-        @if ($children->isEmpty())
+            {{-- 🔗 ADR-060: il filtro di testo. C'è quando c'è qualcosa da
+                 filtrare, a ogni livello dell'albero. --}}
+            @if ($quantiInTutto > 0)
+                <div class="w-full sm:w-72">
+                    <label for="cerca-nodi" class="sr-only">Filtra per nome</label>
+                    <input id="cerca-nodi" type="search" wire:model.live.debounce.300ms="cerca" placeholder="Filtra per nome…"
+                        class="block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none" />
+                </div>
+            @endif
+        </div>
+
+        @if ($quantiInTutto > 0 && $children->isEmpty())
+            <div class="mt-3 rounded-lg border border-dashed border-border px-4 py-8 text-center" data-cerca-vuota>
+                <p class="text-sm text-ink-2">Nessun nome contiene «{{ trim($cerca) }}».</p>
+                <x-ui.button variant="secondary" class="mt-3" wire:click="togliCerca">Togli il filtro</x-ui.button>
+            </div>
+        @elseif ($children->isEmpty())
             <div class="mt-3 rounded-lg border border-dashed border-border px-4 py-8 text-center">
                 {{-- 🔗 ADR-057: un Responsabile Reparto senza laboratori non
                      vede nulla (ADR-006, fail-closed), e «Nessun ente qui» non

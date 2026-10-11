@@ -25,6 +25,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Lab404\Impersonate\Services\ImpersonateManager;
 use Livewire\Attributes\Layout;
@@ -73,6 +74,10 @@ class Albero extends Component
 
     // Modale create strumento
     public bool $showStrumentoForm = false;
+
+    // 🔗 ADR-060: il filtro di testo sulle card del livello aperto. Si svuota
+    // cambiando livello: ciò che si cercava fra le sedi non vale fra i laboratori.
+    public string $cerca = '';
 
     // Provenienza esterna opzionale (ente off-platform) alla creazione.
     public ?string $provenienza = null;
@@ -318,11 +323,40 @@ class Albero extends Component
     public function open(int $id): void
     {
         $this->currentId = UnitaOrganizzativa::findOrFail($id)->id;
+        $this->cerca = '';
     }
 
     public function goTo(?int $id): void
     {
         $this->currentId = $id !== null ? UnitaOrganizzativa::findOrFail($id)->id : null;
+        $this->cerca = '';
+    }
+
+    public function togliCerca(): void
+    {
+        $this->cerca = '';
+    }
+
+    /**
+     * Le card il cui nome contiene ogni parola cercata, senza badare a
+     * maiuscole e accenti (🔗 ADR-060). Si filtra ciò che `visibleNodes()` ha
+     * già caricato: il filtro restringe, non può mostrare un nodo in più.
+     *
+     * @param  Collection<int, UnitaOrganizzativa>  $nodi
+     * @return Collection<int, UnitaOrganizzativa>
+     */
+    private function filtraPerNome(Collection $nodi): Collection
+    {
+        $piega = fn (string $testo): string => Str::lower(Str::ascii($testo));
+        $parole = array_values(array_filter(preg_split('/\s+/', trim($piega($this->cerca))) ?: []));
+
+        if ($parole === []) {
+            return $nodi;
+        }
+
+        return $nodi
+            ->filter(fn (UnitaOrganizzativa $n) => Str::containsAll($piega((string) $n->nome), $parole))
+            ->values();
     }
 
     // --- CRUD nodi ---
@@ -779,6 +813,9 @@ class Albero extends Component
             ? $childrenByParent->get($current->id, collect())->values()
             : $roots;
 
+        $quantiInTutto = $children->count();
+        $children = $this->filtraPerNome($children);
+
         $strumenti = ($current && $current->tipo !== TipoUnitaOrganizzativa::Ente)
             ? Strumento::where('unita_organizzativa_id', $current->id)->orderBy('nome')->get()
             : collect();
@@ -796,6 +833,7 @@ class Albero extends Component
             'current' => $current,
             'breadcrumb' => $breadcrumb,
             'children' => $children,
+            'quantiInTutto' => $quantiInTutto,
             'strumenti' => $strumenti,
             'childCounts' => $childCounts,
             'strumentiCounts' => $strumentiCounts,
