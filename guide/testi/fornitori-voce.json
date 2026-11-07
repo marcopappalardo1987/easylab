@@ -1,0 +1,15 @@
+{
+  "0": "Quando una macchina si ferma, la prima domanda è sempre la stessa: a chi telefono? Questo elenco esiste per rispondere.",
+  "2": "«Fornitori» è l'elenco di chi vende e assiste le macchine della tua sede.",
+  "3": "Ogni riga porta i contatti, e quante macchine dipendono da quel fornitore. È il numero che dice quanto pesa un suo disservizio.",
+  "4": "Non è una rubrica in cui mettere tutti. Un fornitore sta qui perché una macchina lo indica, e lo si cerca il giorno del guasto.",
+  "6": "Se ne aggiunge uno quando arriva una macchina di una marca nuova.",
+  "7": "La ragione sociale è quella con cui emette fattura, non il nome commerciale abbreviato.",
+  "8": "Telefono ed email sono quelli dell'assistenza, non del commerciale. Sono i contatti che servono quando la macchina è ferma.",
+  "9": "Le note sono il posto per il numero di contratto, gli orari, o il nome della persona che risponde.",
+  "10": "E si salva.",
+  "12": "Il fornitore nuovo è in elenco, con zero macchine collegate.",
+  "13": "Il legame si fa dalla scheda della macchina. Nel campo «Fornitore» si scrive il nome, e lo si sceglie dall'elenco.",
+  "14": "Da quel momento il conteggio sale, e dalla macchina si arriva a chi chiamare senza cercare in rubrica.",
+  "15": "@punti"
+}

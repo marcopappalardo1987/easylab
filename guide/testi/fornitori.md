@@ -85,8 +85,10 @@ fornitore» in blocco.
 ## 10
 
 Il legame si fa dalla scheda della macchina, nel campo «Fornitore»
-di «Modifica»: si sceglie fra quelli in elenco. È un campo obbligatorio anche
-alla creazione, quindi ogni macchina ha sempre un fornitore.
+di «Modifica»: si apre la tendina, si scrive una parte del nome e si sceglie
+fra quelli che restano. Se il fornitore non c'è ancora, dalla stessa tendina
+lo si crea senza uscire dalla scheda. È un campo obbligatorio anche alla
+creazione, quindi ogni macchina ha sempre un fornitore.
 
 ## 11
 
