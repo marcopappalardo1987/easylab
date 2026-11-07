@@ -105,6 +105,10 @@ class Garanzia extends Model implements ReachesStrumento
     {
         return [
             'soggetto' => SoggettoGaranzia::class,
+            // 🔴 Un intero, non ciò che arriva: dal campo del modulo la durata
+            // è una stringa, e `addMonths('36')` va in `TypeError` (un 500 a chi
+            // scriveva la durata a mano, trovato girando le guide il 7 Nov 2026).
+            'durata_mesi' => 'integer',
             'data_inizio' => 'date',
             'data_scadenza_dichiarata' => 'date',
             'data_scadenza_effettiva' => 'date',
