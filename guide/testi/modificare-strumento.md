@@ -19,8 +19,8 @@ ferma.
 ## 1
 
 «Modifica» cambia **che cosa è** la macchina: nome, modello, matricola, data di
-installazione, fornitore, parametri tecnici. Sono i dati che la descrivono, e
-restano gli stessi in qualunque laboratorio si trovi.
+installazione, fornitore, referente, note, parametri tecnici. Sono i dati che la
+descrivono, e restano gli stessi in qualunque laboratorio si trovi.
 
 ## 2
 
@@ -31,7 +31,7 @@ questo.
 
 ## capitolo 2
 
-Quattro campi, e ciascuno ha una conseguenza che va oltre la scheda.
+Cinque campi, e ciascuno ha una conseguenza che va oltre la scheda.
 
 ## 3
 
@@ -57,38 +57,47 @@ costruisce il budget: vale la pena metterla giusta anche a distanza di tempo.
 ## 6
 
 Il fornitore va aggiornato quando cambia il contratto di assistenza, non quando
-cambia il rivenditore da cui la macchina fu comprata. È l'informazione che serve
-il giorno del guasto, e quel giorno nessuno ha voglia di cercare nei documenti
-chi tiene la manutenzione.
+cambia il rivenditore da cui la macchina fu comprata. Si apre la tendina, si
+scrive qualche lettera del nome e si sceglie fra quelli che restano; se non c'è,
+lo si crea dalla stessa tendina. È l'informazione che serve il giorno del
+guasto, e quel giorno nessuno ha voglia di cercare nei documenti chi tiene la
+manutenzione.
+
+## 7
+
+Il **referente dello strumento** è la persona del laboratorio a cui la macchina
+fa capo: nome, cognome, email e cellulare, tutti facoltativi. L'email è quella
+che conta: se c'è, le email che riguardano questa macchina — una segnalazione,
+un intervento programmato o eseguito, una scadenza in arrivo — arrivano anche a
+lui, senza che debba avere un account. Va cambiato quando la macchina passa a
+un altro responsabile, come si cambia il fornitore quando cambia l'assistenza.
+Poco più sotto ci sono le **note**, per tutto ciò che non ha un campo suo.
 
 ## capitolo 3
 
 I parametri tecnici sono liberi, e vivono nella linguetta Anagrafica.
 
-## 7
-
-Non c'è un elenco fisso: si scrivono le voci che servono a quella macchina —
-alimentazione, potenza assorbita, temperatura di esercizio, volume della camera.
-Su uno strumento da laboratorio i dati di targa utili sono sempre tre o quattro,
-e cambiano da tipo a tipo.
-
 ## 8
 
-Compaiono nella linguetta «Anagrafica» della scheda, ed è il posto in cui si va
-a cercarli invece di aprire il manuale o di andare a leggere la targhetta dietro
-la macchina. Vale la pena riempirli una volta, con calma, quando la macchina
-entra in servizio.
+Non c'è un elenco fisso: «+ Aggiungi» apre una riga con una voce e un valore, e
+si scrivono le voci che servono a quella macchina — alimentazione, potenza
+assorbita, temperatura di esercizio, volume della camera. Su uno strumento da
+laboratorio i dati di targa utili sono sempre tre o quattro, e cambiano da tipo
+a tipo. Ogni voce compare una volta sola: scrivere di nuovo una voce che c'è già
+ne sostituisce il valore.
 
 ## 9
 
 Il salvataggio è immediato e non chiede conferme, perché nessuno di questi
 campi distrugge dati: si stanno correggendo descrizioni, non spostando o
-cancellando macchine. Se sbagli si rientra e si corregge, quante volte serve, e
-la versione buona è sempre l'ultima.
+cancellando macchine. Ogni modifica resta comunque nel registro con il tuo nome
+e la data. Non è sorveglianza: serve il giorno in cui due persone ricordano
+diversamente che cosa c'era scritto prima, e serve a chi deve dimostrare che
+una manutenzione riguardava quella macchina e non un'altra.
 
 ## 10
 
-Ogni modifica resta nel registro con il tuo nome e la data. Non è sorveglianza:
-serve il giorno in cui due persone ricordano diversamente che cosa c'era scritto
-prima, e serve a chi deve dimostrare che una manutenzione riguardava quella
-macchina e non un'altra.
+Matricola, referente e parametri compaiono nella linguetta «Anagrafica» della
+scheda, ed è il posto in cui si va a cercarli invece di aprire il manuale o di
+andare a leggere la targhetta dietro la macchina. Vale la pena riempirli una
+volta, con calma, quando la macchina entra in servizio.

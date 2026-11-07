@@ -22,6 +22,8 @@ export default defineConfig({
     timezoneId: 'Europe/Rome',
     colorScheme: 'light',
     // Il cursore lo disegna Remotion: quello vero non finisce negli scatti.
-    launchOptions: { args: ['--force-color-profile=srgb', '--font-render-hinting=none'] },
+    // `--lang` perché `locale` non basta ai campi data: senza, Chromium li
+    // disegna all'americana (11/07/2026 per il 7 novembre).
+    launchOptions: { args: ['--force-color-profile=srgb', '--font-render-hinting=none', '--lang=it-IT'] },
   },
 });

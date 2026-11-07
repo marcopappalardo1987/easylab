@@ -1,0 +1,16 @@
+{
+  "0": "Ogni macchina ha la sua scheda: un riassunto in cima, e sei linguette per il dettaglio. Vediamola.",
+  "2": "La scheda apre sempre sulla Panoramica. È il riassunto, e serve a decidere se andare più a fondo.",
+  "3": "«In sintesi» dice le tre cose che si cercano per prime: chi la assiste, dove sta, e da quando è in servizio.",
+  "4": "Il prossimo intervento è la scadenza più vicina. È quella che accenderà il semaforo quando arriva.",
+  "5": "Le statistiche contano la vita della macchina: interventi fatti, scaduti non fatti, ricambi montati.",
+  "7": "Sopra ci sono sei linguette. Il numerino accanto a Interventi, Ricambi e Garanzie conta le scadenze da gestire lì dentro.",
+  "8": "«Interventi» è lo storico della manutenzione. È la fonte di verità: il semaforo ne è solo il riassunto.",
+  "9": "«Garanzie» tiene la copertura della macchina intera. Quella dei pezzi montati sta in «Ricambi», accanto a ogni pezzo.",
+  "10": "«Documenti» raccoglie manuali, certificati e rapporti: si allegano qui, e qui si ritrovano.",
+  "11": "«Anagrafica» tiene i dati fissi, il referente con i suoi contatti, e lo storico degli spostamenti.",
+  "13": "In alto ci sono le azioni sulla macchina. Compaiono solo se il tuo ruolo può compierle.",
+  "14": "«Etichetta QR» stampa l'adesivo da attaccare sulla macchina, per ritrovarla col telefono.",
+  "15": "«Forza semaforo» esiste per i casi che la manutenzione non descrive, e chiede sempre una motivazione.",
+  "16": "@punti"
+}

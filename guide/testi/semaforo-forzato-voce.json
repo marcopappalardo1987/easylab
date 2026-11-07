@@ -1,0 +1,14 @@
+{
+  "0": "Il semaforo di una macchina di solito lo decidono i dati. Ma ci sono casi che i dati non sanno descrivere: per quelli si forza.",
+  "2": "Il semaforo, di solito, lo calcola Easy Lab dalle scadenze aperte. È una conseguenza, non una scelta.",
+  "3": "Ma una macchina può essere ferma per ragioni che nessuna scadenza descrive: un pezzo che non arriva, una verifica esterna andata male.",
+  "4": "«Forza semaforo» serve a quei casi, e a nessun altro.",
+  "6": "Si sceglie lo stato che la macchina deve mostrare da adesso.",
+  "7": "Per «Strumento non idoneo» il motivo è obbligatorio, ed è il punto della funzione: senza, resterebbe uno stato senza spiegazione.",
+  "8": "Conviene scrivere quello che serve a chi leggerà: che cosa è successo, e che cosa si sta aspettando.",
+  "9": "E si forza.",
+  "11": "Il semaforo ora è quello che hai deciso tu, con una bandierina accanto. E la macchina compare così in ogni elenco.",
+  "12": "La Panoramica dichiara che lo stato è forzato, da chi e perché. Non si confonde mai con uno stato calcolato.",
+  "13": "Per tornare al calcolo automatico si riapre la stessa finestra: «Rimuovi forzatura» toglie lo stato deciso a mano.",
+  "14": "@punti"
+}

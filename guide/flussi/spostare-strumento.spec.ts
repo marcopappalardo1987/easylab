@@ -1,90 +1,127 @@
-import { test } from '@playwright/test';
-import { Regista } from '../lib/regista';
+import { expect, test } from '@playwright/test';
+import { Scenografo } from '../lib/scenografo';
 import { accedi } from '../lib/accesso';
 
 /**
- * Guida C5 — «Spostare una macchina».
+ * Guida C5 — «Spostare una macchina». Formato «vetrina» (🔗 `lib/scenografo.ts`).
  *
- * ⚠️ Il copione SCRIVE (sposta davvero lo strumento 55 e lascia una riga nello
- * storico): `azzera.sh` prima di ogni giratura, o alla seconda passata lo
- * storico mostrerebbe due spostamenti identici.
+ * ⚠️ Stessa sequenza e stesso numero di passi del copione precedente (8, in
+ * tre capitoli da 2, 3 e 3): i testi scritti in `testi/spostare-strumento.md`
+ * sono numerati come i passi.
+ *
+ * Il trasloco si vede accadere: la finestra si apre, la destinazione si sceglie,
+ * l'ubicazione sotto il nome cambia, e la riga compare fra gli spostamenti.
+ *
+ * ⚠️ Il copione SCRIVE: `azzera.sh` prima di ogni giratura.
  */
+// ⚠️ Senza `--lang` Chromium disegna i campi data all'americana (11/07/2026 per
+// il 7 novembre): `locale` del config non basta. Gli altri argomenti ripetono
+// quelli del config, che `launchOptions` qui sostituisce per intero.
+test.use({ launchOptions: { args: ['--force-color-profile=srgb', '--font-render-hinting=none', '--lang=it-IT'] } });
+
 test('spostare strumento', async ({ page }) => {
-  const g = new Regista(page, 'spostare-strumento', 'Spostare una macchina', 'Il trasloco, e la traccia che lascia');
+  const s = new Scenografo(page, 'spostare-strumento', 'Spostare una macchina', 'Il trasloco, e la traccia che lascia');
 
   await accedi(page, 'maria.conti@aurora.test');
-
-  g.capitolo('Parte 1 di 3', 'Dove sta adesso');
-
   await page.goto('/strumenti/55');
   await page.waitForLoadState('networkidle');
+  await s.avvia();
 
-  await g.passo("L'ubicazione completa è sotto il nome: sede, laboratorio, sotto-laboratorio.", {
-    su: page.getByText(/Sede di Milano ›/).first(),
+  const ubicazione = page.getByText(/Sede di Milano ›/).first();
+
+  // ── Uno: dove sta adesso ────────────────────────────────────────────────────
+  s.cartello('Dove sta adesso', 'Parte 1 di 3');
+
+  await expect(ubicazione).toContainText('Analisi Cliniche › Camera Bianca');
+
+  await s.scatto("L'ubicazione completa è sotto il nome: sede, laboratorio, sotto-laboratorio.", {
+    su: ubicazione,
     zoom: 2,
-    durata: 7,
+    durata: 6,
   });
 
-  await g.passo('«Sposta» apre il trasloco, e non va confuso con «Modifica»: qui non si cambia la macchina, si cambia dove sta.', {
-    su: page.getByRole('button', { name: 'Sposta' }).first(),
-    click: true,
-    zoom: 2.1,
-  });
+  const sposta = page.getByRole('button', { name: 'Sposta' }).first();
+  const destinazione = page.locator('#destinazioneId');
 
-  await page.waitForLoadState('networkidle');
+  await s.movimento(
+    '«Sposta» apre il trasloco, e non va confuso con «Modifica»: qui non si cambia la macchina, si cambia dove sta.',
+    async () => {
+      await sposta.click();
+      await expect(destinazione).toBeVisible();
+      await page.waitForTimeout(600);
+    },
+    { su: sposta, zoom: 2, coda: 1.2 },
+  );
 
-  g.capitolo('Parte 2 di 3', 'La destinazione');
+  // ── Due: la destinazione ────────────────────────────────────────────────────
+  s.cartello('La destinazione', 'Parte 2 di 3');
 
-  await g.passo("La destinazione si sceglie dall'albero dei laboratori: un laboratorio o un sotto-laboratorio, non un indirizzo scritto a mano.", {
-    su: page.locator('#destinazioneId'),
-    zoom: 2.1,
-    durata: 8,
-  });
+  await s.movimento(
+    "La destinazione si sceglie fra i laboratori e i sotto-laboratori della sede: non è un indirizzo scritto a mano.",
+    async () => {
+      await destinazione.focus();
+      await page.waitForTimeout(400);
+      await destinazione.selectOption({ label: 'Spettrometria' });
+      await expect(destinazione.locator('option:checked')).toHaveText('Spettrometria');
+      await page.waitForTimeout(700);
+    },
+    { su: destinazione, zoom: 1.8, coda: 1 },
+  );
 
-  await page.locator('#destinazioneId').selectOption({ index: 3 });
-  await page.waitForTimeout(500);
-
-  await g.passo('La data serve a datare il trasloco, non a programmarlo: è quando la macchina si è spostata davvero.', {
+  await s.scatto('La data serve a datare il trasloco, non a programmarlo: è quando la macchina si è spostata davvero.', {
     su: page.locator('#dataSpostamento'),
-    zoom: 2.1,
-    durata: 7,
-  });
-
-  await g.passo('Si conferma.', {
-    su: page.getByRole('button', { name: 'Sposta' }).last(),
-    click: true,
-    zoom: 2.3,
-  });
-
-  await page.waitForLoadState('networkidle');
-
-  g.capitolo('Parte 3 di 3', 'La traccia');
-
-  await g.passo("L'ubicazione in cima è cambiata, e con lei gli elenchi filtrati per reparto.", {
-    su: page.getByText(/Sede di Milano ›/).first(),
     zoom: 2,
-    durata: 7,
+    durata: 6.5,
   });
 
-  await page.getByRole('button', { name: 'Anagrafica' }).first().click();
-  await page.waitForLoadState('networkidle');
+  const conferma = page.locator('form:has(#destinazioneId)').getByRole('button', { name: 'Sposta' });
 
-  await g.passo("Lo spostamento non sostituisce il passato: resta scritto nello storico, con la data e il posto da cui veniva.", {
-    su: page.getByText('Spostamenti'),
-    zoom: 1.9,
-    durata: 8,
+  await s.movimento(
+    'Si conferma.',
+    async () => {
+      await conferma.click();
+      await expect(destinazione).toHaveCount(0, { timeout: 10_000 });
+      await page.waitForTimeout(600);
+    },
+    { su: conferma, zoom: 2, coda: 1.2 },
+  );
+
+  // ── Tre: la traccia ─────────────────────────────────────────────────────────
+  s.cartello('La traccia', 'Parte 3 di 3');
+
+  await expect(ubicazione).toContainText('Spettrometria');
+
+  await s.scatto("L'ubicazione in cima è cambiata, e con lei gli elenchi filtrati per laboratorio.", {
+    su: ubicazione,
+    zoom: 2,
+    durata: 6,
   });
 
-  await g.passo("È la risposta alla domanda «dov'era prima», che serve più spesso di quanto si creda quando una macchina comincia a dare problemi.", {
-    zoom: 1,
-    durata: 8,
+  const linguetta = page.locator('[data-tab="anagrafica"]');
+  const spostamenti = page.getByText('Spostamenti', { exact: true }).locator('..');
+
+  await s.movimento(
+    'Lo spostamento non sostituisce il passato: resta scritto nello storico, con la data e il posto da cui veniva.',
+    async () => {
+      await linguetta.click();
+      await expect(spostamenti).toContainText('Spettrometria');
+      await spostamenti.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(900);
+    },
+    { su: linguetta, zoom: 1.2, coda: 1.4 },
+  );
+
+  await s.scatto("È la risposta alla domanda «dov'era prima», che serve più spesso di quanto si creda quando una macchina dà problemi.", {
+    su: spostamenti,
+    zoom: 1.6,
+    durata: 7.5,
   });
 
-  g.chiusura('Da ricordare', [
+  s.chiusura('Da ricordare', [
     '«Sposta» cambia dove sta la macchina; «Modifica» cambia che cosa è. Sono due gesti diversi.',
-    "La destinazione si sceglie dall'albero: se il laboratorio non c'è, va prima creato in «Laboratori».",
+    "La destinazione si sceglie fra i laboratori: se quello giusto non c'è, va prima creato in «Laboratori».",
     'Ogni trasloco resta nello storico con la sua data: il passato non si sovrascrive.',
   ]);
 
-  g.scrivi();
+  await s.scrivi();
 });

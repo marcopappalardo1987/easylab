@@ -1,0 +1,14 @@
+{
+  "0": "I dati di una macchina invecchiano: una matricola sbagliata, un fornitore cambiato, una data stimata. Correggerli è rapido.",
+  "2": "«Modifica» cambia che cosa è la macchina: nome, modello, matricola, data, fornitore, referente e parametri.",
+  "3": "Non cambia dove sta, perché per quello c'è «Sposta». E non cambia il suo stato, che resta calcolato dalle scadenze.",
+  "5": "Nome, modello e matricola sono i tre campi su cui lavora la ricerca. Correggerli qui li corregge ovunque.",
+  "6": "La matricola si corregge quando la targhetta dice altro. Succede spesso sulle macchine ereditate da un'altra gestione.",
+  "7": "La data di installazione governa l'obsolescenza: sbagliarla di due anni sposta la macchina dentro o fuori dagli obsoleti.",
+  "8": "Il fornitore è a chi si telefona quando la macchina si guasta. Si sceglie scrivendone il nome, e si aggiorna quando cambia l'assistenza.",
+  "9": "Il referente è la persona del laboratorio a cui la macchina fa capo. Con la sua email, gli avvisi sulla macchina arrivano anche a lui.",
+  "11": "I parametri tecnici sono liberi: «più Aggiungi» apre una riga, e si scrive la voce che serve a quella macchina.",
+  "12": "Si salva. La modifica è immediata, e resta nel registro: si sa sempre chi ha cambiato che cosa.",
+  "13": "Matricola, referente e parametri ora compaiono nella linguetta «Anagrafica». Sono i dati di targa, senza aprire il manuale.",
+  "14": "@punti"
+}

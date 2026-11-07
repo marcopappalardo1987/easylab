@@ -1,0 +1,14 @@
+{
+  "0": "L'elenco degli strumenti è il parco intero della sede. Vediamo come cercare, filtrare e ordinare.",
+  "2": "«Strumenti» apre tutte le macchine della sede, senza filtri. È l'elenco da cui si parte quando si sa già che cosa si cerca.",
+  "3": "La ricerca guarda nome, modello e matricola insieme: non serve ricordare con quale dei tre la macchina è stata registrata.",
+  "4": "E l'elenco si restringe mentre scrivi, senza premere invio.",
+  "6": "Il filtro per ubicazione segue l'albero dei laboratori: si sceglie un laboratorio, e restano le sue macchine.",
+  "7": "Il filtro di stato è il semaforo: strumentazione idonea, interventi necessari, strumenti non idonei.",
+  "8": "Scelto uno stato, restano solo quelle macchine. È la stessa cosa che fa un riquadro della Dashboard.",
+  "9": "«Solo strumenti obsoleti» sta a parte, e si somma agli altri filtri: risponde all'età della macchina, non alla manutenzione.",
+  "11": "Ogni intestazione di colonna ordina l'elenco, e cliccandola di nuovo lo rovescia.",
+  "12": "Ordinando per «Prossima scadenza», in cima viene la macchina che chiede attenzione prima di tutte.",
+  "13": "In fondo si sceglie quante righe vedere per pagina: utile quando si stampa, o quando si fa un giro completo.",
+  "14": "@punti"
+}
