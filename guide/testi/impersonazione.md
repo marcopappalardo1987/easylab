@@ -19,15 +19,17 @@ l'impersonazione una scelta invece di una scorciatoia.
 
 ## 2
 
-Quando serve intervenire davvero si impersona la persona giusta di quel cliente.
-Non c'è una modalità «amministratore che scrive dappertutto»: si passa sempre da
-qualcuno che quel permesso ce l'ha per conto suo.
+Quando serve intervenire davvero si impersona la persona giusta di quel
+cliente: «Impersona», sulla riga della macchina, elenca le persone con cui si
+può entrare. Non c'è una modalità «amministratore che scrive dappertutto»: si
+passa sempre da qualcuno che quel permesso ce l'ha per conto suo.
 
 ## 3
 
-Da quel momento vedi Easy Lab **come lo vede lei**: stesso ruolo, stessi reparti
-accessibili, stessi pulsanti. Se quella persona non può fare una cosa, non la
-puoi fare nemmeno tu — impersonare non somma permessi, li sostituisce.
+Da quel momento vedi Easy Lab **come lo vede lei**: stesso ruolo, stessi
+laboratori accessibili, stessi pulsanti, e l'ingresso è registrato. Se quella
+persona non può fare una cosa, non la puoi fare nemmeno tu: impersonare non
+somma permessi, li sostituisce.
 
 ## capitolo 2
 
@@ -42,15 +44,18 @@ amministri la piattaforma.
 
 ## 5
 
-Durante l'impersonazione le pagine di piattaforma sono chiuse. Si è quella
-persona, non due persone insieme: entrare nella cabina di regia «mentre» si è un
-cliente sarebbe un miscuglio in cui non si capirebbe più chi ha fatto che cosa.
+Durante l'impersonazione le pagine di piattaforma sono chiuse, e la voce
+«Piattaforma» sparisce dal menù. Si è quella persona, non due persone insieme:
+entrare nella cabina di regia «mentre» si è un cliente sarebbe un miscuglio in
+cui non si capirebbe più chi ha fatto che cosa.
 
 ## 6
 
-E alcune schermate restano chiuse comunque, per esempio la sicurezza del proprio
-account: la 2FA di qualcun altro non si governa per conto suo, nemmeno con le
-migliori intenzioni.
+Il banner arancione resta in cima a ogni pagina finché non si esce: dice chi
+stai impersonando e chi sei davvero, così non si dimentica di essere dentro
+l'account di un altro. E alcune azioni restano vietate anche così, per esempio
+attivare o togliere la verifica in due passaggi: la 2FA di qualcun altro non si
+governa per conto suo, nemmeno con le migliori intenzioni.
 
 ## capitolo 3
 

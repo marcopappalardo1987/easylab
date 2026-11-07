@@ -115,8 +115,9 @@ export class Ripresa {
     execFileSync('ffmpeg', [
       '-y', '-loglevel', 'error',
       '-f', 'concat', '-safe', '0', '-i', elenco,
-      '-vf', 'scale=1920:-2:flags=lanczos,format=yuv420p',
-      '-r', '30', '-fps_mode', 'cfr',
+      // ⚠️ `fps=30` nel filtro, non `-r 30 -fps_mode cfr`: con ffmpeg 9 la seconda
+      // forma tiene un fotogramma per immagine e la clip esce di pochi decimi.
+      '-vf', 'scale=1920:-2:flags=lanczos,fps=30,format=yuv420p',
       // ⚠️ Il taglio esatto NON è decorativo: il concat demuxer ignora la durata
       // dell'ultimo file e va ripetuto, e la ripetizione si porta dietro di nuovo
       // l'ultima durata. Senza `-t` la clip esce più lunga del copione, e in

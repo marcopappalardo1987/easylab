@@ -25,11 +25,11 @@ ancora al telefono.
 
 ## 3
 
-Ogni riga porta il cliente, oltre a stato, ubicazione e prossima scadenza: sono
-le stesse colonne dell'elenco che vede il cliente, con una in più. È quella
-colonna a rendere leggibile un elenco che altrimenti mescolerebbe parchi
-diversi, e a evitare l'errore più facile — guardare la macchina giusta del
-cliente sbagliato.
+Ogni riga porta il cliente e la sede, oltre a stato, macchina, modello,
+matricola e prossima scadenza: sono le colonne dell'elenco che vede il cliente,
+con due in più. Sono quelle a rendere leggibile un elenco che altrimenti
+mescolerebbe parchi diversi, e a evitare l'errore più facile: guardare la
+macchina giusta del cliente sbagliato.
 
 ## capitolo 2
 
@@ -37,9 +37,10 @@ Gli stessi filtri di sempre, applicati a un parco più grande.
 
 ## 4
 
-Si filtra per cliente, per stato e per obsolescenza. Filtrare per un cliente
-solo dà esattamente la vista che ha lui, ed è utile per capire di che cosa sta
-parlando mentre lo descrive a parole.
+Il filtro «Clienti» stringe il perimetro: tutti, quelli di un piano, oppure i
+propri preferiti, cioè i clienti segnati con la stella nell'elenco della cabina.
+Accanto ci sono lo stato del semaforo e la casella degli strumenti obsoleti, gli
+stessi filtri che il cliente ha nel proprio elenco.
 
 ## 5
 
@@ -55,15 +56,16 @@ Si legge e basta, e non è una funzione mancante.
 ## 6
 
 Non ci sono azioni sulle macchine: niente modifica, niente forzatura del
-semaforo, niente nuovo intervento. La pagina è fatta per guardare, e l'assenza
-di quei pulsanti non è una funzione che manca — è la riga che separa il
-consultare dall'agire sui dati di qualcun altro.
+semaforo, niente nuovo intervento. Sulla riga c'è un solo pulsante,
+«Impersona», e l'assenza degli altri non è una funzione che manca: è la riga che
+separa il consultare dall'agire sui dati di qualcun altro.
 
 ## 7
 
-Per intervenire si **impersona** il cliente. Il gesto costa un clic in più, e
-quel clic è il punto: da quel momento tutto ciò che si scrive porta il timbro di
-chi c'era davvero dietro.
+Per intervenire si **impersona** una persona del cliente: la finestra elenca chi
+si può impersonare, e da quel momento permessi, sede attiva e visibilità sono i
+suoi. L'ingresso resta nel registro, e tutto ciò che si scrive porta il timbro
+di chi c'era davvero dietro.
 
 ## 8
 

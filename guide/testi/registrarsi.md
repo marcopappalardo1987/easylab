@@ -6,10 +6,10 @@
 ## premessa
 
 È l'unica pagina di Easy Lab che si apre senza un invito, e serve a chi non ha
-ancora un'organizzazione: si compila un modulo, si sceglie un piano, si paga, e
-la propria sede è attiva. Chi invece lavora in un laboratorio che Easy Lab lo ha
-già non deve registrarsi: deve farsi invitare, altrimenti si ritrova con
-un'organizzazione separata e vuota.
+ancora un'organizzazione: si compila un modulo, si conferma l'indirizzo email,
+si paga, e la propria sede è attiva. Chi invece lavora in un laboratorio che
+Easy Lab lo ha già non deve registrarsi: deve farsi invitare, altrimenti si
+ritrova con un'organizzazione separata e vuota.
 
 ## capitolo 1
 
@@ -43,45 +43,51 @@ caratteri, e meglio una frase che ricordi.
 
 ## capitolo 2
 
-Il piano si sceglie prima di pagare, e il pagamento non avviene su Easy Lab.
+Il piano si sceglie prima di pagare, e prima di pagare si conferma l'indirizzo.
 
 ## 5
 
-Il piano determina soprattutto quante **sedi** potrai avere. Non è un limite sul
-numero di macchine o di persone: si sceglie in base a quanti laboratori
-distinti vanno gestiti, e si cambia più avanti se l'organizzazione cresce.
+Il piano determina quante **sedi** e quanti **strumenti** potrai avere: si
+sceglie in base a quanti laboratori distinti vanno gestiti e a quante macchine
+ci lavorano, e si cambia più avanti se l'organizzazione cresce. Non c'è invece
+un limite sul numero di persone.
 
 ## 6
 
-Il pagamento avviene su **Stripe**, che incassa per conto di Easy Lab. È un
-dominio di terzi, e non è una scorciatoia: i dati della carta non passano mai da
-Easy Lab, che quindi non li conserva.
+«Continua» non porta ancora al pagamento: arriva prima un'email all'indirizzo del
+referente, con un collegamento da aprire. Serve a verificare che quell'indirizzo
+sia davvero raggiungibile: è quello su cui arriveranno gli avvisi e, il giorno
+che servisse, il recupero della password. Senza conferma non si paga, e quindi
+non nasce nessun account.
 
 ## 7
 
-Finito il pagamento si torna indietro da soli e l'account viene creato in quel
-momento. Non c'è nessuno da aspettare, nessuna attivazione manuale, nessun
-giorno lavorativo di mezzo.
+Il collegamento dell'email conferma l'indirizzo e porta a un riepilogo: il nome
+del laboratorio, l'email e il piano scelto. È l'ultimo momento per accorgersi di
+un errore di battitura prima di pagare; se qualcosa non va, si ricompila il
+modulo e arriva un collegamento nuovo, mentre quello vecchio smette di valere.
 
 ## capitolo 3
 
-I primi minuti dentro una sede vuota.
+Il pagamento non avviene su Easy Lab, e l'account nasce quando va a buon fine.
 
 ## 8
 
-Arriva un'email di conferma all'indirizzo del referente. Serve anche a
-verificare che quell'indirizzo sia davvero raggiungibile: è quello su cui
-arriveranno gli avvisi e, il giorno che servisse, il recupero della password.
+«Vai al pagamento» porta su **Stripe**, che incassa per conto di Easy Lab. È un
+dominio di terzi, e non è una scorciatoia: i dati della carta non passano mai da
+Easy Lab, che quindi non li conserva.
 
 ## 9
 
-Entrando la prima volta la sede è vuota, ed è normale. L'ordine giusto è:
-prima la struttura — laboratori e sotto-laboratori come sono davvero — poi le
-macchine, a mano o con l'importazione da CSV, che le mette nel posto giusto solo
-se i reparti esistono già.
+Finito il pagamento si torna indietro da soli, e l'account viene creato in quel
+momento. Non c'è nessuno da aspettare, nessuna attivazione manuale, nessun
+giorno lavorativo di mezzo.
 
 ## 10
 
-Poi si invitano i colleghi da «Persone», ciascuno con il proprio ruolo. Da lì in
-avanti Easy Lab è quello che si vede in tutte le altre guide, e questa pagina non
-serve più.
+Entrando la prima volta la sede è vuota, ed è normale. L'ordine giusto è: prima
+la struttura — laboratori e sotto-laboratori come sono davvero — poi le
+macchine, a mano o con l'importazione da CSV, che le mette nel posto giusto solo
+se i laboratori esistono già. Poi si invitano i colleghi da «Persone», ciascuno
+con il proprio ruolo: da lì in avanti Easy Lab è quello che si vede in tutte le
+altre guide.

@@ -42,7 +42,9 @@ vere, e servono entrambe.
 
 ## 5
 
-Senza quel timbro il registro direbbe una cosa **falsa**: che un gesto nostro è
+Basta cercare il nome di una persona del cliente nel filtro «Chi» per vederlo:
+escono anche le righe scritte da noi mentre la impersonavamo. Senza il timbro
+«per conto di» il registro direbbe una cosa **falsa**: che un gesto nostro è
 stato del cliente. Su un registro di sicurezza un'attribuzione sbagliata è
 peggio di un'attribuzione mancante, perché nessuno la mette in dubbio.
 
@@ -65,9 +67,10 @@ consultarlo.
 
 ## 8
 
-Un soggetto cestinato resta nominato: la riga dice «non più presente» invece di
-sparire. Cancellare le righe di ciò che non esiste più sarebbe il modo più
-elegante di perdere esattamente la storia che serve.
+Un soggetto cestinato resta nominato: la riga lo segna «cestinato», e se il
+dato non c'è proprio più dice «non più presente», invece di sparire.
+Cancellare le righe di ciò che non esiste più sarebbe il modo più elegante di
+perdere esattamente la storia che serve.
 
 ## 9
 

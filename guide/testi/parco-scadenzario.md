@@ -25,9 +25,11 @@ con quaranta è l'unica cosa che tiene insieme la pagina.
 
 ## 3
 
-Il valore vero è l'anticipo: vedere che un cliente ha undici tarature in
-scadenza il mese prossimo permette di chiamarlo prima, invece di scoprirlo
-quando è già in ritardo e la conversazione parte male.
+I tre contatori in cima (scaduti, in scadenza entro trenta giorni, oltre)
+dicono dove si sta accumulando lavoro. Il valore vero è l'anticipo: vedere che
+un cliente ha undici tarature in scadenza il mese prossimo permette di
+chiamarlo prima, invece di scoprirlo quando è già in ritardo. Un clic su un
+contatore filtra l'elenco.
 
 ## capitolo 2
 
@@ -42,9 +44,11 @@ rompono.
 
 ## 5
 
-Filtrando per un cliente si prepara la telefonata. «Avete undici tarature
-scadute e sei in scadenza questo mese» è un discorso diverso da «come va»: il
-primo produce un appuntamento, il secondo un saluto.
+Non c'è un filtro per un cliente solo: il perimetro si stringe a un piano o ai
+propri preferiti, i clienti segnati con la stella nell'elenco della cabina. Con
+«I miei preferiti» si prepara la telefonata: «avete cinquanta tarature in scadenza
+questo mese» è un discorso diverso da «come va», e il primo produce un
+appuntamento.
 
 ## 6
 

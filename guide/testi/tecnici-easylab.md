@@ -2,7 +2,8 @@
 
 ## premessa
 
-I tecnici di EasyLab lavorano sui clienti che gli sono stati assegnati. Questa
+Le persone di EasyLab che lavorano sulle macchine dei clienti, tecnici e
+gestori, ci lavorano solo sulle sedi che gli sono state assegnate. Questa
 pagina dichiara quelle assegnazioni, e la cosa più importante da sapere è che
 **non è una nota organizzativa**: è un conferimento di accesso, con tutte le
 conseguenze del caso.
@@ -13,15 +14,17 @@ Chi lavora su chi.
 
 ## 1
 
-La pagina elenca i tecnici e, per ciascuno, i clienti nel suo portafoglio. Si
-legge in due direzioni: da un tecnico ai suoi clienti, e da un cliente a chi lo
-segue — che è la domanda più frequente quando arriva una richiesta.
+«Tecnici e gestori» elenca le persone di EasyLab che lavorano sulle macchine
+dei clienti: il tecnico esegue gli interventi, il gestore tiene anche i
+laboratori e la pianificazione. Nessuno di loro appartiene a un cliente. Una
+persona nuova si aggiunge da «Invita una persona».
 
 ## 2
 
-Il portafoglio è **dichiarato**, non implicito: un tecnico lavora sui clienti
-che gli sono stati assegnati e su nessun altro. Non esiste un accesso
-«temporaneo perché oggi serve» che non passi da qui.
+Il portafoglio è **dichiarato**, non implicito: ognuno lavora sulle sedi che
+gli sono state assegnate e su nessun'altra, e la colonna «Sedi in portafoglio»
+dice quante sono. Non esiste un accesso «temporaneo perché oggi serve» che non
+passi da qui.
 
 ## capitolo 2
 
@@ -29,22 +32,23 @@ Che cosa comporta davvero aggiungere una riga.
 
 ## 3
 
-🔴 Aggiungere un cliente al portafoglio di un tecnico gli apre **tutte** le
-macchine di quella sede. Non è una selezione fine: è l'accesso al parco, e da
-quel momento quel tecnico compare anche nelle tendine degli assegnatari del
-cliente.
+🔴 «Clienti e accessi» apre il portafoglio, con le sedi raggruppate per
+cliente. Spuntarne una apre **tutte** le macchine di quella sede. Non è una
+selezione fine: è l'accesso al parco. E si sceglie sede per sede, non per
+contratto: un cliente con tre sedi va spuntato tre volte.
 
 ## 4
 
-Ne segue che non va usato come promemoria di chi segue chi. Se serve annotare
-un'informazione organizzativa esiste un posto migliore di uno strumento che
-conferisce accesso — perché qui la nota **è** l'accesso.
+Salvato il portafoglio, l'accesso vale da subito, e da quel momento la persona
+compare anche nella tendina «Assegnatario» di quel cliente. Ne segue che non va
+usato come promemoria di chi segue chi: qui la nota **è** l'accesso.
 
 ## 5
 
-Toglierlo revoca l'accesso, e non tocca quello che il tecnico ha registrato: gli
-interventi restano suoi, con il suo nome, nello storico delle macchine. Come per
-gli utenti cestinati, si toglie la porta e si lascia la storia.
+Togliere la spunta revoca l'accesso subito, e non tocca quello che il tecnico
+ha registrato: gli interventi restano suoi, con il suo nome, nello storico
+delle macchine. Come per gli utenti cestinati, si toglie la porta e si lascia
+la storia.
 
 ## 6
 

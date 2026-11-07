@@ -1,0 +1,12 @@
+{
+  "0": "Quando un cliente telefona per una macchina, serve trovarla mentre è ancora in linea. Questa è la vista che lo permette.",
+  "2": "Il parco mette insieme gli strumenti di tutti i clienti. È l'unica pagina di EasyLab che attraversa i confini fra un cliente e l'altro.",
+  "3": "Esiste per il supporto: quando un cliente chiama, la sua macchina si trova qui, senza chiedergli di dettare la matricola.",
+  "4": "Ogni riga dice a quale cliente e a quale sede appartiene la macchina, poi stato, modello, matricola e prossima scadenza.",
+  "6": "Il perimetro si stringe ai clienti di un piano, oppure ai propri preferiti. Accanto ci sono i filtri per stato e per strumenti obsoleti.",
+  "7": "La ricerca guarda nome, modello e matricola. Al telefono la matricola è la via più corta: trova una macchina sola.",
+  "9": "Da qui si legge soltanto. Sulla riga l'unica azione è «Impersona», e non è una dimenticanza.",
+  "10": "Per scrivere si entra come una persona del cliente. L'ingresso resta registrato, con il nome di chi c'era davvero dietro.",
+  "11": "Serve a tenere distinte due cose che è comodo confondere: guardare per aiutare, e agire al posto di qualcuno.",
+  "12": "@punti"
+}

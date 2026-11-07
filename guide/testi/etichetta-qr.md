@@ -76,5 +76,6 @@ scheda sbagliata, semplicemente non arriva.
 
 Si usa quando un'etichetta è finita dove non doveva — la macchina è uscita
 dall'Ente, è stata venduta, o l'adesivo è stato applicato sulla macchina
-sbagliata e ha già girato. Per ristampare la **stessa** etichetta non serve:
-basta stampare di nuovo, e il codice resta quello.
+sbagliata e ha già girato. Confermato, il riquadro mostra subito l'indirizzo
+nuovo, e il foglio da stampare porta già il codice nuovo. Per ristampare la
+**stessa** etichetta invece non serve: basta «Stampa», e il codice resta quello.

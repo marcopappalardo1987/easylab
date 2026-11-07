@@ -1,0 +1,13 @@
+{
+  "0": "Questa è la pagina più potente della piattaforma: decide chi può fare che cosa, per tutti i clienti insieme.",
+  "2": "Una riga per permesso, una colonna per ruolo. La matrice dice chi può fare che cosa, in tutto il prodotto.",
+  "3": "Ogni cella è un bottone. Un clic concede o revoca il permesso a tutti quelli che hanno quel ruolo, in tutti gli Enti.",
+  "4": "Prima di scrivere, la finestra avvisa: Tenant non ha il secondo fattore obbligatorio, quindi il permesso arriverebbe anche a chi entra con la sola password.",
+  "6": "Alcune righe portano il lucchetto. Un permesso bloccato non si ridistribuisce dall'interfaccia: sono i vincoli di privacy e di sicurezza del prodotto.",
+  "7": "Il caso da ricordare è la lettura degli errori dell'applicazione: è del solo Developer. Se fosse una cella cliccabile, il controllo più stretto del prodotto sarebbe una casella.",
+  "8": "Ogni clic resta nel registro di audit, col nome di chi l'ha fatto. I blocchi e il catalogo, invece, si cambiano solo nel codice, con un rilascio.",
+  "10": "La cella appena accesa adesso dice «personalizzato»: il database e la configurazione non concordano più, e la cella mostra entrambi i valori.",
+  "11": "«Mostra solo le differenze» le raccoglie tutte. È da qui che si decide se riseminare, sapendo che riseminare le riporterebbe tutte alla configurazione.",
+  "12": "In fondo ci sono i permessi orfani: righe che il codice non usa più, ma che restano attaccate a qualche ruolo finché qualcuno non le toglie a mano.",
+  "13": "@punti"
+}

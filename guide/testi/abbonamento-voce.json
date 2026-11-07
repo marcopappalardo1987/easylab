@@ -1,0 +1,13 @@
+{
+  "0": "È l'unica pagina di Easy Lab che parla di soldi: che piano avete, quanto ne state usando, e dove sono le fatture.",
+  "2": "«Abbonamento» sta nel menù del tuo nome. Riguarda il contratto della tua organizzazione, e la vede chi amministra.",
+  "3": "Sotto il titolo c'è la ragione sociale con cui il contratto è intestato. È quella che comparirà sulle fatture.",
+  "5": "Il piano dice che cosa è previsto, lo stato dice se l'abbonamento è attivo o sospeso. Qui non è ancora stato attivato.",
+  "6": "I limiti sono due. Le sedi, quante ne usi su quante ne prevede il piano. E gli strumenti, che su questo piano sono illimitati.",
+  "7": "Sono i numeri da guardare prima di aprire una sede nuova: se il piano non la copre, va cambiato prima.",
+  "9": "Con un abbonamento attivo, qui compare il portale di fatturazione. Senza, come in questo caso, la pagina dice a chi rivolgersi.",
+  "10": "Il pagamento passa da Stripe, un sito di terzi. Non è un difetto: i dati della carta non passano mai da Easy Lab.",
+  "11": "Fatture, metodo di pagamento e disdetta si gestiscono lì, nel portale. È il posto di ogni domanda che comincia con «la fattura».",
+  "12": "Finita la visita si torna qui, e le modifiche fatte là si riflettono su questa pagina.",
+  "13": "@punti"
+}

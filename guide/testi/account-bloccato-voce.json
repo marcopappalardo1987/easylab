@@ -1,0 +1,12 @@
+{
+  "0": "Capita di trovare una schermata che dice che l'accesso è sospeso. Vediamo che cosa vuol dire, e come si torna a lavorare.",
+  "2": "Quando un pagamento resta insoluto, l'accesso alla sede viene sospeso. Non si perde niente: si smette di poter entrare.",
+  "3": "Qualunque pagina si provi ad aprire riporta qui. La sospensione riguarda l'organizzazione, non il tuo account.",
+  "4": "La pagina dice quale sede è sospesa. Il motivo dettagliato non compare: è una questione fra chi amministra ed Easy Lab.",
+  "6": "Le macchine, gli interventi, i documenti restano dove sono. La sospensione chiude la porta, non svuota la stanza.",
+  "7": "Nemmeno le email si fermano per sempre: riprendono quando l'accesso riprende.",
+  "9": "La sospensione vale per tutte le sedi del contratto. Chi lavora anche per un altro cliente trova qui le sue sedi ancora aperte.",
+  "10": "Per riaprire si salda l'insoluto. Chi amministra lo fa dalla pagina «Abbonamento», che resta raggiungibile.",
+  "11": "A pagamento registrato l'accesso torna da solo, quando Stripe conferma l'incasso. Nessuno deve chiedere niente.",
+  "12": "@punti"
+}
