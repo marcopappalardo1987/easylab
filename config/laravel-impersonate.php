@@ -28,7 +28,12 @@ return [
      * Only used in the built-in controller.
      * * Use 'back' to redirect to the previous page
      */
-    'take_redirect_to' => '/',
+    // ⛔ Mai `/`: rimanda a `/login`, e nel browser passare dalla pagina di
+    // accesso subito dopo il cambio d'identità chiudeva la sessione. Il
+    // Superadmin si ritrovava fuori, sia entrando sia uscendo (trovato girando
+    // le guide il 7 Nov 2026; nei test PHP non si riproduce). La Dashboard è
+    // una pagina protetta che ogni ruolo ha, come la usa già il parco.
+    'take_redirect_to' => '/dashboard',
 
     /**
      * The URI to redirect after leaving an impersonation.
@@ -36,6 +41,6 @@ return [
      * Only used in the built-in controller.
      * Use 'back' to redirect to the previous page
      */
-    'leave_redirect_to' => '/',
+    'leave_redirect_to' => '/dashboard',
 
 ];
