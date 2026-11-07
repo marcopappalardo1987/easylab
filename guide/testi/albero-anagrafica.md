@@ -33,10 +33,11 @@ reparto.
 
 ## 3
 
-Il numero accanto a ogni riga conta **tutto quello che sta sotto**, non solo il
-livello immediato: un laboratorio con quattro sotto-laboratori mostra la somma delle
-loro macchine. È il motivo per cui il totale della radice coincide con il parco
-della sede.
+Ogni scheda porta due numeri: quanti sotto-laboratori contiene e quante
+macchine stanno **direttamente** lì, senza contare quelle dei livelli sotto.
+Il secondo numero dice quindi quanta strumentazione è appoggiata al laboratorio
+in sé; per sapere quante macchine ci sono in tutto il ramo si scende, oppure si
+filtra l'elenco degli strumenti per laboratorio.
 
 ## capitolo 2
 
@@ -46,17 +47,21 @@ perdersi.
 
 ## 4
 
-Un nodo si apre cliccandolo, e non c'è nessuna freccia da centrare: tutta la
-riga è il bersaglio. Non si tratta di un menù che si espande sul posto ma di uno
-spostamento vero, quindi la pagina cambia e il titolo diventa quello del
-laboratorio.
+Quando i laboratori sono tanti, il campo «Filtra per nome» sopra le schede le
+restringe mentre scrivi: bastano poche lettere, e non serve il nome intero. Il
+filtro esiste a ogni livello dell'albero e si svuota da solo quando cambi
+livello. Un nodo poi si apre cliccandolo, e tutta la scheda è il bersaglio: non
+è un menù che si espande sul posto ma uno spostamento vero, e il percorso in
+alto si allunga col nome del laboratorio.
 
 ## 5
 
-Dentro un laboratorio ci sono i suoi sotto-laboratori, e se il laboratorio
-contiene già delle macchine sue compaiono anche quelle. I due livelli non si
-escludono: una macchina può stare direttamente sotto il laboratorio, se nella
-realtà è così.
+Dentro un laboratorio ci sono i suoi sotto-laboratori, poi il blocco
+«Responsabili», con chi segue quel laboratorio, e in fondo le macchine che
+stanno direttamente lì. I livelli non si escludono: una macchina può stare
+sotto il laboratorio invece che in un locale, se nella realtà è così. Chi può
+gestire le persone, dal blocco «Responsabili» assegna il laboratorio a un
+Responsabile Reparto o glielo toglie.
 
 ## 6
 

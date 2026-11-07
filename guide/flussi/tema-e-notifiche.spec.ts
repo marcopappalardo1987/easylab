@@ -1,117 +1,166 @@
 import { expect, test } from '@playwright/test';
-import { Regista } from '../lib/regista';
+import { Scenografo } from '../lib/scenografo';
 
 /**
- * Guida A3 — «Tema e notifiche».
+ * Guida A3 — «Tema e notifiche». Formato «vetrina» (🔗 `lib/scenografo.ts`).
+ *
+ * ⚠️ **Stessa sequenza e stesso numero di passi del copione precedente** (13, in
+ * tre capitoli da 5, 5 e 3): i testi scritti in `testi/tema-e-notifiche.md` sono
+ * numerati come i passi.
  *
  * ⚠️ Il tema è salvato sull'ACCOUNT, non nel browser: il copione lo rimette
- * chiaro in chiusura, o l'ultimo scatto lascerebbe l'applicazione scura e le
- * guide girate dopo, sullo stesso seme, partirebbero da lì.
+ * chiaro in chiusura, dalla scheda «Tema» delle preferenze.
  */
 test('tema e notifiche', async ({ page }) => {
-  const g = new Regista(page, 'tema-e-notifiche', 'Tema e notifiche', 'Come vuoi vedere Easy Lab, e che cosa vuoi ricevere');
+  const s = new Scenografo(page, 'tema-e-notifiche', 'Tema e notifiche', 'Come vuoi vedere Easy Lab, e che cosa vuoi ricevere');
 
   // ⚠️ I pulsanti del tema stanno sia nel menù in alto sia nella pagina delle
-  // preferenze: senza restringere alla barra, Playwright ne trova due e si ferma.
+  // preferenze: senza restringere, Playwright ne trova due e si ferma.
   const barra = page.getByRole('banner');
+  const nome = barra.getByRole('button', { name: /Giulia Ferrari/ });
 
   await page.goto('/login');
   await page.fill('#email', 'giulia.ferrari@aurora.test');
   await page.fill('#password', 'guida-demo');
   await page.click('button[type=submit]');
   await page.waitForURL('**/dashboard');
+  await s.avvia();
 
-  g.capitolo('Parte 1 di 3', 'Chiaro, scuro, o come il computer');
+  // ── Uno: il tema ────────────────────────────────────────────────────────────
+  s.cartello('Chiaro, scuro, o come il computer', 'Parte 1 di 3');
 
-  await g.passo('Il tema si sceglie dal menù col tuo nome, in alto a destra.', {
-    su: barra.getByRole('button', { name: /Giulia Ferrari/ }),
-    click: true,
-    zoom: 2.6,
-  });
+  await s.movimento(
+    'Il tema si sceglie dal menù col tuo nome, in alto a destra.',
+    async () => {
+      await nome.click();
+      await expect(barra.getByRole('button', { name: 'Tema scuro' })).toBeVisible();
+      await page.waitForTimeout(600);
+    },
+    { su: nome, zoom: 2, coda: 1 },
+  );
 
-  await page.waitForTimeout(500);
+  const scuro = barra.getByRole('button', { name: 'Tema scuro' });
 
-  await g.passo('Tre possibilità: chiaro, scuro, o «di sistema», che segue il tuo dispositivo.', {
-    su: barra.getByRole('button', { name: 'Tema scuro' }),
+  await s.scatto('Tre possibilità: chiaro, scuro, o «di sistema», che segue il tuo dispositivo.', {
+    su: scuro.locator('..'),
     zoom: 2.4,
+    alone: false,
     durata: 6,
   });
 
-  await g.passo('Si prova: «Tema scuro».', {
-    su: barra.getByRole('button', { name: 'Tema scuro' }),
-    click: true,
-    zoom: 2.8,
+  await s.movimento(
+    'Si prova: «Tema scuro».',
+    async () => {
+      await scuro.click();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+      await page.waitForTimeout(700);
+    },
+    { su: scuro, zoom: 2.2, coda: 1.2 },
+  );
+
+  // Il menù si chiude con un clic fuori, prima dello scatto d'insieme.
+  await page.locator('main').click({ position: { x: 5, y: 5 } });
+  await page.waitForTimeout(400);
+
+  await s.scatto('Cambia subito, senza salvare nulla.', { durata: 4.5 });
+
+  const preferenze = barra.getByText('Preferenze', { exact: true });
+
+  await s.movimento(
+    'La scelta viaggia con il tuo account: la ritrovi anche da un altro computer.',
+    async () => {
+      await nome.click();
+      await expect(preferenze).toBeVisible();
+      await page.waitForTimeout(500);
+      await preferenze.click();
+      await page.waitForURL('**/settings/notifiche');
+      await expect(page.getByRole('heading', { name: 'Tema' })).toBeVisible();
+      await page.waitForTimeout(600);
+    },
+    { su: nome, zoom: 1, coda: 1.4 },
+  );
+
+  // ── Due: l'email delle scadenze ─────────────────────────────────────────────
+  s.cartello("L'email delle scadenze", 'Parte 2 di 3');
+
+  await s.scatto("Nelle preferenze c'è un solo interruttore, e riguarda le email.", {
+    su: page.getByRole('heading', { name: 'Riepilogo email delle scadenze' }).locator('xpath=ancestor::div[.//button[normalize-space()="Salva"]][1]'),
+    zoom: 1.4,
+    durata: 5,
   });
-
-  await page.waitForTimeout(900);
-
-  await g.passo('Cambia subito, senza salvare nulla.', { durata: 4.5 });
-
-  await g.passo('La scelta viaggia con il tuo account: la ritrovi anche da un altro computer.', {
-    durata: 6,
-  });
-
-  g.capitolo('Parte 2 di 3', "L'email delle scadenze");
-
-  await page.goto('/settings/notifiche');
-  await page.waitForLoadState('networkidle');
-
-  await g.passo('Nelle preferenze c\'è un solo interruttore, e riguarda le email.', { durata: 5 });
 
   const interruttore = page.getByRole('switch', { name: /Riepilogo email/ });
 
-  await g.passo('Acceso, ricevi un\'email al giorno con le scadenze appena superate e quelle dei prossimi trenta giorni.', {
+  await s.scatto("Acceso, ricevi un'email al giorno con le scadenze appena superate e quelle dei prossimi trenta giorni.", {
     su: interruttore,
     zoom: 2.4,
     durata: 7,
   });
 
-  await g.passo('Nei giorni in cui non cambia nulla, non arriva niente.', {
+  await s.scatto('Nei giorni in cui non cambia nulla, non arriva niente.', {
     su: page.getByText(/Nessuna email nei giorni/),
     zoom: 1.9,
     durata: 5,
   });
 
-  await g.passo('Si spegne con un clic.', {
-    su: interruttore,
-    click: true,
-    zoom: 2.8,
-  });
+  await s.movimento(
+    'Si spegne con un clic.',
+    async () => {
+      await interruttore.click();
+      await expect(interruttore).toHaveAttribute('aria-checked', 'false');
+      await page.waitForTimeout(500);
+    },
+    { su: interruttore, zoom: 2.4, coda: 1 },
+  );
 
-  await page.waitForTimeout(500);
-  await expect(interruttore).toHaveAttribute('aria-checked', 'false');
+  const salva = page.getByRole('button', { name: 'Salva' });
 
-  await g.passo('E si salva.', {
-    su: page.getByRole('button', { name: 'Salva' }),
-    click: true,
-    zoom: 2.8,
-  });
+  await s.movimento(
+    'E si salva.',
+    async () => {
+      await salva.click();
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(700);
+    },
+    { su: salva, zoom: 2, coda: 1.2 },
+  );
 
-  await page.waitForTimeout(900);
+  // ── Tre: quello che resta comunque ──────────────────────────────────────────
+  s.cartello('Quello che resta comunque', 'Parte 3 di 3');
 
-  g.capitolo('Parte 3 di 3', 'Quello che resta comunque');
-
-  await g.passo('Le notifiche dentro l\'applicazione non si spengono: sono la copia di ciò che vedi comunque entrando, e non lasciano Easy Lab.', {
+  await s.scatto("Le notifiche dentro l'applicazione non si spengono: sono la copia di ciò che vedi comunque entrando, e non lasciano Easy Lab.", {
     su: page.getByText(/restano sempre attive/),
     zoom: 1.8,
     durata: 8,
   });
 
-  await g.passo('Spegnere l\'email non ti fa perdere niente: cambia solo dove lo leggi.', { durata: 5.5 });
+  await s.scatto("Spegnere l'email non ti fa perdere niente: cambia solo dove lo leggi, qui nella campanella.", {
+    su: barra.getByRole('button', { name: 'Notifiche' }),
+    zoom: 2.2,
+    durata: 6,
+  });
 
-  // Il tema torna chiaro: è sull'account, e resterebbe scuro per le guide successive.
-  await barra.getByRole('button', { name: /Giulia Ferrari/ }).click();
-  await page.waitForTimeout(400);
-  await barra.getByRole('button', { name: 'Tema chiaro' }).click();
-  await page.waitForTimeout(900);
+  const chiaro = page.getByRole('main').getByRole('button', { name: 'Tema chiaro' });
 
-  await g.passo('Si torna al tema chiaro quando si vuole: la scelta non è mai definitiva.', { durata: 5 });
+  await s.movimento(
+    'Si torna al tema chiaro quando si vuole: la scelta non è mai definitiva.',
+    async () => {
+      await chiaro.click();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+      await page.waitForTimeout(800);
+    },
+    { su: chiaro, zoom: 1.5, coda: 1.2 },
+  );
 
-  g.chiusura('Da ricordare', [
+  // Dopo il salvataggio l'interruttore resta spento: la scelta è stata registrata.
+  await page.reload();
+  await expect(page.getByRole('switch', { name: /Riepilogo email/ })).toHaveAttribute('aria-checked', 'false');
+
+  s.chiusura('Da ricordare', [
     'Il tema si applica subito e viaggia con il tuo account, non con il browser.',
     "L'interruttore delle preferenze riguarda solo le email: una al giorno, e nessuna quando non cambia nulla.",
     'Le notifiche in applicazione restano sempre attive, e non escono da Easy Lab.',
   ]);
 
-  g.scrivi();
+  await s.scrivi();
 });

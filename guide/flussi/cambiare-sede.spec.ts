@@ -1,98 +1,134 @@
 import { expect, test } from '@playwright/test';
-import { Regista } from '../lib/regista';
+import { Scenografo } from '../lib/scenografo';
 
 /**
- * Guida A5 — «Passare da una sede all'altra» (ADR-032).
+ * Guida A5 — «Passare da una sede all'altra» (ADR-032). Formato «vetrina»
+ * (🔗 `lib/scenografo.ts`).
  *
- * ⚠️ Girata con un utente **Tenant**, non col Responsabile Reparto delle altre
- * guide, e non è una scelta di comodo: per un Responsabile lo switcher non
- * compare affatto. `SwitcherEnte::mount()` legge il nome dell'Ente dal modello
- * coi global scope attivi, e `DepartmentScope` esclude il nodo radice — che non
- * è fra i reparti assegnati né loro discendente — quindi `nomeEnte` resta null
- * e la vista è tutta dietro quel controllo. Difetto segnalato il 6 Set 2026.
+ * ⚠️ **Stessa sequenza e stesso numero di passi del copione precedente** (11, in
+ * tre capitoli da 3, 3 e 5): i testi scritti in `testi/cambiare-sede.md` sono
+ * numerati come i passi.
+ *
+ * ⚠️ Girata con un utente **Tenant**: vede tutte le sedi del contratto, e la
+ * tendina ne elenca più d'una.
  */
 test('cambiare sede', async ({ page }) => {
-  const g = new Regista(page, 'cambiare-sede', 'Passare da una sede all\'altra', 'Quando il tuo contratto ne copre più di una');
+  const s = new Scenografo(page, 'cambiare-sede', "Passare da una sede all'altra", 'Quando il tuo contratto ne copre più di una');
 
   const barra = page.getByRole('banner');
-  const switcher = barra.getByRole('button', { name: /Sede di/ });
+  const switcher = barra.getByRole('button', { name: /Sede di/ }).first();
+  const riquadri = page.getByRole('link', { name: /Strumentazione idonea/ }).locator('..');
 
   await page.goto('/login');
   await page.fill('#email', 'paolo.greco@aurora.test');
   await page.fill('#password', 'guida-demo');
   await page.click('button[type=submit]');
   await page.waitForURL('**/dashboard');
+  await s.avvia();
 
-  g.capitolo('Parte 1 di 3', 'Dove sei adesso');
+  // ── Uno: dove sei adesso ────────────────────────────────────────────────────
+  s.cartello('Dove sei adesso', 'Parte 1 di 3');
 
-  await g.passo('Un contratto può coprire più sedi. Easy Lab te ne mostra una alla volta.', { durata: 6 });
+  await s.scatto('Un contratto può coprire più sedi. Easy Lab te ne mostra una alla volta.', { durata: 6 });
 
-  await g.passo('Il nome della sede in cui sei sta sempre in alto a sinistra.', {
+  await s.scatto('Il nome della sede in cui sei sta sempre in alto a sinistra.', {
     su: switcher,
     zoom: 2.6,
     durata: 5,
   });
 
-  await g.passo('E i numeri della Dashboard sono soltanto i suoi.', { durata: 5 });
-
-  g.capitolo('Parte 2 di 3', 'Le tue sedi');
-
-  await g.passo('Se le sedi sono più di una, il nome è cliccabile.', {
-    su: switcher,
-    click: true,
-    zoom: 2.6,
+  await s.scatto('E i numeri della Dashboard sono soltanto i suoi.', {
+    su: riquadri,
+    zoom: 1.15,
+    alone: false,
+    durata: 5,
   });
 
-  await page.waitForTimeout(700);
+  // ── Due: le tue sedi ────────────────────────────────────────────────────────
+  s.cartello('Le tue sedi', 'Parte 2 di 3');
 
-  await g.passo('La tendina elenca le altre sedi del tuo contratto. Solo quelle: non si esce mai dal proprio.', {
-    su: page.getByText('Le tue sedi'),
+  await s.movimento(
+    'Se le sedi sono più di una, il nome è cliccabile.',
+    async () => {
+      await switcher.click();
+      await expect(page.getByText('Le tue sedi')).toBeVisible();
+      await page.waitForTimeout(700);
+    },
+    { su: switcher, zoom: 2.2, coda: 1 },
+  );
+
+  await s.scatto('La tendina elenca le altre sedi del tuo contratto. Solo quelle: non si esce mai dal proprio.', {
+    su: page.getByText('Le tue sedi').locator('..'),
     zoom: 2.2,
     durata: 7,
   });
 
-  await g.passo('Si sceglie, e si cambia.', {
-    su: page.getByRole('button', { name: 'Sede di Bologna' }),
-    click: true,
-    zoom: 2.6,
-  });
+  const bologna = page.getByRole('button', { name: 'Sede di Bologna' });
 
-  await page.waitForTimeout(1200);
+  await s.movimento(
+    'Si sceglie, e si cambia.',
+    async () => {
+      await bologna.click();
+      // Se il nome in barra non cambia lo switch non è avvenuto, e tutto ciò
+      // che il video racconta da qui in poi sarebbe falso.
+      await expect(barra.getByRole('button', { name: 'Sede di Bologna' }).first()).toBeVisible({ timeout: 10_000 });
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(600);
+    },
+    { su: bologna, zoom: 1.6, coda: 1.4 },
+  );
 
-  // Se il nome in barra non è cambiato lo switch non è avvenuto, e tutto ciò
-  // che il video racconta da qui in poi sarebbe falso.
-  await expect(barra.getByRole('button', { name: 'Sede di Bologna' })).toBeVisible({ timeout: 10_000 });
+  // ── Tre: che cosa cambia ────────────────────────────────────────────────────
+  s.cartello('Che cosa cambia', 'Parte 3 di 3');
 
-  g.capitolo('Parte 3 di 3', 'Che cosa cambia');
+  await expect(page.getByText(/Sede di Bologna/).first()).toBeVisible();
 
-  await g.passo('Da questo momento tutto parla di Bologna: la Dashboard, gli elenchi, le scadenze.', {
+  await s.scatto('Da questo momento tutto parla di Bologna: la Dashboard, gli elenchi, le scadenze.', { durata: 6 });
+
+  await s.scatto('Il nome in alto lo conferma.', { su: switcher, zoom: 2.6, durata: 4 });
+
+  const strumenti = page.getByRole('link', { name: 'Strumenti', exact: true });
+
+  await s.movimento(
+    'Anche gli strumenti sono i suoi.',
+    async () => {
+      await strumenti.click();
+      await page.waitForURL('**/strumenti');
+      await expect(page.locator('tbody tr').first()).toBeVisible();
+      await page.waitForTimeout(500);
+    },
+    { su: strumenti, zoom: 1.6, coda: 1.2 },
+  );
+
+  await expect(page.locator('tbody')).not.toContainText('Milano');
+
+  await s.scatto("Le macchine dell'altra sede non compaiono, e non si mescolano mai.", {
+    su: page.locator('tbody tr').first(),
+    zoom: 1.4,
     durata: 6,
   });
 
-  await g.passo('Il nome in alto lo conferma.', { su: switcher, zoom: 2.6, durata: 4 });
+  const milano = page.getByRole('button', { name: 'Sede di Milano' });
 
-  await g.passo('Anche gli strumenti sono i suoi.', {
-    su: page.getByRole('link', { name: 'Strumenti', exact: true }),
-    click: true,
-    zoom: 3,
-  });
+  await s.movimento(
+    'Per tornare indietro si rifà la stessa cosa: il nome, e la sede di prima.',
+    async () => {
+      await switcher.click();
+      await expect(milano).toBeVisible();
+      await page.waitForTimeout(700);
+      await milano.click();
+      await expect(barra.getByRole('button', { name: 'Sede di Milano' }).first()).toBeVisible({ timeout: 10_000 });
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(500);
+    },
+    { su: switcher, zoom: 2, coda: 1.2 },
+  );
 
-  await page.waitForURL('**/strumenti');
-  await expect(page.locator('tbody tr').first()).toBeVisible();
-
-  await g.passo('Le macchine dell\'altra sede non compaiono, e non si mescolano mai.', { durata: 6 });
-
-  await g.passo('Per tornare indietro si rifà la stessa cosa: il nome, e la sede di prima.', {
-    su: switcher,
-    zoom: 2.6,
-    durata: 5.5,
-  });
-
-  g.chiusura('Da ricordare', [
+  s.chiusura('Da ricordare', [
     'La sede in cui ti trovi è sempre scritta in alto a sinistra.',
     'La tendina elenca soltanto le sedi del tuo contratto: da lì non si esce.',
     'Cambiando sede cambia tutto quello che vedi, e i dati delle due non si mescolano mai.',
   ]);
 
-  g.scrivi();
+  await s.scrivi();
 });

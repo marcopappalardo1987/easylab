@@ -50,23 +50,39 @@ l'accesso resta senza via di recupero.
 Il ruolo si assegna adesso ed è la decisione che conta. Non è irreversibile — si
 cambia in qualsiasi momento — ma è quello con cui la persona vedrà Easy Lab al
 primo accesso, e un ruolo troppo largo dato «per non avere problemi» è la strada
-più comune per aprire dati a chi non serve. Per un **Responsabile Reparto** il
-ruolo da solo non basta: vede soltanto i laboratori che gli vengono assegnati, e
-finché non ne ha non vede nulla. Si assegnano subito dopo, con «Laboratori»
-nella sua riga, spuntando quelli che segue: chi segue un laboratorio segue anche
-tutto ciò che contiene.
+più comune per aprire dati a chi non serve. Quando il ruolo scelto richiede il
+secondo fattore, la finestra lo dice prima dell'invio: conviene avvisare la
+persona, perché al primo accesso le sarà chiesto di configurarlo.
 
 ## 6
 
-Alla persona arriva un invito valido **sette giorni**. Se scade non si recupera:
-se ne manda un altro. Finché non lo accetta, l'account esiste ma non ha una
-password, quindi nessuno può entrarci al posto suo.
+Con «Invita» parte l'email, e la persona compare subito in elenco come
+«Invitata, mai entrata». L'invito vale **sette giorni**; se scade non si
+recupera, ma dalla stessa riga si manda di nuovo con «Reinvia l'invito». Finché
+non lo accetta, l'account esiste ma non ha una password, quindi nessuno può
+entrarci al posto suo.
+
+## 7
+
+Per un **Responsabile Reparto** il ruolo da solo non basta: vede soltanto i
+laboratori che gli vengono assegnati, e finché non ne ha non vede nulla. La sua
+riga lo dice in rosso, e porta un pulsante in più, «Laboratori», che apre la
+finestra con tutti i laboratori della sede. Si spuntano quelli che segue; vale
+subito, anche se in quel momento la persona è collegata.
+
+## 8
+
+Chi segue un laboratorio segue anche tutto ciò che contiene: spuntato
+Ematologia, i suoi sotto-laboratori risultano compresi e non si scelgono a uno
+a uno. Salvato, la riga dice «Segue:» con l'elenco dei laboratori. Lo stesso
+legame si può fare anche dall'altra parte, dalla pagina di un laboratorio, nel
+blocco «Responsabili».
 
 ## capitolo 3
 
 Il ruolo si cambia, l'accesso si toglie, il passato resta.
 
-## 7
+## 9
 
 Il ruolo di una persona si modifica in qualsiasi momento e ha effetto subito:
 alla prossima pagina che apre vedrà l'applicazione secondo il ruolo nuovo. È
@@ -74,14 +90,14 @@ utile quando qualcuno cambia mansione, e serve anche in senso opposto — restri
 un ruolo dato troppo largo all'inizio. Chi smette di essere Responsabile Reparto
 perde i laboratori che seguiva: se un giorno torna a esserlo, vanno riassegnati.
 
-## 8
+## 10
 
 «Cestina» toglie l'accesso: la persona non entra più. Non cancella però quello
 che ha fatto — gli interventi che ha registrato restano suoi, con il suo nome, e
 lo storico non cambia. È deliberato: un registro di manutenzione che perde
 l'autore quando qualcuno lascia il laboratorio non serve a niente.
 
-## 9
+## 11
 
 È il gesto giusto quando una persona va via, ed è meglio farlo il giorno stesso.
 Un account che resta aperto perché «tanto non lo usa più» è un accesso vivo a

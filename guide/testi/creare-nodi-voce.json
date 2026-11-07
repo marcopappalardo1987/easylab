@@ -1,0 +1,15 @@
+{
+  "0": "La struttura vale quanto è fedele: se il reparto è cambiato e l'albero no, le macchine risultano dove non sono più. Tenerla allineata richiede meno di un minuto.",
+  "2": "Il pulsante in alto a destra aggiunge sempre un figlio del punto in cui ti trovi. Alla radice della sede, aggiunge un laboratorio.",
+  "3": "Si apre un modulo, e il nome è la sola cosa obbligatoria.",
+  "4": "Conviene scrivere il nome che il reparto ha davvero, quello che si usa in corridoio, non una sigla interna.",
+  "5": "Le note sono facoltative. Servono a chi arriverà dopo, e si possono aggiungere in qualsiasi momento.",
+  "6": "E si salva.",
+  "8": "Il laboratorio nuovo è nell'elenco, ed è vuoto: nessun sotto-laboratorio e nessuna macchina. Non è un errore, le macchine arrivano dopo.",
+  "9": "Entrandoci, lo stesso pulsante ora propone un sotto-laboratorio: cambia con il livello in cui sei.",
+  "10": "Un sotto-laboratorio dentro il laboratorio, con lo stesso modulo di prima.",
+  "12": "«Rinomina» cambia il nome del nodo in cui ti trovi, e non tocca nient'altro: le macchine restano dove sono.",
+  "13": "Si corregge e si salva. Il nome nuovo compare subito ovunque, percorso compreso.",
+  "14": "«Elimina», invece, vale solo per un nodo vuoto. Finché dentro ci sono sotto-laboratori o macchine, l'applicazione si rifiuta, e dice che cosa togliere prima.",
+  "15": "@punti"
+}

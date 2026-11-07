@@ -1,94 +1,170 @@
-import { test } from '@playwright/test';
-import { Regista } from '../lib/regista';
+import { expect, test } from '@playwright/test';
+import { Scenografo } from '../lib/scenografo';
 import { accedi } from '../lib/accesso';
 
 /**
- * Guida I1 — «Le persone del laboratorio».
+ * Guida I1 — «Le persone del laboratorio». Formato «vetrina» (🔗 `lib/scenografo.ts`).
+ *
+ * ⚠️ **Due passi in più del copione precedente** (11 invece di 9; tre capitoli
+ * da 2, 6 e 3): la persona invitata è un Responsabile Reparto, e da ADR-057 il
+ * ruolo da solo non le fa vedere niente finché non le si assegnano i
+ * laboratori. La finestra «Laboratori» è il gesto che lo completa, e la guida
+ * lo mostra subito dopo l'invito. `testi/persone-ente.md` è rinumerato.
+ *
+ * Il vecchio copione compilava l'invito e non lo mandava mai: qui si manda, e la
+ * riga nuova compare in elenco.
  *
  * ⚠️ Serve l'**Admin**: invitare e cambiare ruolo sono gesti di amministrazione.
- * ⚠️ Il copione SCRIVE (invita una persona): `azzera.sh` prima di ogni giratura.
+ * ⚠️ Il copione SCRIVE (invita, assegna, cestina): `azzera.sh` prima di ogni giratura.
  */
 test('persone ente', async ({ page }) => {
-  const g = new Regista(page, 'persone-ente', 'Le persone del laboratorio', 'Invitare, dare un ruolo, togliere accesso');
+  const s = new Scenografo(page, 'persone-ente', 'Le persone del laboratorio', 'Invitare, dare un ruolo, togliere accesso');
 
   await accedi(page, 'maria.conti@aurora.test');
-
-  g.capitolo('Parte 1 di 3', 'Chi ha accesso');
-
   await page.goto('/utenti');
   await page.waitForLoadState('networkidle');
+  await s.avvia();
 
-  await g.passo("«Persone» elenca chi ha accesso a questo Ente, con il suo ruolo e il suo stato.", {
-    su: page.getByRole('heading').first(),
+  // ── Uno: chi ha accesso ─────────────────────────────────────────────────────
+  s.cartello('Chi ha accesso', 'Parte 1 di 3');
+
+  await s.scatto('«Persone» elenca chi ha accesso a questo Ente, con il suo ruolo e il suo stato.', {
+    su: page.getByRole('heading', { name: /Persone di questo Ente/ }),
     zoom: 1.7,
     durata: 8,
   });
 
-  await g.passo("Il ruolo non è un'etichetta: decide che cosa quella persona vede e può fare, quindi questa pagina è anche l'elenco dei permessi.", {
-    zoom: 1,
-    durata: 8,
-  });
+  await s.panoramica(
+    "Il ruolo non è un'etichetta: decide che cosa quella persona vede e può fare, quindi questa pagina è anche l'elenco dei permessi.",
+    8,
+  );
 
-  g.capitolo('Parte 2 di 3', 'Invitare qualcuno');
+  // ── Due: invitare qualcuno ──────────────────────────────────────────────────
+  s.cartello('Invitare qualcuno', 'Parte 2 di 3');
 
-  await g.passo("Si invita per email: non si crea una password per conto d'altri, e non si consegnano credenziali a voce.", {
-    su: page.getByRole('button', { name: /Invita/ }).first(),
+  const invita = page.getByRole('button', { name: /Invita una persona/ });
+
+  await s.scatto("Si invita per email: non si crea una password per conto d'altri, e non si consegnano credenziali a voce.", {
+    su: invita,
     zoom: 2.1,
     durata: 8,
   });
 
-  await page.getByRole('button', { name: /Invita/ }).first().click();
-  await page.waitForTimeout(900);
+  const finestra = page.getByRole('dialog');
 
-  await page.fill('#nome', 'Federico Sala');
-  await page.fill('#email', 'federico.sala@aurora.test');
+  await s.movimento(
+    'Nome e indirizzo: il resto lo sceglie la persona quando accetta.',
+    async () => {
+      await invita.click();
+      await expect(page.locator('#nome')).toBeVisible();
+      await page.waitForTimeout(400);
+      await page.locator('#nome').pressSequentially('Federico Sala', { delay: 80 });
+      await page.locator('#email').click();
+      await page.locator('#email').pressSequentially('federico.sala@aurora.test', { delay: 55 });
+      await page.waitForTimeout(500);
+    },
+    { su: invita, zoom: 1.2, coda: 0.9, suono: 'tastiera' },
+  );
 
-  await g.passo('Nome e indirizzo: il resto lo sceglie la persona quando accetta.', {
-    su: page.locator('#email'),
+  await s.movimento(
+    "Il ruolo si assegna adesso, ed è la decisione che conta: da lì discende tutto quello che vedrà entrando.",
+    async () => {
+      // ⚠️ Niente click né Escape: la tendina nativa non finisce nello
+      // screencast, ed Escape chiude l'intera finestra d'invito.
+      await page.locator('#ruolo').focus();
+      await page.waitForTimeout(500);
+      await page.locator('#ruolo').selectOption({ label: 'Responsabile Reparto' });
+      await expect(page.locator('#ruolo')).toHaveValue('Responsabile Reparto');
+      await page.waitForTimeout(800);
+    },
+    { su: page.locator('#ruolo'), zoom: 1.6, coda: 1.2 },
+  );
+
+  const conferma = finestra.getByRole('button', { name: 'Invita', exact: true });
+  const riga = page.locator('tbody tr', { hasText: 'Federico Sala' });
+
+  await s.movimento(
+    'Alla persona arriva un invito valido sette giorni, con cui sceglierà la propria password.',
+    async () => {
+      await conferma.click();
+      await expect(page.locator('#nome')).toHaveCount(0, { timeout: 10_000 });
+      await expect(riga).toBeVisible();
+      await riga.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(800);
+    },
+    { su: conferma, zoom: 1.4, coda: 1.4 },
+  );
+
+  await expect(riga).toContainText(/Nessun laboratorio assegnato/);
+
+  const laboratori = riga.getByRole('button', { name: 'Laboratori' });
+
+  await s.movimento(
+    'A un Responsabile Reparto il ruolo non basta: con «Laboratori» si scelgono quelli che segue, e senza non vede nulla.',
+    async () => {
+      await laboratori.click();
+      await expect(finestra.getByText(/Laboratori di Federico Sala/)).toBeVisible();
+      await page.waitForTimeout(900);
+      await finestra.getByLabel('Ematologia', { exact: true }).check();
+      await expect(finestra.locator('[data-compreso]').first()).toBeVisible();
+      await page.waitForTimeout(1200);
+    },
+    { su: laboratori, zoom: 1.2, coda: 1.4 },
+  );
+
+  const salvaLab = finestra.getByRole('button', { name: 'Salva i laboratori' });
+
+  await s.movimento(
+    'Chi segue un laboratorio segue anche tutto ciò che contiene. Si salva, e la riga dice che cosa segue.',
+    async () => {
+      await salvaLab.click();
+      await expect(finestra).toHaveCount(0, { timeout: 10_000 });
+      await expect(riga).toContainText(/Segue:\s*Ematologia/);
+      await page.waitForTimeout(800);
+    },
+    { su: salvaLab, zoom: 1.4, coda: 1.4 },
+  );
+
+  // ── Tre: cambiare ruolo, togliere accesso ───────────────────────────────────
+  s.cartello('Cambiare ruolo, togliere accesso', 'Parte 3 di 3');
+
+  await s.scatto('Il ruolo di una persona si cambia in qualsiasi momento, e ha effetto subito.', {
+    su: riga.getByRole('button', { name: 'Cambia ruolo' }),
     zoom: 2,
-    durata: 8,
+    durata: 7,
   });
 
-  await g.passo("Il ruolo si assegna adesso, ed è la decisione che conta: da lì discende tutto quello che vedrà entrando.", {
-    su: page.locator('#ruolo'),
-    zoom: 2.1,
-    durata: 8,
-  });
+  const cestina = riga.getByRole('button', { name: 'Cestina' });
 
-  await page.locator('#ruolo').selectOption({ index: 1 });
-  await page.waitForTimeout(400);
+  await s.movimento(
+    "«Cestina» toglie l'accesso senza cancellare il passato: gli interventi che quella persona ha registrato restano suoi.",
+    async () => {
+      await cestina.click();
+      await expect(finestra.getByText(/Cestinare Federico Sala/)).toBeVisible();
+      await page.waitForTimeout(1200);
+    },
+    { su: cestina, zoom: 1.3, coda: 1.6 },
+  );
 
-  await g.passo("Alla persona arriva un invito valido sette giorni, con cui sceglierà la propria password.", {
-    zoom: 1,
-    durata: 8,
-  });
+  const confermaCestino = finestra.getByRole('button', { name: 'Cestina' });
 
-  g.capitolo('Parte 3 di 3', 'Cambiare ruolo, togliere accesso');
+  await s.movimento(
+    "È il gesto giusto quando qualcuno lascia il laboratorio: si toglie l'accesso, non la storia.",
+    async () => {
+      await confermaCestino.click();
+      await expect(finestra).toHaveCount(0, { timeout: 10_000 });
+      await expect(riga.getByRole('button', { name: 'Ripristina' })).toBeVisible();
+      await expect(riga).toContainText('non entra e non è assegnabile');
+      await page.waitForTimeout(900);
+    },
+    { su: confermaCestino, zoom: 1.4, coda: 1.4 },
+  );
 
-  await page.goto('/utenti');
-  await page.waitForLoadState('networkidle');
-
-  await g.passo("Il ruolo di una persona si cambia in qualsiasi momento, e ha effetto subito.", {
-    su: page.locator('tbody tr').first(),
-    zoom: 1.8,
-    durata: 8,
-  });
-
-  await g.passo("«Cestina» toglie l'accesso senza cancellare il passato: gli interventi che quella persona ha registrato restano suoi.", {
-    zoom: 1,
-    durata: 8,
-  });
-
-  await g.passo("È il gesto giusto quando qualcuno lascia il laboratorio: si toglie l'accesso, non la storia.", {
-    zoom: 1,
-    durata: 8,
-  });
-
-  g.chiusura('Da ricordare', [
-    "Si invita per email: la password la sceglie la persona, e nessuno la conosce al posto suo.",
-    'Il ruolo decide che cosa quella persona vede: è la scelta che conta, e si può correggere in qualsiasi momento.',
+  s.chiusura('Da ricordare', [
+    'Si invita per email: la password la sceglie la persona, e nessuno la conosce al posto suo.',
+    'Il ruolo decide che cosa quella persona vede; a un Responsabile Reparto servono anche i laboratori che segue.',
     "Cestinare toglie l'accesso e lascia intatto lo storico: il lavoro registrato resta attribuito a chi lo ha fatto.",
   ]);
 
-  g.scrivi();
+  await s.scrivi();
 });
