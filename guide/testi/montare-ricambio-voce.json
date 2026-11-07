@@ -1,0 +1,16 @@
+{
+  "0": "Un pezzo cambiato su una macchina è un'informazione che serve due volte: a chi lavora su quella macchina, e a chi deve ricomprarlo. Vediamo come si annota.",
+  "2": "Un ricambio non si aggiunge da solo. Si annota dentro l'intervento in cui è stato montato.",
+  "3": "Si parte quindi da un intervento, nuovo o già esistente.",
+  "5": "Nel modulo dell'intervento c'è la spunta «Ricambio effettuato». Finché è spenta, il pezzo non esiste.",
+  "6": "Accendendola compare la sezione dei ricambi, con «più Aggiungi ricambio».",
+  "7": "Ogni riga è un pezzo: il nome, la sua garanzia, e il fornitore da cui è stato comprato.",
+  "8": "Il nome si scrive per esteso, come lo si direbbe a voce: diventerà la voce del catalogo dei ricambi.",
+  "9": "E mentre scrivi, Easy Lab propone i nomi già usati. Sceglierne uno evita di creare una seconda grafia dello stesso pezzo.",
+  "10": "La scadenza di garanzia del pezzo è facoltativa. Ma se c'è, conta per il semaforo come quella della macchina.",
+  "11": "Il fornitore si sceglie da una tendina: si scrive una parte del nome, e si prende quello giusto.",
+  "13": "Salvato l'intervento, il pezzo compare nella linguetta «Ricambi» della macchina, con il suo fornitore e la sua garanzia.",
+  "14": "E compare nel catalogo dei ricambi, che raccoglie tutti i montaggi di quel pezzo, su tutte le macchine.",
+  "15": "Da lì si risponde alla domanda pratica: quante guarnizioni sono montate, su quali macchine, e in quali laboratori.",
+  "16": "@punti"
+}

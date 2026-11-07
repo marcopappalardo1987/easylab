@@ -26,7 +26,9 @@ invece è coperta.
 
 I due orologi partono in momenti diversi. La copertura della macchina parte dal
 contratto, quella del pezzo dal giorno in cui è stato montato: è il motivo per
-cui una macchina vecchia può avere una garanzia attiva, e non è un errore.
+cui una macchina vecchia può avere una garanzia attiva, e una macchina coperta
+per anni può avere dentro un pezzo che non lo è più. Il numerino accanto alla
+linguetta «Ricambi» segnala proprio questo: una scadenza da gestire sui pezzi.
 
 ## capitolo 2
 
@@ -41,16 +43,18 @@ documento del fornitore; farlo dopo significa cercarlo di nuovo.
 
 ## 4
 
-Nella linguetta «Ricambi» della macchina i pezzi si ritrovano tutti, e da lì si
-corregge la data se era sbagliata o se non era stata messa. La correzione sta
-qui e non nell'intervento, perché la garanzia è una proprietà del pezzo, non del
-lavoro.
+Nella linguetta «Ricambi» della macchina i pezzi si ritrovano tutti, e con
+«Correggi» si sistema la data se era sbagliata o se non era stata messa. La
+correzione sta qui e non nell'intervento, perché la garanzia è una proprietà del
+pezzo, non del lavoro. Nella stessa finestra si correggono anche la quantità,
+la data di montaggio e il fornitore del pezzo.
 
 ## 5
 
-Ogni riga tiene insieme tre cose: il pezzo, l'intervento che lo ha montato e la
-sua copertura. È il legame che permette di rispondere a «quando è stato
-cambiato» e «da chi» senza cercare nello storico.
+Ogni riga tiene insieme il pezzo, la quantità, la data di montaggio,
+l'intervento che lo ha montato, il fornitore da cui è stato comprato e la sua
+copertura. È il legame che permette di rispondere a «quando è stato cambiato»,
+«da chi» e «da dove arrivava» senza cercare nello storico.
 
 ## capitolo 3
 
@@ -70,10 +74,11 @@ semaforo somma, i motivi separano.
 
 ## 8
 
-Il dettaglio dei pezzi coperti non è visibile a tutti: per alcuni ruoli resta un
-**aggregato**, cioè quanti sono coperti, senza il nome dei pezzi. Il pallino
-invece lo vedono tutti, perché è un'informazione di stato e non un dato
-commerciale.
+Il dettaglio dei pezzi coperti non è per forza visibile a tutti: dipende da
+un permesso che l'Ente può togliere ad alcuni ruoli. Per chi non ce l'ha resta
+un **aggregato**, cioè quanti pezzi sono coperti, senza il nome dei pezzi. Il
+pallino del semaforo invece lo vedono tutti, perché è un'informazione di stato e
+non un dato commerciale.
 
 ## 9
 

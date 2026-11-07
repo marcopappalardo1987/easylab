@@ -1,0 +1,22 @@
+{
+  "0": "Il gesto che si fa più spesso in Easy Lab: trovare una macchina e annotare che cosa le è stato fatto. Vediamolo dall'inizio.",
+  "2": "Si entra con le proprie credenziali di lavoro: l'indirizzo dell'invito e la password che hai scelto tu.",
+  "3": "Un clic su «Accedi», e siamo dentro.",
+  "4": "La Dashboard apre sullo stato del parco: quante macchine sono a posto, e quante chiedono attenzione.",
+  "5": "Ma se sai già su quale macchina hai lavorato, conviene andare dritti al menù «Strumenti», che porta all'elenco completo.",
+  "7": "Ogni riga porta il suo semaforo, con lo stesso significato della Dashboard: verde a posto, giallo in scadenza, rosso fermo.",
+  "8": "La ricerca lavora su nome, modello e matricola insieme: non serve ricordare con quale dei tre è stata registrata la macchina.",
+  "9": "Basta digitare, e l'elenco si restringe mentre scrivi.",
+  "10": "Si apre la scheda dell'autoclave cliccando la sua riga.",
+  "11": "La scheda raccoglie tutto quel che si sa della macchina: dove sta, da quando è in servizio, e qual è la prossima scadenza.",
+  "13": "La linguetta «Interventi» apre lo storico della manutenzione.",
+  "14": "Qui restano gli interventi già fatti e quelli in programma, ognuno con la sua data, il tipo, e chi lo esegue.",
+  "15": "Per annotarne uno nuovo, «più Nuovo intervento». Nasce già agganciato a questa macchina.",
+  "16": "Si descrive che cosa è stato fatto, con le parole che servirebbero a un collega fra otto mesi.",
+  "17": "Il tipo distingue manutenzione ordinaria, straordinaria, taratura e full risk.",
+  "18": "La data di scadenza è il campo più importante: è quella che accenderà il semaforo quando si avvicina.",
+  "19": "L'assegnatario è obbligatorio. Un intervento è sempre di qualcuno, ed è a lui che arriverà l'avviso.",
+  "20": "E si salva.",
+  "21": "L'intervento è nello storico, e in «Panoramica» la prossima scadenza della macchina è già quella appena impostata.",
+  "22": "@punti"
+}

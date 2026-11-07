@@ -25,7 +25,9 @@ coperta». Sono due elenchi distinti e non si mescolano mai.
 
 Ogni riga dice da quando parte la copertura, quanti mesi dura e quando scade
 davvero. Le tre informazioni stanno insieme perché la terza discende dalle prime
-due, e vederle affiancate rende evidente un inizio sbagliato.
+due, e vederle affiancate rende evidente un inizio sbagliato. Quando una
+garanzia è scaduta o sta per scadere, il numerino accanto al nome della
+linguetta lo segnala anche da fuori, senza bisogno di aprirla.
 
 ## capitolo 2
 
@@ -36,7 +38,10 @@ rinnova: le coperture successive convivono nello storico.
 
 Se ne aggiunge una nuova col contratto in mano. Una macchina può averne più di
 una nel tempo — la garanzia del costruttore, poi un contratto di assistenza —
-e tenerle tutte permette di ricostruire chi copriva cosa in un dato momento.
+e tenerle tutte permette di ricostruire chi copriva cosa in un dato momento. La
+prima, quella del costruttore, si può scrivere già nel modulo «Nuovo
+strumento», mentre si registra la macchina: da qui poi si modifica, si aggiunge
+e si toglie.
 
 ## 4
 
@@ -72,9 +77,11 @@ Una garanzia scaduta pesa sul semaforo quanto una manutenzione non fatta.
 
 ## 8
 
-La riga compare con il suo stato — in corso, in scadenza, scaduta — calcolato
-sulla data effettiva. Gli stati sono gli stessi del semaforo, quindi non c'è un
-secondo vocabolario da imparare.
+La riga compare con il suo stato — attiva, in scadenza, scaduta — calcolato
+sulla data effettiva, accanto a quelle che c'erano già. Attenzione però: anche
+la garanzia scaduta continua a contare, perché il semaforo guarda la scadenza
+più vicina fra tutte quelle registrate sulla macchina. Un rinnovo, da solo, non
+spegne il giallo.
 
 ## 9
 

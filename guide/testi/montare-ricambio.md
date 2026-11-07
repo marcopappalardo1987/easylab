@@ -46,9 +46,10 @@ garanzia — e sono informazioni che non si possono mettere insieme.
 
 ## 5
 
-Ogni riga ha il nome del pezzo, la sua scadenza di garanzia e, se lo si vuole
-dire, il fornitore da cui è stato comprato. Il resto — chi, quando, su quale
-macchina — lo eredita dall'intervento, e non c'è niente da ripetere.
+Ogni riga ha il nome del pezzo, la sua scadenza di garanzia e il fornitore da
+cui è stato comprato. Il resto — chi, quando, su quale macchina — lo eredita
+dall'intervento, e non c'è niente da ripetere: la data di montaggio è quella in
+cui l'intervento risulta eseguito.
 
 ## 6
 
@@ -69,25 +70,33 @@ La scadenza di garanzia del pezzo è facoltativa, ma se la metti conta: una
 garanzia di ricambio scaduta accende il semaforo della macchina come quella
 della macchina stessa. Vale la pena inserirla quando il fornitore la dichiara.
 
+## 9
+
+Il fornitore del pezzo è facoltativo e si sceglie da una tendina: la si apre,
+si scrive una parte del nome e si prende quello giusto fra quelli che restano.
+Conviene metterlo quando il pezzo non arriva dal fornitore della macchina,
+perché è l'informazione che serve il giorno in cui va ricomprato. Se il
+fornitore non c'è ancora, lo si crea dalla stessa tendina.
+
 ## capitolo 3
 
 Un pezzo annotato si ritrova in due posti, e serve a due domande diverse.
 
-## 9
+## 10
 
 Sulla macchina, nella linguetta «Ricambi», ci sono tutti i pezzi che le sono
 stati montati, con l'intervento che li ha portati. È la risposta a «che cosa è
 stato cambiato su questa macchina».
 
-## 10
+## 11
 
 Nel catalogo dei ricambi, invece, lo stesso pezzo compare una volta sola con
 tutti i suoi montaggi su tutte le macchine. È la risposta a «dove sta questo
 pezzo», che è la domanda di chi ordina.
 
-## 11
+## 12
 
-Da lì si arriva a quella davvero pratica: quante guarnizioni monta questo
-laboratorio in un anno, su quali macchine, e quindi quante conviene tenerne a
-scorta. È un'informazione che nasce da sola, se i pezzi vengono annotati mentre
-si lavora.
+Da lì si arriva alla domanda davvero pratica: quante guarnizioni di quel tipo
+sono montate, su quali macchine e in quali laboratori, e quindi quante conviene
+tenerne a scorta. È un'informazione che nasce da sola, se i pezzi vengono
+annotati mentre si lavora.

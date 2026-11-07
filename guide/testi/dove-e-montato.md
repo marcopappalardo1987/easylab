@@ -30,20 +30,22 @@ niente.
 
 ## capitolo 2
 
-I montaggi divisi per laboratorio dicono dove il pezzo si consuma.
+Le macchine divise per laboratorio dicono dove il pezzo si consuma.
 
 ## 3
 
-Le etichette sotto il nome dividono i montaggi per laboratorio, ciascuna col
-proprio conteggio. È la stessa informazione dell'elenco sotto, aggregata: si
-legge in due secondi invece che contando le righe.
+Le etichette sotto il nome dividono le macchine per laboratorio, ciascuna col
+numero di macchine di quel laboratorio che montano il pezzo. È la stessa
+informazione dell'elenco sotto, aggregata: si legge in due secondi invece che
+contando le righe.
 
 ## 4
 
-Un laboratorio con il triplo dei montaggi degli altri sta dicendo qualcosa, e
+Un laboratorio con il triplo delle macchine degli altri sta dicendo qualcosa, e
 vale la pena chiedersi che cosa: macchine più vecchie, un uso più intenso, o una
-condizione ambientale che logora quel pezzo. È il tipo di domanda che senza
-questa vista non verrebbe in mente.
+condizione ambientale che logora quel pezzo. Cliccando l'etichetta si apre
+l'elenco degli strumenti filtrato su quel laboratorio: tutte le sue macchine,
+non solo quelle che montano il pezzo, così si vede anche quali ne sono senza.
 
 ## capitolo 3
 

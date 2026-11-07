@@ -1,0 +1,12 @@
+{
+  "0": "Ogni pezzo montato su una macchina finisce in un catalogo, senza che nessuno lo compili. Vediamo come si legge, e come si tiene pulito.",
+  "2": "«Ricambi» raccoglie i pezzi che sono stati montati sulle macchine. Non è un magazzino di quelli a scorta.",
+  "3": "Nessuno lo compila a mano: si costruisce da solo, annotando gli interventi. E si interroga scrivendo il nome di un pezzo.",
+  "5": "La ricerca lavora sul nome del pezzo, e basta una parola.",
+  "6": "Per ogni pezzo trovato, su quante macchine è montato e quanti pezzi in tutto, con i laboratori in cui stanno.",
+  "7": "Sotto, una riga per macchina: il nome, la matricola, il laboratorio, e quanti pezzi monta.",
+  "9": "Il nome del pezzo lo scrive chi registra l'intervento. Così lo stesso ricambio può finire con due grafie diverse, come qui.",
+  "10": "«Unisci» serve a questo: si sceglie la voce da tenere, e le due diventano una, senza perdere nessun montaggio.",
+  "11": "Vale la pena farlo appena ci si accorge del doppione. Più a lungo convivono, più montaggi finiscono sulla grafia sbagliata.",
+  "12": "@punti"
+}

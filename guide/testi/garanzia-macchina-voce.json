@@ -1,0 +1,14 @@
+{
+  "0": "Una macchina non ha solo manutenzioni: ha anche una copertura, che un giorno finisce. Vediamo dove si registra, e perché conta.",
+  "2": "La garanzia sta in una linguetta sua, perché non è una manutenzione: è una copertura, con una scadenza propria.",
+  "3": "Ogni riga dice da quando parte, quanto dura, e quando scade davvero. Questa è scaduta, e il numerino sulla linguetta lo segnala anche da fuori.",
+  "5": "Se ne aggiunge una quando si rinnova il contratto. La prima, quella del costruttore, si può scrivere già nel modulo «Nuovo strumento», mentre si registra la macchina.",
+  "6": "La data di inizio è quella del contratto, che non sempre coincide con l'installazione della macchina.",
+  "7": "La durata si dà in mesi: ventiquattro, trentasei, quello che dice il contratto.",
+  "8": "La scadenza invece non si scrive. La calcola Easy Lab sommando inizio e durata, così non esistono due date che possono discordare.",
+  "9": "E si salva.",
+  "11": "La garanzia nuova è in elenco, attiva fino al 2028. Quella scaduta resta accanto, con il suo stato.",
+  "12": "E la garanzia conta per il semaforo: una garanzia scaduta accende la macchina come farebbe una manutenzione non fatta.",
+  "13": "È il motivo per cui certe macchine sono gialle senza nessun intervento in ritardo. Il motivo è scritto qui, in Panoramica.",
+  "14": "@punti"
+}
