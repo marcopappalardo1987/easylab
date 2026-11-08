@@ -149,7 +149,7 @@ test('modificare strumento', async ({ page }) => {
   const salva = page.locator('form:has(#strumentoForm\\.nome)').getByRole('button', { name: 'Salva' });
 
   await s.movimento(
-    'Si salva. La modifica è immediata, e resta nel registro: si sa sempre chi ha cambiato che cosa.',
+    'Si salva. La modifica è immediata: nessuno di questi campi cancella dati, quindi non chiede conferme.',
     async () => {
       await salva.click();
       // La modale che resta aperta significa validazione fallita.

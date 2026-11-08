@@ -8,7 +8,7 @@
   "8": "Il fornitore è a chi si telefona quando la macchina si guasta. Si sceglie scrivendone il nome, e si aggiorna quando cambia l'assistenza.",
   "9": "Il referente è la persona del laboratorio a cui la macchina fa capo. Con la sua email, gli avvisi sulla macchina arrivano anche a lui.",
   "11": "I parametri tecnici sono liberi: «più Aggiungi» apre una riga, e si scrive la voce che serve a quella macchina.",
-  "12": "Si salva. La modifica è immediata, e resta nel registro: si sa sempre chi ha cambiato che cosa.",
+  "12": "Si salva. La modifica è immediata, e non chiede conferme: nessuno di questi campi cancella dati.",
   "13": "Matricola, referente e parametri ora compaiono nella linguetta «Anagrafica». Sono i dati di targa, senza aprire il manuale.",
   "14": "@punti"
 }

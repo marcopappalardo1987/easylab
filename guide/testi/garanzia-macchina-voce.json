@@ -7,8 +7,8 @@
   "7": "La durata si dà in mesi: ventiquattro, trentasei, quello che dice il contratto.",
   "8": "La scadenza invece non si scrive. La calcola Easy Lab sommando inizio e durata, così non esistono due date che possono discordare.",
   "9": "E si salva.",
-  "11": "La garanzia nuova è in elenco, attiva fino al 2028. Quella scaduta resta accanto, con il suo stato.",
-  "12": "E la garanzia conta per il semaforo: una garanzia scaduta accende la macchina come farebbe una manutenzione non fatta.",
-  "13": "È il motivo per cui certe macchine sono gialle senza nessun intervento in ritardo. Il motivo è scritto qui, in Panoramica.",
+  "11": "La garanzia nuova è in elenco, attiva fino al 2029. Quella scaduta non si cancella: resta accanto, come storico.",
+  "12": "E la garanzia conta per il semaforo. Quella scaduta accendeva la macchina come una manutenzione non fatta. Rinnovata, la macchina torna in regola.",
+  "13": "La Panoramica mostra la garanzia in vigore. E quando una macchina è gialla senza interventi in ritardo, il motivo è scritto proprio qui.",
   "14": "@punti"
 }

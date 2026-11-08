@@ -78,21 +78,21 @@ Una garanzia scaduta pesa sul semaforo quanto una manutenzione non fatta.
 ## 8
 
 La riga compare con il suo stato — attiva, in scadenza, scaduta — calcolato
-sulla data effettiva, accanto a quelle che c'erano già. Attenzione però: anche
-la garanzia scaduta continua a contare, perché il semaforo guarda la scadenza
-più vicina fra tutte quelle registrate sulla macchina. Un rinnovo, da solo, non
-spegne il giallo.
+sulla data effettiva, accanto a quelle che c'erano già. Le garanzie vecchie non
+si cancellano: restano come storico delle coperture che la macchina ha avuto.
+Per il semaforo, però, conta solo quella in vigore, cioè quella che scade più
+avanti.
 
 ## 9
 
 E conta davvero: una garanzia scaduta accende la macchina come farebbe un
-intervento in ritardo. Non è una segnalazione minore, perché il rischio che
-descrive è concreto — se quella macchina si guasta domani, la riparazione la
-paga il laboratorio.
+intervento in ritardo, perché il rischio che descrive è concreto — se quella
+macchina si guasta domani, la riparazione la paga il laboratorio. Il rinnovo
+spegne il giallo: registrata la garanzia nuova, la macchina torna in regola.
 
 ## 10
 
-È la spiegazione di molte macchine gialle che non hanno nessun intervento in
-ritardo, e il motivo per cui la Panoramica elenca sempre i **motivi**: quando il
-colore non torna, la risposta è in quel riquadro, e quasi sempre dice
-«garanzia».
+La Panoramica mostra la garanzia in vigore e, quando la macchina è gialla,
+elenca sempre i **motivi**. È la spiegazione di molte macchine gialle che non
+hanno nessun intervento in ritardo: quando il colore non torna, la risposta è
+in quel riquadro, e quasi sempre dice «garanzia».

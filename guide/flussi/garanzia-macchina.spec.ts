@@ -11,9 +11,9 @@ import { accedi } from '../lib/accesso';
  * sono numerati come i passi.
  *
  * La macchina è la 195 del seme: gialla per UN solo motivo, la garanzia
- * scaduta, che la Panoramica elenca. ⚠️ Il rinnovo NON la fa tornare verde:
- * il semaforo guarda la scadenza minima fra TUTTE le garanzie (ADR-004), e
- * quella vecchia resta in elenco. Che la garanzia si scriva già in «Nuovo strumento»
+ * scaduta, che la Panoramica elenca. Il rinnovo la fa tornare in regola: pesa
+ * solo la garanzia in vigore (🔗 nota a ADR-005, 8 Nov 2026), e quella vecchia
+ * resta in elenco come storico. Che la garanzia si scriva già in «Nuovo strumento»
  * (ADR-059) lo dice il passo 3.
  *
  * ⚠️ Il copione SCRIVE (registra una garanzia): `azzera.sh` prima di ogni giratura.
@@ -75,14 +75,15 @@ test('garanzia macchina', async ({ page }) => {
   );
 
   const durata = page.locator('#garanziaForm\\.durata_mesi');
-  // ⚠️ La durata resta quella proposta (24): scriverne una a mano oggi manda
-  // il salvataggio in errore 500 (`durata_mesi` arriva come stringa a
-  // `Garanzia::normalizzaScadenza()` → `addMonths()`). Difetto riportato.
-  await s.scatto('La durata si dà in mesi: ventiquattro, trentasei, quello che dice il contratto.', {
-    su: durata,
-    zoom: 1.8,
-    durata: 6,
-  });
+  await s.movimento(
+    'La durata si dà in mesi: ventiquattro, trentasei, quello che dice il contratto.',
+    async () => {
+      await durata.fill('');
+      await durata.pressSequentially('36', { delay: 160 });
+      await page.waitForTimeout(600);
+    },
+    { su: durata, zoom: 1.8, coda: 0.8, durata: 6, suono: 'tastiera' },
+  );
 
   await s.scatto('La scadenza non si scrive: la calcola Easy Lab sommando inizio e durata, così non ci sono due date che possono discordare.', {
     su: page.getByText(/scadenza effettiva è calcolata/i),
@@ -104,11 +105,11 @@ test('garanzia macchina', async ({ page }) => {
   // ── Tre: che cosa muove ─────────────────────────────────────────────────────
   s.cartello('Che cosa muove', 'Parte 3 di 3');
 
-  const nuovaRiga = page.locator('tbody tr').filter({ hasText: '01/11/2028' }).filter({ visible: true });
+  const nuovaRiga = page.locator('tbody tr').filter({ hasText: '01/11/2029' }).filter({ visible: true });
   await expect(nuovaRiga).toHaveCount(1);
   await expect(nuovaRiga).toContainText('Attiva');
 
-  await s.scatto('La garanzia nuova è in elenco con il suo stato, attiva fino al 2028; quella scaduta resta accanto, con il suo.', {
+  await s.scatto('La garanzia nuova è in elenco, attiva fino al 2029; quella scaduta resta accanto, come storico.', {
     su: nuovaRiga,
     zoom: 1.5,
     durata: 7,
@@ -116,25 +117,26 @@ test('garanzia macchina', async ({ page }) => {
 
   const panoramica = page.getByRole('button', { name: 'Panoramica' });
   await s.movimento(
-    'E conta per il semaforo: una garanzia scaduta accende la macchina come farebbe una manutenzione non fatta.',
+    'E conta per il semaforo: la garanzia scaduta accendeva la macchina; rinnovata, la macchina torna in regola.',
     async () => {
       await panoramica.click();
-      await expect(page.getByText(/Garanzia macchina scaduta il/)).toBeVisible();
+      await expect(page.getByText(/Garanzia macchina scaduta il/)).toHaveCount(0);
+      await expect(page.getByText(/Nessuna scadenza aperta o imminente/)).toBeVisible();
       await page.waitForTimeout(700);
     },
     { su: panoramica, zoom: 1.3, coda: 1.2, durata: 7 },
   );
 
-  await s.scatto('È il motivo per cui certe macchine sono gialle senza nessun intervento in ritardo: il motivo è scritto in Panoramica.', {
-    su: page.getByText(/Garanzia macchina scaduta il/),
+  await s.scatto('La Panoramica mostra la garanzia in vigore. Quando una macchina è gialla senza interventi in ritardo, il motivo è scritto qui.', {
+    su: page.getByText(/01\/11\/2029/).first(),
     zoom: 1.6,
     durata: 7.5,
   });
 
   s.chiusura('Da ricordare', [
     'La scadenza si calcola da inizio più durata: non esistono due date che possono discordare.',
-    'Una garanzia scaduta accende il semaforo come una manutenzione non fatta.',
-    'Se una macchina è gialla senza interventi in ritardo, la spiegazione è quasi sempre qui.',
+    'Una garanzia scaduta accende il semaforo come una manutenzione non fatta; il rinnovo la spegne.',
+    'Se una macchina è gialla senza interventi in ritardo, la spiegazione è quasi sempre una garanzia.',
   ]);
 
   await s.scrivi();

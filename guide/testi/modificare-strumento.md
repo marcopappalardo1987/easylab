@@ -90,10 +90,11 @@ ne sostituisce il valore.
 
 Il salvataggio è immediato e non chiede conferme, perché nessuno di questi
 campi distrugge dati: si stanno correggendo descrizioni, non spostando o
-cancellando macchine. Ogni modifica resta comunque nel registro con il tuo nome
-e la data. Non è sorveglianza: serve il giorno in cui due persone ricordano
-diversamente che cosa c'era scritto prima, e serve a chi deve dimostrare che
-una manutenzione riguardava quella macchina e non un'altra.
+cancellando macchine. I gesti che cambiano la storia della macchina lasciano
+invece una traccia propria, con il tuo nome e la data: lo spostamento in un
+altro laboratorio, la forzatura del semaforo, l'etichetta QR rigenerata. È
+quello che serve a chi deve dimostrare dov'era una macchina e chi ne ha deciso
+lo stato.
 
 ## 10
 
