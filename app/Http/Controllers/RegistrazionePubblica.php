@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Notifications\AccountGiaEsistente;
 use App\Notifications\VerificaEmailRegistrazione;
 use App\Rules\SenzaIndirizziWeb;
+use App\Support\Piani;
 use App\Support\Registrazione\CompletaRegistrazione;
 use App\Support\Registrazione\PianiRegistrabili;
 use App\Support\Registrazione\PortaleCheckout;
@@ -273,7 +274,10 @@ class RegistrazionePubblica extends Controller
 
         return view('auth.registrazione-pagamento', [
             'registrazione' => $registrazione,
-            'piano' => $registrazione->piano,
+            // L'etichetta, non il codice: la pagina è pubblica, e «saas» è un
+            // identificatore che il cliente non dovrebbe leggere (né «free»,
+            // ADR-050). Un piano uscito dal catalogo resta col suo codice.
+            'piano' => Piani::esiste((string) $registrazione->piano) ? Piani::etichetta($registrazione->piano) : $registrazione->piano,
             // L'action del form è una URL firmata a sé: la firma che ha aperto
             // questa pagina vale per il GET, non per il POST.
             'azione' => $this->urlFirmata('registrazione.verso-stripe', $registrazione, self::ORE_PASSO_INTERNO),

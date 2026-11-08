@@ -103,7 +103,7 @@
                 <p class="mt-1 text-sm text-ink-2">{{ $strumento->forced_reason }}</p>
             @endif
             <p class="mt-3 border-t border-border pt-3 text-xs text-ink-3">
-                Il calcolato resta <span class="font-medium text-ink-2">{{ $diagnosi->stato->value }}</span>:
+                Il calcolato resta <span class="font-medium text-ink-2">{{ $diagnosi->stato->etichetta() }}</span>:
                 i motivi qui accanto valgono comunque.
             </p>
         </x-ui.card>

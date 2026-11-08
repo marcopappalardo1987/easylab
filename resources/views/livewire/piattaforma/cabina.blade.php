@@ -141,7 +141,7 @@
                 <p class="text-sm text-ink-2">
                     <span class="font-medium text-ink">Nessun account di piattaforma.</span>
                     Il deploy esegue le migration, non i seeder: se
-                    <code class="text-xs">SuperadminSeeder</code> non e' mai stato lanciato su
+                    <code class="text-xs">SuperadminSeeder</code> non è mai stato lanciato su
                     questo ambiente, il Superadmin non esiste. Si crea con
                     <code class="text-xs">php artisan db:seed --class=SuperadminSeeder --force</code>,
                     con <code class="text-xs">SUPERADMIN_EMAIL</code> e
@@ -162,7 +162,7 @@
             @else
                 <p class="text-sm text-ink-2">
                     <span class="font-medium text-ink">{{ $accountPiattaforma->ragione_sociale }}</span>
-                    — la piattaforma stessa. Non e' un cliente e non entra nei numeri qui sopra.
+                    — la piattaforma stessa. Non è un cliente e non entra nei numeri qui sopra.
                 </p>
             @endif
 
@@ -178,7 +178,7 @@
                     <span aria-hidden="true">👁</span> Impersona ({{ $candidatiPiattaforma->count() }})
                 </button>
             @elseif ($accountPiattaforma !== null)
-                <span class="text-xs text-ink-3">Nessun membro impersonabile: il Developer non lo e' mai, e te stesso nemmeno.</span>
+                <span class="text-xs text-ink-3">Nessun membro impersonabile: il Developer non lo è mai, e te stesso nemmeno.</span>
             @endif
         </div>
     @endif

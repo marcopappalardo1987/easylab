@@ -187,6 +187,19 @@ it('shows the renewal in the garanzia macchina box, not the expired one it super
         ->not->toContain('06/02/2024');
 });
 
+it('names the calculated state by its label in the forced box, never by its internal value', function () {
+    // «Il calcolato resta arancione» (7 Nov 2026): il valore della colonna.
+    Intervento::factory()->forStrumento($this->strumento)->scaduto()->create();
+    $this->actingAs($this->admin);
+    $this->strumento->forzaSemaforo(StatoSemaforo::Verde, 'Verificata sul campo');
+
+    $html = scheda($this->admin, $this->strumento->fresh())->html();
+    $frase = strip_tags(substr($html, strpos($html, 'Il calcolato resta'), 200));
+
+    expect($frase)->toContain('Il calcolato resta '.StatoSemaforo::Arancione->etichetta())
+        ->not->toContain('arancione');
+});
+
 it('adds no garanzia CTA of its own: the Panoramica is a summary, not a form', function () {
     // Serve un ruolo in sola lettura sulle garanzie (il Tenant ha `view` ma non
     // `manage`), altrimenti il bottone del tab Garanzie renderebbe la verifica

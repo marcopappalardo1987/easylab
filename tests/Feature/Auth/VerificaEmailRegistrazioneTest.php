@@ -2,6 +2,7 @@
 
 use App\Models\Account;
 use App\Models\Registrazione;
+use App\Support\Piani;
 use App\Support\Registrazione\PortaleCheckout;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\URL;
@@ -121,6 +122,16 @@ it('never opens a checkout for a mailbox nobody confirmed', function () {
 
     expect($this->portale->aperture())->toBe(0)
         ->and($riga->fresh()->stripe_session_id)->toBeNull();
+});
+
+it('names the plan by its label on the payment page, never by its code', function () {
+    // La pagina è pubblica: «saas» è un identificatore (7 Nov 2026).
+    $riga = Registrazione::factory()->create(['piano' => 'saas', 'email_verificata_at' => now()]);
+
+    $this->get(passoFirmato('registrazione.pagamento', $riga))
+        ->assertOk()
+        ->assertSee(Piani::etichetta('saas'))
+        ->assertDontSee('>saas<', false);
 });
 
 it('never shows the payment page for a mailbox nobody confirmed', function () {
