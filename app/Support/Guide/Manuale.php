@@ -54,8 +54,13 @@ final class Manuale
      *   vista ora legge le tre chiavi nuove col `??`, così il prossimo cambio
      *   di forma costa un paragrafo mancante per un'ora e non il manuale
      *   intero.
+     * - **v4** — le 47 guide rigirate nel formato «vetrina» (8 Nov 2026), con
+     *   passi rinumerati in cinque di esse. La forma è la stessa: si alza
+     *   perché il deploy che porta i testi nuovi legga subito anche i video
+     *   appena caricati, invece di servire per un'ora l'elenco in cache
+     *   accanto ai testi nuovi.
      */
-    private const CHIAVE = 'guide.manuale.v3';
+    private const CHIAVE = 'guide.manuale.v4';
 
     /** @return Collection<int, array<string, mixed>> */
     public static function tutte(): Collection
