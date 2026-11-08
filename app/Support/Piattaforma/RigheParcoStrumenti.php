@@ -100,6 +100,7 @@ final class RigheParcoStrumenti
         // Fonte 2 — la garanzia della MACCHINA (🔗 ADR-004).
         $garanzie = ParcoClienti::garanzie($perimetro)
             ->whereIn('garanzie.strumento_id', $ids)
+            ->nonSuperate()
             ->orderBy('garanzie.data_scadenza_effettiva')
             ->orderBy('garanzie.id')
             ->get(['garanzie.id', 'garanzie.strumento_id', 'garanzie.data_scadenza_effettiva'])

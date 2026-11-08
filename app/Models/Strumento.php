@@ -445,9 +445,10 @@ class Strumento extends Model implements ReachesStrumento
                 ->whereColumn('strumento_id', 'strumenti.id')
                 ->apertiEntroSoglia(),
 
-            // La garanzia della macchina (ADR-004).
+            // La garanzia della macchina (ADR-004), se un rinnovo non l'ha superata.
             Garanzia::query()->select(DB::raw('1'))
                 ->whereColumn('garanzie.strumento_id', 'strumenti.id')
+                ->nonSuperate()
                 ->entroSoglia(),
 
             // La garanzia di un pezzo MONTATO (ADR-020), con la correlazione e
@@ -697,13 +698,28 @@ class Strumento extends Model implements ReachesStrumento
      */
     public function prossimaGaranzia(): ?Garanzia
     {
-        if ($this->relationLoaded('garanzie')) {
-            return $this->garanzie
-                ->sortBy([['data_scadenza_effettiva', 'asc'], ['id', 'asc']])
-                ->first();
-        }
+        $garanzie = $this->relationLoaded('garanzie') ? $this->garanzie : $this->garanzie()->get();
 
-        return $this->garanzie()->first(); // la relazione ordina già asc
+        return self::garanzieInVigore($garanzie)
+            ->sortBy([['data_scadenza_effettiva', 'asc'], ['id', 'asc']])
+            ->first();
+    }
+
+    /**
+     * Le garanzie della macchina che un rinnovo non ha superato: quelle con la
+     * scadenza più lontana (🔗 ADR-005, «si risolve rinnovandola»). Gemello PHP
+     * di `Garanzia::scopeNonSuperate()`.
+     *
+     * @param  Collection<int, Garanzia>  $garanzie
+     * @return Collection<int, Garanzia>
+     */
+    public static function garanzieInVigore(Collection $garanzie): Collection
+    {
+        $ultima = $garanzie->max(fn (Garanzia $g) => $g->data_scadenza_effettiva->toDateString());
+
+        return $garanzie
+            ->filter(fn (Garanzia $g) => $g->data_scadenza_effettiva->toDateString() === $ultima)
+            ->values();
     }
 
     /**
@@ -770,7 +786,7 @@ class Strumento extends Model implements ReachesStrumento
 
         return Semaforo::diagnostica(
             ...$this->interventiAperti()->map(MotivoSemaforo::daIntervento(...)),
-            ...$garanzie->map(MotivoSemaforo::daGaranziaMacchina(...)),
+            ...self::garanzieInVigore($garanzie)->map(MotivoSemaforo::daGaranziaMacchina(...)),
             ...$this->scadenzeGaranzieRicambi()->map(MotivoSemaforo::daGaranziaRicambio(...)),
         );
     }

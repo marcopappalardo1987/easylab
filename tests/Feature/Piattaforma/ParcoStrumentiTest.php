@@ -550,6 +550,33 @@ it('lights it orange for an expiring machine warranty too', function () {
     expect($righe->semaforo($this->autoclaveBianchi))->toBe(StatoSemaforo::Arancione);
 });
 
+it('turns a renewed machine warranty green on the parco, in the rows and in the filter alike', function () {
+    // 🔗 ADR-005, «si risolve rinnovandola» (7 Nov 2026): la scaduta superata
+    // da un rinnovo non pesa più. Le righe e il filtro sono due SQL diverse.
+    Garanzia::factory()->forStrumento($this->autoclaveBianchi)->scaduta()->create();
+    $rinnovo = Garanzia::factory()->forStrumento($this->autoclaveBianchi)
+        ->create(['data_inizio' => today()->subDays(3)->toDateString(), 'durata_mesi' => 24]);
+
+    alComandoDelParco($this->superadmin);
+
+    $righe = Livewire::test(ParcoGlobale::class)->viewData('righe');
+    $arancioni = Livewire::test(ParcoGlobale::class)->set('stato', StatoSemaforo::Arancione->value)
+        ->viewData('strumenti')->pluck('id')->all();
+    $verdi = Livewire::test(ParcoGlobale::class)->set('stato', StatoSemaforo::Verde->value)
+        ->viewData('strumenti')->pluck('id')->all();
+
+    expect($righe->semaforo($this->autoclaveBianchi))->toBe(StatoSemaforo::Verde)
+        ->and($arancioni)->not->toContain($this->autoclaveBianchi->id)
+        ->and($verdi)->toContain($this->autoclaveBianchi->id);
+
+    $rinnovo->delete();
+
+    $arancioni = Livewire::test(ParcoGlobale::class)->set('stato', StatoSemaforo::Arancione->value)
+        ->viewData('strumenti')->pluck('id')->all();
+
+    expect($arancioni)->toContain($this->autoclaveBianchi->id);
+});
+
 it('lights it orange for the warranty of a part mounted on someone else machine', function () {
     // Terza fonte (🔗 ADR-020): il doppio salto garanzie → ricambio_utilizzo →
     // strumenti. È la più facile da perdere, perché richiede di togliere il
