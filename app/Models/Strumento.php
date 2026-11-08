@@ -710,10 +710,10 @@ class Strumento extends Model implements ReachesStrumento
      * scadenza più lontana (🔗 ADR-005, «si risolve rinnovandola»). Gemello PHP
      * di `Garanzia::scopeNonSuperate()`.
      *
-     * @param  Collection<int, Garanzia>  $garanzie
-     * @return Collection<int, Garanzia>
+     * @param  \Illuminate\Support\Collection<int, Garanzia>  $garanzie
+     * @return \Illuminate\Support\Collection<int, Garanzia>
      */
-    public static function garanzieInVigore(Collection $garanzie): Collection
+    public static function garanzieInVigore(\Illuminate\Support\Collection $garanzie): \Illuminate\Support\Collection
     {
         $ultima = $garanzie->max(fn (Garanzia $g) => $g->data_scadenza_effettiva->toDateString());
 

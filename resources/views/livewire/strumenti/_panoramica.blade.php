@@ -31,7 +31,10 @@
             : ($m->scaduto ? 'Garanzia scaduta il' : 'Garanzia in scadenza il'),
     };
 
-    $garanziaMacchina = $garanzie->first();
+    // La garanzia IN VIGORE, non la più vicina: dopo un rinnovo la vecchia
+    // scaduta resta in elenco ma non è più la copertura della macchina
+    // (🔗 nota a ADR-005, 8 Nov 2026).
+    $garanziaMacchina = \App\Models\Strumento::garanzieInVigore($garanzie)->first();
 @endphp
 
 <div class="grid gap-4 sm:grid-cols-2">
