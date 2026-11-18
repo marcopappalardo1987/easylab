@@ -216,3 +216,43 @@ it('saves a garanzia whose duration is typed in the field, which arrives as text
 
     expect($garanzia->fresh()->data_scadenza_effettiva->toDateString())->toBe('2028-01-10');
 });
+
+it('refuses a parametro with the name of one already written above, and keeps both values', function (string $doppione) {
+    // 🔴 Fino al 7 Nov 2026 la seconda riga cancellava in silenzio la prima:
+    // i parametri si salvano come chiave→valore.
+    $strumento = Strumento::factory()->forNode($this->laboratorio)->create([
+        'fornitore_id' => $this->fornitore->id,
+        'parametri_tecnici' => ['Alimentazione' => '400 V'],
+    ]);
+
+    scheda($this->admin, $strumento)
+        ->call('edit')
+        ->call('addParametro')
+        ->set('parametri.1.chiave', $doppione)
+        ->set('parametri.1.valore', '230 V')
+        ->call('save')
+        ->assertHasErrors(['parametri.1.chiave'])
+        ->assertHasNoErrors(['parametri.0.chiave'])
+        ->assertSee("C'è già un parametro con questo nome");
+
+    expect($strumento->fresh()->parametri_tecnici)->toBe(['Alimentazione' => '400 V']);
+})->with([
+    'stesso nome' => ['Alimentazione'],
+    'maiuscole' => ['ALIMENTAZIONE'],
+    'spazi' => ['  alimentazione '],
+]);
+
+it('still saves parametri with different names, and an empty row is no duplicate', function () {
+    $strumento = Strumento::factory()->forNode($this->laboratorio)->create(['fornitore_id' => $this->fornitore->id, 'parametri_tecnici' => null]);
+
+    scheda($this->admin, $strumento)
+        ->call('edit')
+        ->call('addParametro')->set('parametri.0.chiave', 'Alimentazione')->set('parametri.0.valore', '230 V')
+        ->call('addParametro')->set('parametri.1.chiave', 'Potenza')->set('parametri.1.valore', '600 W')
+        ->call('addParametro')
+        ->call('addParametro')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($strumento->fresh()->parametri_tecnici)->toBe(['Alimentazione' => '230 V', 'Potenza' => '600 W']);
+});

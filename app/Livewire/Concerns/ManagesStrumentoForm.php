@@ -3,6 +3,7 @@
 namespace App\Livewire\Concerns;
 
 use App\Models\Strumento;
+use Closure;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -76,9 +77,32 @@ trait ManagesStrumentoForm
             'strumentoForm.referente_cellulare' => ['nullable', 'string', 'max:50'],
             'strumentoForm.note' => ['nullable', 'string', 'max:2000'],
             'parametri' => ['array'],
-            'parametri.*.chiave' => ['nullable', 'string', 'max:100'],
+            'parametri.*.chiave' => ['nullable', 'string', 'max:100', $this->chiaveNonRipetuta(...)],
             'parametri.*.valore' => ['nullable', 'string', 'max:255'],
         ];
+    }
+
+    /**
+     * Un parametro col nome di uno già scritto più sopra si rifiuta.
+     *
+     * I parametri si salvano come oggetto chiave→valore, quindi due righe con
+     * lo stesso nome ne lasciavano una sola: «Alimentazione 230 V» aggiunta
+     * sotto cancellava in silenzio «Alimentazione 400 V» (trovato girando le
+     * guide, 7 Nov 2026). Maiuscole e spazi non fanno due nomi diversi.
+     */
+    private function chiaveNonRipetuta(string $attributo, mixed $valore, Closure $fallisce): void
+    {
+        $normalizza = fn (mixed $chiave): string => mb_strtolower(trim((string) $chiave));
+        // Una riga col nome vuoto non arriva qui: la regola non gira sui campi vuoti.
+        $indice = (int) explode('.', $attributo)[1];
+
+        foreach (array_slice(array_values($this->parametri), 0, $indice) as $riga) {
+            if ($normalizza($riga['chiave'] ?? '') === $normalizza($valore)) {
+                $fallisce('C\'è già un parametro con questo nome: correggi il suo valore invece di aggiungerne uno uguale.');
+
+                return;
+            }
+        }
     }
 
     /**
