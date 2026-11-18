@@ -25,10 +25,12 @@ installato.
 
 ## 2
 
-Ogni riquadro è un modello, e sotto ci sono i laboratori in cui si trova, con
-quante unità per ciascuno. Un modello presente in sei laboratori occupa un
-riquadro con sei righe: si legge in un colpo d'occhio come è distribuito nel
-laboratorio.
+Ogni riquadro è un modello, con il totale delle unità in alto a destra e sotto
+un'etichetta per ogni laboratorio in cui si trova, col numero di unità accanto.
+Un modello presente in sei laboratori ha sei etichette: si legge in un colpo
+d'occhio come è distribuito nella sede. L'etichetta porta il solo nome del
+laboratorio, quindi due sotto-laboratori omonimi in rami diversi compaiono come
+due etichette uguali; il collegamento porta comunque a quello giusto.
 
 ## 3
 
@@ -46,25 +48,26 @@ grafie dello stesso modello convivono e andrebbero uniformate.
 ## capitolo 2
 
 Ogni laboratorio elencato è un collegamento, e porta esattamente alle unità di
-quel modello in quel reparto. Da lì in poi si lavora come nell'elenco normale.
+quel modello in quel laboratorio. Da lì in poi si lavora come nell'elenco normale.
 
 ## 5
 
 Cliccando il nome di un laboratorio si apre l'elenco degli strumenti già
-filtrato su due condizioni insieme: quel modello e quel reparto. Non serve
+filtrato su due condizioni insieme: quel modello e quel laboratorio. Non serve
 impostare niente a mano, ed è il modo più rapido per passare dalla domanda
 generale alle singole macchine.
 
 ## 6
 
-È la vista con cui si prepara un acquisto o una trattativa. Sapere che di un
-modello ne hai quattordici unità, distribuite in sei laboratori, cambia il
-discorso col fornitore — sul prezzo, sul contratto di assistenza e sui ricambi
-da tenere a scorta.
+È la vista che serve il giorno di un richiamo. Quando un produttore segnala un
+difetto su un modello, la domanda «quali nostre unità sono coinvolte» ha qui
+una risposta immediata e completa, con le matricole da controllare, invece di
+una ricerca a memoria laboratorio per laboratorio.
 
 ## 7
 
-Ed è anche quella che serve il giorno di un richiamo. Quando un produttore
-segnala un difetto su un modello, la domanda «quali nostre unità sono
-coinvolte» ha qui una risposta immediata e completa, invece di una ricerca a
-memoria reparto per reparto.
+Ed è anche quella con cui si prepara un acquisto o una trattativa. Il numero di
+unità accanto al nome del modello dice quante ne hai in tutta la sede: sapere
+che sono quattordici, distribuite in sei laboratori, cambia il discorso col
+fornitore — sul prezzo, sul contratto di assistenza e sui ricambi da tenere a
+scorta.

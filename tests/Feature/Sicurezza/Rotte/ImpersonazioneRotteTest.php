@@ -92,7 +92,7 @@ it('refuses the jump to a machine from a link on another site', function () {
 it('still starts an impersonation from our own cabina', function () {
     $this->actingAs($this->superadmin)
         ->get(route('impersonate', $this->cliente), ['Sec-Fetch-Site' => 'same-origin'])
-        ->assertRedirect('/');
+        ->assertRedirect('/dashboard');
 
     expect(app('impersonate')->isImpersonating())->toBeTrue();
 });
@@ -122,7 +122,7 @@ it('lets the developer start an impersonation without a second factor', function
 
     $this->actingAs($developer)
         ->get(route('impersonate', $this->cliente), ['Sec-Fetch-Site' => 'same-origin'])
-        ->assertRedirect('/');
+        ->assertRedirect('/dashboard');
 
     expect(app('impersonate')->isImpersonating())->toBeTrue();
 });
@@ -146,9 +146,9 @@ it('keeps the exit from an impersonation open, whatever the two factor state of 
 
     $this->actingAs($this->superadmin)
         ->get(route('impersonate', $clienteSenza2fa), ['Sec-Fetch-Site' => 'same-origin'])
-        ->assertRedirect('/');
+        ->assertRedirect('/dashboard');
 
-    $this->get(route('impersonate.leave'))->assertRedirect('/');
+    $this->get(route('impersonate.leave'))->assertRedirect('/dashboard');
     expect(app('impersonate')->isImpersonating())->toBeFalse();
 });
 
@@ -216,6 +216,6 @@ it('refuses to end an impersonation from a link on another site', function () {
 it('still ends an impersonation from the banner, which is a link of our own', function () {
     $this->actingAs($this->superadmin)->get(route('impersonate', $this->cliente), ['Sec-Fetch-Site' => 'same-origin']);
 
-    $this->get(route('impersonate.leave'), ['Sec-Fetch-Site' => 'same-origin'])->assertRedirect('/');
+    $this->get(route('impersonate.leave'), ['Sec-Fetch-Site' => 'same-origin'])->assertRedirect('/dashboard');
     expect(app('impersonate')->isImpersonating())->toBeFalse();
 });

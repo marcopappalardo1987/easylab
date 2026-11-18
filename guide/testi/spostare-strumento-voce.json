@@ -1,0 +1,12 @@
+{
+  "0": "Una macchina che cambia stanza non cambia identità: cambia posto, e il trasloco lascia una traccia. Vediamo come si registra.",
+  "2": "L'ubicazione completa è scritta sotto il nome: la sede, il laboratorio, il sotto-laboratorio.",
+  "3": "«Sposta» apre il trasloco. Non va confuso con «Modifica»: qui non si cambia la macchina, si cambia dove sta.",
+  "5": "La destinazione si sceglie fra i laboratori e i sotto-laboratori della sede. Non è un indirizzo da scrivere a mano.",
+  "6": "La data serve a datare il trasloco, non a programmarlo: è il giorno in cui la macchina si è spostata davvero.",
+  "7": "E si conferma.",
+  "9": "L'ubicazione sotto il nome è cambiata, e con lei gli elenchi filtrati per laboratorio.",
+  "10": "Lo spostamento non cancella il passato. Nella linguetta «Anagrafica» resta scritto nello storico, con la data e il posto da cui veniva.",
+  "11": "È la risposta alla domanda «dov'era prima», che serve più spesso di quanto si creda quando una macchina comincia a dare problemi.",
+  "12": "@punti"
+}

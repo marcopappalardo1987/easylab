@@ -1,0 +1,14 @@
+{
+  "0": "Programmare un intervento è metà del lavoro. L'altra metà è dire che è stato fatto, e finché non lo si segna, per Easy Lab quel lavoro non esiste.",
+  "2": "Si chiude dalla linguetta «Interventi» della macchina. Il numerino accanto al nome conta le scadenze ancora da gestire: qui ce n'è una.",
+  "3": "Le righe ancora aperte portano «Scaduto» o «Pianificato». Sono quelle su cui c'è qualcosa da fare.",
+  "4": "«Fatto» è il gesto che chiude. Non cancella la riga: la completa.",
+  "6": "La data di esecuzione è quella in cui il lavoro è stato fatto davvero, non quella in cui lo stai registrando.",
+  "7": "Il report di fine lavoro è il posto in cui scrivere che cosa si è trovato. Lo leggerà chi tornerà su questa macchina dopo di te.",
+  "8": "Su una taratura compare anche la pianificazione della prossima: si dice fra quanti mesi, e la nuova scadenza nasce da sola.",
+  "9": "Si conferma.",
+  "11": "La riga ora è «Fatto», con la data di esecuzione accanto a quella di scadenza. Restano scritte tutte e due, e sotto c'è già la prossima taratura.",
+  "12": "Era l'unica scadenza aperta: il numerino sparisce, e il semaforo della macchina torna verde da solo.",
+  "13": "«Riapri» esiste per gli errori. Se hai chiuso la riga sbagliata si torna indietro, senza perdere niente.",
+  "14": "@punti"
+}

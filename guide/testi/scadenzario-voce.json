@@ -1,0 +1,14 @@
+{
+  "0": "L'elenco degli strumenti parte dalle macchine. Lo Scadenzario fa il contrario: parte da quello che c'è da fare.",
+  "2": "Lo Scadenzario raccoglie in un elenco solo tutti gli interventi ancora aperti, su tutte le macchine che vedi.",
+  "3": "In cima ci sono tre riquadri: gli scaduti, quelli in scadenza entro trenta giorni, e quelli più avanti nel tempo.",
+  "4": "«Scaduti» è il riquadro da guardare per primo: interventi la cui data è passata, e che nessuno ha ancora segnato come fatti.",
+  "5": "Un clic su un riquadro restringe l'elenco a quelle righe. È il modo più rapido di costruirsi la lista del giorno.",
+  "7": "La ricerca guarda insieme la macchina e la descrizione: si trova per nome di strumento, o per che cosa va fatto.",
+  "8": "Il tipo separa la manutenzione ordinaria dalle tarature, dalle straordinarie, e dal resto.",
+  "9": "E «Solo i miei» lascia gli interventi assegnati a te. È la lista con cui si comincia la giornata.",
+  "11": "Ogni riga porta la data, lo stato, la macchina, dove si trova, e a chi è assegnata.",
+  "12": "Una data già passata si legge in colore, accanto a «Scaduto». Quelle in arrivo restano neutre, e dicono «Pianificato».",
+  "13": "Dalla riga si apre la macchina, e da lì si segna l'intervento come fatto. È il giro completo.",
+  "14": "@punti"
+}

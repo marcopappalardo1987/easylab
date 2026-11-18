@@ -236,6 +236,7 @@ final class StrumentiPerStato
             // La garanzia della macchina (🔗 ADR-004).
             ParcoClienti::garanzie($perimetro)->select(DB::raw('1'))
                 ->whereColumn('garanzie.strumento_id', 'strumenti.id')
+                ->nonSuperate()
                 ->entroSoglia(),
 
             // La garanzia di un pezzo MONTATO (🔗 ADR-020): doppio salto,

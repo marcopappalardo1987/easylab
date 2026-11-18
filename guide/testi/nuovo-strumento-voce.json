@@ -1,0 +1,18 @@
+{
+  "0": "Una macchina nuova non si registra da un modulo qualunque: nasce dentro il laboratorio in cui si trova. Vediamo come.",
+  "2": "Si parte da «Laboratori», non dall'elenco degli strumenti. Si scende fino al laboratorio in cui la macchina si trova davvero.",
+  "3": "Il percorso in alto è la conferma: quello che stai per creare nascerà proprio qui dentro.",
+  "4": "«Aggiungi strumento» sta sopra l'elenco delle macchine già presenti, accanto al loro numero.",
+  "6": "Il nome è quello con cui la macchina viene chiamata in reparto. È il primo campo su cui lavora la ricerca.",
+  "7": "Il modello è quello del costruttore, scritto come lo scrive lui: serve anche alla vista «Per modello».",
+  "8": "La matricola identifica questa unità e nessun'altra. È quella incisa sulla targhetta.",
+  "9": "La data di installazione dice da quando la macchina è in servizio. È da lì che si conta l'obsolescenza.",
+  "10": "Il fornitore è obbligatorio, perché è a chi si telefona quando la macchina si guasta. Si apre la tendina, si scrive qualche lettera del nome, e lo si sceglie.",
+  "11": "Il referente è facoltativo. Ma se scrivi la sua email, gli avvisi che riguardano questa macchina arrivano anche a lui.",
+  "12": "Anche la garanzia si scrive adesso. Basta la durata in mesi: senza una data di inizio, vale quella di installazione.",
+  "13": "Si salva. La finestra si chiude, e gli strumenti del laboratorio passano da quarantadue a quarantatré.",
+  "15": "La macchina nuova è nell'elenco del laboratorio, al suo posto fra le altre.",
+  "16": "Aprendo la scheda, è verde: non perché qualcuno l'abbia verificata, ma perché non ha ancora scadenze. E la garanzia di ventiquattro mesi è già lì.",
+  "17": "Il primo gesto utile è pianificare subito la prima manutenzione, da «Interventi». Una macchina senza scadenze non comparirà mai nello Scadenzario.",
+  "18": "@punti"
+}

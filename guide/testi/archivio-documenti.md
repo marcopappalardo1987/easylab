@@ -69,12 +69,14 @@ indirizzo pubblico che apra un documento a chi non ha un accesso.
 
 ## 8
 
-L'esportazione in PDF invece prende **l'elenco**, non i file: produce la lista
-dei documenti con i filtri che hai applicato in quel momento. È un indice, non
-un archivio compresso.
+«Indice PDF», in alto a destra, prende invece **l'elenco**, non i file: produce
+la lista dei documenti con i filtri che hai applicato in quel momento. È un
+indice, non un archivio compresso.
 
 ## 9
 
 Serve a dimostrare che cosa si ha, che è una domanda diversa da «dammi i file».
-In preparazione di una verifica si esporta l'elenco dei certificati, si controlla
-che non manchi niente, e solo dopo si scaricano quelli che servono davvero.
+Con «Dal» e «Al» si sceglie il periodo — l'anno della verifica, per esempio —
+e l'indice stampato da lì elenca solo i documenti caricati in quell'intervallo.
+Si controlla che non manchi niente, e solo dopo si scaricano quelli che servono
+davvero.

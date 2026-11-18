@@ -1,0 +1,13 @@
+{
+  "0": "Le email che Easy Lab manda per conto tuo possono portare il logo e il colore del tuo Ente. Si imposta una volta, e vale per tutti.",
+  "2": "Si arriva da «Laboratori», col pulsante «Marchio email». Riguarda l'Ente, non il tuo account.",
+  "3": "Logo e colore finiscono in testa alle email che Easy Lab manda al posto tuo: il riepilogo delle scadenze, gli avvisi, gli inviti. Dentro l'applicazione non cambia niente.",
+  "5": "Il colore si sceglie dalla tavolozza, oppure si scrive in esadecimale, se il tuo marchio ne ha uno preciso.",
+  "6": "L'anteprima qui sotto si aggiorna mentre scrivi, ed è la testata vera dell'email: il filetto e il pulsante prendono il colore.",
+  "7": "Lasciando il campo vuoto si usa il blu di Easy Lab. È un valore predefinito, non un errore.",
+  "9": "Il logo si carica dal proprio computer, in PNG o JPEG. Gli SVG no, perché Gmail e Outlook non li mostrano.",
+  "10": "Anche qui l'anteprima mostra il risultato prima di salvare, alla larghezza che avrà nella posta.",
+  "11": "«Salva» rende il marchio effettivo: la prossima email esce così.",
+  "12": "Da qui in avanti compare anche «Rimuovi il logo», per tornare al solo nome scritto.",
+  "13": "@punti"
+}

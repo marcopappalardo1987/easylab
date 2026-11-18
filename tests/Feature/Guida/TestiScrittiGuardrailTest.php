@@ -109,6 +109,13 @@ it('drops the preamble and folds each block into one paragraph', function () {
     ]);
 });
 
+it('reads a text with characters outside the basic Latin set', function () {
+    // Senza il flag `u` lo split per righe spezzava l'UTF-8 di una ★ (7 Nov 2026).
+    $testi = TestiScritti::analizza("## 1\nLa ★ segna i preferiti, e «così» resta.");
+
+    expect($testi['passi'])->toBe([1 => 'La ★ segna i preferiti, e «così» resta.']);
+});
+
 it('never confuses a chapter number with a step number', function () {
     // ⚠️ `## capitolo 1` e `## 1` sono due blocchi diversi con lo stesso numero:
     // un parser che leggesse la sola cifra li sovrascriverebbe a vicenda, e in

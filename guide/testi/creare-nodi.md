@@ -39,10 +39,11 @@ macchine: se è un codice, ogni volta qualcuno dovrà tradurlo.
 
 ## 4
 
-Le note servono a chi arriverà dopo di te, e la soglia di obsolescenza dice
-dopo quanti anni una macchina di questo reparto va considerata da sostituire.
-Sono impostazioni che si **ereditano** verso il basso, quindi metterle sul
-laboratorio evita di ripeterle su ogni sotto-laboratorio.
+Sotto il nome c'è solo il campo delle note, ed è facoltativo: serve a chi
+arriverà dopo di te, per sapere dove sta fisicamente il reparto, a chi
+rivolgersi o perché è stato creato. Le impostazioni che valgono per tutta la
+sede, come la soglia di obsolescenza, non stanno qui ma sul nodo della sede, e
+i laboratori le ereditano senza doverle ripetere.
 
 ## 5
 
@@ -95,7 +96,8 @@ parte.
 
 ## 11
 
-«Elimina» è l'altra faccia, e porta via **anche quello che sta sotto**: i
-sotto-laboratori e le macchine che contengono. Prima di usarlo su un nodo
-popolato conviene spostare altrove le macchine, così l'eliminazione riguarda
-solo la struttura vuota.
+«Elimina» è l'altra faccia, ed è protetto: funziona solo su un nodo vuoto. Se
+dentro ci sono ancora sotto-laboratori, l'applicazione chiede di eliminare
+prima quelli; se ci sono macchine, chiede di spostarle o eliminarle. Così non
+si perde mai per sbaglio un ramo pieno di strumenti, e l'eliminazione resta un
+gesto che riguarda soltanto la struttura vuota.

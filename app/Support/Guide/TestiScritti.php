@@ -80,7 +80,7 @@ final class TestiScritti
         $blocchi = [];
         $corrente = null;
 
-        foreach (preg_split('/\R/', $sorgente) ?: [] as $riga) {
+        foreach (preg_split('/\R/u', $sorgente) ?: [] as $riga) {
             if (preg_match('/^##\s+(premessa|capitolo\s+(\d+)|(\d+))\s*$/', $riga, $pezzi) === 1) {
                 $corrente = match (true) {
                     $pezzi[1] === 'premessa' => 'premessa',

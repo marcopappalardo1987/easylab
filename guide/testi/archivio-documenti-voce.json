@@ -1,0 +1,13 @@
+{
+  "0": "Gli allegati vivono sulle schede delle macchine. Ma certe domande riguardano l'archivio intero, e per quelle c'è una pagina sola.",
+  "2": "«Documenti», nel menù, raccoglie gli allegati di tutte le macchine della sede. Sono gli stessi file delle schede, visti tutti insieme.",
+  "3": "Serve quando non ricordi su quale macchina sta il file che cerchi, oppure quando ne cerchi molti dello stesso tipo.",
+  "5": "La ricerca lavora sul nome del file: basta una parola, e l'elenco si restringe mentre scrivi.",
+  "6": "Il filtro per tipo separa manuali, certificati e rapporti. È il modo più rapido per tirare fuori tutti i certificati di taratura dell'anno.",
+  "7": "E si può restringere a una macchina sola, quando sai già quale.",
+  "8": "Ogni riga dice a che cosa è allegato il file: alla macchina in generale, oppure a un intervento preciso, come questo certificato.",
+  "10": "«Scarica» prende il singolo file, e passa sempre dall'applicazione: il permesso viene ricontrollato, e lo scarico resta registrato.",
+  "11": "«Indice PDF», invece, prende l'elenco. Non i file: la loro lista, con i filtri che hai applicato in quel momento.",
+  "12": "Per una verifica si sceglie il periodo con «Dal» e «Al». L'indice stampato da lì dice che cosa c'è in archivio per quel periodo.",
+  "13": "@punti"
+}

@@ -1,0 +1,14 @@
+{
+  "0": "Una sede non è un elenco di macchine: è fatta di laboratori, e dentro i laboratori di locali. «Laboratori» è quella struttura, com'è davvero.",
+  "2": "«Laboratori» apre la sede alla sua radice. Qui non c'è un elenco di macchine da filtrare: c'è la struttura da percorrere.",
+  "3": "Al primo livello ci sono i laboratori della sede, una scheda ciascuno.",
+  "4": "Ogni scheda porta due numeri: quanti sotto-laboratori contiene, e quante macchine stanno direttamente lì.",
+  "6": "Quando i laboratori sono tanti, si filtra per nome: bastano poche lettere. Poi si apre quello giusto cliccandolo.",
+  "7": "Dentro ci sono i sotto-laboratori, il blocco «Responsabili» con chi segue il laboratorio, e in fondo le macchine che stanno qui.",
+  "8": "Il percorso in alto dice sempre dove sei, e ogni pezzo si può cliccare.",
+  "9": "Si scende ancora, fino al sotto-laboratorio.",
+  "11": "In fondo all'albero non ci sono più laboratori: ci sono gli strumenti.",
+  "12": "Da qui si apre la scheda di una macchina, senza cercarla per nome fra quelle di tutta la sede.",
+  "13": "E il percorso riporta su di un livello, o alla radice, senza ricominciare da capo.",
+  "14": "@punti"
+}

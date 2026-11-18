@@ -57,18 +57,23 @@ Si esce saldando, e la riapertura non richiede di chiedere niente a nessuno.
 
 ## 6
 
-Se il contratto copre più sedi e la sospensione ne riguarda una sola, le altre
-restano raggiungibili: la pagina le elenca e ci si passa da lì. Il lavoro sulle
-sedi in regola continua senza interruzioni.
+La sospensione riguarda il contratto, quindi chiude **tutte** le sedi che quel
+contratto copre. Chi però lavora anche per un altro cliente di Easy Lab — un
+tecnico esterno, per esempio — trova su questa pagina l'elenco «Le tue altre
+sedi», e da lì passa a quelle in regola senza interruzioni. Quando l'elenco non
+c'è, come qui, vuol dire che non ce ne sono.
 
 ## 7
 
-Per riaprire quella sospesa si salda l'insoluto. Chi amministra trova le fatture
-nel portale di fatturazione, raggiungibile dalla pagina «Abbonamento» — che
-resta accessibile proprio perché è da lì che si risolve.
+Per riaprire si salda l'insoluto. Chi amministra trova sulla pagina il
+collegamento alla pagina «Abbonamento», che resta accessibile proprio perché è
+da lì che si risolve: con un abbonamento attivo c'è anche il pulsante
+«Regolarizza il pagamento», che apre il portale di fatturazione su Stripe.
 
 ## 8
 
 A pagamento registrato l'accesso torna da solo: non c'è da scrivere a nessuno né
 aspettare che qualcuno riabiliti qualcosa a mano. Non è istantaneo al secondo,
-perché passa dalla conferma di Stripe, ma è questione di minuti.
+perché passa dalla conferma di Stripe, ma è questione di minuti. Vale per la
+sospensione per insoluto: se invece è stata disposta dall'amministrazione di
+Easy Lab, la pagina «Abbonamento» lo dice, e il pagamento da solo non la revoca.

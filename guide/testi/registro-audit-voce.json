@@ -1,0 +1,13 @@
+{
+  "0": "Quando due persone ricordano in modo diverso la stessa decisione, serve un posto che lo dica senza opinioni. È il registro di audit.",
+  "2": "Il registro raccoglie le scritture di dominio: chi ha creato, modificato o cancellato che cosa, e quando.",
+  "3": "Non è un log tecnico per chi ripara il sistema. È la memoria delle decisioni, e serve il giorno in cui due persone ricordano diversamente.",
+  "4": "Ogni riga ha un autore, un soggetto e un momento. Aprendola si vedono i valori cambiati: com'erano prima, e come sono dopo.",
+  "6": "Una riga scritta durante un'impersonazione porta il nome del cliente e, subito sotto, quello di chi c'era davvero dietro.",
+  "7": "Basta cercare il nome di una persona del cliente per capire perché serve: escono anche i gesti fatti da noi. Senza quel timbro, il registro li direbbe suoi.",
+  "8": "Il timbro vale per ciò che succede dentro una richiesta. Quello che parte in coda, da console o da un webhook non ha una sessione, quindi non ha timbro, e la pagina lo dichiara.",
+  "10": "Il registro non si modifica e non si cancella. Nessuna riga ha un pulsante per farlo: c'è solo la freccia del dettaglio.",
+  "11": "Un soggetto cestinato resta nominato. La riga lo segna come cestinato, invece di sparire insieme a lui.",
+  "12": "E l'attribuzione è affidabile a partire da una data dichiarata in pagina. Prima di quella, lo storico è quello che è, ed è giusto dirlo.",
+  "13": "@punti"
+}

@@ -83,10 +83,11 @@ Qui si registra quello che è stato fatto. È anche il punto in cui si decide qu
 
 ## 10
 
-La linguetta «Interventi» apre lo storico della manutenzione: tutto quello che
-è stato fatto su questa macchina, dal più recente al più vecchio. Non si
-cancella e non si riscrive — è il registro su cui ci si appoggia quando bisogna
-dimostrare che una manutenzione è stata eseguita.
+La linguetta «Interventi» apre lo storico della manutenzione: tutto quello
+che è stato fatto su questa macchina e tutto quello che è in programma, ciascuno
+col suo stato. Quando la macchina ha scadenze superate o vicine, accanto al nome
+della linguetta compare un numerino che le conta: qui non c'è, perché questa
+autoclave è in regola.
 
 ## 11
 
@@ -139,8 +140,9 @@ descrizione.
 
 ## 18
 
-Il nuovo intervento compare in cima allo storico, e la scheda si aggiorna con
-lui: la prossima scadenza della macchina è ora quella che hai appena impostato,
-e il semaforo si è mosso di conseguenza. Da questo momento la macchina è
-tornata verde per il suo prossimo ciclo, e la stessa scadenza comparirà nello
-Scadenzario e nell'email del giorno in cui si avvicinerà.
+Il nuovo intervento compare nello storico fra quelli pianificati, e la scheda
+si aggiorna con lui: in «Panoramica» il prossimo intervento della macchina è ora
+quello che hai appena impostato, perché la sua data viene prima delle altre già
+in programma. La stessa scadenza comparirà nello Scadenzario e nell'email del
+giorno in cui si avvicinerà, che arriva anche al referente della macchina se
+sulla scheda ce n'è uno.

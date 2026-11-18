@@ -23,10 +23,10 @@ scritta annotando un intervento, e sparirebbe se quei montaggi non ci fossero.
 
 ## 2
 
-Ogni voce porta due numeri: su quante macchine quel pezzo è montato e quanti
-pezzi in tutto. Sono diversi quando una macchina ne ha più d'uno — tre
-guarnizioni sulla stessa autoclave contano una macchina e tre pezzi — e insieme
-dicono se un ricambio è diffuso o concentrato.
+Nessuno compila il catalogo a mano: ogni voce esiste perché qualcuno l'ha
+scritta annotando un intervento, e il catalogo cresce da solo man mano che i
+pezzi vengono registrati. Per questo la pagina si apre vuota e chiede il nome di
+un pezzo: non è un elenco da sfogliare, è una domanda da fare.
 
 ## capitolo 2
 
@@ -40,15 +40,19 @@ cerca non ha.
 
 ## 4
 
-Restano i pezzi che corrispondono, ciascuno con la sua diffusione. Se compaiono
-due voci molto simili, l'hai appena scoperto un problema: sono probabilmente lo
-stesso ricambio scritto in due modi.
+Restano i pezzi che corrispondono, ciascuno con due numeri: su quante macchine
+è montato e quanti pezzi in tutto. Sono diversi quando una macchina ne ha più
+d'uno — tre guarnizioni sulla stessa autoclave contano una macchina e tre
+pezzi — e insieme dicono se un ricambio è diffuso o concentrato. Sotto i numeri,
+i laboratori in cui quel pezzo sta, ciascuno col suo conteggio.
 
 ## 5
 
 Per ogni voce si legge l'elenco delle macchine che la montano, con matricola,
-laboratorio e quanti pezzi ciascuna. Da lì si passa alla scheda della singola
-macchina per vedere quando il pezzo è stato montato e in quale intervento.
+laboratorio e quanti pezzi ciascuna. Se compaiono due voci molto simili, hai
+appena scoperto un problema: sono probabilmente lo stesso ricambio scritto in due
+modi. Dal nome della macchina si passa alla sua scheda, per vedere quando il
+pezzo è stato montato e in quale intervento.
 
 ## capitolo 3
 

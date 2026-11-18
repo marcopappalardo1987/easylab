@@ -13,22 +13,25 @@ Piani, tetti e prezzi correnti.
 
 ## 1
 
-Ogni piano ha un codice, un tetto di **sedi** e un prezzo corrente. Il tetto non
-riguarda le macchine né le persone: si cresce aprendo sedi, ed è su quello che
-il listino è costruito.
+Ogni piano ha un'etichetta, un tetto di **sedi**, un tetto di **strumenti** e un
+prezzo corrente. Il piano senza canone si chiama «comodato d'uso». Il tetto di
+strumenti può valere per sede o per cliente intero, e lasciato vuoto significa
+illimitato.
 
 ## 2
 
-Il tetto che si imposta qui è esattamente quello che il cliente vede nella
-propria pagina «Abbonamento», nella forma «2 su 5». Qui si decide, là si
-subisce: cambiare un tetto cambia quello che un cliente può fare, senza che
-nessuno glielo dica.
+I tetti che si impostano qui sono esattamente quelli che il cliente vede nella
+propria pagina «Abbonamento»: le sedi nella forma «2 su 5», gli strumenti come
+numero o «illimitati». Qui si decide, là si subisce: cambiare un tetto cambia
+quello che un cliente può fare, e se qualcuno ci finisce sotto la finestra lo
+chiede prima di salvare.
 
 ## 3
 
-Un piano senza un prezzo agganciato a Stripe **non è vendibile**, e la
-registrazione pubblica lo dichiara invece di ripiegare su un piano in comodato d'uso.
-È una scelta deliberata: un ripiego rassicurante nasconderebbe l'errore di
+È il **prezzo agganciato a Stripe** a rendere vendibile un piano: senza, il piano
+non compare nella registrazione pubblica, e se nessun piano è vendibile la
+registrazione lo dichiara invece di ripiegare su un piano in comodato d'uso. È
+una scelta deliberata: un ripiego rassicurante nasconderebbe l'errore di
 configurazione e regalerebbe account.
 
 ## capitolo 2
@@ -37,9 +40,10 @@ I prezzi hanno una storia, e serve a non toccare i contratti in corso.
 
 ## 4
 
-Cambiare un prezzo non sovrascrive il precedente: quello nuovo diventa corrente,
-i vecchi restano. Il listino è quindi un archivio, non un valore singolo, ed è
-la ragione per cui si può alzare un prezzo senza telefonare a nessuno.
+Cambiare un prezzo non sovrascrive il precedente: alla sincronizzazione nasce un
+prezzo nuovo su Stripe, che diventa corrente, e i vecchi restano. Il listino è
+quindi un archivio, non un valore singolo, ed è la ragione per cui si può
+alzare un prezzo senza telefonare a nessuno.
 
 ## 5
 

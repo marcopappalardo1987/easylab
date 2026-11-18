@@ -43,7 +43,7 @@ costruirsi la lista del giorno senza toccare nessun filtro.
 
 ## capitolo 2
 
-Tre filtri, e uno di loro trasforma la vista di reparto nella propria lista di
+Tre filtri, e uno di loro trasforma la vista di laboratorio nella propria lista di
 lavoro.
 
 ## 5
@@ -63,7 +63,8 @@ verifica che riguarda solo le tarature.
 
 «Solo i miei» lascia gli interventi assegnati a te. Insieme a «Scaduti» dà
 esattamente la lista con cui si comincia la mattina: le cose che devi fare tu, e
-che sono già in ritardo.
+che sono già in ritardo. Anche i riquadri in cima si ricalcolano sul filtro,
+quindi i loro numeri diventano i tuoi.
 
 ## capitolo 3
 
@@ -78,9 +79,11 @@ sembri: dice se due interventi si possono fare nello stesso giro di reparto.
 
 ## 9
 
-Il colore della data dice quanto manca: **rossa** se è passata, **gialla** se
-sta arrivando. È la stessa logica del semaforo, applicata alla singola riga
-invece che alla macchina intera.
+Una data già passata si legge in colore, accanto allo stato «Scaduto»: è
+l'unico accento della riga, e salta all'occhio scorrendo la colonna. Le date
+ancora da venire, anche quelle entro i trenta giorni del riquadro «In scadenza»,
+restano neutre e portano lo stato «Pianificato»: per sapere quanto manca basta
+il riquadro che hai scelto, e la riga non ha bisogno di ripeterlo.
 
 ## 10
 

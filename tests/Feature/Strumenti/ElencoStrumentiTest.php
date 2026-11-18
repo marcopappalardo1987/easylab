@@ -3,6 +3,7 @@
 use App\Enums\StatoSemaforo;
 use App\Enums\TipoIntervento;
 use App\Livewire\Strumenti\ElencoStrumenti;
+use App\Models\Garanzia;
 use App\Models\Intervento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
@@ -165,6 +166,24 @@ it('shows the nearest of several imminent scadenze in the elenco', function () {
     Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)
         ->assertSee('Manutenzione straordinaria tra 2 gg')
         ->assertDontSee('Taratura e certificazione tra 20 gg');
+});
+
+it('sorts by the renewed warranty, not by the expired one it superseded', function () {
+    // 🔗 ADR-005 (7 Nov 2026): l'ordinamento per «prossima scadenza» legge la
+    // garanzia in vigore, come la colonna e il semaforo.
+    $rinnovata = Strumento::factory()->forNode($this->dip1)->create(['nome' => 'Garanzia rinnovata']);
+    Garanzia::factory()->forStrumento($rinnovata)->scaduta()->create();
+    Garanzia::factory()->forStrumento($rinnovata)
+        ->create(['data_inizio' => today()->toDateString(), 'durata_mesi' => 24]);
+
+    $vicina = Strumento::factory()->forNode($this->dip1)->create(['nome' => 'Intervento fra dieci giorni']);
+    Intervento::factory()->forStrumento($vicina)->create(['data_scadenza' => today()->addDays(10)->toDateString()]);
+
+    $ordine = Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)
+        ->call('sort', 'prossima_scadenza')
+        ->viewData('strumenti')->pluck('id')->all();
+
+    expect(array_search($vicina->id, $ordine, true))->toBeLessThan(array_search($rinnovata->id, $ordine, true));
 });
 
 it('makes every column sortable, derived ones included', function () {

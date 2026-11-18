@@ -1,0 +1,15 @@
+{
+  "0": "Chi entra in Easy Lab, che cosa vede, e fino a quando: sono tre decisioni che si prendono da una pagina sola.",
+  "2": "«Persone» elenca chi ha accesso a questo Ente, con il suo ruolo e il suo stato.",
+  "3": "Il ruolo non è un'etichetta. Decide che cosa quella persona vede e può fare, quindi questa pagina è anche l'elenco dei permessi dell'Ente.",
+  "5": "Si invita per email. Non si crea una password per conto d'altri, e non si consegnano credenziali a voce.",
+  "6": "Servono il nome e l'indirizzo, meglio quello di lavoro. Il resto lo sceglie la persona quando accetta.",
+  "7": "Il ruolo si assegna adesso, ed è la decisione che conta: da lì discende tutto quello che vedrà entrando.",
+  "8": "Con «Invita» parte l'email: un invito valido sette giorni, con cui la persona sceglierà la propria password. E compare subito in elenco.",
+  "9": "A un Responsabile Reparto, però, il ruolo non basta. Con «Laboratori» si scelgono quelli che segue: senza, non vede nulla.",
+  "10": "Chi segue un laboratorio segue anche tutto ciò che contiene. Si salva, e la riga dice che cosa segue.",
+  "12": "Il ruolo di una persona si cambia in qualsiasi momento, e ha effetto subito.",
+  "13": "«Cestina» toglie l'accesso senza cancellare il passato: gli interventi che quella persona ha registrato restano suoi.",
+  "14": "È il gesto giusto quando qualcuno lascia il laboratorio. Si toglie l'accesso, non la storia, e se serve si ripristina da qui.",
+  "15": "@punti"
+}

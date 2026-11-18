@@ -550,8 +550,13 @@ it('writes neither dipartimento nor the old name of the section, in any view, se
         'guide/testi/modificare-strumento.md' => ['Anagrafica'],
         'guide/testi/spostare-strumento.md' => ['Anagrafica'],
         'guide/flussi/scheda-strumento.spec.ts' => ['Anagrafica', 'anagrafica'],
-        'guide/flussi/modificare-strumento.spec.ts' => ['Anagrafica'],
-        'guide/flussi/spostare-strumento.spec.ts' => ['Anagrafica'],
+        'guide/flussi/modificare-strumento.spec.ts' => ['Anagrafica', 'anagrafica'],
+        'guide/flussi/spostare-strumento.spec.ts' => ['anagrafica'],
+        // La voce delle guide in formato nuovo (7 Nov 2026) nomina la stessa
+        // linguetta, e `anagrafica` nei copioni è il suo `data-tab`.
+        'guide/testi/scheda-strumento-voce.json' => ['Anagrafica'],
+        'guide/testi/modificare-strumento-voce.json' => ['Anagrafica'],
+        'guide/testi/spostare-strumento-voce.json' => ['Anagrafica'],
         // Lo slug della guida è un identificatore: è il nome dei file già
         // pubblicati, e l'indirizzo della sua pagina nel manuale.
         'guide/flussi/albero-anagrafica.spec.ts' => ['anagrafica'],

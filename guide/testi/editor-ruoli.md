@@ -19,15 +19,19 @@ quel permesso, e insieme le celle sono l'intero sistema di autorizzazioni.
 
 ## 2
 
-Accendere o spegnere una cella ha effetto **subito**, per tutti quelli che hanno
-quel ruolo, su tutti i clienti. Non c'è un rilascio di mezzo e non c'è
-un'approvazione: è la ragione per cui questa pagina merita rispetto.
+Ogni cella è un bottone. Un clic apre una finestra di conferma, e da lì
+concedere o revocare ha effetto **subito**, per tutti quelli che hanno quel
+ruolo, su tutti i clienti. Non c'è un rilascio di mezzo e non c'è
+un'approvazione di qualcun altro: è la ragione per cui questa pagina merita
+rispetto.
 
 ## 3
 
-Ed è anche il motivo per cui alcune celle non si toccano affatto: senza un
-freno, un clic distratto potrebbe aprire dati a un ruolo che per contratto non
-deve vederli.
+La finestra di conferma non è una formalità. Il secondo fattore è obbligatorio
+per **nome di ruolo**, non per permesso: oggi lo chiedono Superadmin, Admin e
+Gestore. Concedere qualcosa a Tenant, Tecnico o Responsabile Reparto lo dà
+anche a chi entra con la sola password, e la finestra lo scrive prima che si
+prema «Concedi». Revocando, dice invece quanti utenti hanno oggi quel ruolo.
 
 ## capitolo 2
 
@@ -47,9 +51,11 @@ fosse accendibile da qui, il gate più stretto del prodotto sarebbe una casella.
 
 ## 6
 
-Cambiarli si può, ma passando dalla configurazione e da un rilascio — cioè da
-qualcuno che se ne assume la responsabilità, con una traccia in un commit. La
-differenza fra i due percorsi non è tecnica, è di responsabilità.
+Ogni clic sulla matrice resta nel registro di audit, col nome di chi l'ha
+fatto, ed è reversibile con un altro clic. I blocchi e il catalogo dei permessi
+invece non si cambiano da qui: si passa dalla configurazione e da un rilascio,
+cioè da qualcuno che se ne assume la responsabilità, con una traccia in un
+commit. La differenza fra i due percorsi non è tecnica, è di responsabilità.
 
 ## capitolo 3
 
@@ -72,7 +78,9 @@ ritroverebbe.
 
 ## 9
 
-In fondo alla pagina ci sono i permessi **orfani**: righe che il codice non usa
-più ma che restano attaccate a qualche ruolo, perché il seeder non cancella
-quello che non conosce. Non fanno danno, ma vanno tolte a mano, e questa striscia
-serve appunto a non dimenticarsene.
+In fondo alla pagina c'è la striscia dei permessi **non più nel catalogo**:
+righe che esistono a database ma che `config/rbac.php` non dichiara più, e che
+restano attaccate a qualche ruolo. Riseminare non le cancella, perché il seeder
+non toglie ciò che non conosce: le stacca dai ruoli e le lascia lì, senza
+nessuno che le porti. Vanno rimosse a mano, e questa striscia serve appunto a
+non dimenticarsene.

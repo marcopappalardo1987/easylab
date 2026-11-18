@@ -1,0 +1,12 @@
+{
+  "0": "Un fornitore segnala un lotto difettoso, o vuoi cambiare la stessa guarnizione su tutte le macchine. La domanda è una sola: quel pezzo, dove è montato?",
+  "2": "La domanda è: questo pezzo, su quali macchine sta? Si scrive il nome, e la risposta è tutta qui.",
+  "3": "In cima al riquadro ci sono i due numeri che contano: su quante macchine è montato, e quanti pezzi in tutto.",
+  "5": "Le etichette sotto il nome dividono le macchine per laboratorio, con quante ne ha ciascuno.",
+  "6": "Un laboratorio con il triplo delle macchine degli altri sta dicendo qualcosa. E la sua etichetta apre l'elenco di tutte le macchine di quel laboratorio.",
+  "8": "Sotto c'è l'elenco delle macchine: nome, matricola, laboratorio, e quanti pezzi hanno sopra.",
+  "9": "Ogni macchina è un collegamento alla sua scheda. Nella linguetta «Ricambi» si vede quando il pezzo è stato montato, e in quale intervento.",
+  "10": "Serve a preparare un giro di manutenzione, la stessa guarnizione su tutte, e a ordinare la quantità giusta.",
+  "11": "E serve il giorno in cui un lotto di ricambi risulta difettoso: qui c'è l'elenco esatto delle macchine da controllare.",
+  "12": "@punti"
+}

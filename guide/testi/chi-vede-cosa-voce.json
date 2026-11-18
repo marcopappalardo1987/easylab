@@ -1,0 +1,13 @@
+{
+  "0": "Due colleghi seduti uno accanto all'altro possono vedere due Easy Lab diversi. Ecco la stessa applicazione, vista da tre ruoli.",
+  "2": "Il ruolo non è una qualifica. È l'insieme delle cose che una persona può vedere e fare, ed è scritto sotto il nome, in alto a destra.",
+  "3": "L'Amministratore ha una voce in più, «Persone»: è chi decide chi entra nell'Ente, e con quale ruolo.",
+  "4": "Sulle schede vede tutte le azioni: modificare, spostare, forzare il semaforo, eliminare.",
+  "6": "Il Responsabile di reparto vede solo i laboratori che gli sono assegnati. Non è un menù più corto: è un parco più piccolo.",
+  "7": "Le macchine degli altri laboratori non compaiono nei suoi elenchi. Non le trova nemmeno scrivendone la matricola esatta.",
+  "8": "Sulle sue macchine, invece, lavora per intero: interventi, scadenze, ricambi, documenti e spostamenti.",
+  "10": "Il referente del cliente ha lo stesso menù, ma un altro perimetro: vede tutti i laboratori della sede, cioè il parco intero.",
+  "11": "Sulle schede, però, resta solo lo storico in PDF, da leggere. Il referente guarda il parco, non lo amministra.",
+  "12": "Se ti aspetti un pulsante e non c'è, la risposta è quasi sempre il ruolo scritto sotto il tuo nome. È una domanda da fare a chi amministra l'Ente.",
+  "13": "@punti"
+}

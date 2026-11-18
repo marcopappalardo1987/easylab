@@ -330,7 +330,8 @@ class ElencoStrumenti extends Component
                 ->whereColumn('strumento_id', 'strumenti.id')
                 ->where('stato', StatoIntervento::NonFatto->value);
             $minGaranzia = Garanzia::query()->selectRaw('min(data_scadenza_effettiva)')
-                ->whereColumn('strumento_id', 'strumenti.id');
+                ->whereColumn('strumento_id', 'strumenti.id')
+                ->nonSuperate();
             $minGaranziaRicambio = $this->garanzieRicambiDellaRiga()
                 ->selectRaw('min(garanzie.data_scadenza_effettiva)');
 
@@ -458,6 +459,7 @@ class ElencoStrumenti extends Component
         // mantiene i global scope del proprio model (privacy ricambio inclusa).
         $garanzieMin = Garanzia::query()
             ->whereIn('strumento_id', $strumenti->getCollection()->modelKeys())
+            ->nonSuperate()
             ->orderBy('data_scadenza_effettiva')->orderBy('id')
             ->get(['id', 'strumento_id', 'data_scadenza_effettiva'])
             ->unique('strumento_id')

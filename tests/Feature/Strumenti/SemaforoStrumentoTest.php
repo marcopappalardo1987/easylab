@@ -385,13 +385,59 @@ it('stays verde when the garanzia is beyond the soglia', function () {
     expect($this->strumento->statoSemaforoCalcolato())->toBe(StatoSemaforo::Verde);
 });
 
-it('picks the nearest garanzia among several', function () {
+it('shows the garanzia in force among several, not the one a renewal superseded', function () {
+    // 🔴 Fino al 7 Nov 2026 vinceva la più vicina, anche scaduta: dopo un
+    // rinnovo la Panoramica mostrava la garanzia vecchia accanto a quella nuova.
     Garanzia::factory()->forStrumento($this->strumento)->attiva()->create();
-    $vicina = Garanzia::factory()->forStrumento($this->strumento)->scaduta()->create();
-    Garanzia::factory()->forStrumento($this->strumento)
-        ->create(['data_inizio' => today()->toDateString(), 'durata_mesi' => 24]);
+    Garanzia::factory()->forStrumento($this->strumento)->scaduta()->create();
+    $piuLunga = Garanzia::factory()->forStrumento($this->strumento)
+        ->create(['data_inizio' => today()->toDateString(), 'durata_mesi' => 48]);
 
-    expect($this->strumento->prossimaGaranzia()->id)->toBe($vicina->id);
+    expect($this->strumento->prossimaGaranzia()->id)->toBe($piuLunga->id);
+});
+
+it('turns green again when an expired garanzia is renewed, and keeps only the renewal on the diagnosis', function () {
+    // ADR-005: una garanzia scaduta «si risolve rinnovandola».
+    $vecchia = Garanzia::factory()->forStrumento($this->strumento)->scaduta()->create();
+
+    expect($this->strumento->fresh()->statoSemaforoCalcolato())->toBe(StatoSemaforo::Arancione);
+
+    $rinnovo = Garanzia::factory()->forStrumento($this->strumento)
+        ->create(['data_inizio' => today()->subDays(3)->toDateString(), 'durata_mesi' => 24]);
+
+    $diagnosi = $this->strumento->fresh()->diagnosiSemaforo();
+
+    expect($this->strumento->fresh()->statoSemaforoCalcolato())->toBe(StatoSemaforo::Verde)
+        ->and($diagnosi->motivi)->toBe([])
+        ->and($this->strumento->fresh()->prossimaGaranzia()->id)->toBe($rinnovo->id);
+
+    // Cancellato il rinnovo, la vecchia torna a pesare.
+    $rinnovo->delete();
+
+    expect($this->strumento->fresh()->statoSemaforoCalcolato())->toBe(StatoSemaforo::Arancione)
+        ->and($this->strumento->fresh()->prossimaGaranzia()->id)->toBe($vecchia->id);
+});
+
+it('stays yellow when the renewal itself is about to expire', function () {
+    Garanzia::factory()->forStrumento($this->strumento)->scaduta()->create();
+    Garanzia::factory()->forStrumento($this->strumento)->imminente()->create();
+
+    expect($this->strumento->fresh()->statoSemaforoCalcolato())->toBe(StatoSemaforo::Arancione)
+        ->and($this->strumento->fresh()->diagnosiSemaforo()->motivi)->toHaveCount(1);
+});
+
+it('never lets the garanzia of another machine supersede this one', function () {
+    $altra = Strumento::factory()->forNode($this->dept)->create();
+    Garanzia::factory()->forStrumento($altra)->attiva()->create();
+    Garanzia::factory()->forStrumento($this->strumento)->scaduta()->create();
+
+    expect($this->strumento->fresh()->statoSemaforoCalcolato())->toBe(StatoSemaforo::Arancione);
+
+    $this->actingAs($this->admin);
+    $arancioni = Livewire::actingAs($this->admin)->test(ElencoStrumenti::class)
+        ->set('stato', StatoSemaforo::Arancione->value)->viewData('strumenti')->pluck('id')->all();
+
+    expect($arancioni)->toContain($this->strumento->id);
 });
 
 it('keeps the elenco aligned with the per-model calculation when garanzie are involved', function () {
@@ -410,6 +456,16 @@ it('keeps the elenco aligned with the per-model calculation when garanzie are in
     $entrambi = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Intervento e garanzia']);
     Intervento::factory()->forStrumento($entrambi)->scaduto()->create();
     Garanzia::factory()->forStrumento($entrambi)->scaduta()->create();
+
+    // 🔗 ADR-005, «si risolve rinnovandola»: il filtro SQL deve dirlo come il
+    // calcolo per-model, e una garanzia cestinata non rinnova niente.
+    $rinnovata = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Garanzia scaduta e rinnovata']);
+    Garanzia::factory()->forStrumento($rinnovata)->scaduta()->create();
+    Garanzia::factory()->forStrumento($rinnovata)->attiva()->create();
+
+    $rinnovoCestinato = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Rinnovo cestinato']);
+    Garanzia::factory()->forStrumento($rinnovoCestinato)->scaduta()->create();
+    Garanzia::factory()->forStrumento($rinnovoCestinato)->attiva()->create()->delete();
 
     $forzatoVerde = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Forzato verde con garanzia scaduta']);
     Garanzia::factory()->forStrumento($forzatoVerde)->scaduta()->create();

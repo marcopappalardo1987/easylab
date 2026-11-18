@@ -1,110 +1,138 @@
-import { test } from '@playwright/test';
-import { Regista } from '../lib/regista';
+import { expect, test } from '@playwright/test';
+import { Scenografo } from '../lib/scenografo';
 import { accedi } from '../lib/accesso';
 
 /**
- * Guida C6 — «Forzare il semaforo».
+ * Guida C6 — «Forzare il semaforo». Formato «vetrina» (🔗 `lib/scenografo.ts`).
  *
- * ⚠️ Lo stato NON si punta con `getByText('Strumento non idoneo')`: quel testo è anche
- * un `<option>` della tendina appena chiusa, che Livewire stacca dal DOM mentre
- * Playwright ci sta puntando. Si punta il titolo, che resta.
+ * ⚠️ Stessa sequenza e stesso numero di passi del copione precedente (10, in
+ * tre capitoli da 3, 4 e 3): i testi scritti in `testi/semaforo-forzato.md`
+ * sono numerati come i passi.
  *
- * ⚠️ La motivazione si punta col suo `name`, non con `textarea` generico: la
- * scheda monta in pagina anche le textarea delle altre modali (descrizione
- * intervento, report di fine lavoro), e `.first()` scriveva in quella sbagliata
- * — la forzatura falliva la validazione e lo stato non cambiava.
+ * Il motivo è obbligatorio solo per «Strumenti non idonei» (l'etichetta del
+ * campo lo dice appena si sceglie il rosso): la guida lo mostra accadere.
  *
- * ⚠️ Il copione SCRIVE (forza lo stato dello strumento 55 e lascia la riga di
- * audit): `azzera.sh` prima di ogni giratura.
+ * ⚠️ Il copione SCRIVE: `azzera.sh` prima di ogni giratura.
  */
 test('semaforo forzato', async ({ page }) => {
-  const g = new Regista(page, 'semaforo-forzato', 'Forzare il semaforo', "Quando lo stato calcolato non dice la verità");
+  const s = new Scenografo(page, 'semaforo-forzato', 'Forzare il semaforo', 'Quando lo stato calcolato non dice la verità');
 
   await accedi(page, 'maria.conti@aurora.test');
-
-  g.capitolo('Parte 1 di 3', 'Perché esiste');
-
   await page.goto('/strumenti/55');
   await page.waitForLoadState('networkidle');
+  await s.avvia();
 
-  await g.passo('Il semaforo di solito lo calcola Easy Lab dalle scadenze aperte: è una conseguenza, non una scelta.', {
-    su: page.getByText('Interventi necessari').first(),
-    zoom: 2.3,
-    durata: 8,
+  const titolo = page.getByRole('heading', { name: 'Autoclave' }).locator('..');
+  const bottone = page.getByRole('button', { name: 'Forza semaforo' });
+  const statoForzato = page.locator('#forzaStato');
+  const motivo = page.locator('[name="forzaForm.motivo"]');
+
+  // ── Uno: perché esiste ──────────────────────────────────────────────────────
+  s.cartello('Perché esiste', 'Parte 1 di 3');
+
+  await s.scatto('Il semaforo di solito lo calcola Easy Lab dalle scadenze aperte: è una conseguenza, non una scelta.', {
+    su: titolo,
+    zoom: 2.2,
+    durata: 7,
   });
 
-  await g.passo("Ma una macchina può essere ferma per ragioni che nessuna scadenza descrive: un pezzo che non arriva, una verifica esterna andata male.", {
-    zoom: 1,
-    durata: 8,
-  });
+  await s.scatto(
+    "Ma una macchina può essere ferma per ragioni che nessuna scadenza descrive: un pezzo che non arriva, una verifica esterna andata male.",
+    { durata: 7.5 },
+  );
 
-  await g.passo('«Forza semaforo» serve a quei casi, e a nessun altro.', {
-    su: page.getByRole('button', { name: 'Forza semaforo' }),
-    click: true,
-    zoom: 2.1,
-  });
+  await s.movimento(
+    '«Forza semaforo» serve a quei casi, e a nessun altro.',
+    async () => {
+      await bottone.click();
+      await expect(statoForzato).toBeVisible();
+      await page.waitForTimeout(600);
+    },
+    { su: bottone, zoom: 2, coda: 1.2 },
+  );
 
-  await page.waitForLoadState('networkidle');
+  // ── Due: stato e motivazione ────────────────────────────────────────────────
+  s.cartello('Stato e motivazione', 'Parte 2 di 3');
 
-  g.capitolo('Parte 2 di 3', 'Stato e motivazione');
+  await s.movimento(
+    'Si sceglie lo stato che la macchina deve mostrare da adesso.',
+    async () => {
+      await statoForzato.focus();
+      await page.waitForTimeout(300);
+      await statoForzato.selectOption('rosso');
+      await expect(page.getByText(/Motivo \(obbligatorio/)).toBeVisible();
+      await page.waitForTimeout(700);
+    },
+    { su: statoForzato, zoom: 1.8, coda: 1 },
+  );
 
-  await g.passo('Si sceglie lo stato che la macchina deve mostrare da adesso.', {
-    su: page.locator('#forzaStato'),
-    zoom: 2.1,
-    durata: 6,
-  });
-
-  await page.locator('#forzaStato').selectOption('rosso');
-  await page.waitForTimeout(400);
-
-  await g.passo("La motivazione è obbligatoria, ed è il punto della funzione: senza, resterebbe uno stato senza spiegazione.", {
-    su: page.locator('[name="forzaForm.motivo"]'),
+  await s.scatto("Per «Strumento non idoneo» il motivo è obbligatorio, ed è il punto della funzione: senza, resterebbe uno stato senza spiegazione.", {
+    su: page.getByText(/Motivo \(obbligatorio/),
     zoom: 2,
-    durata: 8,
+    durata: 7.5,
   });
 
-  await page.locator('[name="forzaForm.motivo"]').fill('Guarnizione della camera da sostituire, pezzo ordinato al fornitore. Macchina non utilizzabile fino al montaggio.');
-  await page.waitForTimeout(400);
+  await s.movimento(
+    'Conviene scrivere quello che serve a chi leggerà: che cosa è successo, e che cosa si sta aspettando.',
+    async () => {
+      await motivo.click();
+      await motivo.pressSequentially('Guarnizione della camera da sostituire, pezzo ordinato al fornitore. Ferma fino al montaggio.', {
+        delay: 30,
+      });
+      await page.waitForTimeout(500);
+    },
+    { su: motivo, zoom: 1.7, coda: 1, suono: 'tastiera' },
+  );
 
-  await g.passo('Conviene scrivere quello che serve a chi leggerà: che cosa è successo, e che cosa si sta aspettando.', {
-    su: page.locator('[name="forzaForm.motivo"]'),
-    zoom: 1.9,
-    durata: 8,
-  });
+  const forza = page.getByRole('button', { name: 'Forza', exact: true });
 
-  await g.passo('Si forza.', {
-    su: page.getByRole('button', { name: 'Forza', exact: true }),
-    click: true,
-    zoom: 2.3,
-  });
+  await s.movimento(
+    'Si forza.',
+    async () => {
+      await forza.click();
+      await expect(statoForzato).toHaveCount(0, { timeout: 10_000 });
+      await page.waitForTimeout(700);
+    },
+    { su: forza, zoom: 2, coda: 1.2 },
+  );
 
-  await page.waitForLoadState('networkidle');
+  // ── Tre: come si vede, e come si torna indietro ─────────────────────────────
+  s.cartello('Come si vede, e come si torna indietro', 'Parte 3 di 3');
 
-  g.capitolo('Parte 3 di 3', 'Come si vede, e come si torna indietro');
+  await expect(titolo).toContainText('Strumento non idoneo');
 
-  await g.passo('Il semaforo ora è quello che hai deciso tu, e la macchina compare così in ogni elenco.', {
-    su: page.getByRole('heading', { name: 'Autoclave' }),
-    zoom: 2.3,
+  await s.scatto('Il semaforo ora è quello che hai deciso tu, con la bandierina accanto, e la macchina compare così in ogni elenco.', {
+    su: titolo,
+    zoom: 2.2,
     durata: 7,
   });
 
-  await g.passo('La Panoramica dichiara che lo stato è forzato e riporta il motivo: non si confonde mai con uno stato calcolato.', {
-    su: page.getByText(/Semaforo forzato/).first(),
-    zoom: 1.9,
-    durata: 8,
+  const cartaForzata = page.getByText('Stato forzato', { exact: true }).locator('..');
+  await expect(cartaForzata).toContainText('Guarnizione della camera');
+
+  await s.scatto('La Panoramica dichiara che lo stato è forzato, da chi e perché: non si confonde mai con uno stato calcolato.', {
+    su: cartaForzata,
+    zoom: 1.7,
+    durata: 7.5,
   });
 
-  await g.passo("Per tornare al calcolo automatico si riapre la stessa finestra e si toglie la forzatura.", {
-    su: page.getByRole('button', { name: 'Forza semaforo' }),
-    zoom: 2.1,
-    durata: 7,
-  });
+  const rimuovi = page.getByRole('button', { name: 'Rimuovi forzatura' });
 
-  g.chiusura('Da ricordare', [
-    'Il semaforo normalmente è calcolato: forzarlo è l\'eccezione, per stati che le scadenze non sanno descrivere.',
-    'La motivazione è obbligatoria e resta visibile in Panoramica: uno stato deciso da una persona non deve sembrare calcolato.',
+  await s.movimento(
+    'Per tornare al calcolo automatico si riapre la stessa finestra: «Rimuovi forzatura» toglie lo stato deciso a mano.',
+    async () => {
+      await bottone.click();
+      await expect(rimuovi).toBeVisible();
+      await page.waitForTimeout(1000);
+    },
+    { su: bottone, zoom: 1.4, coda: 1.4 },
+  );
+
+  s.chiusura('Da ricordare', [
+    "Il semaforo normalmente è calcolato: forzarlo è l'eccezione, per stati che le scadenze non sanno descrivere.",
+    'La motivazione resta visibile in Panoramica: uno stato deciso da una persona non deve sembrare calcolato.',
     'La forzatura non cancella le scadenze: quando si toglie, il semaforo torna a dire quello che i dati dicono.',
   ]);
 
-  g.scrivi();
+  await s.scrivi();
 });

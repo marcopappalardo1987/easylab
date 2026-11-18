@@ -45,8 +45,9 @@ ruolo più alto sul piano commerciale non è quello che vede di più.
 
 ## 5
 
-Non è gerarchia: è che gli errori contengono dati dei clienti, e chi non ha
-bisogno di leggerli non li legge. È anche il motivo per cui il Developer non è
+Fra le linguette della Piattaforma del Superadmin, «Errori» non c'è proprio. Non
+è gerarchia: è che gli errori contengono dati dei clienti, e chi non ha bisogno
+di leggerli non li legge. È anche il motivo per cui il Developer non è
 impersonabile — altrimenti questo gate sarebbe aggirabile in due clic.
 
 ## capitolo 3
@@ -68,6 +69,8 @@ ricompare e uno nato stanotte richiedono due reazioni diverse.
 ## 8
 
 Il contesto viene **ripulito prima di essere salvato**, non mascherato dopo:
-password, token e segreti non entrano affatto nel database. Mascherare in lettura
-avrebbe lasciato i segreti scritti da qualche parte, ed è esattamente ciò che si
-voleva evitare.
+password, token e segreti non entrano affatto nel database. Nell'input
+dell'occorrenza la voce della password manca del tutto, chiave compresa, invece
+di comparire oscurata: anche il nome della chiave direbbe che cosa c'era.
+Mascherare in lettura avrebbe lasciato i segreti scritti da qualche parte, ed è
+esattamente ciò che si voleva evitare.

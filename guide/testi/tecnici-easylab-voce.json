@@ -1,0 +1,10 @@
+{
+  "0": "Le persone di EasyLab lavorano solo sulle sedi che gli sono state assegnate. Questa pagina dice quali, e conferisce l'accesso.",
+  "2": "«Tecnici e gestori» elenca le persone di EasyLab che lavorano sulle macchine dei clienti.",
+  "3": "Il portafoglio è dichiarato, non implicito. Ognuno lavora sulle sedi che gli sono state assegnate, e su nessun'altra.",
+  "5": "«Clienti e accessi» apre il portafoglio. Attenzione: spuntare una sede apre a quella persona tutte le macchine della sede.",
+  "6": "Non è un promemoria di chi segue chi. È un conferimento di accesso, e da quel momento la persona compare anche fra gli assegnatari di quel cliente.",
+  "7": "Togliere la spunta revoca l'accesso subito, e lascia intatto quello che il tecnico ha registrato: lo storico resta suo.",
+  "8": "Il portafoglio va rivisto quando qualcuno cambia zona o lascia. Un portafoglio dimenticato è un accesso ancora aperto.",
+  "9": "@punti"
+}

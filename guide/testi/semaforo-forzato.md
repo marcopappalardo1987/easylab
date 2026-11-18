@@ -49,9 +49,11 @@ vocabolario. Chi guarda l'elenco vedrà un pallino uguale a tutti gli altri.
 
 ## 5
 
-La motivazione è obbligatoria, ed è il punto della funzione. Senza, resterebbe
-uno stato deciso da qualcuno e non spiegato a nessuno: fra due settimane
-nemmeno chi l'ha impostato ricorderebbe perché quella macchina è rossa.
+Scegliendo «Strumento non idoneo» il motivo diventa obbligatorio, e l'etichetta
+del campo lo dice subito; per gli altri due stati è facoltativo, ma conviene
+scriverlo comunque. È il punto della funzione: senza, resterebbe uno stato
+deciso da qualcuno e non spiegato a nessuno, e fra due settimane nemmeno chi
+l'ha impostato ricorderebbe perché quella macchina è rossa.
 
 ## 6
 
@@ -73,21 +75,22 @@ si dichiara ovunque, e per questo si toglie con lo stesso gesto con cui si mette
 
 ## 8
 
-Il pallino accanto al nome è quello che hai scelto, e la macchina compare così
+Il pallino accanto al nome è quello che hai scelto, seguito da una piccola
+bandierina «⚑» che segnala la forzatura, e la macchina compare così
 in ogni elenco, in ogni filtro per stato e nei conteggi della Dashboard: un
 rosso forzato è rosso per tutti, esattamente come un rosso calcolato.
 
 ## 9
 
-Nella Panoramica però compare la dicitura «Semaforo forzato», con chi l'ha
-fatto, quando e perché. È la differenza che conta: chi legge sa che quel colore
+Nella Panoramica però compare il riquadro «Stato forzato», con chi l'ha
+fatto, quando e perché, e sotto lo stato che il calcolo darebbe comunque. È la differenza che conta: chi legge sa che quel colore
 è una decisione di una persona e può risalire a chi chiedere, invece di cercare
 una scadenza che non troverebbe.
 
 ## 10
 
-Per tornare al calcolo automatico si riapre la stessa finestra e si toglie la
-forzatura. Le scadenze non sono mai state toccate: erano lì sotto tutto il
+Per tornare al calcolo automatico si riapre la stessa finestra e si preme
+«Rimuovi forzatura», che compare solo quando una forzatura c'è. Le scadenze non sono mai state toccate: erano lì sotto tutto il
 tempo, e il semaforo ricomincia a dire quello che i dati dicono. È il motivo per
 cui una forzatura dimenticata non fa danni permanenti, ma è comunque meglio
 toglierla quando la situazione si risolve.

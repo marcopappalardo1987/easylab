@@ -1,0 +1,13 @@
+{
+  "0": "Una macchina può essere fuori garanzia e avere dentro un pezzo che invece è coperto. O il contrario. Sono due coperture, e vanno tenute distinte.",
+  "2": "Una macchina ha la sua garanzia, e i pezzi montati sopra possono averne una propria: sono due cose distinte.",
+  "3": "E scadono in momenti diversi. Qui la macchina è coperta fino al 2029, ma il pezzo montato ad aprile non lo è più: il numerino sulla linguetta lo segnala.",
+  "5": "La garanzia del pezzo si mette quando lo si annota, nell'intervento che lo ha montato.",
+  "6": "Nella linguetta «Ricambi» la si ritrova, e con «Correggi» si sistema la scadenza se la data era sbagliata.",
+  "7": "Ogni riga tiene insieme il pezzo, la data di montaggio, l'intervento che lo ha montato, il fornitore, e la sua copertura.",
+  "9": "Una garanzia di ricambio scaduta accende il semaforo della macchina, esattamente come la garanzia della macchina.",
+  "10": "Nella Panoramica il motivo è scritto per esteso: «Garanzia ricambio scaduta», distinto dalla garanzia della macchina.",
+  "11": "Non tutti però vedono il dettaglio. Per alcuni ruoli il pezzo resta un numero, quanti sono coperti, senza il nome.",
+  "12": "È una scelta di riservatezza che ogni Ente può fare: il pallino del semaforo lo vedono tutti, l'elenco dei pezzi no.",
+  "13": "@punti"
+}

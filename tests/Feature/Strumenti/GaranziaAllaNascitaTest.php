@@ -189,3 +189,30 @@ it('can then be changed from the garanzie tab, as before', function () {
 
     expect($garanzia->fresh()->durata_mesi)->toBe(36);
 });
+
+it('saves a garanzia whose duration is typed in the field, which arrives as text', function () {
+    // 🔴 Un 500 fino al 7 Nov 2026: il campo manda «36» come stringa, e il
+    // model la passava ad `addMonths()`, che vuole un intero.
+    $strumento = Strumento::factory()->forNode($this->laboratorio)->create(['data_installazione' => '2026-01-10']);
+
+    scheda($this->admin, $strumento)
+        ->call('openNuovaGaranzia')
+        ->set('garanziaForm.data_inizio', '2026-01-10')
+        ->set('garanziaForm.durata_mesi', '36')
+        ->call('saveGaranzia')
+        ->assertHasNoErrors();
+
+    $garanzia = Garanzia::where('strumento_id', $strumento->id)->sole();
+
+    expect($garanzia->durata_mesi)->toBe(36)
+        ->and($garanzia->data_scadenza_effettiva->toDateString())->toBe('2029-01-10');
+
+    // E dal tab Garanzie, modificandola.
+    scheda($this->admin, $strumento)
+        ->call('openModificaGaranzia', $garanzia->id)
+        ->set('garanziaForm.durata_mesi', '24')
+        ->call('saveGaranzia')
+        ->assertHasNoErrors();
+
+    expect($garanzia->fresh()->data_scadenza_effettiva->toDateString())->toBe('2028-01-10');
+});

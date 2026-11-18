@@ -105,6 +105,10 @@ class Garanzia extends Model implements ReachesStrumento
     {
         return [
             'soggetto' => SoggettoGaranzia::class,
+            // 🔴 Un intero, non ciò che arriva: dal campo del modulo la durata
+            // è una stringa, e `addMonths('36')` va in `TypeError` (un 500 a chi
+            // scriveva la durata a mano, trovato girando le guide il 7 Nov 2026).
+            'durata_mesi' => 'integer',
             'data_inizio' => 'date',
             'data_scadenza_dichiarata' => 'date',
             'data_scadenza_effettiva' => 'date',
@@ -228,6 +232,35 @@ class Garanzia extends Model implements ReachesStrumento
         $this->data_scadenza_dichiarata = null;
 
         return $this;
+    }
+
+    /**
+     * Le garanzie della MACCHINA ancora in vigore: quelle che nessun'altra
+     * garanzia della stessa macchina supera con una scadenza successiva.
+     *
+     * 🔴 È ciò che ADR-005 intende con «si risolve rinnovandola». Fino al 7 Nov
+     * 2026 il rinnovo si registrava come garanzia nuova e la vecchia, scaduta,
+     * restava a pesare sul semaforo per sempre: la macchina rinnovata restava
+     * gialla, e la Panoramica mostrava la garanzia del 2024 accanto a una
+     * valida fino al 2028.
+     *
+     * ⚠️ Superata da una scadenza successiva, non da una che è già cominciata:
+     * un rinnovo che parte mesi dopo la fine della vecchia la supera lo stesso.
+     * Quel buco di copertura non accende il semaforo; si vede dalle date.
+     *
+     * Solo per le righe `soggetto = macchina`: la correlazione è su
+     * `strumento_id`, NULL sulle garanzie dei pezzi. Gemello PHP:
+     * `Strumento::garanzieInVigore()`.
+     *
+     * @param  Builder<Garanzia>  $query
+     */
+    public function scopeNonSuperate(Builder $query): void
+    {
+        $query->whereNotExists(fn ($q) => $q->selectRaw('1')
+            ->from('garanzie as successiva')
+            ->whereColumn('successiva.strumento_id', 'garanzie.strumento_id')
+            ->whereNull('successiva.deleted_at')
+            ->whereColumn('successiva.data_scadenza_effettiva', '>', 'garanzie.data_scadenza_effettiva'));
     }
 
     /**

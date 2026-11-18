@@ -20,7 +20,8 @@ Si chiude dalla scheda della macchina, nella linguetta che ne tiene lo storico.
 La linguetta «Interventi» elenca tutto ciò che riguarda quella macchina, fatto e
 non fatto insieme. È voluto: lo storico e la lista delle cose da fare sono lo
 stesso elenco guardato in due momenti diversi, e tenerli separati farebbe
-perdere il filo.
+perdere il filo. Il numerino accanto al nome della linguetta conta le scadenze
+superate o vicine: dice, prima ancora di aprirla, quante righe aspettano te.
 
 ## 2
 
@@ -80,10 +81,11 @@ contratto di assistenza sta funzionando.
 
 ## 9
 
-Il semaforo della macchina si ricalcola da solo. Se quella era l'unica scadenza
-aperta torna verde; se ce ne sono altre resta com'è, e la Panoramica continua a
-elencare i motivi rimasti. Non serve fare nient'altro perché il colore si
-aggiorni.
+Il semaforo della macchina si ricalcola da solo, e il numerino della linguetta
+con lui. Qui la taratura era l'unica scadenza aperta, quindi il numerino sparisce
+e la macchina torna verde; se ce ne fossero state altre, il numerino sarebbe
+sceso di uno e il colore sarebbe rimasto, con la Panoramica a elencare i motivi
+rimasti. Non serve fare nient'altro perché tutto si aggiorni.
 
 ## 10
 

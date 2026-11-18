@@ -1,0 +1,14 @@
+{
+  "0": "La cabina di regia è la home di piattaforma: da qui si vedono tutti i clienti di EasyLab, come stanno, e quanto dura il loro contratto.",
+  "2": "La cabina è la pagina di chi gestisce EasyLab, non di chi lo usa. Raccoglie i clienti, e come stanno.",
+  "3": "In cima ci sono i numeri della piattaforma: il ricavo mensile a listino, i clienti, le sedi e gli strumenti. Sono totali, e i filtri più sotto non li toccano.",
+  "4": "Sotto, l'andamento degli ultimi dodici mesi, e poi l'elenco dei clienti, con il piano, lo stato, le sedi e gli strumenti di ciascuno.",
+  "6": "La ricerca lavora su ragione sociale, partita IVA e nome della sede. È il gesto più rapido quando arriva una telefonata.",
+  "7": "La stella mette il cliente fra i tuoi preferiti. Non riordina questo elenco: lo ritrovi nel filtro «I miei preferiti» delle schede del Parco clienti.",
+  "8": "Ogni riga si apre sulle sedi del cliente, e porta le azioni su di lui: impersonare, bloccare, aggiungere un Ente, sistemare i dati fiscali.",
+  "10": "Per un cliente in comodato d'uso, il pulsante «Comodato» dice fino a quando vale il piano: dodici, ventiquattro o trentasei mesi, una data precisa, oppure nessuna scadenza.",
+  "11": "Una volta salvata, la scadenza si legge sulla riga del cliente. Trenta giorni prima parte un'email al cliente e ai Superadmin, e alla scadenza non si blocca niente da solo.",
+  "12": "«Nuovo cliente» fa nascere insieme il cliente, la sua prima sede e l'Amministratore, che riceve l'invito per email e sceglie da sé la password.",
+  "13": "Se il piano è in comodato d'uso, la stessa finestra chiede subito quanto dura, con le stesse scelte del pulsante «Comodato».",
+  "14": "@punti"
+}

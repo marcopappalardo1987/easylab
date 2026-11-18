@@ -1,0 +1,14 @@
+{
+  "0": "Quando le macchine sono decine o centinaia, non si registrano una alla volta: si importano da un foglio. E prima si vede che cosa non torna.",
+  "2": "Si arriva da «Importa CSV», in cima all'elenco degli strumenti. Serve a caricare molte macchine in una volta.",
+  "3": "Il formato è scritto qui, con un esempio: sei colonne, e la prima riga con le intestazioni.",
+  "4": "«Scarica template CSV» dà il file già intestato. È la strada più corta per non sbagliare i nomi delle colonne.",
+  "5": "Si carica il proprio file, e si chiede di analizzarlo.",
+  "7": "L'analisi non importa niente. Mostra che cosa succederebbe, riga per riga, con il conto delle valide e degli errori.",
+  "8": "Ogni riga porta il proprio esito: quelle valide entreranno, quelle con un problema no, e il problema è scritto.",
+  "9": "Gli errori tipici sono due: un campo obbligatorio vuoto, e un'ubicazione che fra i laboratori non esiste.",
+  "11": "Il pulsante dice quante righe verranno importate: solo le valide, e il numero è quello che hai appena letto.",
+  "12": "Le macchine sono nel parco. Le righe scartate non sono andate perdute: si correggono nel foglio, e si ricarica.",
+  "13": "La prima volta conviene importare a lotti piccoli: cinque righe di prova dicono se le ubicazioni combaciano, prima di caricarne trecento.",
+  "14": "@punti"
+}

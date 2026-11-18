@@ -1,0 +1,11 @@
+{
+  "0": "L'elenco risponde alla domanda «dov'è questa macchina». Questa vista risponde a quella opposta: dove sono tutte le macchine di un certo modello.",
+  "2": "«Per modello» è la seconda linguetta degli strumenti, e ribalta la domanda: non dov'è questa macchina, ma dove sono tutte quelle di questo tipo.",
+  "3": "Ogni riquadro è un modello. Sotto ci sono i laboratori in cui è installato, e quante unità per ciascuno.",
+  "4": "La ricerca filtra sui modelli, non sulle macchine: basta una parte del nome commerciale.",
+  "5": "Restano i modelli che corrispondono, ciascuno con la sua distribuzione nei laboratori.",
+  "7": "Cliccando un laboratorio si apre l'elenco degli strumenti, già filtrato su quel modello e su quel laboratorio.",
+  "8": "È la vista con cui si gestisce un richiamo: se un modello ha un difetto noto, ecco l'elenco esatto delle unità da controllare.",
+  "9": "Ed è anche quella con cui si decide un acquisto. Sapere quante unità hai, e in quanti laboratori, cambia la trattativa con il fornitore.",
+  "10": "@punti"
+}

@@ -32,16 +32,18 @@ Il piano, lo stato e i limiti: tre numeri da guardare prima di crescere.
 
 ## 3
 
-Il piano dice che cosa è stato sottoscritto; lo stato dice se è attivo, in prova
-o sospeso. Sono due informazioni diverse: si può avere un piano importante e un
-abbonamento sospeso per un pagamento non andato a buon fine, e in quel caso
-l'accesso si chiude.
+Il piano dice che cosa è previsto; la voce «Abbonamento» dice se è attivo, in
+prova o sospeso. Sono due informazioni diverse: si può avere un piano importante
+e un abbonamento sospeso per un pagamento non andato a buon fine, e in quel caso
+l'accesso si chiude. «Nessun abbonamento» vuol dire che il pagamento non è
+ancora stato attivato.
 
 ## 4
 
-I limiti sono espressi in **sedi**: quante ne stai usando e quante ne prevede il
-piano. Non c'è un limite sul numero di macchine o di persone, perché il modo in
-cui un laboratorio cresce è aprendo sedi, non aggiungendo utenti.
+I limiti sono due. Le **sedi**: quante ne stai usando e quante ne prevede il
+piano, nella forma «2 su 5». E gli **strumenti**: il tetto di macchine che il
+piano consente, che su alcuni piani è «illimitati». Non c'è invece un limite sul
+numero di persone.
 
 ## 5
 

@@ -43,7 +43,8 @@ cui la fai. Se non ti piace, si torna indietro con lo stesso gesto.
 La preferenza è salvata **sul tuo account**, non nel browser. Vuol dire che la
 ritrovi identica da un altro computer, da casa o dal tablet del laboratorio, e
 che un collega che entra con le sue credenziali sulla tua stessa postazione
-vedrà il proprio tema, non il tuo.
+vedrà il proprio tema, non il tuo. La stessa scelta compare anche nelle
+«Preferenze», nel riquadro «Tema», e si può cambiare da lì.
 
 ## capitolo 2
 

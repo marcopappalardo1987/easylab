@@ -1,0 +1,12 @@
+{
+  "0": "Quando l'applicazione si rompe, l'errore resta qui dentro. Ecco dove si legge, chi lo può leggere, e perché non esce da Easy Lab.",
+  "2": "Gli errori dell'applicazione si raccolgono qui dentro, non su un servizio esterno.",
+  "3": "Un errore porta con sé messaggi, input della richiesta e identificativi. Mandarlo fuori significherebbe mandare fuori dati dei clienti.",
+  "4": "Da qui la scelta di costruirlo invece di comprarlo: un fornitore in più sarebbe stato un sub-responsabile in più.",
+  "6": "È la pagina più chiusa del prodotto. La vede il solo Developer.",
+  "7": "Il Superadmin non ha nemmeno la linguetta. Non è gerarchia: è che gli errori contengono dati dei clienti, e chi non deve leggerli non li legge.",
+  "9": "Gli errori sono raggruppati per tipo: un problema che si ripete è una riga sola con un conteggio, non cento righe.",
+  "10": "Aprendone uno si vede quando è comparso la prima volta, quante volte è successo, e la traccia tecnica.",
+  "11": "E il contesto viene ripulito prima di essere salvato. La password inviata con la richiesta non c'è proprio: non è mascherata, non è mai entrata nel database.",
+  "12": "@punti"
+}

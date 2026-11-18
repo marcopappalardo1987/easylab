@@ -2069,3 +2069,15 @@ Nel modulo «Nuovo fornitore» il campo si chiama **«Laboratorio»** e non più
 - ⚠️ **Non fatto**: una pagina che mostri in quali clienti è stato usato un fornitore di EasyLab; il porta-in-blocco di più fornitori; i globali nell'importazione massiva degli strumenti.
 - **Prova di mutazione**: 32 mutazioni, tutte rosse. Chi li riceve e chi no; quali fornitori contano come di EasyLab; il già copiato, lo stesso nome, la copia cestinata (propria e altrui); il catalogo di destinazione; le note; il legame; `globale_id` fuori da ciò che un form può scrivere.
 
+---
+
+**Nota a ADR-005 (8 Nov 2026) — Una garanzia rinnovata non pesa più sul semaforo**
+
+ADR-005 dice che una garanzia scaduta «si risolve rinnovandola», ma il codice contava ogni garanzia scaduta della macchina, anche quando un rinnovo registrato come garanzia nuova la copriva: la macchina restava gialla per sempre, e la Panoramica mostrava la garanzia vecchia accanto alla nuova. Trovato girando le guide.
+
+Ora pesa solo la garanzia della macchina **in vigore**: quella che nessun'altra garanzia della stessa macchina supera con una scadenza successiva (`Garanzia::scopeNonSuperate()` in SQL, `Strumento::garanzieInVigore()` in PHP). Vale per il semaforo, la diagnosi, la Panoramica, la colonna e l'ordinamento dell'elenco, e per il parco di piattaforma. Le garanzie dei pezzi montati non cambiano. Una garanzia cestinata non rinnova niente.
+
+⚠️ Superata da una scadenza successiva, non da una già cominciata: un rinnovo che parte mesi dopo la fine della vecchia la supera lo stesso, e quel buco di copertura non accende il semaforo.
+
+Prova di mutazione: 14 mutazioni, tutte rosse.
+

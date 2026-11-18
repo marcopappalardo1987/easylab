@@ -31,7 +31,20 @@ if (!fs.existsSync(path.join('out', 'audio', 'sfx', 'click.wav'))) {
 const props = path.join('out', slug, '.props-vetrina.json');
 fs.writeFileSync(props, JSON.stringify({ slug, copione, ...(voci ? { voci } : {}) }));
 
-const comune = ['--props', props, '--public-dir', 'out', '--config', 'remotion/remotion.config.ts'];
+// ⛔ Non `out` intera come cartella pubblica: Remotion la COPIA a ogni
+// montaggio, e `out` contiene i video già finiti di tutte le guide. Con il
+// catalogo intero la copia superava i 2 GB e riempiva il disco a metà
+// produzione (8 Nov 2026). Qui si espone solo ciò che il video legge: la
+// cartella della guida, l'audio e il marchio, come collegamenti.
+const pubblico = path.resolve('out', `.pubblico-${slug}`);
+fs.rmSync(pubblico, { recursive: true, force: true });
+fs.mkdirSync(pubblico, { recursive: true });
+for (const voce of ['audio', 'brand', slug]) {
+  fs.symlinkSync(path.resolve('out', voce), path.join(pubblico, voce));
+}
+process.on('exit', () => fs.rmSync(pubblico, { recursive: true, force: true }));
+
+const comune = ['--props', props, '--public-dir', pubblico, '--config', 'remotion/remotion.config.ts'];
 
 execFileSync('npx', [
   'remotion', 'render', 'remotion/src/index.ts', 'Vetrina', `out/${slug}/${slug}.mp4`,

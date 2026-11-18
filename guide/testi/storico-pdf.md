@@ -23,7 +23,8 @@ un report periodico, ed è il motivo per cui non si trova in un menù «rapporti
 ## 2
 
 Non ci sono opzioni da scegliere, intervalli di date da impostare o modelli da
-selezionare: si clicca e il file arriva già impaginato. La semplicità è
+selezionare: si clicca e il documento si apre in una scheda nuova del browser,
+già impaginato, accanto a quella su cui stavi lavorando. La semplicità è
 deliberata — un documento che si può configurare in dieci modi è un documento di
 cui nessuno si fida, perché non si sa mai quale versione si sta guardando.
 
@@ -36,8 +37,8 @@ le stesse informazioni della scheda, in forma stampabile.
 
 Il documento riporta i dati identificativi — nome, modello, matricola,
 ubicazione, data di installazione — e sotto l'elenco completo degli interventi,
-dal più recente al più vecchio. È la linguetta «Interventi» della scheda,
-impaginata.
+quelli ancora aperti e quelli già eseguiti. È la linguetta «Interventi» della
+scheda, impaginata.
 
 ## 4
 

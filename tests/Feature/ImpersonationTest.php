@@ -47,10 +47,12 @@ it('allows a Superadmin to take and leave impersonation', function () {
     $tenant = User::factory()->create();
     $tenant->assignRole('Tenant');
 
-    $this->actingAs($superadmin)->get(route('impersonate', $tenant))->assertRedirect('/');
+    // ⛔ Mai `/`, che rimanda a `/login`: nel browser quel passaggio chiudeva
+    // la sessione e il Superadmin si ritrovava fuori (7 Nov 2026).
+    $this->actingAs($superadmin)->get(route('impersonate', $tenant))->assertRedirect('/dashboard');
     expect(app('impersonate')->isImpersonating())->toBeTrue();
 
-    $this->get(route('impersonate.leave'))->assertRedirect('/');
+    $this->get(route('impersonate.leave'))->assertRedirect('/dashboard');
     expect(app('impersonate')->isImpersonating())->toBeFalse();
 });
 

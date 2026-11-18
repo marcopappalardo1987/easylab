@@ -23,9 +23,11 @@ l'insieme esatto delle cose che quella persona può vedere e fare.
 
 ## 2
 
-L'Amministratore ha il menù più lungo: oltre a strumenti e scadenze ci sono
-laboratori, persone, fornitori e abbonamento. Sono le voci con cui si governa
-l'organizzazione, non con cui si lavora sulle macchine.
+Nel menù dell'Amministratore c'è una voce che gli altri non hanno, «Persone»:
+è da lì che si invita qualcuno, gli si cambia il ruolo e, se è un Responsabile
+Reparto, gli si assegnano i laboratori che segue. Nel menù personale, sotto il
+nome, ha in più anche «Abbonamento». Sono le voci con cui si governa
+l'organizzazione, non quelle con cui si lavora sulle macchine.
 
 ## 3
 
@@ -63,15 +65,18 @@ Il referente del cliente guarda il proprio parco, e non lo amministra.
 
 ## 7
 
-Ha il menù più corto: gli servono lo stato delle macchine e le scadenze, non
-gli strumenti di amministrazione. È il ruolo pensato per chi vuole sapere come
-sta il parco senza doverlo gestire.
+Il referente del cliente ha lo stesso menù del Responsabile, ma un perimetro
+diverso: vede **tutti** i laboratori della sede, non solo alcuni. È il ruolo
+pensato per chi deve sapere come sta il parco intero, per esempio chi ne
+risponde verso la direzione, senza doverlo gestire giorno per giorno.
 
 ## 8
 
-Le voci che non vede non gli mancano per errore. Alcune non gli servono, altre
-contengono dati che non lo riguardano — per esempio il dettaglio di quali pezzi
-sono stati sostituiti, che in certi Enti è deliberatamente riservato.
+La differenza si vede sulle schede: non ci sono «Modifica», «Sposta», «Forza
+semaforo» né «Elimina», e resta lo storico in PDF da scaricare. Il referente
+legge lo stato delle macchine, le scadenze e la storia degli interventi, ma non
+li cambia. Le azioni che non vede non gli mancano per errore: non sono il suo
+mestiere, e alcune toccano dati che non lo riguardano.
 
 ## 9
 

@@ -31,7 +31,10 @@
             : ($m->scaduto ? 'Garanzia scaduta il' : 'Garanzia in scadenza il'),
     };
 
-    $garanziaMacchina = $garanzie->first();
+    // La garanzia IN VIGORE, non la più vicina: dopo un rinnovo la vecchia
+    // scaduta resta in elenco ma non è più la copertura della macchina
+    // (🔗 nota a ADR-005, 8 Nov 2026).
+    $garanziaMacchina = \App\Models\Strumento::garanzieInVigore($garanzie)->first();
 @endphp
 
 <div class="grid gap-4 sm:grid-cols-2">
@@ -100,7 +103,7 @@
                 <p class="mt-1 text-sm text-ink-2">{{ $strumento->forced_reason }}</p>
             @endif
             <p class="mt-3 border-t border-border pt-3 text-xs text-ink-3">
-                Il calcolato resta <span class="font-medium text-ink-2">{{ $diagnosi->stato->value }}</span>:
+                Il calcolato resta <span class="font-medium text-ink-2">{{ $diagnosi->stato->etichetta() }}</span>:
                 i motivi qui accanto valgono comunque.
             </p>
         </x-ui.card>

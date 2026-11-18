@@ -39,7 +39,8 @@ perché stanno in sezioni diverse della pagina.
 
 ## capitolo 2
 
-Sei campi, e tre di loro decidono se la macchina sarà ritrovabile.
+Pochi campi obbligatori, e tre di loro decidono se la macchina sarà
+ritrovabile. Referente e garanzia sono facoltativi, ma conviene scriverli adesso.
 
 ## 4
 
@@ -71,18 +72,31 @@ meglio una stima ragionevole che il campo vuoto.
 ## 8
 
 Il fornitore è **obbligatorio**, e non è burocrazia: è a chi si telefona quando
-la macchina si guasta. Si sceglie dall'elenco di quelli registrati, che si
-può scorrere oppure restringere scrivendo qualche lettera del nome. Se il
-fornitore non c'è, «＋ Nuovo fornitore» lo crea da lì e lo sceglie, senza
-chiudere il modulo: i contatti dell'assistenza si completano poi da «Fornitori».
+la macchina si guasta. Si apre la tendina e si scrive qualche lettera del nome:
+l'elenco dei fornitori registrati si restringe mentre scrivi, e si sceglie con
+un clic. Se il fornitore non c'è, «＋ Nuovo fornitore» lo crea da lì e lo
+sceglie, senza chiudere il modulo: i contatti dell'assistenza si completano poi
+da «Fornitori».
+
+## 9
+
 Subito sotto c'è il **referente dello strumento**, cioè la persona del
 laboratorio a cui la macchina fa capo: nome, cognome, email e cellulare. È
 facoltativo, ma l'email conta: se la scrivi, le email che riguardano questa
 macchina — una segnalazione, un intervento programmato o eseguito, una scadenza
-in arrivo — arrivano anche a lui, senza che debba avere un account. In fondo al
-modulo ci sono le **note**, per tutto ciò che non ha un campo suo.
+in arrivo — arrivano anche a lui, senza che debba avere un account. Più in
+basso ci sono i parametri tecnici e le **note**, per tutto ciò che non ha un
+campo suo.
 
-## 9
+## 10
+
+La **garanzia della macchina** si scrive mentre la si registra, non in un
+secondo momento. È facoltativa e chiede due cose sole: l'inizio e la durata in
+mesi. Basta la durata: senza una data di inizio la garanzia parte dalla data di
+installazione, che è il caso più comune per una macchina appena consegnata.
+Dopo, si modifica dalla scheda, nella linguetta «Garanzie».
+
+## 11
 
 Il salvataggio è immediato e non chiede conferme. Se un campo obbligatorio
 manca — il nome, l'ubicazione, il fornitore — il modulo lo segnala e tiene
@@ -94,19 +108,20 @@ per una tendina dimenticata.
 Appena creata la macchina è in elenco, verde, e senza scadenze. È proprio lo
 stato in cui è più facile dimenticarsene.
 
-## 10
+## 12
 
-La macchina compare subito nell'elenco del laboratorio, e i conteggi di
-«Laboratori» salgono di uno fino alla radice. Da questo momento è cercabile
+La macchina compare subito nell'elenco del laboratorio, in ordine alfabetico
+fra le altre, e i conteggi di «Laboratori» salgono di uno fino alla radice. Da questo momento è cercabile
 per nome, modello e matricola come tutte le altre.
 
-## 11
+## 13
 
 Nasce **verde** perché non ha scadenze aperte, non perché sia stata verificata:
 il semaforo dice quello che i dati dicono, e su una macchina appena registrata i
-dati non dicono ancora niente.
+dati non dicono ancora niente. Se hai scritto la garanzia, la Panoramica la
+mostra già, con la data in cui scade.
 
-## 12
+## 14
 
 Il primo gesto utile è aprirla e pianificare la prima manutenzione o taratura.
 Finché non ha una scadenza, la macchina non comparirà mai nello Scadenzario né
