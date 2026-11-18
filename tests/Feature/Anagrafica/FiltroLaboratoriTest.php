@@ -101,3 +101,15 @@ it('filters at the root too, and never brings in a laboratorio the person does n
         ->assertDontSee('Chimica organica')
         ->assertSeeHtml('data-cerca-vuota');
 });
+
+it('titles the root cards of a Responsabile Reparto as laboratori, not as sedi', function () {
+    // Per lui la radice è fatta dei suoi laboratori (DepartmentScope gli toglie
+    // il nodo Ente), e il titolo diceva «Enti» (7 Nov 2026).
+    $chi = User::factory()->create(['tenant_id' => $this->ente->id, 'two_factor_confirmed_at' => now()]);
+    $chi->assignRole('Responsabile Reparto');
+    $chi->unitaResponsabili()->attach(UnitaOrganizzativa::whereIn('nome', ['Virologia', 'Città della Salute'])->pluck('id'));
+
+    $titolo = fn (string $html) => trim(strip_tags(preg_match('/<h2[^>]*uppercase[^>]*>(.*?)<\/h2>/s', $html, $m) ? $m[1] : ''));
+
+    expect($titolo(Livewire::actingAs($chi->fresh())->test(Albero::class)->html()))->toBe('Laboratori');
+});
