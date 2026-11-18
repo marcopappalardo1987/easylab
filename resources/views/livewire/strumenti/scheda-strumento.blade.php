@@ -532,7 +532,7 @@
                         class="mt-1 block w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-ink focus:border-brand focus:ring-2 focus:ring-ring focus:outline-none">
                         <option value="">— Scegli laboratorio o sotto-laboratorio —</option>
                         @foreach ($nodiDestinazione as $nodo)
-                            <option value="{{ $nodo->id }}">{{ $nodo->nome }}</option>
+                            <option value="{{ $nodo->id }}">{{ $percorsiDestinazione[$nodo->id] ?? $nodo->nome }}</option>
                         @endforeach
                     </select>
                     @error('destinazioneId') <p class="mt-1 text-sm text-bad-soft-ink">{{ $message }}</p> @enderror
