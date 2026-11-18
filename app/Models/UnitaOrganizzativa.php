@@ -6,6 +6,8 @@ use App\Enums\TipoUnitaOrganizzativa;
 use App\Enums\VisibilitaGaranzieRicambio;
 use App\Models\Concerns\BelongsToOrgNode;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Scopes\DepartmentScope;
+use App\Models\Scopes\TenantScope;
 use App\Support\AuditLog;
 use Database\Factories\UnitaOrganizzativaFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -288,8 +290,11 @@ class UnitaOrganizzativa extends Model
             return [];
         }
 
-        $tenant = self::withoutGlobalScopes()->whereIn('id', $ids)->pluck('tenant_id')->unique();
-        $nodi = self::withoutGlobalScopes()
+        // I due scope di tenancy per nome, non il bypass nudo: quello toglierebbe
+        // anche il cestino, e un laboratorio cestinato finirebbe nel percorso.
+        $senzaScope = [TenantScope::class, DepartmentScope::class];
+        $tenant = self::withoutGlobalScopes($senzaScope)->whereIn('id', $ids)->pluck('tenant_id')->unique();
+        $nodi = self::withoutGlobalScopes($senzaScope)
             ->whereIn('tenant_id', $tenant)
             ->where('tipo', '!=', TipoUnitaOrganizzativa::Ente->value)
             ->get(['id', 'parent_id', 'nome', 'tenant_id'])
