@@ -6,6 +6,8 @@ use App\Enums\TipoUnitaOrganizzativa;
 use App\Enums\VisibilitaGaranzieRicambio;
 use App\Models\Concerns\BelongsToOrgNode;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Scopes\DepartmentScope;
+use App\Models\Scopes\TenantScope;
 use App\Support\AuditLog;
 use Database\Factories\UnitaOrganizzativaFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -265,5 +267,49 @@ class UnitaOrganizzativa extends Model
     public function responsabili(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'responsabile_unita')->withTimestamps();
+    }
+
+    /**
+     * Il percorso di ogni nodo DENTRO la sede, per id: «Analisi Cliniche ›
+     * Camera Bianca». Serve dove due laboratori con lo stesso nome finirebbero
+     * uno accanto all'altro (la tendina di «Sposta», le etichette di «Per
+     * modello»): col solo nome non si distinguevano (7 Nov 2026).
+     *
+     * La sede si lascia fuori: chi legge è già dentro una sede. Si risale
+     * senza scope, e solo attraverso nodi della stessa sede del nodo di
+     * partenza: è un'etichetta, non una lettura di dati altrui.
+     *
+     * @param  iterable<int>  $ids
+     * @return array<int, string>
+     */
+    public static function percorsiNellaSede(iterable $ids): array
+    {
+        $ids = collect($ids)->map(fn ($id) => (int) $id)->filter()->unique()->values();
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        // I due scope di tenancy per nome, non il bypass nudo: quello toglierebbe
+        // anche il cestino, e un laboratorio cestinato finirebbe nel percorso.
+        $senzaScope = [TenantScope::class, DepartmentScope::class];
+        $tenant = self::withoutGlobalScopes($senzaScope)->whereIn('id', $ids)->pluck('tenant_id')->unique();
+        $nodi = self::withoutGlobalScopes($senzaScope)
+            ->whereIn('tenant_id', $tenant)
+            ->where('tipo', '!=', TipoUnitaOrganizzativa::Ente->value)
+            ->get(['id', 'parent_id', 'nome', 'tenant_id'])
+            ->keyBy('id');
+
+        return $ids->mapWithKeys(function (int $id) use ($nodi) {
+            $catena = [];
+            $nodo = $nodi->get($id);
+
+            while ($nodo !== null && count($catena) < 20) {
+                array_unshift($catena, $nodo->nome);
+                $nodo = $nodi->get($nodo->parent_id);
+            }
+
+            return [$id => $catena === [] ? '—' : implode(' › ', $catena)];
+        })->all();
     }
 }

@@ -75,7 +75,7 @@
         @endcan
     </div>
 
-    @include('livewire.strumenti._tabs')
+    @include('livewire.strumenti._tabs', ['attiva' => 'strumenti.index'])
 
     {{-- Filtri --}}
     <x-ui.card class="mt-6">

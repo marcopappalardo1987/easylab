@@ -67,7 +67,8 @@ it('gives a JSON client the same mute page, not a trace', function () {
     expect($corpo)->not->toContain('segreto-t1c')
         ->and($corpo)->not->toContain('"trace"')
         ->and($corpo)->not->toContain(base_path())
-        ->and($corpo)->toContain('Server Error');
+        // La pagina muta è la nostra, in italiano, dal 7 Nov 2026.
+        ->and($corpo)->toContain('Qualcosa non ha funzionato');
 });
 
 it('does not expose the stack of a 404 either', function () {

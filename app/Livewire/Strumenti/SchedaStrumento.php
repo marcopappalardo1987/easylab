@@ -1053,6 +1053,15 @@ class SchedaStrumento extends Component
             ->orderBy('nome')
             ->get();
 
+        // Il percorso dentro la sede, e l'elenco ordinato su quello: col solo
+        // nome due sotto-laboratori omonimi erano due voci uguali. Solo a
+        // finestra «Sposta» aperta: è l'unico posto che lo legge, e la scheda
+        // ha un budget di query.
+        $percorsiDestinazione = $this->showMoveForm
+            ? UnitaOrganizzativa::percorsiNellaSede($nodiDestinazione->modelKeys())
+            : [];
+        $nodiDestinazione = $nodiDestinazione->sortBy(fn ($n) => mb_strtolower($percorsiDestinazione[$n->id] ?? $n->nome))->values();
+
         // Una sola volta: la Panoramica ricava prossimo/ultimo/statistiche da
         // QUESTA collection, senza tornare al DB (ADR-024 — la vista di sintesi
         // non deve costare query in più del tab che riassume).
@@ -1131,6 +1140,7 @@ class SchedaStrumento extends Component
             'vedeGaranzieRicambio' => Gate::allows('view', Garanzia::class),
             'spostamenti' => $this->strumento->spostamenti()->with(['daNodo', 'aNodo', 'eseguitoBy'])->get(),
             'nodiDestinazione' => $nodiDestinazione,
+            'percorsiDestinazione' => $percorsiDestinazione,
         ]);
     }
 

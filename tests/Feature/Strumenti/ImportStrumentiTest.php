@@ -81,6 +81,35 @@ it('accepts the comma delimiter and strips the BOM', function () {
 
 // --- Import parziale ---
 
+it('lists the discarded rows after importing, with their number, name and reason', function () {
+    // Prima si contavano soltanto, e l'anteprima che le mostrava spariva
+    // premendo «Importa» (7 Nov 2026).
+    $csv = <<<'CSV'
+    nome;modello;matricola;data_installazione;ubicazione;provenienza
+    Valida;M1;;2020-01-01;Terapia intensiva;
+    Ubicazione fantasma;M3;;;Laboratorio Inesistente;
+    Data storta;M4;;31/02/2020;Terapia intensiva;
+    CSV;
+
+    $import = Livewire::actingAs($this->admin)->test(ImportStrumenti::class)
+        ->set('file', csvFile($csv))
+        ->call('analizza')
+        ->call('importa')
+        ->assertSet('importate', 1)
+        ->assertSeeHtml('data-righe-scartate')
+        ->assertSee('Riga 3')
+        ->assertSee('(Ubicazione fantasma)')
+        ->assertSee('Riga 4')
+        ->assertSee('(Data storta)')
+        ->assertDontSee('Riga 2 ');
+
+    expect(array_column($import->get('righeScartate'), 'numero'))->toBe([3, 4])
+        ->and($import->get('righeScartate')[0]['errori'])->not->toBeEmpty();
+
+    // «Importa un altro file» riparte pulito.
+    $import->call('ricarica')->assertSet('righeScartate', [])->assertDontSeeHtml('data-righe-scartate');
+});
+
 it('imports only valid rows and reports the discarded ones', function () {
     $csv = <<<'CSV'
     nome;modello;matricola;data_installazione;ubicazione;provenienza

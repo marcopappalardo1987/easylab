@@ -128,6 +128,23 @@ it('fails closed for an authenticated user without a tenant', function () {
     $this->actingAs($senzaTenant)->get(route('anagrafica.marchio'))->assertForbidden();
 });
 
+it('shows the colour that is really applied in the square, the Easy Lab blue when none is chosen', function () {
+    // Col campo vuoto il quadratino era nero (7 Nov 2026), mentre le email
+    // escono col blu di Easy Lab.
+    [$ente, $admin] = enteConAdmin();
+
+    $quadratino = fn (string $html) => preg_match('/<input id="colore" type="color"[^>]*value="([^"]*)"/', $html, $m) ? $m[1] : null;
+
+    expect($quadratino(Livewire::actingAs($admin)->test(MarchioEnte::class)->html()))
+        ->toBe(MarchioEmail::COLORE_EASYLAB);
+
+    $ente->fissaMarchioEmail(null, '#aa3300');
+
+    expect($quadratino(Livewire::actingAs($admin)->test(MarchioEnte::class)->html()))->toBe('#aa3300')
+        // E il campo scritto resta vuoto quando non c'è una scelta: «vuoto» vuol dire «il predefinito».
+        ->and(Livewire::actingAs($admin)->test(MarchioEnte::class)->set('colore', '')->get('colore'))->toBe('');
+});
+
 it('fails closed on the action too when the tenant is taken away mid-session', function () {
     // ADR-030: la conversione a tecnico esterno azzera il `tenant_id`. Una
     // scheda già aperta non deve continuare a scrivere sull'Ente di prima —

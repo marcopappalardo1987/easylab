@@ -62,6 +62,9 @@
                         <button type="button" wire:click="removeParametro({{ $i }})" title="Rimuovi"
                             class="flex h-9 w-9 shrink-0 items-center justify-center rounded text-bad-dot hover:bg-bad-soft">🗑</button>
                     </div>
+                    {{-- L'errore della riga, sotto la riga: un nome ripetuto o troppo lungo. --}}
+                    @error("parametri.{$i}.chiave") <p class="text-sm text-bad-soft-ink">{{ $message }}</p> @enderror
+                    @error("parametri.{$i}.valore") <p class="text-sm text-bad-soft-ink">{{ $message }}</p> @enderror
                 @endforeach
             </div>
         @endif

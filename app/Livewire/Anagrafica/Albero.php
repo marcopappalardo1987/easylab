@@ -807,6 +807,13 @@ class Albero extends Component
             : $roots;
 
         $quantiInTutto = $children->count();
+
+        // Alla radice le card sono le sedi per quasi tutti, ma per un
+        // Responsabile Reparto sono i suoi laboratori: `DepartmentScope` gli
+        // toglie il nodo Ente. Il titolo dice che cosa sono davvero (prima
+        // diceva «Enti» sopra un elenco di laboratori, 7 Nov 2026).
+        $tipiRadici = $current ? collect() : $children->pluck('tipo')->unique()->values();
+        $tipoRadici = $tipiRadici->count() === 1 ? $tipiRadici->first() : null;
         $children = $this->filtraPerNome($children);
 
         $strumenti = ($current && $current->tipo !== TipoUnitaOrganizzativa::Ente)
@@ -827,6 +834,7 @@ class Albero extends Component
             'breadcrumb' => $breadcrumb,
             'children' => $children,
             'quantiInTutto' => $quantiInTutto,
+            'tipoRadici' => $tipoRadici,
             'strumenti' => $strumenti,
             'childCounts' => $childCounts,
             'strumentiCounts' => $strumentiCounts,

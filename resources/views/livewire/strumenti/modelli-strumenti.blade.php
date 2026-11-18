@@ -3,7 +3,7 @@
     <h1 class="text-2xl font-bold tracking-tight text-ink">Strumenti</h1>
     <p class="mt-1 text-sm text-ink-2">In quali laboratori è installato un modello, e quante unità.</p>
 
-    @include('livewire.strumenti._tabs')
+    @include('livewire.strumenti._tabs', ['attiva' => 'strumenti.modelli'])
 
     {{-- Ricerca --}}
     <x-ui.card class="mt-6">

@@ -35,9 +35,10 @@ class ModelliStrumenti extends Component
 
         $righe = $query->get();
 
-        // Nomi laboratori in una sola query (niente N+1).
-        $nomiNodi = UnitaOrganizzativa::whereIn('id', $righe->pluck('unita_organizzativa_id')->unique())
-            ->pluck('nome', 'id');
+        // Il percorso dentro la sede, non il solo nome: due «Camera Bianca»
+        // sotto laboratori diversi erano due etichette uguali. Le righe passano
+        // già dallo scope: qui si scrive solo come chiamarle.
+        $nomiNodi = UnitaOrganizzativa::percorsiNellaSede($righe->pluck('unita_organizzativa_id'));
 
         $modelli = $righe
             ->groupBy(fn ($r) => $r->modello ?? self::SENZA_MODELLO)

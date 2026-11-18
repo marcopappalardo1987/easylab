@@ -5,7 +5,7 @@
     // 🔗 ADR-053: i nomi dei livelli li dà l'enum. Sotto la sede ci sono i
     // laboratori (fino al 10 Ott 2026 «dipartimenti»), e sotto quelli i
     // sotto-laboratori.
-    $figli = $current ? ($isEnte ? TipoUnitaOrganizzativa::Dipartimento : TipoUnitaOrganizzativa::Sottolaboratorio) : TipoUnitaOrganizzativa::Ente;
+    $figli = $current ? ($isEnte ? TipoUnitaOrganizzativa::Dipartimento : TipoUnitaOrganizzativa::Sottolaboratorio) : ($tipoRadici ?? TipoUnitaOrganizzativa::Ente);
     $childLabel = $figli->plurale();
     $addLabel = 'Aggiungi '.mb_strtolower($figli->etichetta());
 @endphp

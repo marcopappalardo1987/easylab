@@ -84,6 +84,18 @@ class ImportStrumenti extends Component
     #[Locked]
     public ?int $scartate = null;
 
+    /**
+     * Le righe scartate, dette dopo l'import: numero, nome e perché. Prima si
+     * contavano e basta («2 righe scartate»), e l'anteprima che le mostrava
+     * spariva proprio premendo «Importa» (7 Nov 2026). Solo i tre dati che
+     * servono a ritrovarle nel file: i valori interi resterebbero nello
+     * snapshot di Livewire (T1cB-9).
+     *
+     * @var list<array{numero: int, nome: string, errori: list<string>}>
+     */
+    #[Locked]
+    public array $righeScartate = [];
+
     public function scaricaTemplate(): StreamedResponse
     {
         $righe = [
@@ -129,7 +141,7 @@ class ImportStrumenti extends Component
         // in «ï»¿» e l'intestazione `nome` non si troverebbe più.
         $contenuto = (string) preg_replace('/^\xEF\xBB\xBF/', '', $contenuto);
 
-        $this->reset(['righe', 'importate', 'scartate', 'troncato', 'analizzato']);
+        $this->reset(['righe', 'importate', 'scartate', 'righeScartate', 'troncato', 'analizzato']);
 
         $lette = $this->leggiCsv($this->inUtf8($contenuto));
         [$perNome, $perPercorso] = $this->mappeNodi($vaScelta ? (int) $this->sedeId : null);
@@ -161,6 +173,15 @@ class ImportStrumenti extends Component
 
         $this->importate = $valide->count();
         $this->scartate = count($this->righe) - $this->importate;
+        $this->righeScartate = collect($this->righe)
+            ->reject(fn ($r) => $r['errori'] === [])
+            ->map(fn ($r) => [
+                'numero' => (int) $r['numero'],
+                'nome' => Str::limit((string) ($r['dati']['nome'] ?? ''), 60),
+                'errori' => array_values($r['errori']),
+            ])
+            ->values()
+            ->all();
         $this->reset(['righe', 'file', 'analizzato']);
     }
 
@@ -243,7 +264,7 @@ class ImportStrumenti extends Component
 
     public function ricarica(): void
     {
-        $this->reset(['file', 'righe', 'analizzato', 'importate', 'scartate', 'troncato', 'sedeId']);
+        $this->reset(['file', 'righe', 'analizzato', 'importate', 'scartate', 'righeScartate', 'troncato', 'sedeId']);
         $this->chiudiSedi();
     }
 

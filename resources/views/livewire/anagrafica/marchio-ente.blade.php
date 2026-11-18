@@ -30,7 +30,15 @@
                 <div class="mt-1 flex items-center gap-3">
                     {{-- ⚠️ `<input type="color">` nudo: la preflight rende trasparenti i
                          controlli di form, quindi `bg-surface` va dichiarato (DS §8.5). --}}
-                    <input id="colore" type="color" wire:model.live="colore"
+                    {{-- Il quadratino mostra il colore che si applica DAVVERO: a
+                         campo vuoto è il blu di Easy Lab, non il nero che un
+                         `type="color"` senza valore disegna da sé (7 Nov 2026).
+                         Per questo non è legato con `wire:model`, che gli
+                         passerebbe il vuoto: scrive il colore solo quando lo si
+                         sceglie. --}}
+                    <input id="colore" type="color" data-quadratino-colore
+                        value="{{ $colore ?: \App\Support\Mail\MarchioEmail::COLORE_EASYLAB }}"
+                        x-on:change="$wire.set('colore', $event.target.value)"
                         class="h-11 w-14 shrink-0 cursor-pointer rounded-md border border-border-strong bg-surface p-1">
                     <input type="text" wire:model.live="colore" placeholder="#06589c" maxlength="7"
                         aria-label="Colore del marchio in esadecimale"
