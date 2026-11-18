@@ -166,7 +166,11 @@
                                      ordinaria porta il bordo (`secondary`), quella che
                                      toglie resta `ghost`. Due bottoni identici, uno dei
                                      quali cestina, sono due bottoni uguali. --}}
-                                <div class="flex flex-wrap justify-end gap-2 max-md:justify-start">
+                                {{-- Su schermo largo le azioni stanno su una riga sola: andando
+                                     a capo, «Cestina» finiva da solo sotto le altre e sembrava
+                                     un'azione di un'altra riga (7 Nov 2026). La tabella scorre
+                                     in orizzontale se non ci stanno. --}}
+                                <div class="flex flex-wrap justify-end gap-2 max-md:justify-start md:flex-nowrap md:whitespace-nowrap">
                                     @if (in_array($persona->id, $condivise, true))
                                         <span class="text-xs text-ink-3">Anche di un altro cliente: si amministra da lì</span>
                                     @elseif (! $amministrabile)

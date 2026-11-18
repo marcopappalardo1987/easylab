@@ -3,6 +3,7 @@
 use App\Enums\StatoSemaforo;
 use App\Enums\TipoIntervento;
 use App\Livewire\Strumenti\ElencoStrumenti;
+use App\Livewire\Strumenti\ModelliStrumenti;
 use App\Models\Garanzia;
 use App\Models\Intervento;
 use App\Models\Strumento;
@@ -184,6 +185,21 @@ it('sorts by the renewed warranty, not by the expired one it superseded', functi
         ->viewData('strumenti')->pluck('id')->all();
 
     expect(array_search($vicina->id, $ordine, true))->toBeLessThan(array_search($rinnovata->id, $ordine, true));
+});
+
+it('keeps the active tab underlined after a search or a filter, on both pages', function () {
+    // Durante un aggiornamento Livewire la richiesta è `/livewire/update`:
+    // la linguetta attiva si leggeva dalla rotta e la sottolineatura spariva
+    // (7 Nov 2026).
+    $attiva = fn (string $html) => preg_match('/<a [^>]*aria-current="page"[^>]*>([^<]+)<\/a>/', $html, $m) ? trim($m[1]) : null;
+
+    $elenco = Livewire::actingAs($this->admin)->test(ElencoStrumenti::class);
+    expect($attiva($elenco->html()))->toBe('Elenco')
+        ->and($attiva($elenco->set('search', 'autoclave')->html()))->toBe('Elenco');
+
+    $modelli = Livewire::actingAs($this->admin)->test(ModelliStrumenti::class);
+    expect($attiva($modelli->html()))->toBe('Per modello')
+        ->and($attiva($modelli->set('search', 'x')->html()))->toBe('Per modello');
 });
 
 it('makes every column sortable, derived ones included', function () {
