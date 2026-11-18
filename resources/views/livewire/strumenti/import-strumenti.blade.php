@@ -13,6 +13,17 @@
                 Importati {{ $importate }} strumenti.
                 @if ($scartate > 0) {{ $scartate }} righe scartate (con errori). @endif
             </p>
+            {{-- Quali, e perché: per correggerle nel file e reimportarle. --}}
+            @if ($righeScartate !== [])
+                <ul class="mt-3 space-y-1 text-sm text-ok-soft-ink" data-righe-scartate>
+                    @foreach ($righeScartate as $scartata)
+                        <li wire:key="scartata-{{ $scartata['numero'] }}">
+                            <span class="font-medium">Riga {{ $scartata['numero'] }}</span>@if ($scartata['nome'] !== '') ({{ $scartata['nome'] }})@endif:
+                            {{ implode(' ', $scartata['errori']) }}
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
             <div class="mt-4 flex gap-3">
                 <x-ui.button :href="route('strumenti.index')">Vai all'elenco</x-ui.button>
                 <x-ui.button variant="secondary" wire:click="ricarica">Importa un altro file</x-ui.button>
