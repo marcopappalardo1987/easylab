@@ -13,7 +13,7 @@
 | **EasyLab** | **Titolare** per i dati dei propri account/clienti diretti e per i dati di fatturazione; **Responsabile** (data processor) per i dati che i clienti SaaS trattano tramite la piattaforma | Duplice ruolo tipico del SaaS. **APERTO:** confermare il confine con un legale. |
 | **Cliente/Ente (Admin/Tenant)** | **Titolare** dei dati operativi del proprio laboratorio | Firma DPA (accordo art. 28) con EasyLab. |
 | **Tecnici/Operatori** | Persone autorizzate al trattamento (art. 29) | Accesso tracciato (ADR-007). |
-| **Sub-responsabili** | **Laravel Cloud** (applicazione, database, Redis, **documenti**), **Stripe** (pagamenti) | Serve elenco sub-processor + relativi DPA (🔗 ADR-025/042). |
+| **Sub-responsabili** | **Laravel Cloud** (applicazione, database, Redis, **documenti**), **Stripe** (pagamenti), **Amazon Web Services** (invio email con SES, regione Francoforte, dal 23 Nov 2026, 🔗 ADR-063) | Serve elenco sub-processor + relativi DPA (🔗 ADR-025/042). |
 
 > **Azione:** predisporre **DPA** (EasyLab↔clienti) e raccogliere i DPA dei sub-responsabili. **Residenza dati in UE** — ambienti Laravel Cloud in regione UE e bucket dei documenti con **giurisdizione UE** — per minimizzare trasferimenti extra-UE.
 

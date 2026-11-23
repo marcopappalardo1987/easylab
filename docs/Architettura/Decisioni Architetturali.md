@@ -274,7 +274,7 @@ Attuando la voce è emerso il buco che ADR-009 non copriva: chiusa una taratura,
 
 **Conseguenze.** Invio email accodato sulle code Redis (già nello stack). ~~Provider SMTP da definire (es. Postmark/SES/Mailgun o SMTP standard).~~ → **Deciso da Marco il 18 Ago 2026: SMTP standard su server di posta interno**, vedi sotto. Le notifiche in-app implicano una tabella `notifications` (notifiche di Laravel) consultabile dall'utente.
 
-**Il canale di uscita: SMTP interno, non un servizio di invio transazionale** *(deciso il 18 Ago 2026, chiude il «da definire» qui sopra)*.
+**Il canale di uscita: SMTP interno, non un servizio di invio transazionale** *(deciso il 18 Ago 2026, chiude il «da definire» qui sopra)*. ⚠️ **Superato il 23 Nov 2026 da ADR-063**: Aruba ha cominciato a rifiutare la posta che parte da Laravel Cloud, e le email escono ora da Amazon SES. Il resto di questa decisione (digest, destinatari, opt-out) non cambia.
 
 Le email escono dal **server di posta di EasyLab**, via SMTP autenticato. Non si adotta Postmark/SES/Mailgun. Il codice non cambia di una riga — Laravel parla SMTP e il mailer è già solo configurazione (`MAIL_MAILER=smtp` + host/porta/credenziali, Setup Ambienti §2.1) — ma tre conseguenze sono operative e vanno sapute:
 
@@ -2081,3 +2081,23 @@ Ora pesa solo la garanzia della macchina **in vigore**: quella che nessun'altra 
 
 Prova di mutazione: 14 mutazioni, tutte rosse.
 
+---
+
+**ADR-063 — La posta esce da Amazon SES, non più dallo SMTP di Aruba**
+
+*Stato: Accettata il 23 Nov 2026, per decisione di Marco. Supera il canale di uscita di ADR-011 (SMTP interno); digest, destinatari e preferenze di ADR-011, ADR-047 e ADR-054 non cambiano. Codice su staging.*
+
+**Il fatto.** Il 23 Nov 2026 la prova di invio da Piattaforma → Email in produzione ha risposto `550 5.1.0 <no-reply@easylab.technology> Connessione da 18.158.253.155 temporaneamente rifiutata`. Quell'indirizzo è un server Amazon di Francoforte, cioè l'uscita di Laravel Cloud. Non è in nessuna lista nera pubblica (Spamhaus, Barracuda, SpamCop, SORBS, PSBL, Mailspike): è Aruba che non accetta posta autenticata da quell'indirizzo. Il 9 Ott l'invio funzionava, e l'indirizzo di uscita di Laravel Cloud non è fisso: può ricapitare a ogni cambio. Era anche la causa del 500 su «Password dimenticata».
+
+**Decisione.** Le email partono da **Amazon SES**, regione **Francoforte** (`eu-central-1`, la stessa dell'applicazione), con il mailer `ses` di Laravel. Il mittente resta `no-reply@easylab.technology`.
+
+**Conseguenze.**
+
+- 🔴 **Chiavi proprie**: `SES_ACCESS_KEY_ID`, `SES_SECRET_ACCESS_KEY`, `SES_REGION` in `config/services.php`, non le `AWS_*` che Laravel usa di default. In sviluppo le `AWS_*` aprono il bucket dei documenti (ADR-042): con le stesse variabili, una chiave persa per la posta aprirebbe anche i documenti. `PostaSesTest` diventa rosso se le `AWS_*` tornano a valere per SES.
+- 🔴 **Un utente IAM per ambiente** (staging e produzione), con il solo permesso di inviare (`ses:SendRawEmail`, `ses:SendEmail`) da indirizzi `@easylab.technology`. La chiave va dalla console AWS a Laravel Cloud senza passare da altri posti.
+- **Dominio verificato con DKIM di Amazon** (tre CNAME) e **MAIL FROM su `bounce.easylab.technology`** (MX e TXT): SPF e DKIM risultano allineati al dominio del mittente, quindi DMARC passa. L'SPF della radice non cambia, perché serve ancora alla posta di Aruba.
+- ✅ **I rimbalzi ora si vedono**, il limite che ADR-011 lasciava aperto. La lista di soppressione dell'account SES smette di scrivere a un indirizzo che è rimbalzato o ha segnalato spam. Leggere quei rimbalzi da EasyLab (SNS verso un webhook) non è fatto.
+- ⚠️ **Amazon Web Services è un sub-responsabile in più** (indirizzi e contenuto delle email, in UE), aggiunto al registro dei trattamenti. Prima lo era di fatto Aruba, che il registro non nominava.
+- ⚠️ **Finché SES è in sandbox** si scrive solo a indirizzi verificati, al massimo 200 al giorno. La produzione si passa solo dopo l'uscita dalla sandbox, che è una richiesta ad Amazon.
+- ⚠️ **Le email fallite con Aruba non ripartono da sole.** Dopo il passaggio vanno lette con `php artisan queue:failed`. I link di reimpostazione della password scadono in 60 minuti, quindi non vanno rimandati.
+- **Prova di mutazione**: 6 mutazioni sulla configurazione, tutte rosse (chiavi e segreto dalle `AWS_*`, le `AWS_*` come riserva, regione di riserva da `AWS_DEFAULT_REGION`, regione americana, regione non configurabile).

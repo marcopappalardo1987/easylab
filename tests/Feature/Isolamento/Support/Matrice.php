@@ -26,6 +26,7 @@ use App\Notifications\InvitoUtente;
 use App\Notifications\MacchinaSegnalata;
 use App\Notifications\PianoCambiato;
 use App\Notifications\PropostaPiano;
+use App\Notifications\RecuperoPassword;
 use App\Notifications\VerificaEmailRegistrazione;
 use Illuminate\Database\Eloquent\Model;
 
@@ -276,6 +277,8 @@ final class Matrice
             MacchinaSegnalata::class => 't:Email/EmailMacchinaSegnalataTest.php::builds the email with the brand and the name of the ente in its payload, whatever the context on the worker',
             AccountBloccato::class => $senzaEnte,
             PianoCambiato::class => $senzaEnte,
+            // Il link di recupero password: un token e un indirizzo, nessun dato di un Ente.
+            RecuperoPassword::class => $senzaEnte,
             // 🔗 ADR-058: parla di un contratto, non di un Ente; marchio di piattaforma e soli scalari.
             ComodatoInScadenza::class => $senzaEnte,
             InviaAllertaErrore::class => 't:Notifiche/MarchioEmailTest.php::never brands the platform alert with a tenant, by construction and not by convention',
