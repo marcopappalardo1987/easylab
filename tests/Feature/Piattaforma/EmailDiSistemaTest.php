@@ -88,13 +88,19 @@ it('re-authorizes every action, so a permission revoked after the page was opene
 });
 
 it('shows the entry in the platform bar only to whoever can open it', function () {
-    $this->get(route('piattaforma.index'))->assertSee(route('piattaforma.email'));
+    // L'attributo intero e non l'indirizzo: dal 23 Nov 2026 c'è anche
+    // `/piattaforma/email-inviate` (ADR-064), che contiene questo come prefisso
+    // e renderebbe il negativo rosso anche con la voce giustamente nascosta.
+    $voce = 'href="'.route('piattaforma.email').'"';
+
+    $this->get(route('piattaforma.index'))->assertSee($voce, false);
 
     $osservatore = User::factory()->create(['two_factor_confirmed_at' => now()]);
     $osservatore->givePermissionTo('tenants.view_all');
 
     $this->actingAs($osservatore->fresh())->get(route('piattaforma.index'))
-        ->assertOk()->assertDontSee(route('piattaforma.email'));
+        ->assertOk()->assertDontSee($voce, false)
+        ->assertSee('href="'.route('piattaforma.email-inviate').'"', false);
 });
 
 // ─── L'elenco ────────────────────────────────────────────────────────────────

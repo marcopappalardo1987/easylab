@@ -3,6 +3,7 @@
 use App\Models\Account;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Contracts\ReachesStrumento;
+use App\Models\EmailInviata;
 use App\Models\Errore;
 use App\Models\OccorrenzaErrore;
 use App\Models\Piano;
@@ -93,6 +94,13 @@ const NON_TENANT_MODELS = [
     //    «registrazioni in corso», quel file diventa rosso e obbliga a
     //    rispondere alla domanda che questa riga ha rimandato.
     Registrazione::class,
+    //  - EmailInviata (ADR-064, il registro delle email) segue il pattern di
+    //    `Errore`: le email partono soprattutto da console e da coda, dove un
+    //    tenant corrente non esiste, e chi legge è tenant-bound — uno scope
+    //    filtrerebbe sul cliente di chi guarda. Il confine è il permesso della
+    //    pagina, `tenants.view_all` (set bloccato). In cambio, le scritture
+    //    stanno in un posto solo: `RegistroEmailTest` lo rende meccanico.
+    EmailInviata::class,
 ];
 
 function businessModels(): array

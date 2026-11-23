@@ -26,6 +26,7 @@ use App\Livewire\Interventi\Scadenzario;
 use App\Livewire\Piattaforma\Cabina;
 use App\Livewire\Piattaforma\EditorRuoli;
 use App\Livewire\Piattaforma\EmailDiSistema;
+use App\Livewire\Piattaforma\EmailInviate;
 use App\Livewire\Piattaforma\Errori;
 use App\Livewire\Piattaforma\Listino;
 use App\Livewire\Piattaforma\ParcoGlobale;
@@ -332,6 +333,14 @@ Route::middleware(['auth', 'account.lockout', 'two-factor.enforce'])->group(func
     Route::get('/piattaforma/email', EmailDiSistema::class)
         ->middleware('can:'.EmailDiSistema::PERMESSO)
         ->name('piattaforma.email');
+
+    // Il registro delle email partite (🔗 ADR-064): si legge e basta, quindi lo
+    // stesso permesso del registro di audit. ⚠️ Il nome NON è
+    // `piattaforma.email.inviate`: la barra accende una voce anche sulle sue
+    // sotto-rotte, e «Email» e «Email inviate» risulterebbero attive insieme.
+    Route::get('/piattaforma/email-inviate', EmailInviate::class)
+        ->middleware('can:'.EmailInviate::PERMESSO)
+        ->name('piattaforma.email-inviate');
 
     Route::get('/piattaforma/errori', Errori::class)
         ->middleware('can:'.Errori::PERMESSO)

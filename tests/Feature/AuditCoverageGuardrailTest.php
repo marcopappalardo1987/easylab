@@ -4,6 +4,7 @@ use App\Models\Account;
 use App\Models\AvvisoScadenza;
 use App\Models\Concerns\AuditsDomainWrites;
 use App\Models\Documento;
+use App\Models\EmailInviata;
 use App\Models\Errore;
 use App\Models\Fornitore;
 use App\Models\Garanzia;
@@ -45,6 +46,7 @@ const ESENZIONI = [
     Strumento::class => 'logga a mano: i suoi gesti (forzaSemaforo/rimuoviForzatura) hanno un messaggio che vale più dell\'elenco dei campi, e le colonne forced_* sono fuori da $fillable (ADR-005/027).',
     UnitaOrganizzativa::class => 'logga a mano la sola scrittura che conta — la visibilità garanzie ricambio (ADR-029). Il resto dell\'anagrafica non è tracciato: ADR-027 §3, «il resto quando serve».',
     User::class => 'identità e sessioni, già coperte da AuditLogSubscriber su un altro canale (login, 2FA, impersonation).',
+    EmailInviata::class => 'il registro delle email (ADR-064): le righe le scrive RegistroEmail sugli eventi di invio di Laravel, nessuna persona le crea o le modifica. Il trait scriverebbe una riga di audit per ogni email partita: l\'audit di un log, la ragione di Errore e AvvisoScadenza.',
 ];
 
 /** Il sostantivo atteso nella descrizione, per ogni modello che usa il trait. */

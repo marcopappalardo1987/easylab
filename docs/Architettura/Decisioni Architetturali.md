@@ -2102,3 +2102,24 @@ Prova di mutazione: 14 mutazioni, tutte rosse.
 - ⚠️ **`MAIL_FROM_ADDRESS` va impostata in ogni ambiente.** Senza, Laravel usa `hello@example.com` e SES rifiuta l'invio («Email address is not verified»). Su staging mancava.
 - ⚠️ **Le email fallite con Aruba non ripartono da sole.** Dopo il passaggio vanno lette con `php artisan queue:failed`. I link di reimpostazione della password scadono in 60 minuti, quindi non vanno rimandati.
 - **Prova di mutazione**: 6 mutazioni sulla configurazione, tutte rosse (chiavi e segreto dalle `AWS_*`, le `AWS_*` come riserva, regione di riserva da `AWS_DEFAULT_REGION`, regione americana, regione non configurabile).
+
+---
+
+**ADR-064 — Il registro delle email partite**
+
+*Stato: Accettata e attuata il 23 Nov 2026, per decisione di Marco, e promossa in produzione lo stesso giorno. Si appoggia ad ADR-047 (il catalogo delle email) e ad ADR-063 (SES).*
+
+**Il bisogno.** Marco vuole vedere quali email sono partite dalla piattaforma e a chi, lui come Developer ed EasyLab come amministratori. L'incidente del 23 Nov 2026 ne mostra la ragione: per giorni Aruba ha rifiutato la posta di produzione, e niente lo diceva.
+
+**Decisione.** Una tabella `email_inviate`, scritta da `App\Support\Email\RegistroEmail` sugli eventi di invio di Laravel (`MessageSending` e `MessageSent`), e una pagina **Piattaforma → Email inviate** (`/piattaforma/email-inviate`), dietro `tenants.view_all`.
+
+**Conseguenze.**
+
+- **Un posto solo per tutte le strade.** Gli eventi passano da ogni invio: notifiche accodate, comandi programmati, prove dalla piattaforma. Il tipo si ricava dalla classe che Laravel mette nei dati del messaggio, tradotta in voce di catalogo da `CatalogoEmail::chiavePerClasse()`. La mappa è completa nei due versi, e `RegistroEmailTest` la tiene così.
+- **Tre stati visibili, due scritti.** La riga nasce *in invio* e diventa *accettata* quando il server di posta la prende in carico, con il suo id (per SES l'intestazione `X-SES-Message-ID`). *Non partita* è una riga ancora in invio dopo dieci minuti: Laravel non avvisa quando un invio fallisce, quindi lo stato si deduce invece di scriverlo. Il motivo del rifiuto resta in Piattaforma → Errori. Ogni tentativo di un'email accodata è una riga, e quelle della stessa email condividono `notifica_id`.
+- ⚠️ **«Accettata» non vuol dire «ricevuta».** Vuol dire partita da noi. Consegne, rimbalzi e reclami di SES (via SNS) non sono letti: sono il passo successivo, e `message_id` è già la chiave per legarli.
+- 🔴 **Il registro non ferma mai la posta.** Ogni scrittura sta in un `try`, e un guasto va in `report()`. Il primo listener non restituisce mai `false`, che per `MessageSending` vorrebbe dire «non inviare». Un test lo prova togliendo la tabella.
+- 🔴 **Modello di piattaforma, senza `BelongsToTenant`**, come `Errore`: le email nascono soprattutto in console e in coda, e chi legge è tenant-bound. Il confine è il permesso `tenants.view_all`, nel set bloccato, oggi di Developer e Superadmin. La pagina lo richiede di nuovo a ogni render. In cambio dell'esenzione, le scritture stanno in un posto solo, e un guardrail elenca chi può nominare il modello.
+- ⛔ **Niente testo dell'email**: tipo, destinatari (anche copie), oggetto, mittente, mailer. Un test fissa l'elenco delle colonne, così una colonna in più è una decisione di privacy da prendere apposta.
+- **Trenta giorni, poi si cancella** (decisione di Marco del 23 Nov 2026). Il registro serve a vedere che cosa è partito di recente, non a tenere un archivio di posta. Ogni notte alle 03:30 `model:prune` toglie le righe più vecchie, con gli altri modelli di `Retention::MODELLI`. La prima stesura teneva dodici mesi, come le notifiche in applicazione.
+- **Prova di mutazione**: 16 mutazioni, tutte rosse (due sulla soglia dei trenta giorni, un giorno prima e un giorno dopo). Due erano verdi al primo giro: un controllo doppione sullo stato, tolto, e le copie conoscenza non coperte, ora coperte.

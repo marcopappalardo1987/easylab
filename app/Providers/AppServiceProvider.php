@@ -10,6 +10,7 @@ use App\Models\Account;
 use App\Models\Garanzia;
 use App\Policies\AccountPolicy;
 use App\Policies\GaranziaRicambioPolicy;
+use App\Support\Email\RegistroEmail;
 use App\Support\Listino\CatalogoPiani;
 use App\Support\Listino\Stripe\PortaListinoStripe;
 use App\Support\Listino\Stripe\PortaListinoStripeReale;
@@ -74,6 +75,10 @@ class AppServiceProvider extends ServiceProvider
         // reset globale in `tests/Pest.php`.
         $this->app->singleton(CatalogoPiani::class);
 
+        // 🔗 ADR-064. Singleton perché lega i due eventi di un invio con una
+        // WeakMap: due istanze non si ritroverebbero.
+        $this->app->singleton(RegistroEmail::class);
+
         // La porta verso Stripe per il listino (Product e Price). È
         // un'interfaccia perché la logica **nostra** — idempotenza, storico dei
         // prezzi, cosa succede se Stripe rifiuta — è sostanziale e va provata:
@@ -103,6 +108,9 @@ class AppServiceProvider extends ServiceProvider
         // impersonazione e scritture di assegnazioni e albero. Senza questa
         // riga resta inerte: si torna ai conteggi di prima, mai a nodi vecchi.
         Event::subscribe(AccessibleNodesMemo::class);
+
+        // Il registro delle email (ADR-064): ogni invio, da qualunque strada.
+        Event::subscribe(RegistroEmail::class);
 
         // ADR-029. Registrata a mano e non per convenzione (`GaranziaPolicy`)
         // perché non governa il model `Garanzia` per intero: risponde alle due
