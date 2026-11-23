@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\StatoSemaforo;
 use App\Enums\TipoIntervento;
 use App\Livewire\Piattaforma\ParcoScadenzario;
 use App\Models\Account;
@@ -7,6 +8,7 @@ use App\Models\Intervento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
+use App\Support\Interventi\PartizioniScadenzario;
 use App\Support\Piattaforma\Perimetro;
 use App\Support\Piattaforma\ScadenzarioParco;
 use App\Support\Semaforo;
@@ -564,7 +566,7 @@ it('never leaves a row without a client, so no intervention can be read as anybo
 // ─── 4. I confini di data: si provano sui giorni che li circondano ──────────
 
 it('filters the list from the tile that was clicked, and marks it as the active one', function () {
-    // ⚠️ **La strada vera è questa**: le tre tile chiamano `filtra()`, mentre
+    // ⚠️ **La strada vera è questa**: le quattro tile chiamano `filtra()`, mentre
     // ogni altro test di partizione scrive la property. Un `filtra()` che
     // scrivesse la partizione senza `resetPage()` — o che non la scrivesse
     // affatto — lascerebbe le tile inerti con tutti gli altri test verdi.
@@ -623,7 +625,7 @@ it('says the same number on the lit tile and at the foot of the table', function
 it('wires every tile to the filter, so none of them can be an inert decoration', function () {
     // 🔴 Il test qui sopra prova il **metodo**, non il bottone: dal punto
     // di vista del server `->call('filtra', 'scaduti')` è la stessa strada di
-    // `->set('stato', ...)`, quindi cancellare i quattro `wire:click` dal Blade
+    // `->set('stato', ...)`, quindi cancellare i cinque `wire:click` dal Blade
     // lascerebbe in pagina quattro riquadri con etichette e numeri giusti e
     // **inerti** — il Superadmin clicca «Scaduti» e la pagina non si muove —
     // senza che nulla diventi rosso. Il cablaggio è il prodotto: qui si guarda
@@ -634,7 +636,10 @@ it('wires every tile to the filter, so none of them can be an inert decoration',
     Livewire::test(ParcoScadenzario::class)
         ->assertSeeHtml('wire:click="filtra(\'scaduti\')"')
         ->assertSeeHtml('wire:click="filtra(\'in_scadenza\')"')
-        ->assertSeeHtml('wire:click="filtra(\'oltre\')"')
+        ->assertSeeHtml('wire:click="filtra(\'idonei\')"')
+        ->assertSeeHtml('wire:click="filtra(\'non_idonei\')"')
+        // `oltre` resta un sinonimo in ingresso, non un bottone.
+        ->assertDontSeeHtml('wire:click="filtra(\'oltre\')"')
         // ⚠️ E il ritorno: senza, «Tutti gli interventi aperti» resta come
         // unica via per togliere la partizione, e diventerebbe un vicolo cieco.
         ->assertSeeHtml('wire:click="filtra(null)"');
@@ -668,7 +673,7 @@ it('puts an intervention due today inside the imminent partition, not outside ev
     Livewire::test(ParcoScadenzario::class)
         ->set('stato', 'in_scadenza')
         ->assertSee('Scade oggi')
-        ->assertViewHas('contatori', fn (array $c) => $c['in_scadenza'] === 1 && $c['scaduti'] === 0 && $c['oltre'] === 0);
+        ->assertViewHas('contatori', fn (array $c) => $c['in_scadenza'] === 1 && $c['scaduti'] === 0 && $c['idonei'] === 0);
 });
 
 it('holds the imminent threshold on the exact day, and lets go the day after', function () {
@@ -691,10 +696,10 @@ it('holds the imminent threshold on the exact day, and lets go the day after', f
         ->assertDontSee('Primo giorno oltre');
 
     Livewire::test(ParcoScadenzario::class)
-        ->set('stato', 'oltre')
+        ->set('stato', 'idonei')
         ->assertSee('Primo giorno oltre')
         ->assertDontSee('Ultimo giorno utile')
-        ->assertViewHas('contatori', fn (array $c) => $c['in_scadenza'] === 1 && $c['oltre'] === 1);
+        ->assertViewHas('contatori', fn (array $c) => $c['in_scadenza'] === 1 && $c['idonei'] === 1);
 });
 
 it('reads the threshold from the semaforo instead of writing thirty by hand', function () {
@@ -707,7 +712,118 @@ it('reads the threshold from the semaforo instead of writing thirty by hand', fu
     apertoIl($this->autoclaveRossi, today()->addDays(6)->toDateString(), 'Fuori dalla soglia stretta');
 
     Livewire::test(ParcoScadenzario::class)
-        ->assertViewHas('contatori', fn (array $c) => $c['in_scadenza'] === 0 && $c['oltre'] === 1);
+        ->assertViewHas('contatori', fn (array $c) => $c['in_scadenza'] === 0 && $c['idonei'] === 1);
+});
+
+// ─── 4-ter. «Idonei» e «Non idonei» (23 Nov 2026) ───────────────────────────
+// Marco: «Oltre diventa idonei e aggiungere tab non idonei». La regola è la
+// stessa dello scadenzario dell'Ente (`PartizioniScadenzario`); qui si prova
+// ciò che solo il parco ha: le macchine ferme di un cliente che non è il
+// tenant di chi guarda.
+
+it('keeps the non idonea machine of another client out of «Idonei»', function () {
+    // 🔴 Bianchi NON è il tenant del Superadmin. Una sottoquery delle macchine
+    // rosse scopata su chi guarda (`Strumento::query()`) non vedrebbe la cappa
+    // di Bianchi, e i suoi interventi finirebbero tutti sotto «Idonei» — il
+    // difetto peggiore, perché si legge come una buona notizia.
+    $lontano = today()->addDays(Semaforo::giorniImminente() + 20)->toDateString();
+
+    apertoIl($this->autoclaveRossi, $lontano, 'Lontano su Rossi idonea');
+    apertoIl($this->cappaBianchi, $lontano, 'Lontano su Bianchi ferma');
+
+    comeIlCliente(fn () => $this->cappaBianchi->forzaSemaforo(StatoSemaforo::Rosso, 'Fuori uso'));
+
+    Livewire::test(ParcoScadenzario::class)
+        ->call('filtra', 'idonei')
+        ->assertSee('Lontano su Rossi idonea')
+        ->assertDontSee('Lontano su Bianchi ferma')
+        ->assertViewHas('contatori', fn (array $c) => $c['idonei'] === 1 && $c['non_idonei'] === 1);
+});
+
+it('lists under «Non idonei» every open intervention of another client\'s stopped machine, at any distance', function () {
+    // «Non idonei» non guarda la data, e la riga porta il suo cliente: è la
+    // lista delle macchine da far ripartire su tutto il parco.
+    $soglia = Semaforo::giorniImminente();
+
+    apertoIl($this->cappaBianchi, today()->subDays(3)->toDateString(), 'Bianchi ferma, scaduta');
+    apertoIl($this->cappaBianchi, today()->addDays($soglia + 15)->toDateString(), 'Bianchi ferma, lontana');
+    apertoIl($this->autoclaveRossi, today()->subDays(3)->toDateString(), 'Rossi idonea, scaduta');
+
+    comeIlCliente(fn () => $this->cappaBianchi->forzaSemaforo(StatoSemaforo::Rosso, 'Fuori uso'));
+
+    Livewire::test(ParcoScadenzario::class)
+        ->call('filtra', 'non_idonei')
+        ->assertViewHas('statoAttivo', fn ($v) => $v === 'non_idonei')
+        ->assertSee('Bianchi ferma, scaduta')
+        ->assertSee('Bianchi ferma, lontana')
+        ->assertSee('Lab Bianchi')
+        ->assertDontSee('Rossi idonea, scaduta')
+        // Le prime due finestre contano anche la macchina ferma, come prima.
+        ->assertViewHas('contatori', fn (array $c) => $c === [
+            'scaduti' => 2,
+            'in_scadenza' => 0,
+            'idonei' => 0,
+            'non_idonei' => 2,
+        ]);
+});
+
+it('never counts the stopped machines of a client outside the perimeter', function () {
+    // 🔴 Il negativo: il perimetro è la superficie che si dimentica, e la
+    // sottoquery delle macchine rosse è una lettura in più da cui un cliente
+    // non scelto può entrare nel numero.
+    $lontano = today()->addDays(Semaforo::giorniImminente() + 20)->toDateString();
+
+    apertoIl($this->autoclaveRossi, $lontano, 'Rossi ferma');
+    apertoIl($this->cappaBianchi, $lontano, 'Bianchi ferma');
+
+    comeIlCliente(function () {
+        $this->autoclaveRossi->forzaSemaforo(StatoSemaforo::Rosso, 'Fuori uso');
+        $this->cappaBianchi->forzaSemaforo(StatoSemaforo::Rosso, 'Fuori uso');
+    });
+
+    preferisce($this->superadmin, $this->rossi);
+
+    Livewire::test(ParcoScadenzario::class, ['modo' => Perimetro::PREFERITI])
+        ->call('filtra', 'non_idonei')
+        ->assertSee('Rossi ferma')
+        ->assertDontSee('Bianchi ferma')
+        ->assertViewHas('contatori', fn (array $c) => $c['non_idonei'] === 1 && $c['idonei'] === 0);
+
+    // Il positivo, senza cui l'«1» sarebbe verde anche se le macchine rosse
+    // non contassero affatto: su tutti i clienti sono due.
+    Livewire::test(ParcoScadenzario::class)
+        ->assertViewHas('contatori', fn (array $c) => $c['non_idonei'] === 2);
+});
+
+it('still opens «Idonei» from an old link that says stato=oltre, and shrugs off one it cannot read', function () {
+    $lontano = today()->addDays(Semaforo::giorniImminente() + 5)->toDateString();
+
+    apertoIl($this->autoclaveRossi, $lontano, 'Lontano e idoneo');
+    apertoIl($this->autoclaveRossi, today()->subDays(2)->toDateString(), 'Gia scaduta');
+
+    Livewire::withQueryParams(['stato' => 'oltre'])->test(ParcoScadenzario::class)
+        ->assertSet('stato', 'idonei')
+        ->assertViewHas('statoAttivo', fn ($v) => $v === 'idonei')
+        ->assertSee('Lontano e idoneo')
+        ->assertDontSee('Gia scaduta');
+
+    // Da un update del browser, che non ripassa da `mount()`.
+    Livewire::test(ParcoScadenzario::class)
+        ->set('stato', 'oltre')
+        ->assertViewHas('statoAttivo', fn ($v) => $v === 'idonei')
+        ->assertDontSee('Gia scaduta');
+
+    Livewire::test(ParcoScadenzario::class)
+        ->call('filtra', 'oltre')
+        ->assertSet('stato', 'idonei');
+
+    // ⛔ Un array dalla query string non è un 500: è un filtro ignorato.
+    $this->get(route('piattaforma.parco.scadenzario').'?stato[]=idonei')->assertOk();
+
+    Livewire::withQueryParams(['stato' => ['idonei']])->test(ParcoScadenzario::class)
+        ->assertSet('stato', null)
+        ->assertSee('Gia scaduta')
+        ->assertSee('Lontano e idoneo');
 });
 
 it('writes every date boundary as a comparison the two drivers agree on', function () {
@@ -724,7 +840,7 @@ it('writes every date boundary as a comparison the two drivers agree on', functi
     $oggi = today()->toDateString();
     $primoOltre = today()->addDays($soglia + 1)->toDateString();
 
-    $q = fn (string $stato) => ScadenzarioParco::partiziona(ScadenzarioParco::base(Perimetro::tutti()), $stato);
+    $q = fn (string $stato) => ScadenzarioParco::partiziona(ScadenzarioParco::base(Perimetro::tutti()), $stato, Perimetro::tutti());
 
     // Scaduto = STRETTAMENTE prima di oggi: ciò che scade oggi non è scaduto
     // (`Intervento::isScaduto()`). Un `<=` sposterebbe il confine di un giorno.
@@ -741,13 +857,13 @@ it('writes every date boundary as a comparison the two drivers agree on', functi
     expect($q('in_scadenza')->toSql())->toContain('"data_scadenza" < ?');
     expect($q('in_scadenza')->getBindings())->toContain($primoOltre);
 
-    expect($q('oltre')->toSql())->toContain('"interventi"."data_scadenza" >= ?');
-    expect($q('oltre')->getBindings())->toContain($primoOltre);
+    expect($q('idonei')->toSql())->toContain('"interventi"."data_scadenza" >= ?');
+    expect($q('idonei')->getBindings())->toContain($primoOltre);
 
     // ⛔ Le date si passano come STRINGA e mai come Carbon: un Carbon si
     // serializza con l'orario, e l'orario è esattamente ciò che rende il
     // confronto diverso fra i due driver.
-    foreach (ScadenzarioParco::STATI as $stato) {
+    foreach (PartizioniScadenzario::STATI as $stato) {
         $bindings = $q($stato)->getBindings();
 
         // Il conteggio PRIMA del ciclo: su un array vuoto un `foreach` non
@@ -946,7 +1062,7 @@ it('narrows the list to the chosen kind of intervention, counters included', fun
         ->set('tipo', TipoIntervento::ManutenzioneFullRisk->value)
         ->assertSee('Verifica del full risk')
         ->assertDontSee('Verifica ordinaria')
-        ->assertViewHas('contatori', fn (array $c) => $c['in_scadenza'] === 1 && $c['scaduti'] === 0 && $c['oltre'] === 0);
+        ->assertViewHas('contatori', fn (array $c) => $c['in_scadenza'] === 1 && $c['scaduti'] === 0 && $c['idonei'] === 0);
 });
 
 it('drops a kind of intervention it does not know instead of emptying the list', function () {

@@ -97,26 +97,9 @@
         </div>
     </x-ui.card>
 
-    {{-- ─── Le tre partizioni, cliccabili come i riquadri della dashboard ── --}}
+    {{-- ─── I quattro riquadri, cliccabili come quelli della dashboard ───── --}}
 
-    <div class="mt-6 grid gap-4 sm:grid-cols-3">
-        <button type="button" wire:click="filtra('scaduti')" class="rounded-lg text-left transition">
-            <x-ui.stat-tile label="Scaduti" :valore="$contatori['scaduti']"
-                            class="h-full hover:border-brand {{ $statoAttivo === 'scaduti' ? 'ring-2 ring-ring' : '' }}" />
-        </button>
-
-        <button type="button" wire:click="filtra('in_scadenza')" class="rounded-lg text-left transition">
-            <x-ui.stat-tile label="In scadenza" :valore="$contatori['in_scadenza']"
-                            :dettaglio="'entro '.$soglia.' giorni'"
-                            class="h-full hover:border-brand {{ $statoAttivo === 'in_scadenza' ? 'ring-2 ring-ring' : '' }}" />
-        </button>
-
-        <button type="button" wire:click="filtra('oltre')" class="rounded-lg text-left transition">
-            <x-ui.stat-tile label="Oltre" :valore="$contatori['oltre']"
-                            :dettaglio="'oltre '.$soglia.' giorni'"
-                            class="h-full hover:border-brand {{ $statoAttivo === 'oltre' ? 'ring-2 ring-ring' : '' }}" />
-        </button>
-    </div>
+    <x-scadenzario.riquadri :contatori="$contatori" :stato-attivo="$statoAttivo" :soglia="$soglia" />
 
     <div class="mt-3">
         <button type="button" wire:click="filtra(null)"

@@ -124,11 +124,14 @@ dataset('pagine', [
     'Admin elenco strumenti' => ['admin', '/strumenti', 11, 'Macchina 2'],
     'Responsabile elenco strumenti' => ['responsabile', '/strumenti', 12, 'Macchina 2'],
     'Tenant elenco strumenti' => ['tenant', '/strumenti', 10, 'Macchina 2'],
-    'Admin scadenzario' => ['admin', '/scadenzario', 12, 'Macchina 2'],
-    'Responsabile scadenzario' => ['responsabile', '/scadenzario', 13, 'Macchina 2'],
+    // +1 dal 23 Nov 2026 su tutti e tre: il quarto riquadro, «Non idonei», è
+    // UN count per pagina, con la sottoquery delle macchine rosse dentro.
+    'Admin scadenzario' => ['admin', '/scadenzario', 13, 'Macchina 2'],
+    'Responsabile scadenzario' => ['responsabile', '/scadenzario', 14, 'Macchina 2'],
     // 12 e non più 11 dal 6 Ott 2026 (ADR-046): chi può seguire più sedi ne
-    // legge l'elenco per il filtro «Sede», una volta per richiesta.
-    'Tecnico scadenzario' => ['tecnico', '/scadenzario', 12, 'Macchina 2'],
+    // legge l'elenco per il filtro «Sede», una volta per richiesta. 13 dal
+    // 23 Nov 2026, per «Non idonei».
+    'Tecnico scadenzario' => ['tecnico', '/scadenzario', 13, 'Macchina 2'],
     'Superadmin cabina' => ['superadmin', '/piattaforma', 19, 'Strumenti 50 Macchine di tutti i clienti'],
     'Superadmin parco' => ['superadmin', '/piattaforma/parco', 11, 'Macchina 2'],
 ]);

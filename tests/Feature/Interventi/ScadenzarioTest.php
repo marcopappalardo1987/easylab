@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\StatoSemaforo;
 use App\Enums\TipoIntervento;
 use App\Livewire\Interventi\Scadenzario;
 use App\Models\Intervento;
@@ -160,12 +161,13 @@ it('ends every ordering with a tie-break, so pages cannot lose rows', function (
     }
 });
 
-it('splits the open interventi in three partitions that are exactly complementary', function () {
+it('splits the open interventi of idonee machines in three date windows that are exactly complementary', function () {
     // 🔴 Il caso che conta è **oggi**: `isScaduto()` esclude la giornata in
     // corso, quindi un intervento che scade oggi sta fra i NON scaduti. Se il
     // taglio del ramo «in scadenza» diventasse `> oggi`, quella riga
-    // sparirebbe da tutte e tre le partizioni senza che nessun conteggio
-    // sembrasse sbagliato.
+    // sparirebbe da tutte e tre le finestre senza che nessun conteggio
+    // sembrasse sbagliato. Nessuna macchina è non idonea: qui «Idonei» è la
+    // vecchia «Oltre», e il caso con una macchina ferma ha il suo test.
     $soglia = Semaforo::giorniImminente();
 
     $ieri = Intervento::factory()->forStrumento($this->autoclave)
@@ -188,14 +190,15 @@ it('splits the open interventi in three partitions that are exactly complementar
     $tutti = $idsDi(null);
     $scaduti = $idsDi('scaduti');
     $inScadenza = $idsDi('in_scadenza');
-    $oltreSoglia = $idsDi('oltre');
+    $oltreSoglia = $idsDi('idonei');
 
     expect($tutti)->toHaveCount(5)
         ->and($scaduti)->toBe([$ieri->id])
         ->and($inScadenza)->toBe([$oggi->id, $domani->id, $alConfine->id])
-        ->and($oltreSoglia)->toBe([$oltre->id]);
+        ->and($oltreSoglia)->toBe([$oltre->id])
+        ->and($idsDi('non_idonei'))->toBe([]);
 
-    // Le tre partizioni coprono TUTTO e non si sovrappongono.
+    // Le tre finestre coprono TUTTO e non si sovrappongono.
     $unione = collect([$scaduti, $inScadenza, $oltreSoglia])->flatten()->sort()->values()->all();
 
     expect($unione)->toBe($tutti)
@@ -246,7 +249,7 @@ it('cuts both boundaries with >= in the SQL, and not only in the data', function
     // Il confine superiore si esprime come `>= oggi+soglia+1` e mai come
     // `> oggi+soglia`, per la stessa ragione e nella stessa forma di
     // `Intervento::scopeApertiEntroSoglia()`.
-    $oltre = $sqlDellaPagina('oltre');
+    $oltre = $sqlDellaPagina('idonei');
     expect($oltre['query'])->toContain('"interventi"."data_scadenza" >= ?')
         ->and($oltre['bindings'])->toContain(today()->addDays(Semaforo::giorniImminente() + 1)->toDateString());
 });
@@ -267,17 +270,19 @@ it('reads the imminente boundary from the config, never from a hand-written 30',
     expect($componente->viewData('contatori'))->toBe([
         'scaduti' => 0,
         'in_scadenza' => 1,
-        'oltre' => 1,
+        'idonei' => 1,
+        'non_idonei' => 0,
     ]);
 
-    // E la frase sotto la tile dice SETTE, non trenta.
-    $componente->assertSee('entro 7 giorni');
+    // E le frasi sotto le due tile dicono SETTE, non trenta.
+    $componente->assertSee('entro 7 giorni')
+        ->assertSee('oltre 7 giorni');
 
     expect(Livewire::withQueryParams(['stato' => 'in_scadenza'])
         ->actingAs($this->admin)->test(Scadenzario::class)
         ->viewData('interventi')->pluck('id')->all())->toBe([$dentro->id]);
 
-    expect(Livewire::withQueryParams(['stato' => 'oltre'])
+    expect(Livewire::withQueryParams(['stato' => 'idonei'])
         ->actingAs($this->admin)->test(Scadenzario::class)
         ->viewData('interventi')->pluck('id')->all())->toBe([$fuori->id]);
 });
@@ -318,10 +323,12 @@ it('costs the same number of statements with five rows and with thirty', functio
 
     // La proprietà che conta: trenta righe in pagina non costano più di cinque.
     expect($misura(50))->toBe($conCinque)
-        // Otto, e sapere quali rende utile il numero: count del paginatore,
+        // Nove, e sapere quali rende utile il numero: count del paginatore,
         // pagina, due eager load (strumento, tecnico), la mappa delle
-        // ubicazioni, i tre contatori.
-        ->and($conCinque)->toBe(8);
+        // ubicazioni, i quattro contatori. Erano otto fino al 23 Nov 2026: il
+        // quarto riquadro, «Non idonei», costa UN count per pagina, e la sua
+        // sottoquery sulle macchine rosse vive dentro quel count.
+        ->and($conCinque)->toBe(9);
 });
 
 it('makes the paginator total agree with the number on the tile', function () {
@@ -336,14 +343,15 @@ it('makes the paginator total agree with the number on the tile', function () {
 
     expect($contatori['scaduti'])->toBe(3)
         ->and($contatori['in_scadenza'])->toBe(2)
-        ->and($contatori['oltre'])->toBe(0);
+        ->and($contatori['idonei'])->toBe(0)
+        ->and($contatori['non_idonei'])->toBe(0);
 
     $componente->call('filtra', 'scaduti')
         ->assertSet('stato', 'scaduti')
         ->tap(fn ($c) => expect($c->viewData('interventi')->total())->toBe($contatori['scaduti']))
         // ⚠️ Le tile NON portano il filtro attivo: applicandolo anche a loro,
-        // due su tre direbbero zero appena se ne clicca una e non si potrebbe
-        // più passare dall'una all'altra.
+        // tre su quattro direbbero zero appena se ne clicca una e non si
+        // potrebbe più passare dall'una all'altra.
         ->tap(fn ($c) => expect($c->viewData('contatori'))->toBe($contatori));
 });
 
@@ -361,6 +369,198 @@ it('shows everything when the partition in the query string is not in the whitel
     Livewire::actingAs($this->admin)->test(Scadenzario::class)
         ->call('filtra', 'inventato')
         ->assertSet('stato', null);
+});
+
+// ─── «Idonei» e «Non idonei» (23 Nov 2026) ──────────────────────────────────
+// Marco: «Oltre diventa idonei e aggiungere tab non idonei». Il rosso del
+// semaforo nasce solo da una forzatura manuale (ADR-005 punto 5), quindi le
+// fixture lo scrivono con `forzaSemaforo()`, che è la sola strada.
+
+it('keeps a non idonea machine out of «Idonei», even far beyond the threshold', function () {
+    // 🔴 Le due righe differiscono SOLO per la macchina: stessa data, oltre la
+    // soglia. Senza la riga sulla macchina idonea, un «Idonei» vuoto per
+    // qualunque ragione sarebbe verde.
+    $lontano = today()->addDays(Semaforo::giorniImminente() + 20)->toDateString();
+
+    $sana = Intervento::factory()->forStrumento($this->autoclave)
+        ->create(['data_scadenza' => $lontano, 'descrizione' => 'Su una macchina idonea']);
+    Intervento::factory()->forStrumento($this->cappa)
+        ->create(['data_scadenza' => $lontano, 'descrizione' => 'Su una macchina ferma']);
+
+    $this->cappa->forzaSemaforo(StatoSemaforo::Rosso, 'Ventola guasta');
+
+    $componente = Livewire::withQueryParams(['stato' => 'idonei'])
+        ->actingAs($this->admin)->test(Scadenzario::class);
+
+    $componente->assertSee('Su una macchina idonea')
+        ->assertDontSee('Su una macchina ferma');
+
+    expect($componente->viewData('interventi')->pluck('id')->all())->toBe([$sana->id])
+        ->and($componente->viewData('contatori')['idonei'])->toBe(1)
+        ->and($componente->viewData('contatori')['non_idonei'])->toBe(1);
+});
+
+it('lists under «Non idonei» every open intervento of a non idonea machine, at any distance, and none of the others', function () {
+    // «Non idonei» non guarda la data: scaduto, di oggi, oltre la soglia. E non
+    // è «tutto ciò che non è verde»: una macchina forzata ARANCIONE chiede
+    // interventi ma resta idonea, e i suoi restano fuori.
+    $soglia = Semaforo::giorniImminente();
+    $centrifuga = Strumento::factory()->forNode($this->dept)->create(['nome' => 'Centrifuga']);
+
+    $diCappa = [];
+    foreach ([today()->subDays(4), today(), today()->addDays($soglia + 10)] as $i => $data) {
+        $diCappa[] = Intervento::factory()->forStrumento($this->cappa)
+            ->create(['data_scadenza' => $data->toDateString(), 'descrizione' => "Cappa ferma {$i}"])->id;
+        Intervento::factory()->forStrumento($this->autoclave)
+            ->create(['data_scadenza' => $data->toDateString(), 'descrizione' => "Autoclave sana {$i}"]);
+        Intervento::factory()->forStrumento($centrifuga)
+            ->create(['data_scadenza' => $data->toDateString(), 'descrizione' => "Centrifuga da seguire {$i}"]);
+    }
+
+    // Già fatto su una macchina ferma: non è un intervento aperto, e non conta.
+    Intervento::factory()->forStrumento($this->cappa)->fatto()
+        ->create(['data_scadenza' => today()->toDateString(), 'descrizione' => 'Cappa gia chiuso']);
+
+    $this->cappa->forzaSemaforo(StatoSemaforo::Rosso, 'Ventola guasta');
+    $centrifuga->forzaSemaforo(StatoSemaforo::Arancione, 'Rumore anomalo');
+
+    $componente = Livewire::withQueryParams(['stato' => 'non_idonei'])
+        ->actingAs($this->admin)->test(Scadenzario::class);
+
+    $componente->assertSee('Cappa ferma 0')
+        ->assertSee('Cappa ferma 2')
+        ->assertDontSee('Autoclave sana')
+        ->assertDontSee('Centrifuga da seguire')
+        ->assertDontSee('Cappa gia chiuso');
+
+    expect($componente->viewData('interventi')->pluck('id')->sort()->values()->all())->toBe($diCappa)
+        // I quattro numeri: le prime due finestre contano TUTTE le macchine —
+        // la ferma compresa, come prima — «Idonei» le due oltre la soglia delle
+        // macchine idonee, «Non idonei» i tre della ferma.
+        ->and($componente->viewData('contatori'))->toBe([
+            'scaduti' => 3,
+            'in_scadenza' => 3,
+            'idonei' => 2,
+            'non_idonei' => 3,
+        ]);
+});
+
+it('covers every open intervento with the four tiles, «Idonei» and «Non idonei» never sharing one', function () {
+    // Le proprietà che reggono i numeri: le tre finestre di tempo restano
+    // disgiunte, «Idonei» e «Non idonei» non si toccano, e insieme fanno
+    // esattamente la vecchia «Oltre» — nessuna riga uscita da tutte le tile.
+    $soglia = Semaforo::giorniImminente();
+
+    foreach ([$this->autoclave, $this->cappa] as $macchina) {
+        foreach ([-1, 0, $soglia, $soglia + 1, $soglia + 40] as $giorni) {
+            Intervento::factory()->forStrumento($macchina)
+                ->create(['data_scadenza' => today()->addDays($giorni)->toDateString()]);
+        }
+    }
+
+    $this->cappa->forzaSemaforo(StatoSemaforo::Rosso, 'Ventola guasta');
+
+    $idsDi = fn (?string $stato): array => Livewire::withQueryParams(['stato' => $stato, 'perPage' => 100])
+        ->actingAs($this->admin)->test(Scadenzario::class)
+        ->viewData('interventi')->pluck('id')->sort()->values()->all();
+
+    $tutti = $idsDi(null);
+    $scaduti = $idsDi('scaduti');
+    $inScadenza = $idsDi('in_scadenza');
+    $idonei = $idsDi('idonei');
+    $nonIdonei = $idsDi('non_idonei');
+
+    $oltre = Intervento::query()
+        ->where('data_scadenza', '>=', today()->addDays($soglia + 1)->toDateString())
+        ->pluck('id')->sort()->values()->all();
+
+    expect($tutti)->toHaveCount(10)
+        ->and($idonei)->toHaveCount(2)
+        ->and($nonIdonei)->toHaveCount(5)
+        ->and(collect([$scaduti, $inScadenza, $idonei, $nonIdonei])->flatten()->unique()->sort()->values()->all())->toBe($tutti)
+        ->and(array_values(array_intersect($scaduti, $inScadenza)))->toBe([])
+        ->and(array_values(array_intersect($inScadenza, $idonei)))->toBe([])
+        ->and(array_values(array_intersect($scaduti, $idonei)))->toBe([])
+        ->and(array_values(array_intersect($idonei, $nonIdonei)))->toBe([])
+        ->and(collect($idonei)->merge(array_intersect($nonIdonei, $oltre))->sort()->values()->all())->toBe($oltre);
+});
+
+it('still opens «Idonei» from an old link that says stato=oltre', function () {
+    // Un segnalibro o un link incollato in una mail di ieri dicono ancora
+    // `?stato=oltre`: devono aprire la stessa vista, con la tile accesa.
+    $lontano = today()->addDays(Semaforo::giorniImminente() + 5)->toDateString();
+
+    $sano = Intervento::factory()->forStrumento($this->autoclave)
+        ->create(['data_scadenza' => $lontano, 'descrizione' => 'Lontano e idoneo']);
+    Intervento::factory()->forStrumento($this->autoclave)->scaduto()
+        ->create(['descrizione' => 'Gia scaduto']);
+    Intervento::factory()->forStrumento($this->cappa)
+        ->create(['data_scadenza' => $lontano, 'descrizione' => 'Lontano su macchina ferma']);
+
+    $this->cappa->forzaSemaforo(StatoSemaforo::Rosso, 'Ventola guasta');
+
+    // Dall'indirizzo: e l'indirizzo si riscrive col nome di oggi.
+    Livewire::withQueryParams(['stato' => 'oltre'])
+        ->actingAs($this->admin)->test(Scadenzario::class)
+        ->assertSet('stato', 'idonei')
+        ->assertViewHas('statoAttivo', fn ($v) => $v === 'idonei')
+        ->assertSee('Lontano e idoneo')
+        ->assertDontSee('Gia scaduto')
+        ->assertDontSee('Lontano su macchina ferma')
+        ->tap(fn ($c) => expect($c->viewData('interventi')->pluck('id')->all())->toBe([$sano->id]))
+        ->tap(fn ($c) => expect($c->instance()->haFiltriAttivi())->toBeTrue());
+
+    // Da un update del browser, che non ripassa da `mount()`: `render()`
+    // normalizza lo stesso.
+    Livewire::actingAs($this->admin)->test(Scadenzario::class)
+        ->set('stato', 'oltre')
+        ->assertViewHas('statoAttivo', fn ($v) => $v === 'idonei')
+        ->assertSee('Lontano e idoneo')
+        ->assertDontSee('Gia scaduto');
+
+    // E dall'azione delle tile.
+    Livewire::actingAs($this->admin)->test(Scadenzario::class)
+        ->call('filtra', 'oltre')
+        ->assertSet('stato', 'idonei');
+});
+
+it('does not break on a partition it cannot read, an array included', function () {
+    // ⛔ `?stato[]=…` su una property tipizzata `?string` sarebbe un
+    // `TypeError`, cioè un 500 al posto di un filtro ignorato: stessa ragione
+    // per cui `$sede` è `mixed`.
+    Intervento::factory()->count(2)->forStrumento($this->autoclave)->scaduto()->create();
+
+    $this->actingAs($this->admin)
+        ->get(route('scadenzario.index').'?stato[]=idonei')
+        ->assertOk();
+
+    Livewire::withQueryParams(['stato' => ['idonei']])
+        ->actingAs($this->admin)->test(Scadenzario::class)
+        ->assertSet('stato', null)
+        ->tap(fn ($c) => expect($c->viewData('interventi')->total())->toBe(2))
+        ->tap(fn ($c) => expect($c->instance()->haFiltriAttivi())->toBeFalse());
+});
+
+it('counts under «Non idonei» only my own interventi when solo i miei is ticked', function () {
+    // Il quarto riquadro porta i filtri dell'elenco come gli altri tre: la
+    // spunta «Solo i miei» non può lasciarlo sul numero di tutto il laboratorio.
+    $collega = User::factory()->create(['tenant_id' => $this->ente->id]);
+    $collega->assignRole('Tecnico');
+
+    Intervento::factory()->forStrumento($this->cappa)->assegnatoA($this->admin)->scaduto()
+        ->create(['descrizione' => 'Mio, su macchina ferma']);
+    Intervento::factory()->forStrumento($this->cappa)->assegnatoA($collega)->scaduto()
+        ->create(['descrizione' => 'Del collega, su macchina ferma']);
+
+    $this->cappa->forzaSemaforo(StatoSemaforo::Rosso, 'Ventola guasta');
+
+    Livewire::actingAs($this->admin)->test(Scadenzario::class)
+        ->tap(fn ($c) => expect($c->viewData('contatori')['non_idonei'])->toBe(2))
+        ->set('soloMiei', true)
+        ->tap(fn ($c) => expect($c->viewData('contatori')['non_idonei'])->toBe(1))
+        ->call('filtra', 'non_idonei')
+        ->assertSee('Mio, su macchina ferma')
+        ->assertDontSee('Del collega, su macchina ferma');
 });
 
 it('never exceeds 100 rows per page, whatever the query string says', function () {
@@ -594,6 +794,9 @@ it('drops the rows of a binned machine, from the list and from the tiles', funct
     $orfano = Intervento::factory()->forStrumento($this->cappa)->scaduto()
         ->create(['descrizione' => 'Su una macchina cestinata']);
 
+    // ⚠️ E la macchina cestinata era stata dichiarata non idonea: senza, il
+    // riquadro «Non idonei» direbbe zero anche se contasse le cestinate.
+    $this->cappa->forzaSemaforo(StatoSemaforo::Rosso, 'Fuori uso, poi dismessa');
     $this->cappa->delete();
 
     $componente = Livewire::actingAs($this->admin)->test(Scadenzario::class);
@@ -608,7 +811,8 @@ it('drops the rows of a binned machine, from the list and from the tiles', funct
         ->and($componente->viewData('contatori'))->toBe([
             'scaduti' => 1,
             'in_scadenza' => 0,
-            'oltre' => 0,
+            'idonei' => 0,
+            'non_idonei' => 0,
         ])
         // La riga NON è stata cancellata: è solo uscita da questo elenco. Senza
         // questa asserzione il test sarebbe verde anche se cestinare una
@@ -813,6 +1017,8 @@ it('wires the tiles to the filter, so they cannot go inert with the suite green'
     // `filtra()` come METODO, e nessuna asserzione tocca il `wire:click` del
     // Blade. Cancellandoli dal markup le tre tile diventerebbero decorazioni
     // inerti — si cliccherebbe e non succederebbe niente — con la suite verde.
+    // Dal 23 Nov 2026 le tile sono quattro e vivono in `x-scadenzario.riquadri`,
+    // condiviso col parco: l'asserzione resta sull'HTML della pagina.
     //
     // ⚠️ Si asserisce sul markup e non sul comportamento perché è il markup a
     // mancare: il metodo è già provato sopra, ed è proprio quella copertura che
@@ -821,5 +1027,10 @@ it('wires the tiles to the filter, so they cannot go inert with the suite green'
 
     expect($html)->toContain('wire:click="filtra(\'scaduti\')"')
         ->and($html)->toContain('wire:click="filtra(\'in_scadenza\')"')
-        ->and($html)->toContain('wire:click="filtra(\'oltre\')"');
+        ->and($html)->toContain('wire:click="filtra(\'idonei\')"')
+        ->and($html)->toContain('wire:click="filtra(\'non_idonei\')"')
+        // Il nome di prima resta un sinonimo in ingresso, non un bottone: una
+        // tile ancora cablata su `oltre` funzionerebbe, ma l'indirizzo
+        // tornerebbe a dire il nome vecchio.
+        ->and($html)->not->toContain('wire:click="filtra(\'oltre\')"');
 });

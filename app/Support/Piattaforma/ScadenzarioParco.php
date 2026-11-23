@@ -3,13 +3,15 @@
 namespace App\Support\Piattaforma;
 
 use App\Enums\StatoIntervento;
+use App\Enums\StatoSemaforo;
 use App\Enums\TipoIntervento;
 use App\Models\Account;
 use App\Models\Intervento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
-use App\Support\Semaforo;
+use App\Support\Interventi\PartizioniScadenzario;
 use Carbon\CarbonInterface;
+use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -29,6 +31,12 @@ use Illuminate\Support\Collection;
  * Qui si **chiamano**, non si ripetono: una seconda copia della regola su una
  * vista cross-cliente vorrebbe dire che il parco e l'Ente possono dire due cose
  * diverse sulla stessa riga, e a scoprirlo sarebbe il cliente.
+ *
+ * Dal 23 Nov 2026 anche i **quattro riquadri** sono una regola sola:
+ * `App\Support\Interventi\PartizioniScadenzario`, che i due scadenzari
+ * chiamano. Fino a quel giorno il taglio delle tre finestre di tempo era
+ * scritto due volte, qui e nel componente dell'Ente, identico; con «Idonei» e
+ * «Non idonei» le copie sarebbero diventate quattro.
  *
  * ## Perché una classe e non tre metodi privati nel componente
  *
@@ -57,17 +65,10 @@ use Illuminate\Support\Collection;
 final class ScadenzarioParco
 {
     /**
-     * Le tre partizioni, e sono tre: scaduto, entro la soglia «imminente» di
-     * ADR-005, oltre. Le stesse del scadenzario dell'Ente e le stesse due
-     * domande del digest (ADR-011) più il resto. Nessuna quarta soglia.
-     */
-    public const STATI = ['scaduti', 'in_scadenza', 'oltre'];
-
-    /**
      * Gli interventi **aperti** del perimetro, con ricerca e tipo applicati ma
      * senza la partizione.
      *
-     * Serve identica alle righe e ai tre contatori: se i due la costruissero
+     * Serve identica alle righe e ai quattro contatori: se i due la costruissero
      * per conto proprio, le tile direbbero numeri che l'elenco non conferma.
      *
      * ⛔ **Solo gli interventi di una macchina ancora leggibile.** Cestinare uno
@@ -116,45 +117,57 @@ final class ScadenzarioParco
     }
 
     /**
-     * Applica una delle tre partizioni, o nessuna.
+     * Applica una delle quattro partizioni, o nessuna.
      *
-     * 🔴 **Nessuna delle tre regole è riscritta qui**: `scadute()` è il gemello
-     * SQL di `isScaduto()`, `apertiEntroSoglia()` porta con sé
-     * `Semaforo::giorniImminente()`. Un 30 scritto a mano qui sarebbe una
-     * seconda soglia, e il giorno in cui la prima cambia resterebbe indietro in
-     * silenzio.
-     *
-     * ⚠️ `$oggi` si calcola **una volta** e vale per tutto il metodo:
-     * `scadute()` taglia a `< oggi` e `in_scadenza` riprende da `>= oggi`,
-     * quindi le due metà non possono divergere di un giorno e un intervento che
-     * scade OGGI sta fra i non scaduti — che è la regola di `isScaduto()`.
-     *
-     * ⛔ Il confine superiore si esprime SEMPRE come `>= oggi+soglia+1` e mai
-     * come `> oggi+soglia`: su SQLite le colonne `date` sono stringhe
-     * `'Y-m-d 00:00:00'` e il confronto è **lessicografico**, quindi
-     * `'2026-09-28 00:00:00' > '2026-09-28'` è vero mentre su Postgres è falso —
-     * cioè un intervento al confine cadrebbe in due partizioni diverse a
-     * seconda del driver, verde in locale e rosso in CI. Col giorno successivo
-     * i due motori dicono la stessa cosa. Le date si passano come **stringa**
-     * (`->toDateString()`), mai come Carbon.
+     * 🔴 **Nessuna regola è riscritta qui**: le date, la soglia di `Semaforo` e
+     * il sinonimo `oltre` stanno in `PartizioniScadenzario::applica()`, la
+     * stessa dello scadenzario dell'Ente. Qui c'è solo ciò che il parco ha di
+     * suo: **da quali macchine** partire per «Idonei» e «Non idonei».
      *
      * @param  Builder<Intervento>  $query
      * @return Builder<Intervento>
      */
-    public static function partiziona(Builder $query, ?string $stato): Builder
+    public static function partiziona(Builder $query, mixed $stato, Perimetro $perimetro): Builder
     {
-        $oggi = today()->toDateString();
+        return PartizioniScadenzario::applica($query, $stato, fn () => self::nonIdonee($perimetro));
+    }
 
-        return match ($stato) {
-            'scaduti' => $query->scadute(),
-            'in_scadenza' => $query->apertiEntroSoglia()->where('interventi.data_scadenza', '>=', $oggi),
-            'oltre' => $query->where(
-                'interventi.data_scadenza',
-                '>=',
-                today()->addDays(Semaforo::giorniImminente() + 1)->toDateString()
-            ),
-            default => $query,
-        };
+    /**
+     * I quattro numeri dei riquadri, dalla stessa `base()` delle righe.
+     *
+     * @param  Closure(): Builder<Intervento>  $base
+     * @return array<string, int>
+     */
+    public static function contatori(Closure $base, Perimetro $perimetro): array
+    {
+        return PartizioniScadenzario::contatori($base, fn () => self::nonIdonee($perimetro));
+    }
+
+    /**
+     * Gli id delle macchine **non idonee** dei clienti nel perimetro: semaforo
+     * rosso, cioè forzato a mano (🔗 ADR-005 punto 5, ADR-052).
+     *
+     * ⛔ Da `ParcoClienti::strumenti()`, cioè dallo **stesso** builder da cui
+     * `base()` prende le macchine leggibili. `Strumento::query()` sarebbe
+     * scopato sul tenant di chi guarda: le macchine rosse degli altri clienti
+     * non ci sarebbero, e i loro interventi finirebbero tutti sotto «Idonei» —
+     * il difetto peggiore, perché si legge come una buona notizia.
+     *
+     * ⚠️ `StrumentiPerStato::semaforo()` e non `conStato()`: quest'ultimo su un
+     * builder del parco è vietato per nome (`VistaPiattaformaTest`), perché i
+     * suoi rami verde e arancione partono da sottoquery scopate. Il ramo rosso
+     * guarda la sola colonna `forced_state`, quindi qui le due forme dicono la
+     * stessa cosa; la regola del parco resta però quella sua.
+     *
+     * @return Builder<Strumento>
+     */
+    private static function nonIdonee(Perimetro $perimetro): Builder
+    {
+        $macchine = ParcoClienti::strumenti($perimetro)->select('strumenti.id');
+
+        StrumentiPerStato::semaforo($macchine, StatoSemaforo::Rosso, $perimetro);
+
+        return $macchine;
     }
 
     /**
