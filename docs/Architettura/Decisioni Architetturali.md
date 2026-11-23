@@ -1998,6 +1998,8 @@ Si imposta dalla cabina: nella finestra con cui nasce un cliente, e col pulsante
 
 *Stato: Accettata e attuata l'11 Ott 2026, per decisione di Marco. Estende ADR-019 (la garanzia «inizio + durata»); il tab Garanzie della scheda non cambia. Solo su staging.*
 
+*⚠️ Cambiata da ADR-065 (23 Nov 2026): l'inizio non si chiede più. La garanzia conta dalla data di collaudo (la «data di installazione» di allora), e senza quella non si registra.*
+
 **Decisione.** Il modulo «Nuovo strumento» chiede anche la **garanzia della macchina**: inizio e durata in mesi. È facoltativa, e a dire che c'è è la durata: senza una data di inizio vale quella di installazione, e senza nemmeno quella il giorno in cui la si registra. Nasce nella stessa transazione della macchina. Dopo si modifica, si aggiunge o si toglie dal tab Garanzie, come sempre.
 
 **Conseguenze.**
@@ -2123,6 +2125,40 @@ Prova di mutazione: 14 mutazioni, tutte rosse.
 - ⛔ **Niente testo dell'email**: tipo, destinatari (anche copie), oggetto, mittente, mailer. Un test fissa l'elenco delle colonne, così una colonna in più è una decisione di privacy da prendere apposta.
 - **Trenta giorni, poi si cancella** (decisione di Marco del 23 Nov 2026). Il registro serve a vedere che cosa è partito di recente, non a tenere un archivio di posta. Ogni notte alle 03:30 `model:prune` toglie le righe più vecchie, con gli altri modelli di `Retention::MODELLI`. La prima stesura teneva dodici mesi, come le notifiche in applicazione.
 - **Prova di mutazione**: 16 mutazioni, tutte rosse (due sulla soglia dei trenta giorni, un giorno prima e un giorno dopo). Due erano verdi al primo giro: un controllo doppione sullo stato, tolto, e le copie conoscenza non coperte, ora coperte.
+
+---
+
+**ADR-065 — La garanzia della macchina conta dal collaudo**
+
+*Stato: Accettata e attuata il 23 Nov 2026, per decisione di Marco. Cambia ADR-059 (l'inizio sparisce dal modulo «Nuovo strumento») ed estende ADR-019 e ADR-022 alla garanzia della macchina; ADR-014 non cambia, ma ora conta dal collaudo. La garanzia di un ricambio montato non cambia. Solo su staging.*
+
+**La richiesta.** «Data installazione diventa data di collaudo e la garanzia va associata a questa data. Scompare quindi inizio di garanzia.»
+
+**Decisione.** L'applicazione chiama «**Data di collaudo**» la data che chiamava «Data installazione»: nel modulo e nella scheda della macchina, nella Panoramica, nell'elenco, nel PDF dello storico, nell'email di obsolescenza, nella cabina e nell'importazione. La colonna `strumenti.data_installazione` resta com'è: è un identificatore, come `dipartimento` per i laboratori (ADR-053).
+
+La **garanzia della macchina** non ha più un inizio suo: conta dal collaudo, anche quando è un rinnovo. Il campo «inizio» sparisce dai moduli della garanzia macchina: dal modulo «Nuovo strumento» (resta la sola durata) e dal tab Garanzie della scheda, dove si scrive la durata in mesi **oppure** la data fino a cui vale («Oppure: vale fino al», il ramo `data_scadenza_dichiarata` di ADR-022). È così che si registra un'estensione: da 24 a 36 mesi, o la scadenza nuova. La tabella del tab perde la colonna «Inizio» e dice in testa da quale collaudo contano. `garanzie.data_inizio` resta (serve ai ricambi): per `soggetto = macchina` vale la data di collaudo.
+
+**Le regole, da una strada sola.** L'inizio lo scrive `App\Support\Garanzie\GaranzieDalCollaudo`, che usano il modulo «Nuovo strumento», il tab Garanzie, il cambio di collaudo e il comando. La regola di una riga è `Garanzia::contaDalCollaudo()`, che ricalcola la scadenza con la stessa normalizzazione del salvataggio.
+
+- **Senza collaudo, nessuna garanzia della macchina.** I moduli lo dicono («Per registrare la garanzia della macchina serve prima la data di collaudo…»), e il model rifiuta comunque la nascita (`Garanzia::esigiCollaudo()`, `CollaudoMancante`), come il `min:1` della durata sta in due posti. Una garanzia già registrata su una macchina senza collaudo non si modifica finché qualcuno non scrive la data.
+- **Un collaudo cambiato ricalcola le garanzie della macchina** (`Strumento::booted()`, evento `updated`, nella transazione del salvataggio). Nel ramo durata si spostano inizio e scadenza; nel ramo dichiarato si sposta l'inizio e la scadenza resta la data scritta. Le garanzie dei ricambi montati non si muovono. Si scrivono solo le righe che cambiano, per model e mai by-query, così la scadenza la ricalcola l'hook `saving` e l'audit registra il gesto. Le query hanno il `tenant_id` della macchina e nessuno scope: in console gli scope si ritirano, e nel web chi modifica la macchina deve riallinearne ogni garanzia.
+- **Il collaudo si corregge, non si toglie**, se la macchina ha garanzie: resterebbero con un inizio che non è più di niente. Una macchina storica senza collaudo si modifica come prima.
+- **Il collaudo viene prima di una scadenza dichiarata.** Il modulo lo rifiuta («La garanzia della macchina vale fino al…: il collaudo deve venire prima»). Chi scrive senza passare dal modulo non fallisce: quella garanzia resta com'è, come per il montaggio dei pezzi (`RicambioUtilizzo::fissaMontaggio()`), e il comando la segna «a mano».
+
+**Le garanzie già registrate.** Avevano un inizio scritto nel modulo, spesso diverso dal collaudo. Non si riallineano da sole: `easylab:allinea-garanzie-collaudo` di default **non scrive niente** ed elenca per cliente le garanzie della macchina il cui inizio non è il collaudo, con la scadenza di oggi e quella nuova, e a parte le macchine con garanzia ma senza collaudo, che non si toccano mai. Con `--applica` scrive le sole righe disallineate; in produzione chiede conferma (`--force` la salta). ⛔ **In produzione `--applica` si lancia solo col via di Marco**, dopo aver guardato l'elenco.
+
+Per la stessa ragione il model **non** riallinea l'inizio a ogni salvataggio: lo farebbe in produzione, una riga alla volta, sulle garanzie che qualcuno tocca per un altro motivo, prima del via. Modificare una garanzia dal tab, invece, la fa contare dal collaudo: è la persona che la sta correggendo a chiederlo.
+
+**Conseguenze.**
+
+- L'**importazione** usa l'intestazione `data_collaudo`, e il template la porta. Un file con l'intestazione di prima, `data_installazione`, importa lo stesso: i clienti hanno file già pronti. Con tutte e due vince la nuova.
+- L'**obsolescenza** (ADR-014) conta dal collaudo: è la stessa colonna.
+- `scopeNonSuperate()` e `garanzieInVigore()` non cambiano: confrontano le scadenze, mai gli inizi, e un rinnovo che conta dal collaudo supera la garanzia di prima come prima.
+- Il **DB dimostrativo** (`DemoSeeder`) fa nascere le garanzie dal collaudo e sceglie la durata per l'esito voluto, invece di retrodatare l'inizio.
+- `LessicoCollaudoTest` diventa rosso se «installazione», «installato» o «installata» tornano in una vista, in una traduzione o in una stringa del codice (tolti i commenti e gli identificatori `data_installazione`/`dataInstallazione`). «Dove altro è installato» e «In quali laboratori è installato un modello» sono diventati «si trova».
+- ⚠️ **ADR-015, da ricordare quando arriverà il trasferimento fra Enti**: le garanzie devono passare al nuovo Ente con la macchina. Una rimasta al vecchio non segue più un cambio di collaudo, e il comando non la scrive.
+- ⚠️ **Non fatto**: la garanzia nell'importazione massiva (già fuori da ADR-059); un segno nel tab sulle garanzie che non contano ancora dal collaudo, prima che il comando giri; il collaudo come colonna rinominata. Le **guide video** nominano ancora l'installazione e l'inizio della garanzia (copioni, voci e flussi di `nuovo-strumento`, `modificare-strumento`, `garanzia-macchina`, `import-csv`, `scheda-strumento`, `storico-pdf`, `vetrina`, `per-modello`): non sono state rigirate. Il flusso `garanzia-macchina.spec.ts` cerca il campo `#garanziaForm.data_inizio`, che non c'è più, e va riscritto prima di rigirarlo.
+- **Prova di mutazione**: 48 mutazioni, 46 rosse. Le due verdi sono equivalenti, e restano: il filtro `soggetto = macchina` nelle garanzie di una macchina (una riga ricambio ha `strumento_id` NULL per l'invariante di `verificaSoggetto()`) e il salto delle righe già allineate (Eloquent non scrive un model che non cambia). Al primo giro ne erano sopravvissute altre due, e hanno avuto il loro test: la scadenza dichiarata che il servizio deve rifiutare, e la garanzia rimasta a un altro Ente. Coperte: il rifiuto senza collaudo (moduli, servizio, model), il soggetto, il confine della scadenza dichiarata e il suo giorno esatto, il ricalcolo della scadenza, il collaudo tolto, le altre macchine, le cestinate, il tenant, il riallineamento che non deve scattare per un altro campo, le regole del modulo della macchina, il comando (scrittura, righe a mano, conferma in produzione), i permessi del modulo «Nuovo strumento», l'inizio forgiato in una richiesta, l'importazione con le due intestazioni, il DB dimostrativo e il lessico.
 
 ---
 

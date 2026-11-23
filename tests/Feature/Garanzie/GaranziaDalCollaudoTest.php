@@ -361,3 +361,25 @@ it('keeps an extension from the collaudo superseding the first garanzia', functi
         ->and(Strumento::garanzieInVigore(collect([$prima->fresh(), $rinnovo->fresh()]))->pluck('id')->all())->toBe([$rinnovo->id])
         ->and($prima->fresh()->isScaduta())->toBeTrue();
 })->with(['una durata più lunga' => [36], 'la scadenza dichiarata' => ['2028-06-30']]);
+
+it('refuses through the service a declared scadenza that does not come after the collaudo', function () {
+    // Il modulo la rifiuta con `after:`; il servizio la rifiuta anche per chi
+    // non passa da lì, invece di lasciare la riga col suo inizio vecchio.
+    $garanzia = Garanzia::factory()->forStrumento($this->strumento)->create(['data_inizio' => '2024-01-01', 'durata_mesi' => 24]);
+
+    expect(fn () => GaranzieDalCollaudo::modifica($garanzia, $this->strumento, Carbon::parse('2024-12-31')))->toThrow(InvalidArgumentException::class)
+        ->and($garanzia->fresh()->durata_mesi)->toBe(24)
+        ->and($garanzia->fresh()->data_scadenza_dichiarata)->toBeNull();
+});
+
+it('does not move a garanzia left with an Ente that is no longer the one of the machine', function () {
+    // 🔗 ADR-015: le garanzie devono passare al nuovo Ente con la macchina.
+    // Una rimasta indietro non si scrive a nome di un altro cliente.
+    $altroEnte = UnitaOrganizzativa::factory()->ente()->create();
+    $rimasta = GaranzieDalCollaudo::registra($this->strumento, 24);
+    Garanzia::withoutGlobalScopes()->whereKey($rimasta->id)->update(['tenant_id' => $altroEnte->id]);
+
+    Strumento::withoutGlobalScopes()->find($this->strumento->id)->update(['data_installazione' => '2025-04-15']);
+
+    expect(Garanzia::withoutGlobalScopes()->find($rimasta->id)->data_inizio->toDateString())->toBe('2025-01-10');
+});

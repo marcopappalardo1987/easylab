@@ -344,7 +344,7 @@ Chi compila il modulo di `/registrati` non è ancora un `User`, non ha un `Accou
 | `modello` | string nullable | |
 | `matricola` | string nullable | Seriale costruttore. |
 | `parametri_tecnici` | json nullable | Scheda tecnica flessibile. |
-| `data_installazione` | date nullable | Base del calcolo obsolescenza (ADR-014). |
+| `data_installazione` | date nullable | **La data di collaudo** (🆕 23 Nov 2026, 🔗 ADR-065): l'applicazione la chiama così da allora, e la colonna ha tenuto il nome, che è un identificatore. Base del calcolo obsolescenza (ADR-014) e **inizio di ogni garanzia della macchina** (§6.1): un collaudo cambiato le ricalcola (`Strumento::booted()` → `GaranzieDalCollaudo::riallinea()`). Si corregge ma non si toglie, se la macchina ha garanzie. |
 | `referente_nome`, `referente_cognome` | string nullable | 🆕 10 Ott 2026 (🔗 ADR-054). La persona del laboratorio a cui la macchina fa capo. **Non è un utente**: non ha account né ruolo, ed è un dato della macchina. |
 | `referente_email` | string nullable | 🆕 10 Ott 2026 (🔗 ADR-054). Sempre minuscola e senza spazi (lo fa il model). Se c'è, **le email che parlano di questa macchina arrivano anche a questo indirizzo** (`App\Support\Notifiche\Referente`). |
 | `referente_cellulare` | string(50) nullable | 🆕 10 Ott 2026 (🔗 ADR-054). |
@@ -459,9 +459,9 @@ Garanzia del macchinario **e** del singolo ricambio, normalizzate in `data_scade
 | `soggetto` | enum: `macchina` \| `ricambio` | |
 | `strumento_id` | bigint nullable FK → `strumenti.id` | Valorizzato se `soggetto = macchina`. |
 | `ricambio_utilizzo_id` | bigint nullable FK → `ricambio_utilizzo.id` | Valorizzato se `soggetto = ricambio` (il pezzo specifico montato, non il catalogo — ADR-008). |
-| `data_inizio` | date | |
-| `durata_mesi` | integer **nullable** | Durata in mesi: la forma di ADR-019, usata dalla garanzia macchina. Nullable dal 9 Ago 2026 perché è **una delle due** forme di input — vedi il vincolo qui sotto. |
-| `data_scadenza_dichiarata` | date **nullable** | La scadenza scritta dall'operatore: la forma di ADR-022, usata dalla garanzia del pezzo montato. Come `data_scadenza_effettiva`, è **fuori da `$fillable`** — si valorizza solo dai metodi di dominio `fissaScadenzaDichiarata()` / `fissaDurata()`, che azzerano sempre l'altro lato. |
+| `data_inizio` | date | Per `soggetto = macchina` è **la data di collaudo dello strumento** (🆕 23 Nov 2026, 🔗 ADR-065): non è più un campo dei moduli, la scrive `App\Support\Garanzie\GaranzieDalCollaudo`, e un collaudo cambiato la sposta. Per `soggetto = ricambio` è il montaggio (`RicambioUtilizzo::fissaMontaggio()`), e il collaudo non la tocca. |
+| `durata_mesi` | integer **nullable** | Durata in mesi: la forma di ADR-019, usata dalla garanzia macchina (contata dal collaudo, ADR-065). Nullable dal 9 Ago 2026 perché è **una delle due** forme di input — vedi il vincolo qui sotto. |
+| `data_scadenza_dichiarata` | date **nullable** | La scadenza scritta dall'operatore: la forma di ADR-022, usata dalla garanzia del pezzo montato e, dal 23 Nov 2026, dall'estensione della garanzia macchina (ADR-065: «vale fino al»). Come `data_scadenza_effettiva`, è **fuori da `$fillable`** — si valorizza solo dai metodi di dominio `fissaScadenzaDichiarata()` / `fissaDurata()`, che azzerano sempre l'altro lato. |
 | **`data_scadenza_effettiva`** | date | **Campo guida** di semaforo/notifiche. Derivata al 100%, ricalcolata nell'hook `saving` e fuori da `$fillable`: `durata_mesi !== null ? data_inizio + durata_mesi : data_scadenza_dichiarata`. |
 | timestamps, `deleted_at` | | soft delete. |
 
@@ -476,6 +476,8 @@ Garanzia del macchinario **e** del singolo ricambio, normalizzate in `data_scade
 > **Ma il semaforo le conta comunque (ADR-020).** Una garanzia ricambio scaduta o in scadenza entro 30 giorni accende l'arancione **sullo strumento che monta il pezzo**, anche per il Tenant che non può vederne il dettaglio. La query del semaforo legge quindi le righe `ricambio` con `withoutGlobalScope(GaranziaRicambioPrivacyScope::class)`; le etichette che nominano la fonte restano filtrate per permesso.
 >
 > **Vincolo logico:** esattamente uno tra `strumento_id` e `ricambio_utilizzo_id` valorizzato, coerente con `soggetto`.
+>
+> **La garanzia della macchina conta dal collaudo** (🆕 23 Nov 2026, 🔗 ADR-065). Per `soggetto = macchina` `data_inizio` = `strumenti.data_installazione`, rinnovi compresi: un'estensione è una durata più lunga o una scadenza dichiarata. Nessuna colonna nuova né rinominata. Tre conseguenze: una garanzia della macchina **non nasce** su una macchina senza collaudo (`Garanzia::esigiCollaudo()`, oltre al messaggio dei moduli); un collaudo cambiato sposta inizio e — nel ramo durata — scadenza, mentre una scadenza dichiarata resta la data scritta; le righe registrate prima, con un inizio loro, si riallineano solo con `easylab:allinea-garanzie-collaudo --applica`, che di default elenca e basta. Il model **non** riscrive l'inizio in `saving`: lo farebbe, una riga alla volta, a ogni salvataggio, prima del via.
 
 **Indici:** `tenant_id`, `strumento_id`, `ricambio_utilizzo_id`, `data_scadenza_effettiva`.
 
@@ -671,6 +673,7 @@ Legenda: ✅ pieno · ⚠️ ristretto (per sotto-albero/portafoglio/proprietà)
 | **ADR-035** Il listino si governa dalla dashboard | **`piani`** + **`prezzi_piano`** (§4.3): il catalogo passa da `config/easylab.php` al DB, e la config resta il bootstrap letto una volta sola dalla migration di backfill. `accounts.piano` invariata come **stringa senza FK** — cambia solo ciò che quella stringa nomina. Nessun permesso nuovo (`billing.manage_global`). Attuato il 27 Ago 2026. |
 | **ADR-037** Il Parco clienti | Nessuna tabella per la **lettura** — è la porta `App\Support\Piattaforma\ParcoClienti` sopra lo schema che c'è già. Una sola per la **scelta**: il pivot **`clienti_preferiti`** (§4.3, 29 Ago 2026), che è una preferenza personale e non un dato del cliente. |
 | **ADR-038** Persone e portafoglio dichiarato | `users.deleted_at` abilita cestino/ripristino senza perdere le attribuzioni storiche; `users.email` resta unique globale. Le UI scrivono `account_user` per gli Admin e `tecnico_cliente` per il portafoglio per sede; `interventi.tecnico_id` resta il grant puntuale. Migration sul DB di sviluppo e verifica manuale ancora pendenti al 30 Ago 2026. |
+| **ADR-065** Garanzia dal collaudo | Nessuna colonna nuova: `strumenti.data_installazione` è la data di collaudo, e per `soggetto = macchina` `garanzie.data_inizio` vale quella (§5.1, §6.1). |
 
 ---
 
