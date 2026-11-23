@@ -229,3 +229,44 @@ it('downloads a CSV template', function () {
         ->call('scaricaTemplate')
         ->assertFileDownloaded('template-strumenti.csv');
 });
+
+// --- La data di collaudo (🔗 ADR-065) ---
+
+it('reads the collaudo from the new header, and still from the old one', function (string $intestazione) {
+    // I file già pronti col template di prima devono importare lo stesso.
+    $csv = "nome;modello;matricola;{$intestazione};ubicazione;provenienza\nAutoclave;;;2015-03-01;Terapia intensiva;\n";
+
+    Livewire::actingAs($this->admin)->test(ImportStrumenti::class)
+        ->set('file', csvFile($csv))
+        ->call('analizza')
+        ->call('importa')
+        ->assertSet('importate', 1);
+
+    expect(Strumento::withoutGlobalScopes()->where('nome', 'Autoclave')->sole()->data_installazione->toDateString())->toBe('2015-03-01');
+})->with(['nuova' => ['data_collaudo'], 'di prima' => ['data_installazione'], 'maiuscole' => ['Data_Collaudo']]);
+
+it('takes the new header when a file carries both', function () {
+    $csv = "nome;data_installazione;data_collaudo;ubicazione\nAutoclave;2010-01-01;2015-03-01;Terapia intensiva\n";
+
+    Livewire::actingAs($this->admin)->test(ImportStrumenti::class)
+        ->set('file', csvFile($csv))
+        ->call('analizza')
+        ->call('importa')
+        ->assertSet('importate', 1);
+
+    expect(Strumento::withoutGlobalScopes()->where('nome', 'Autoclave')->sole()->data_installazione->toDateString())->toBe('2015-03-01');
+});
+
+it('names the collaudo in the template, in the instructions and in the error of a bad date', function () {
+    $pagina = Livewire::actingAs($this->admin)->test(ImportStrumenti::class)
+        ->assertSee('nome;modello;matricola;data_collaudo;ubicazione;provenienza')
+        ->assertDontSee('nome;modello;matricola;data_installazione');
+
+    expect(ImportStrumenti::COLONNE)->toContain('data_collaudo')
+        ->and(ImportStrumenti::COLONNE)->not->toContain('data_installazione');
+
+    $pagina->set('file', csvFile("nome;data_collaudo;ubicazione\nAutoclave;ieri;Terapia intensiva\n"))
+        ->call('analizza');
+
+    expect($pagina->get('righe')[0]['errori'])->toContain('Data di collaudo non valida (usa AAAA-MM-GG o GG/MM/AAAA)');
+});
