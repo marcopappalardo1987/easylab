@@ -96,8 +96,10 @@ it('lists in the catalogue every notification that sends mail', function () {
         ->reject(fn (string $c) => $c === 'EmailDiProva')
         ->sort()->values()->all();
 
-    // Una per voce di catalogo, tranne il recupero password che è del framework.
-    expect($classi)->toHaveCount(count(CatalogoEmail::tutte()) - 1);
+    // Una per voce di catalogo. Il recupero password è una classe nostra dal
+    // 23 Nov 2026 (`RecuperoPassword`, in coda), non più quella del framework.
+    expect($classi)->toHaveCount(count(CatalogoEmail::tutte()))
+        ->and($classi)->toContain('RecuperoPassword');
 });
 
 // ─── L'interruttore di piattaforma ───────────────────────────────────────────

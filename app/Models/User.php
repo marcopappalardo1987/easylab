@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Enums\TemaUtente;
 use App\Enums\TipoUnitaOrganizzativa;
+use App\Notifications\RecuperoPassword;
 use App\Support\AuditLog;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -49,6 +50,15 @@ class User extends Authenticatable
      * cestinare una persona riscriverebbe il passato in «—».
      */
     use HasFactory, HasRoles, Impersonate, Notifiable, SoftDeletes, TwoFactorAuthenticatable;
+
+    /**
+     * Il link di recupero password parte in coda (🔗 `RecuperoPassword`): mai
+     * più un errore 500 a chi lo chiede quando la posta non risponde.
+     */
+    public function sendPasswordResetNotification(#[\SensitiveParameter] $token): void
+    {
+        $this->notify(new RecuperoPassword($token));
+    }
 
     /**
      * Ruolo soggetto al secondo filtro (sotto-albero) del Global Scope (ADR-006).

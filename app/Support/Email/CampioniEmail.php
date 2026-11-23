@@ -22,11 +22,11 @@ use App\Notifications\MacchinaSegnalata;
 use App\Notifications\NuovoErrore;
 use App\Notifications\PianoCambiato;
 use App\Notifications\PropostaPiano;
+use App\Notifications\RecuperoPassword;
 use App\Notifications\VerificaEmailRegistrazione;
 use App\Support\Notifiche\RigaAvviso;
 use App\Support\Notifiche\RigaObsolescenza;
 use App\Support\Tenancy\CurrentTenant;
-use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
@@ -132,7 +132,7 @@ final class CampioniEmail
             CatalogoEmail::BENVENUTO => [new BenvenutoRegistrazione(self::ENTE, $indirizzo), $persona],
             CatalogoEmail::ACCOUNT_ELIMINATO => [new AccountEliminato(self::CLIENTE), $persona],
             CatalogoEmail::NUOVO_ERRORE => [new NuovoErrore('App\\Exceptions\\EsempioDiProva', 'app/Esempio.php:42', 3, 0), $persona],
-            CatalogoEmail::RECUPERO_PASSWORD => [new ResetPassword('token-di-prova'), $persona],
+            CatalogoEmail::RECUPERO_PASSWORD => [new RecuperoPassword('token-di-prova'), $persona],
         };
     }
 
