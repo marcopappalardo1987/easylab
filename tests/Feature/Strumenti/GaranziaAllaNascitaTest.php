@@ -14,8 +14,8 @@ use Spatie\Permission\Models\Role;
 
 /**
  * La garanzia si scrive già nel modulo con cui si registra la macchina
- * (🔗 ADR-059), e il modulo di modifica mostra le righe dei parametri che si
- * stanno scrivendo — non quelle salvate.
+ * (🔗 ADR-059) e conta dal collaudo (🔗 ADR-065), e il modulo di modifica
+ * mostra le righe dei parametri che si stanno scrivendo — non quelle salvate.
  */
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
@@ -79,17 +79,21 @@ it('still lists the saved parametri on the page of the strumento', function () {
 
 // ─── La garanzia alla nascita ────────────────────────────────────────────────
 
-it('asks for the garanzia in the form that registers the strumento', function () {
+it('asks for the garanzia in the form that registers the strumento, without a start of its own', function () {
+    // 🔗 ADR-065: la garanzia della macchina conta dal collaudo, e l'inizio
+    // è sparito dal modulo.
     ($this->nuovo)()
         ->assertSeeHtml('data-garanzia-nuova')
         ->assertSee('Garanzia della macchina')
-        ->assertSeeHtml('wire:model="garanziaNuova.data_inizio"')
-        ->assertSeeHtml('wire:model="garanziaNuova.durata_mesi"');
+        ->assertSee('Data di collaudo')
+        ->assertSeeHtml('wire:model="garanziaNuova.durata_mesi"')
+        ->assertDontSeeHtml('garanziaNuova.data_inizio')
+        ->assertDontSee('Data installazione');
 });
 
-it('creates the garanzia with the strumento, from the date and the months given', function () {
+it('creates the garanzia with the strumento, from the collaudo and the months given', function () {
     ($this->nuovo)()
-        ->set('garanziaNuova.data_inizio', '2026-09-01')
+        ->set('strumentoForm.data_installazione', '2026-09-01')
         ->set('garanziaNuova.durata_mesi', '24')
         ->call('saveStrumento')
         ->assertHasNoErrors()
@@ -104,28 +108,39 @@ it('creates the garanzia with the strumento, from the date and the months given'
         ->and($garanzia->data_scadenza_effettiva->toDateString())->toBe('2028-09-01');
 });
 
-it('starts the garanzia on the day of installation when no start is given, or today without that', function (?string $installazione, string $inizio) {
+it('refuses a garanzia without the collaudo, says why, and saves nothing', function () {
+    // 🔴 Prima valeva oggi: una garanzia senza un giorno da cui contare.
     ($this->nuovo)()
-        ->set('strumentoForm.data_installazione', (string) $installazione)
+        ->set('garanziaNuova.durata_mesi', '12')
+        ->call('saveStrumento')
+        ->assertHasErrors(['garanziaNuova.durata_mesi'])
+        ->assertSee('La garanzia conta dalla data di collaudo')
+        ->assertSet('showStrumentoForm', true);
+
+    expect(Strumento::where('nome', 'Cappa')->exists())->toBeFalse()
+        ->and(Garanzia::withoutGlobalScopes()->count())->toBe(0);
+});
+
+it('ignores a start forged into the request: the garanzia counts from the collaudo', function () {
+    ($this->nuovo)()
+        ->set('strumentoForm.data_installazione', '2026-06-15')
+        ->set('garanziaNuova.data_inizio', '2020-01-01')
         ->set('garanziaNuova.durata_mesi', '12')
         ->call('saveStrumento')
         ->assertHasNoErrors();
 
-    expect(($this->garanzie)()->sole()->data_inizio->toDateString())->toBe($inizio);
-})->with([
-    'installata prima' => ['2026-06-15', '2026-06-15'],
-    'senza data di installazione' => [null, '2026-10-11'],
-]);
-
-it('creates no garanzia when the fields are left empty', function () {
-    ($this->nuovo)()->call('saveStrumento')->assertHasNoErrors();
-
-    expect(($this->garanzie)())->toBeEmpty();
+    expect(($this->garanzie)()->sole()->data_inizio->toDateString())->toBe('2026-06-15');
 });
 
-it('refuses a start without months, and months that are not a duration, and saves nothing', function (string $inizio, string $mesi, string $regola) {
+it('creates no garanzia when the fields are left empty, with or without the collaudo', function (?string $collaudo) {
+    ($this->nuovo)()->set('strumentoForm.data_installazione', (string) $collaudo)->call('saveStrumento')->assertHasNoErrors();
+
+    expect(($this->garanzie)())->toBeEmpty();
+})->with(['con collaudo' => ['2026-06-15'], 'senza collaudo' => [null]]);
+
+it('refuses months that are not a duration, and saves nothing', function (string $mesi, string $regola) {
     ($this->nuovo)()
-        ->set('garanziaNuova.data_inizio', $inizio)
+        ->set('strumentoForm.data_installazione', '2026-06-15')
         ->set('garanziaNuova.durata_mesi', $mesi)
         ->call('saveStrumento')
         ->assertHasErrors(['garanziaNuova.durata_mesi' => $regola])
@@ -133,32 +148,24 @@ it('refuses a start without months, and months that are not a duration, and save
 
     expect(Strumento::where('nome', 'Cappa')->exists())->toBeFalse();
 })->with([
-    'un inizio senza durata' => ['2026-09-01', '', 'required_with'],
-    'zero mesi' => ['', '0', 'min'],
-    'troppi mesi' => ['', '601', 'max'],
-    'una parola' => ['', 'due anni', 'integer'],
+    'zero mesi' => ['0', 'min'],
+    'troppi mesi' => ['601', 'max'],
+    'una parola' => ['due anni', 'integer'],
 ]);
-
-it('refuses a start that is not a date', function () {
-    ($this->nuovo)()
-        ->set('garanziaNuova.data_inizio', 'ieri')
-        ->set('garanziaNuova.durata_mesi', '12')
-        ->call('saveStrumento')
-        ->assertHasErrors(['garanziaNuova.data_inizio' => 'date']);
-});
 
 it('opens the next form without the garanzia of the strumento just saved', function () {
     ($this->nuovo)()
-        ->set('garanziaNuova.data_inizio', '2026-09-01')
+        ->set('strumentoForm.data_installazione', '2026-09-01')
         ->set('garanziaNuova.durata_mesi', '24')
         ->call('saveStrumento')
         ->call('addStrumento')
-        ->assertSet('garanziaNuova', ['data_inizio' => '', 'durata_mesi' => '']);
+        ->assertSet('garanziaNuova', ['durata_mesi' => '']);
 });
 
 it('neither shows the block nor writes a garanzia for who cannot manage them', function () {
     // Chi registra macchine ma non gestisce le garanzie: il blocco non c'è, e
-    // una richiesta costruita a mano non la crea lo stesso.
+    // una richiesta costruita a mano non la crea lo stesso. Né la ferma: senza
+    // collaudo, una durata che quella persona non vede non è un errore suo.
     Role::create(['name' => 'Solo macchine', 'guard_name' => 'web'])
         ->givePermissionTo(['unita_organizzativa.view', 'strumenti.view', 'strumenti.create', 'fornitori.view']);
     $chi = User::factory()->create(['tenant_id' => $this->ente->id, 'two_factor_confirmed_at' => now()]);
@@ -175,7 +182,7 @@ it('neither shows the block nor writes a garanzia for who cannot manage them', f
 });
 
 it('can then be changed from the garanzie tab, as before', function () {
-    ($this->nuovo)()->set('garanziaNuova.durata_mesi', '12')->call('saveStrumento');
+    ($this->nuovo)()->set('strumentoForm.data_installazione', '2026-06-15')->set('garanziaNuova.durata_mesi', '12')->call('saveStrumento');
 
     $strumento = Strumento::where('nome', 'Cappa')->sole();
     $garanzia = ($this->garanzie)()->sole();
@@ -187,7 +194,8 @@ it('can then be changed from the garanzie tab, as before', function () {
         ->call('saveGaranzia')
         ->assertHasNoErrors();
 
-    expect($garanzia->fresh()->durata_mesi)->toBe(36);
+    expect($garanzia->fresh()->durata_mesi)->toBe(36)
+        ->and($garanzia->fresh()->data_scadenza_effettiva->toDateString())->toBe('2029-06-15');
 });
 
 it('saves a garanzia whose duration is typed in the field, which arrives as text', function () {
@@ -197,7 +205,6 @@ it('saves a garanzia whose duration is typed in the field, which arrives as text
 
     scheda($this->admin, $strumento)
         ->call('openNuovaGaranzia')
-        ->set('garanziaForm.data_inizio', '2026-01-10')
         ->set('garanziaForm.durata_mesi', '36')
         ->call('saveGaranzia')
         ->assertHasNoErrors();

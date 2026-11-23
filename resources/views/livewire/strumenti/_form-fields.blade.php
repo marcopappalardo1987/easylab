@@ -6,7 +6,7 @@
         <x-ui.input name="strumentoForm.matricola" label="Matricola" wire:model="strumentoForm.matricola" />
     </div>
 
-    <x-ui.input name="strumentoForm.data_installazione" label="Data installazione" type="date" wire:model="strumentoForm.data_installazione" />
+    <x-ui.input name="strumentoForm.data_installazione" label="Data di collaudo" type="date" wire:model="strumentoForm.data_installazione" />
 
     {{-- Fornitore (ADR-023): obbligatorio nel form, nullable in schema. Gated,
          perché un ruolo che non lo vede non deve nemmeno esserne bloccato. --}}

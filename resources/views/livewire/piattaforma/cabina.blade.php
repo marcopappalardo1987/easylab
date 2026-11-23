@@ -263,7 +263,7 @@
             <x-ui.card>
                 <p class="text-sm font-semibold text-ink">Andamento a 12 mesi</p>
                 <p class="mt-0.5 text-xs text-ink-3">
-                    Cumulato per data di inserimento in EasyLab, non per data di installazione.
+                    Cumulato per data di inserimento in EasyLab, non per data di collaudo.
                 </p>
 
                 <dl class="mt-3 space-y-3">

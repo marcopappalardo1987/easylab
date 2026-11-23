@@ -24,7 +24,7 @@
             <p class="mt-1 text-sm text-ink-2">
                 @if ($strumento->modello)<span class="font-medium text-ink">{{ $strumento->modello }}</span> · @endif
                 {{ $percorso }}
-                @if ($strumento->data_installazione) · Installato {{ $strumento->data_installazione->format('m/Y') }} <x-ui.obsoleto :strumento="$strumento" /> @endif
+                @if ($strumento->data_installazione) · Collaudo {{ $strumento->data_installazione->format('m/Y') }} <x-ui.obsoleto :strumento="$strumento" /> @endif
             </p>
         </div>
         {{-- `flex-wrap` e non un menù «⋯»: le azioni sono al massimo cinque e
@@ -115,7 +115,7 @@
                         {{ $strumento->modello ?: '—' }}
                         @if ($strumento->modello)
                             <a href="{{ route('strumenti.modelli', ['search' => $strumento->modello]) }}" wire:navigate
-                                class="ml-2 text-xs text-brand hover:text-brand-hover">dove altro è installato →</a>
+                                class="ml-2 text-xs text-brand hover:text-brand-hover">dove altro si trova →</a>
                         @endif
                     </dd>
                 </div>
@@ -124,7 +124,7 @@
                     <dd class="mt-0.5 text-sm text-ink">{{ $strumento->matricola ?: '—' }}</dd>
                 </div>
                 <div>
-                    <dt class="text-xs font-medium tracking-wide text-ink-3 uppercase">Data installazione</dt>
+                    <dt class="text-xs font-medium tracking-wide text-ink-3 uppercase">Data di collaudo</dt>
                     <dd class="mt-0.5 text-sm text-ink">{{ $strumento->data_installazione?->format('d/m/Y') ?: '—' }}</dd>
                 </div>
                 <div>
@@ -553,9 +553,18 @@
     @if ($showGaranziaForm)
         <x-ui.modal :title="$editingGaranziaId ? 'Modifica garanzia' : 'Nuova garanzia'" close="closeGaranziaForm">
             <form wire:submit="saveGaranzia" class="space-y-5">
-                <x-ui.input name="garanziaForm.data_inizio" label="Data inizio" type="date" wire:model="garanziaForm.data_inizio" />
-                <x-ui.input name="garanziaForm.durata_mesi" label="Durata (mesi)" type="number" min="1" wire:model="garanziaForm.durata_mesi" />
-                <p class="text-xs text-ink-3">La scadenza effettiva è calcolata: inizio + durata.</p>
+                {{-- 🔗 ADR-065: niente inizio. La garanzia della macchina conta dal
+                     collaudo; un'estensione si scrive con una durata più lunga o
+                     con la data fino a cui vale (ADR-022). --}}
+                @if ($strumento->data_installazione)
+                    <p class="text-sm text-ink-2">Conta dal collaudo, il <span class="font-medium text-ink">{{ $strumento->data_installazione->format('d/m/Y') }}</span>.</p>
+                @endif
+                @error('garanziaForm.collaudo')
+                    <p class="text-sm text-bad-soft-ink" data-collaudo-mancante>{{ $message }}</p>
+                @enderror
+                <x-ui.input name="garanziaForm.durata_mesi" label="Durata dal collaudo (mesi)" type="number" min="1" wire:model="garanziaForm.durata_mesi" />
+                <x-ui.input name="garanziaForm.scadenza" label="Oppure: vale fino al" type="date" wire:model="garanziaForm.scadenza" />
+                <p class="text-xs text-ink-3">Una delle due: per una scadenza precisa, svuota la durata. La scadenza effettiva è calcolata: collaudo + durata, o la data scritta.</p>
 
                 <div class="flex justify-end gap-3">
                     <x-ui.button variant="secondary" wire:click="closeGaranziaForm">Annulla</x-ui.button>

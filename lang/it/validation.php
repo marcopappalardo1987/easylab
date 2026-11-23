@@ -166,7 +166,7 @@ return [
         'strumentoForm.nome' => 'nome',
         'strumentoForm.modello' => 'modello',
         'strumentoForm.matricola' => 'matricola',
-        'strumentoForm.data_installazione' => 'data di installazione',
+        'strumentoForm.data_installazione' => 'data di collaudo',
         'parametri.*.chiave' => 'chiave del parametro',
         'parametri.*.valore' => 'valore del parametro',
 

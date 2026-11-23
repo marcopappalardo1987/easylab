@@ -59,7 +59,7 @@
 
 <table class="sintesi">
     <tr>
-        <td class="etichetta">Installato</td>
+        <td class="etichetta">Collaudo</td>
         <td>{{ $strumento->data_installazione?->format('m/Y') ?: '—' }}</td>
         <td class="etichetta">Interventi</td>
         <td>{{ $interventi->count() }}</td>

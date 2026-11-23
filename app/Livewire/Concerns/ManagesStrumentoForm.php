@@ -122,7 +122,7 @@ trait ManagesStrumentoForm
             'strumentoForm.nome' => 'nome',
             'strumentoForm.modello' => 'modello',
             'strumentoForm.matricola' => 'matricola',
-            'strumentoForm.data_installazione' => 'data di installazione',
+            'strumentoForm.data_installazione' => 'data di collaudo',
             'strumentoForm.fornitore_id' => 'fornitore',
             'strumentoForm.referente_nome' => 'nome del referente',
             'strumentoForm.referente_cognome' => 'cognome del referente',

@@ -91,7 +91,7 @@
 
     <span class="inline-flex items-center gap-1.5 text-sm text-ink-3">
         <x-ui.obsoleto :strumento="$recente" />
-        (installato due anni fa: nessun markup)
+        (collaudo di due anni fa: nessun markup)
     </span>
 @endcomponent
 

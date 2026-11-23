@@ -164,7 +164,7 @@ it('flags year zero as an invalid date, which Postgres refuses', function (strin
         ->set('file', csvDaImportare(INTESTAZIONE_IMPORT."Autoclave;;;{$data};Terapia intensiva;\n"))
         ->call('analizza');
 
-    expect($t->get('righe')[0]['errori'])->toContain('Data non valida (usa AAAA-MM-GG o GG/MM/AAAA)');
+    expect($t->get('righe')[0]['errori'])->toContain('Data di collaudo non valida (usa AAAA-MM-GG o GG/MM/AAAA)');
 })->with(['0000-01-01', '01/01/0000']);
 
 it('still accepts year one, the first year Postgres stores', function () {

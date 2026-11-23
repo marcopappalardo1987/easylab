@@ -421,17 +421,17 @@
                 {{-- 🔗 ADR-059: la garanzia si scrive qui, mentre si registra la
                      macchina, e non in un secondo momento. Dopo si modifica dal
                      tab Garanzie della scheda. Dietro lo stesso permesso di quel
-                     tab: chi non la gestisce non la vede nemmeno qui. --}}
+                     tab: chi non la gestisce non la vede nemmeno qui.
+                     🔗 ADR-065: niente inizio — conta dalla data di collaudo. --}}
                 @can('garanzie.macchina.manage')
                     <fieldset class="space-y-3" data-garanzia-nuova>
                         <legend class="block text-sm font-medium text-ink">Garanzia della macchina <span class="font-normal text-ink-3">(facoltativa)</span></legend>
 
                         <div class="grid gap-4 sm:grid-cols-2">
-                            <x-ui.input name="garanziaNuova.data_inizio" label="Inizio" type="date" wire:model="garanziaNuova.data_inizio" />
                             <x-ui.input name="garanziaNuova.durata_mesi" label="Durata (mesi)" type="number" min="1" max="600" wire:model="garanziaNuova.durata_mesi" placeholder="Es. 24" />
                         </div>
 
-                        <p class="text-xs text-ink-3">Basta la durata: senza una data di inizio vale quella di installazione. Poi si modifica dalla scheda, nel tab Garanzie.</p>
+                        <p class="text-xs text-ink-3">Conta dalla data di collaudo, che serve. Poi si modifica dalla scheda, nel tab Garanzie.</p>
                     </fieldset>
                 @endcan
 

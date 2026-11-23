@@ -31,10 +31,12 @@ beforeEach(function () {
 
 // --- CRUD felice ---
 
-it('creates a garanzia and computes the effective date', function () {
+it('creates a garanzia and computes the effective date from the collaudo', function () {
+    // 🔗 ADR-065: niente inizio nel modulo — conta dal collaudo.
+    $this->strumento->update(['data_installazione' => '2026-03-01']);
+
     scheda($this->admin, $this->strumento)
         ->call('openNuovaGaranzia')
-        ->set('garanziaForm.data_inizio', '2026-03-01')
         ->set('garanziaForm.durata_mesi', 36)
         ->call('saveGaranzia')
         ->assertHasNoErrors()
@@ -47,13 +49,13 @@ it('creates a garanzia and computes the effective date', function () {
         ->and($garanzia->tenant_id)->toBe($this->ente->id);
 });
 
-it('requires inizio and durata', function () {
+it('requires a durata or a scadenza', function () {
     scheda($this->admin, $this->strumento)
         ->call('openNuovaGaranzia')
-        ->set('garanziaForm.data_inizio', '')
         ->set('garanziaForm.durata_mesi', null)
+        ->set('garanziaForm.scadenza', '')
         ->call('saveGaranzia')
-        ->assertHasErrors(['garanziaForm.data_inizio', 'garanziaForm.durata_mesi']);
+        ->assertHasErrors(['garanziaForm.durata_mesi' => 'required_without']);
 
     expect($this->strumento->garanzie()->count())->toBe(0);
 });
