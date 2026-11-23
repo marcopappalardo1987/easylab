@@ -2123,3 +2123,25 @@ Prova di mutazione: 14 mutazioni, tutte rosse.
 - ⛔ **Niente testo dell'email**: tipo, destinatari (anche copie), oggetto, mittente, mailer. Un test fissa l'elenco delle colonne, così una colonna in più è una decisione di privacy da prendere apposta.
 - **Trenta giorni, poi si cancella** (decisione di Marco del 23 Nov 2026). Il registro serve a vedere che cosa è partito di recente, non a tenere un archivio di posta. Ogni notte alle 03:30 `model:prune` toglie le righe più vecchie, con gli altri modelli di `Retention::MODELLI`. La prima stesura teneva dodici mesi, come le notifiche in applicazione.
 - **Prova di mutazione**: 16 mutazioni, tutte rosse (due sulla soglia dei trenta giorni, un giorno prima e un giorno dopo). Due erano verdi al primo giro: un controllo doppione sullo stato, tolto, e le copie conoscenza non coperte, ora coperte.
+
+---
+
+**ADR-066 — Lo Scadenzario ha quattro riquadri: «Idonei» e «Non idonei» al posto di «Oltre»**
+
+*Stato: Accettata e attuata il 23 Nov 2026, per richiesta di Marco. Riguarda lo Scadenzario dell'Ente e quello del parco. Estende ADR-005 (il semaforo e la sua forzatura) e ADR-052.*
+
+**Il bisogno.** In alto nello Scadenzario c'erano tre riquadri: «Scaduti», «In scadenza» e «Oltre». Marco li vuole parlare la lingua del semaforo: «Oltre» diventa «Idonei», e serve un riquadro per le macchine non idonee.
+
+**Decisione.** Tre finestre di tempo, più lo stato della macchina.
+- **Idonei**: gli interventi oltre la soglia (sottotitolo «oltre 30 giorni»), **tolti quelli delle macchine col semaforo rosso**. L'arancione resta idoneo.
+- **Non idonei**: tutti gli interventi aperti delle macchine rosse, a qualunque data. Il rosso nasce solo dalla forzatura (ADR-005).
+- **Scaduti** e **In scadenza** non cambiano, e contano anche gli interventi delle macchine rosse: la somma dei quattro numeri non è il totale, per scelta.
+
+**Conseguenze.**
+- **Una regola sola per le due pagine**: `App\Support\Interventi\PartizioniScadenzario`, e un componente `x-scadenzario.riquadri`. Le macchine rosse le passa chi chiama, dallo stesso elenco di macchine della pagina: `Strumento::query()->conStato(Rosso)` per l'Ente, `ParcoClienti::strumenti()` più `StrumentiPerStato::semaforo()` per il parco, dove `conStato()` è vietato da un guardrail. «Idonei» è scritto come «non fra le rosse», così i due riquadri sono complementari per costruzione.
+- 🔴 **Il conteggio dei non idonei parte dalla stessa base della pagina**: tenant, reparti del Responsabile, «Solo i miei» e assegnazione del Tecnico valgono anche lì. Ci sono i test negativi.
+- **Query string**: `idonei` e `non_idonei`. `oltre` è accettato come sinonimo, così i link vecchi funzionano, e l'indirizzo si riscrive in `idonei`. Un valore inventato o un array non filtrano e non rompono la pagina.
+- **Costo**: un count costante in più per pagina, nessuna query per riga. I budget di `tests/Feature/Performance/` sono saliti di uno.
+- ⚠️ **Le guide video dicono ancora tre riquadri e «Oltre»**: `scadenzario` e `parco-scadenzario` (testi, voce e copione). Si rigirano quando lo decide Marco.
+- **Prova di mutazione**: 19 mutazioni, 16 rosse. Le tre verdi sono equivalenti: due hanno mostrato che un tipo `mixed` non serviva, ed è tornato `?string`; la terza toglie il perimetro a una sottoquery che la base della pagina limita già.
+
