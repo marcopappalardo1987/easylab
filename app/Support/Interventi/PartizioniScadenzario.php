@@ -92,8 +92,10 @@ final class PartizioniScadenzario
     /**
      * La partizione davvero applicata, o nessuna.
      *
-     * `mixed` perché il valore arriva dalla query string: `?stato[]=x` è un
-     * array, e un `in_array()` su un array non deve diventare un filtro.
+     * `mixed` perché il valore arriva dal browser. Oggi Livewire scarta un
+     * `?stato[]=x` prima di idratare la property `?string` dei due componenti,
+     * ma la regola non deve reggersi su quel dettaglio: qualunque cosa non sia
+     * una stringa non è una partizione.
      */
     public static function normalizza(mixed $stato): ?string
     {

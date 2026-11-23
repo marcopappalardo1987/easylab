@@ -124,12 +124,12 @@ class ParcoScadenzario extends Component
      * Partizione selezionata: valori ammessi in `PartizioniScadenzario::STATI`,
      * più il vecchio `oltre` come sinonimo di `idonei`.
      *
-     * `mixed` perché arriva dalla query string: `?stato[]=1` su una property
-     * tipizzata sarebbe un `TypeError`, cioè un 500 al posto di un filtro
-     * ignorato.
+     * Un `?stato[]=…` non arriva fin qui: Livewire scarta il valore che non
+     * entra in una `?string` prima di idratarla, e la pagina risponde 200 (lo
+     * prova un test: «shrugs off one it cannot read»).
      */
     #[Url]
-    public mixed $stato = null;
+    public ?string $stato = null;
 
     /** Filtro per tipo di attività (ADR-021), validato con `tryFrom()`. */
     #[Url]

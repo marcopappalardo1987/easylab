@@ -525,9 +525,11 @@ it('still opens «Idonei» from an old link that says stato=oltre', function () 
 });
 
 it('does not break on a partition it cannot read, an array included', function () {
-    // ⛔ `?stato[]=…` su una property tipizzata `?string` sarebbe un
-    // `TypeError`, cioè un 500 al posto di un filtro ignorato: stessa ragione
-    // per cui `$sede` è `mixed`.
+    // ⛔ Un `?stato[]=…` scritto a mano o incollato da un altro sistema non
+    // deve diventare un 500 né un filtro. Oggi Livewire scarta il valore prima
+    // di idratare la `?string` (misurato: con la property `mixed` il test era
+    // verde per la stessa ragione), e `normalizza()` lo scarterebbe comunque:
+    // questo test è la rete per il giorno in cui una delle due cose cambia.
     Intervento::factory()->count(2)->forStrumento($this->autoclave)->scaduto()->create();
 
     $this->actingAs($this->admin)

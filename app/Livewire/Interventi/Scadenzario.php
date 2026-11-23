@@ -107,12 +107,13 @@ class Scadenzario extends Component
      * (arriva dalla query string), quindi si normalizza a ogni `render()` e non
      * solo nell'azione.
      *
-     * `mixed` per la stessa ragione di `$sede`: `?stato[]=1` su una property
-     * tipizzata sarebbe un `TypeError`, cioè un 500 al posto di un filtro
-     * ignorato.
+     * ⚠️ `?string` e non `mixed` come `$sede`, ed è MISURATO: con
+     * `?stato[]=idonei` Livewire scarta il valore prima di idratare la property,
+     * la pagina risponde 200 e `stato` resta null (prova di mutazione del
+     * 23 Nov 2026, test «does not break on a partition it cannot read»).
      */
     #[Url]
-    public mixed $stato = null;
+    public ?string $stato = null;
 
     /** Filtro per tipo di attività (ADR-021): validato con `TipoIntervento::tryFrom()`. */
     #[Url]
