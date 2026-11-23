@@ -229,6 +229,7 @@ final class Matrice
             'Notifiche/Campanella' => 't:Notifiche/CampanellaTest.php::never shows the notifications of another user',
             'Piattaforma/Cabina' => $piattaforma,
             'Piattaforma/EditorRuoli' => $piattaforma,
+            'Piattaforma/EmailInviate' => $piattaforma,
             'Piattaforma/EmailDiSistema' => $piattaforma,
             'Piattaforma/Errori' => $piattaforma,
             'Piattaforma/Listino' => $piattaforma,

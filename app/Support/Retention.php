@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\AvvisoScadenza;
+use App\Models\EmailInviata;
 use App\Models\Errore;
 use App\Models\OccorrenzaErrore;
 use App\Models\Registrazione;
@@ -68,6 +69,10 @@ final class Retention
         // completamento) e con l'unica risposta a «da dove è entrato questo
         // contratto?».
         Registrazione::class,
+        // Il registro delle email (ADR-064): trenta giorni, per decisione di
+        // Marco. Indirizzi e oggetti di tutti i clienti: senza potatura sarebbe
+        // un archivio di posta che nessuno ha deciso di tenere.
+        EmailInviata::class,
     ];
 
     /**

@@ -110,7 +110,7 @@
                     <p class="mt-1 text-xs text-ink-2">
                         <span aria-hidden="true">⚠️</span>
                         Nessuna si ripara da sola, in <strong>nessuna</strong> delle due direzioni:
-                        il database è la verità per il dominio (etichetta, tetto di Enti, offribilità),
+                        il database è la verità per il dominio (etichetta, tetto di sedi, offribilità),
                         Stripe lo è per il denaro. Si risolvono con «Sincronizza» oppure agganciando
                         il price esistente.
                     </p>
@@ -500,7 +500,7 @@
                 <x-ui.input name="etichetta" label="Etichetta" wire:model="nuovo.etichetta"
                             placeholder="es. Enterprise" />
 
-                <x-ui.input name="max_enti" label="Tetto di Enti" type="number" wire:model="nuovo.max_enti"
+                <x-ui.input name="max_enti" label="Tetto di sedi" type="number" wire:model="nuovo.max_enti"
                             placeholder="vuoto = illimitato" />
 
                 {{-- 🔗 ADR-049. Quanti strumenti, e a che cosa si applica il numero. --}}
@@ -565,7 +565,7 @@
 
                 <x-ui.input name="etichetta" label="Etichetta" wire:model="modifica.etichetta" />
 
-                <x-ui.input name="max_enti" label="Tetto di Enti" type="number"
+                <x-ui.input name="max_enti" label="Tetto di sedi" type="number"
                             wire:model="modifica.max_enti" placeholder="vuoto = illimitato" />
 
                 {{-- 🔗 ADR-049. Quanti strumenti, e a che cosa si applica il numero. --}}
@@ -621,7 +621,7 @@
                 @if ($conferma['enti'])
                     <div data-conferma-tetto="{{ $conferma['enti']['account'] }}">
                         <p class="text-sm text-ink-2">
-                            Il tetto di Enti passa da <strong>{{ $conferma['enti']['da'] }}</strong> a
+                            Il tetto di sedi passa da <strong>{{ $conferma['enti']['da'] }}</strong> a
                             <strong>{{ $conferma['enti']['a'] }}</strong>.
                         </p>
 

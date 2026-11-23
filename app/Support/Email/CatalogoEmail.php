@@ -3,6 +3,23 @@
 namespace App\Support\Email;
 
 use App\Enums\StatoSemaforo;
+use App\Notifications\AccountBloccato;
+use App\Notifications\AccountEliminato;
+use App\Notifications\AccountGiaEsistente;
+use App\Notifications\AvvisoObsolescenza;
+use App\Notifications\BenvenutoRegistrazione;
+use App\Notifications\ComodatoInScadenza;
+use App\Notifications\DigestScadenze;
+use App\Notifications\InterventoAssegnato;
+use App\Notifications\InterventoEseguito;
+use App\Notifications\InterventoProgrammato;
+use App\Notifications\InvitoUtente;
+use App\Notifications\MacchinaSegnalata;
+use App\Notifications\NuovoErrore;
+use App\Notifications\PianoCambiato;
+use App\Notifications\PropostaPiano;
+use App\Notifications\RecuperoPassword;
+use App\Notifications\VerificaEmailRegistrazione;
 use InvalidArgumentException;
 
 /**
@@ -216,5 +233,45 @@ final class CatalogoEmail
     {
         return self::tutte()[$chiave]
             ?? throw new InvalidArgumentException("Email «{$chiave}» non a catalogo.");
+    }
+
+    /**
+     * Quale notifica manda quale voce (🔗 ADR-064, il registro delle email).
+     *
+     * Il registro vede passare una classe, e in pagina deve dire il nome che la
+     * stessa email ha qui. `RegistroEmailTest` tiene la mappa completa nei due
+     * versi: ogni notifica in `app/Notifications` ha la sua voce, e ogni voce la
+     * sua notifica. `EmailDiProva` non c'è: è il veicolo delle prove.
+     */
+    private const CLASSI = [
+        DigestScadenze::class => self::RIEPILOGO_SCADENZE,
+        AvvisoObsolescenza::class => self::AVVISO_OBSOLESCENZA,
+        MacchinaSegnalata::class => self::MACCHINA_SEGNALATA,
+        InterventoProgrammato::class => self::INTERVENTO_PROGRAMMATO,
+        InterventoEseguito::class => self::INTERVENTO_ESEGUITO,
+        InterventoAssegnato::class => self::INTERVENTO_ASSEGNATO,
+        AccountBloccato::class => self::ACCOUNT_BLOCCATO,
+        PianoCambiato::class => self::PIANO_CAMBIATO,
+        ComodatoInScadenza::class => self::COMODATO_IN_SCADENZA,
+        InvitoUtente::class => self::INVITO,
+        PropostaPiano::class => self::PROPOSTA_PIANO,
+        VerificaEmailRegistrazione::class => self::VERIFICA_INDIRIZZO,
+        AccountGiaEsistente::class => self::ACCOUNT_GIA_ESISTENTE,
+        BenvenutoRegistrazione::class => self::BENVENUTO,
+        AccountEliminato::class => self::ACCOUNT_ELIMINATO,
+        NuovoErrore::class => self::NUOVO_ERRORE,
+        RecuperoPassword::class => self::RECUPERO_PASSWORD,
+    ];
+
+    /** La chiave della voce mandata da questa classe di notifica, o null se non è a catalogo. */
+    public static function chiavePerClasse(?string $classe): ?string
+    {
+        return $classe === null ? null : (self::CLASSI[$classe] ?? null);
+    }
+
+    /** @return array<class-string, string> */
+    public static function classi(): array
+    {
+        return self::CLASSI;
     }
 }
