@@ -121,3 +121,15 @@
             ['etichetta' => 'Bloccati', 'valore' => 2, 'classe' => 'bg-chart-rosso', 'glifo' => '■'],
         ]" />
 @endcomponent
+
+@component('banco.pezzo', [
+    'titolo' => 'x-scadenzario.riquadri — i quattro riquadri dei due Scadenzari, con «Non idonei» scelto',
+    'token' => 'ring-ring · border-brand (hover) · grid-cols-2 → lg:grid-cols-4',
+    'nota' => "Tre finestre di tempo e lo stato della macchina (ADR-066): «Non idonei» non guarda la data, quindi la somma dei quattro numeri non è il totale, per scelta. Il riquadro scelto porta l'anello. Due colonne fino al desktop, poi una fila da quattro. ⚠️ I `wire:click` qui non fanno niente: chiamano `filtra()` del componente Livewire che include il pezzo, e il banco non è un componente Livewire.",
+])
+    <x-scadenzario.riquadri
+        :contatori="['scaduti' => 1524, 'in_scadenza' => 186, 'idonei' => 1490, 'non_idonei' => 48]"
+        stato-attivo="non_idonei"
+        :soglia="30" />
+@endcomponent
+
