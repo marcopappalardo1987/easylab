@@ -59,7 +59,7 @@ DB_CONNECTION=pgsql DB_HOST= DB_PORT=5432 DB_DATABASE= DB_USERNAME= DB_PASSWORD=
 REDIS_HOST= REDIS_PASSWORD= REDIS_PORT=6379
 CACHE_STORE=redis
 QUEUE_CONNECTION=redis      # ⚠️ SOLO in locale. Su Cloud con una managed queue NON va impostata: vedi §2.1.1
-MAIL_MAILER=smtp MAIL_HOST= MAIL_PORT= MAIL_USERNAME= MAIL_PASSWORD=   # ADR-011 — server di posta INTERNO
+MAIL_MAILER=ses SES_ACCESS_KEY_ID= SES_SECRET_ACCESS_KEY= SES_REGION=eu-central-1   # ADR-063 — Amazon SES (prima: SMTP Aruba, ADR-011)
 MAIL_FROM_ADDRESS= MAIL_FROM_NAME="Easy Lab"                          # dominio EasyLab, allineato a SPF/DKIM
 # ⛔ Storage documenti: in cloud NON si scrive nessuna AWS_*. Si collega il
 # bucket all'ambiente dal pannello e la piattaforma inietta da sé
@@ -97,7 +97,7 @@ Il sintomo di aver sbagliato è muto: il digest non arriva a nessuno e la dashbo
 
 > Dove si scrivono a mano, le chiavi di un bucket usano i nomi `AWS_*` perché è il driver S3 standard di Laravel puntato a un endpoint diverso: non c'è nulla di Amazon coinvolto. In cloud non si scrivono affatto (🔗 ADR-042).
 
-> **Posta in uscita — server interno** (🔗 ADR-011, deciso il 18 Ago 2026). Niente servizio transazionale: le email partono dal mailserver di EasyLab via SMTP autenticato. In locale resta `MAIL_MAILER=log` e le email finiscono in `storage/logs/laravel.log`.
+> **Posta in uscita — Amazon SES** (🔗 ADR-063, dal 23 Nov 2026; fino ad allora SMTP Aruba, ADR-011). Le email partono da SES a Francoforte con l'identità di dominio `easylab.technology` (DKIM di Amazon, MAIL FROM `bounce.easylab.technology`). Ogni ambiente ha il proprio utente IAM, con il solo permesso di inviare da `@easylab.technology`, e la sua chiave sta nelle variabili `SES_*` di quell'ambiente su Laravel Cloud, mai nelle `AWS_*`. In locale resta `MAIL_MAILER=log` e le email finiscono in `storage/logs/laravel.log`.
 >
 > ⚠️ **Da fare sul dominio prima del primo invio a un cliente reale**, perché senza il promemoria arriva nello spam ed è come non averlo mandato: **SPF** (autorizza l'IP di uscita), **DKIM** (firma il messaggio), **DMARC** (dice ai destinatari cosa fare se i primi due falliscono) e **PTR/reverse DNS** dell'IP. `MAIL_FROM_ADDRESS` deve stare sullo stesso dominio che quei record coprono, o l'allineamento DMARC fallisce anche con SPF e DKIM validi.
 >
@@ -298,7 +298,7 @@ Raccolta delle voci «Per Marco» lasciate aperte dal giro multiagente di harden
 
 ### DNS e posta
 
-- **SPF, DKIM, DMARC, PTR** sul dominio di invio di produzione, con `MAIL_FROM_ADDRESS` allineato. *(Già verificato funzionante su staging il 21 Ago 2026 con Aruba: recapito in posta in arrivo, non in spam — da ripetere sul dominio di produzione se diverso.)*
+- **SPF, DKIM, DMARC, PTR** sul dominio di invio di produzione, con `MAIL_FROM_ADDRESS` allineato. *(Già verificato funzionante su staging il 21 Ago 2026 con Aruba: recapito in posta in arrivo, non in spam — da ripetere sul dominio di produzione se diverso.)* ⚠️ **Dal 23 Nov 2026 si invia da SES** (🔗 ADR-063): DKIM e SPF sono quelli di Amazon (tre CNAME `_domainkey`, MX e TXT su `bounce`), e la verifica va rifatta con SES.
 
 ### Backblaze B2
 

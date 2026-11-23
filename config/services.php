@@ -22,10 +22,23 @@ return [
         'key' => env('RESEND_API_KEY'),
     ],
 
+    /*
+     * Posta in uscita su Amazon SES (🔗 ADR-063, dal 23 Nov 2026).
+     *
+     * ⚠️ Variabili SES_* proprie, NON le AWS_* di Laravel: quelle in sviluppo
+     * aprono il bucket dei documenti (`.env.example`, 🔗 ADR-042). Con le
+     * stesse chiavi, un accesso perso per la posta aprirebbe anche i
+     * documenti, e una chiave del bucket messa a mano in cloud diventerebbe la
+     * chiave di invio. Qui ogni chiave apre una cosa sola.
+     *
+     * Regione di default Francoforte: è quella dell'identità del dominio e
+     * dell'applicazione su Laravel Cloud. Un'altra regione non vede
+     * l'identità verificata e rifiuta il mittente.
+     */
     'ses' => [
-        'key' => env('AWS_ACCESS_KEY_ID'),
-        'secret' => env('AWS_SECRET_ACCESS_KEY'),
-        'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
+        'key' => env('SES_ACCESS_KEY_ID'),
+        'secret' => env('SES_SECRET_ACCESS_KEY'),
+        'region' => env('SES_REGION', 'eu-central-1'),
     ],
 
     'slack' => [
