@@ -281,17 +281,37 @@ it('refuses a collaudo on or after a declared scadenza of the machine', function
         ->and($garanzia->fresh()->data_inizio->toDateString())->toBe('2025-01-10');
 })->with(['lo stesso giorno' => ['2026-03-31'], 'dopo' => ['2026-05-01']]);
 
-it('leaves a declared garanzia as it is if a collaudo written elsewhere passes its scadenza', function () {
+it('leaves a declared garanzia as it is if a collaudo written elsewhere reaches its scadenza', function (string $collaudo) {
     // Il modulo lo rifiuta; chi scrive senza passare da lì non deve far
     // fallire il proprio gesto per una riga incoerente (stessa scelta del
     // montaggio dei pezzi).
     $garanzia = GaranzieDalCollaudo::registra($this->strumento, Carbon::parse('2026-03-31'));
 
-    Strumento::withoutGlobalScopes()->find($this->strumento->id)->update(['data_installazione' => '2026-05-01']);
+    Strumento::withoutGlobalScopes()->find($this->strumento->id)->update(['data_installazione' => $collaudo]);
 
-    expect($this->strumento->fresh()->data_installazione->toDateString())->toBe('2026-05-01')
+    expect($this->strumento->fresh()->data_installazione->toDateString())->toBe($collaudo)
         ->and($garanzia->fresh()->data_inizio->toDateString())->toBe('2025-01-10')
         ->and($garanzia->fresh()->data_scadenza_effettiva->toDateString())->toBe('2026-03-31');
+})->with(['lo stesso giorno' => ['2026-03-31'], 'dopo' => ['2026-05-01']]);
+
+it('leaves the garanzie as they are when the collaudo is taken away outside the form', function () {
+    $garanzia = GaranzieDalCollaudo::registra($this->strumento, 24);
+
+    Strumento::withoutGlobalScopes()->find($this->strumento->id)->update(['data_installazione' => null]);
+
+    expect($garanzia->fresh()->data_inizio->toDateString())->toBe('2025-01-10')
+        ->and($garanzia->fresh()->data_scadenza_effettiva->toDateString())->toBe('2027-01-10');
+});
+
+it('does not realign an old garanzia when something else of the machine changes', function () {
+    // 🔴 Il riallineamento delle garanzie già registrate si lancia col via di
+    // Marco (il comando), non alla prima modifica del nome.
+    $vecchia = Garanzia::factory()->forStrumento($this->strumento)->create(['data_inizio' => '2025-03-01', 'durata_mesi' => 24]);
+
+    scheda($this->admin, $this->strumento)->call('edit')->set('strumentoForm.nome', 'Autoclave grande')->call('save')->assertHasNoErrors();
+
+    expect($this->strumento->fresh()->nome)->toBe('Autoclave grande')
+        ->and($vecchia->fresh()->data_inizio->toDateString())->toBe('2025-03-01');
 });
 
 // ─── Il dominio ──────────────────────────────────────────────────────────────
@@ -305,6 +325,16 @@ it('refuses to create a machine garanzia without collaudo even outside the forms
 
     // La garanzia di un pezzo non dipende dal collaudo della macchina.
     expect(($this->ricambio)($senza)->exists)->toBeTrue();
+});
+
+it('refuses to change through the service a garanzia of a machine without collaudo', function () {
+    // La nascita la ferma anche il model; la modifica di una garanzia storica
+    // la ferma solo il servizio, che senza collaudo non ha un inizio da dare.
+    $garanzia = Garanzia::factory()->forStrumento($this->strumento)->create(['data_inizio' => '2024-05-01', 'durata_mesi' => 12]);
+    Strumento::withoutGlobalScopes()->whereKey($this->strumento->id)->update(['data_installazione' => null]);
+
+    expect(fn () => GaranzieDalCollaudo::modifica($garanzia, $this->strumento->fresh(), 36))->toThrow(CollaudoMancante::class)
+        ->and($garanzia->fresh()->durata_mesi)->toBe(12);
 });
 
 it('lets only the garanzia of the machine count from the collaudo', function () {

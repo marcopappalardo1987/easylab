@@ -142,6 +142,19 @@ it('ignores trashed garanzie and the garanzie of trashed machines', function () 
         ->and(Garanzia::withoutGlobalScopes()->find($this->dichiarata->id)->data_inizio->toDateString())->toBe('2024-09-01');
 });
 
+it('does not touch a garanzia left with an Ente that is no longer the one of the machine', function () {
+    // 🔗 ADR-015: il trasferimento fra Enti deve spostare le garanzie con lo
+    // strumento. Una rimasta indietro non è di questa macchina per il tenant,
+    // e il comando non la scrive a nome di un altro cliente.
+    Garanzia::withoutGlobalScopes()->whereKey($this->spostata->id)->update(['tenant_id' => $this->bianchi->id]);
+
+    $this->artisan('easylab:allinea-garanzie-collaudo', ['--applica' => true])
+        ->expectsOutputToContain('Riallineate 1 garanzie')
+        ->assertSuccessful();
+
+    expect(Garanzia::withoutGlobalScopes()->find($this->spostata->id)->data_inizio->toDateString())->toBe('2025-03-01');
+});
+
 it('asks for confirmation in production, and writes nothing without it', function () {
     app()->detectEnvironment(fn () => 'production');
 
