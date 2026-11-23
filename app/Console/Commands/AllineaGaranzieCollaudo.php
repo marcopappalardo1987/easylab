@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Models\Garanzia;
+use App\Models\Scopes\DepartmentScope;
+use App\Models\Scopes\TenantScope;
 use App\Models\UnitaOrganizzativa;
 use App\Support\Garanzie\GaranzieDalCollaudo;
 use Illuminate\Console\Command;
@@ -182,7 +184,9 @@ class AllineaGaranzieCollaudo extends Command
      */
     private function nomiDeiClienti(Collection $garanzie): Collection
     {
-        return UnitaOrganizzativa::withoutGlobalScopes()
+        // Per nome e coi cestinati: serve solo il nome, anche di un Ente chiuso.
+        return UnitaOrganizzativa::withoutGlobalScopes([TenantScope::class, DepartmentScope::class])
+            ->withTrashed()
             ->whereIn('id', $garanzie->pluck('tenant_id')->unique()->values())
             ->pluck('nome', 'id');
     }

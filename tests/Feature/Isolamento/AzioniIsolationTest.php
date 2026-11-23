@@ -96,7 +96,7 @@ it('refuses to edit or delete a garanzia of another Ente', function () {
     Tentativo::senzaEffetto($b, fn () => schedaA()->set('deletingGaranziaId', $b->id)->call('eliminaGaranzia'));
     Tentativo::senzaEffetto($b, fn () => schedaA()
         ->set('editingGaranziaId', $b->id)
-        ->set('garanziaForm', ['data_inizio' => '2020-01-01', 'durata_mesi' => 1])
+        ->set('garanziaForm', ['durata_mesi' => 1, 'scadenza' => ''])
         ->call('saveGaranzia'));
 });
 

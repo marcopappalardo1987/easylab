@@ -4,6 +4,10 @@ namespace App\Support\Garanzie;
 
 use App\Enums\SoggettoGaranzia;
 use App\Models\Garanzia;
+use App\Models\Scopes\DepartmentScope;
+use App\Models\Scopes\GaranziaDepartmentScope;
+use App\Models\Scopes\GaranziaRicambioPrivacyScope;
+use App\Models\Scopes\TenantScope;
 use App\Models\Strumento;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
@@ -41,11 +45,11 @@ use LogicException;
  * - 🔴 **Senza collaudo non si scrive niente.** Una garanzia nuova si rifiuta
  *   (`CollaudoMancante`), e quelle già registrate su una macchina senza
  *   collaudo non si toccano mai: il comando le elenca a parte.
- * - **Tenant esplicito e nessuno scope.** Il riallineamento gira anche in
- *   console, dove i global scope si ritirano (`CurrentTenant::shouldScope()`),
- *   e nel web per chi può modificare la macchina ma non vedere ogni sua
- *   riga: le query dicono `tenant_id` e `strumento_id`, e riapplicano a mano
- *   il soft delete. Si salva per model e mai by-query, perché la scadenza la
+ * - **Tenant esplicito, e nessuno scope di tenancy.** Il riallineamento gira
+ *   anche in console, dove i global scope si ritirano
+ *   (`CurrentTenant::shouldScope()`), e nel web per chi può modificare la
+ *   macchina ma non vedere ogni sua riga: le query dicono `tenant_id` e
+ *   `strumento_id`, e tolgono gli scope per nome, così il soft delete resta. Si salva per model e mai by-query, perché la scadenza la
  *   ricalcola l'hook `saving` e l'audit la registra (🔗 nota ADR-015 nel
  *   docblock di `Garanzia`).
  */
@@ -159,12 +163,24 @@ final class GaranzieDalCollaudo
      */
     public static function dellaMacchina(Strumento $strumento): Builder
     {
-        return Garanzia::withoutGlobalScopes()
+        return self::senzaScopeDiTenancy()
             ->where('tenant_id', $strumento->tenant_id)
             ->where('strumento_id', $strumento->id)
             ->where('soggetto', SoggettoGaranzia::Macchina->value)
-            ->whereNull('deleted_at')
             ->orderBy('id');
+    }
+
+    /**
+     * Le garanzie senza gli scope di tenancy e di privacy, **per nome**: resta
+     * il soft delete, perché una garanzia cestinata non esiste per nessuna
+     * lettura di dominio (`BypassNudiGuardrailTest`). Il confine lo mettono le
+     * query, col `tenant_id` esplicito.
+     *
+     * @return Builder<Garanzia>
+     */
+    private static function senzaScopeDiTenancy(): Builder
+    {
+        return Garanzia::withoutGlobalScopes([TenantScope::class, GaranziaDepartmentScope::class, GaranziaRicambioPrivacyScope::class]);
     }
 
     /**
@@ -209,10 +225,9 @@ final class GaranzieDalCollaudo
      */
     private static function garanzieDiMacchineVive(): Collection
     {
-        return Garanzia::withoutGlobalScopes()
+        return self::senzaScopeDiTenancy()
             ->where('soggetto', SoggettoGaranzia::Macchina->value)
-            ->whereNull('deleted_at')
-            ->with(['strumento' => fn ($q) => $q->withoutGlobalScopes()->whereNull('deleted_at')])
+            ->with(['strumento' => fn ($q) => $q->withoutGlobalScopes([TenantScope::class, DepartmentScope::class])])
             ->orderBy('tenant_id')
             ->orderBy('strumento_id')
             ->orderBy('id')
