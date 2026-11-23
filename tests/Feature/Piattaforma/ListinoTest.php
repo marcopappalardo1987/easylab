@@ -353,6 +353,21 @@ it('creates no twin price when the same sync is asked twice', function () {
 
 // ─── Il tetto di Enti ────────────────────────────────────────────────────────
 
+it('calls the cap a cap on sites, in both forms', function () {
+    // Il cliente compra sedi, non «Enti»: la parola tecnica resta nel codice
+    // (`max_enti`), la pagina dice ciò che il listino pubblico già dice.
+    $piano = Piano::query()->where('codice', 'saas')->firstOrFail();
+
+    ($this->pagina)()
+        ->call('apriCreazione')
+        ->assertSee('Tetto di sedi')
+        ->assertDontSee('Tetto di Enti')
+        ->call('annulla')
+        ->call('apriModifica', $piano->id)
+        ->assertSee('Tetto di sedi')
+        ->assertDontSee('Tetto di Enti');
+});
+
 it('asks before lowering the cap under someone, and writes nothing until it is confirmed', function () {
     // 🔴 **Non è una guardia, ed è il punto.** Abbassare il tetto è permesso e
     // non cestina niente: chi ci finisce sotto tiene tutte le sue sedi e

@@ -833,7 +833,7 @@ final class GovernoListino
 
         if ($max < 1) {
             throw ValidationException::withMessages([
-                'max_enti' => 'Il tetto di Enti è almeno 1, oppure vuoto per «illimitato». Un piano da zero sedi non permetterebbe nemmeno il primo Ente.',
+                'max_enti' => 'Il tetto di sedi è almeno 1, oppure vuoto per «illimitato». Un piano da zero sedi non permetterebbe nemmeno la prima.',
             ]);
         }
 
