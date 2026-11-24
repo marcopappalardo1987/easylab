@@ -12,6 +12,7 @@ use App\Models\Scopes\DepartmentScope;
 use App\Models\Scopes\TenantScope;
 use App\Support\AuditLog;
 use App\Support\DiagnosiSemaforo;
+use App\Support\Garanzie\GaranzieDalCollaudo;
 use App\Support\MotivoSemaforo;
 use App\Support\Semaforo;
 use Database\Factories\StrumentoFactory;
@@ -34,6 +35,11 @@ use InvalidArgumentException;
  * (`unita_organizzativa_id`), quindi eredita gratis l'isolamento per Ente
  * (BelongsToTenant) e la restrizione sotto-albero del Responsabile
  * (BelongsToOrgNode).
+ *
+ * ⚠️ `data_installazione` è la **data di collaudo** (🔗 ADR-065, 23 Nov 2026):
+ * l'applicazione la chiama così, e la garanzia della macchina conta da lì. La
+ * colonna ha tenuto il nome, che è un identificatore — come `dipartimento`
+ * per i laboratori (ADR-053).
  */
 class Strumento extends Model implements ReachesStrumento
 {
@@ -122,6 +128,18 @@ class Strumento extends Model implements ReachesStrumento
         static::updating(function (Strumento $strumento): void {
             $strumento->verificaFornitore();
             $strumento->lasciaIlReferenteAlVecchioEnte();
+        });
+
+        // 🔗 ADR-065: la garanzia della macchina conta dal collaudo, quindi un
+        // collaudo corretto la sposta. Qui e non nei componenti: è la sola
+        // strada da cui passa ogni modifica della macchina, presente e futura.
+        // `updated` e non `updating`: si scrive dopo che la data nuova è
+        // salvata. Un collaudo tolto non tocca niente (vedi
+        // `GaranzieDalCollaudo::riallinea()`). Le garanzie dei ricambi no.
+        static::updated(function (Strumento $strumento): void {
+            if ($strumento->wasChanged('data_installazione')) {
+                GaranzieDalCollaudo::riallinea($strumento);
+            }
         });
     }
 

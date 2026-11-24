@@ -9,6 +9,8 @@ use App\Models\Concerns\SerializzaGiorniCivili;
 use App\Models\Contracts\ReachesStrumento;
 use App\Models\Scopes\GaranziaDepartmentScope;
 use App\Models\Scopes\GaranziaRicambioPrivacyScope;
+use App\Support\Garanzie\CollaudoMancante;
+use App\Support\Garanzie\GaranzieDalCollaudo;
 use App\Support\Semaforo;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
@@ -19,7 +21,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
+use LogicException;
 
 /**
  * Garanzia del macchinario o del singolo ricambio montato (ERD §6.1 — ADR-004,
@@ -47,6 +51,18 @@ use InvalidArgumentException;
  * Resta:
  * - ADR-015: al trasferimento cross-tenant le garanzie devono seguire lo
  *   strumento con un update by-query (BelongsToTenant blocca il cambio sul model).
+ *   ⚠️ Dal 23 Nov 2026 c'è una ragione in più per farlo nello stesso gesto:
+ *   `GaranzieDalCollaudo::riallinea()` cerca le garanzie della macchina col
+ *   `tenant_id` dello strumento, quindi una garanzia rimasta al vecchio Ente
+ *   non seguirebbe più un cambio di collaudo.
+ *
+ * **La garanzia della macchina conta dal collaudo** (🔗 ADR-065, 23 Nov 2026):
+ * per `soggetto = macchina` `data_inizio` è la data di collaudo dello
+ * strumento (`strumenti.data_installazione`), non un dato che si scrive. La
+ * scrive `App\Support\Garanzie\GaranzieDalCollaudo`, l'unica strada per i
+ * moduli, per il cambio di collaudo e per il comando di riallineamento. Le
+ * garanzie dei ricambi non cambiano: contano dal montaggio
+ * (`RicambioUtilizzo::fissaMontaggio()`).
  *
  * ⚠️ Il tab Garanzie della scheda **non** mostra le righe ricambio, e non per
  * via degli scope: a escluderle è la clausola `strumento_id` della relazione
@@ -124,6 +140,40 @@ class Garanzia extends Model implements ReachesStrumento
             $garanzia->verificaSoggetto();
             $garanzia->normalizzaScadenza();
         });
+
+        static::creating(function (Garanzia $garanzia): void {
+            $garanzia->esigiCollaudo();
+        });
+    }
+
+    /**
+     * Nessuna garanzia della macchina nasce su una macchina senza collaudo
+     * (🔗 ADR-065): conta da lì, e senza quella data non ha un inizio.
+     *
+     * È il secondo livello della regola, come il `min:1` della durata: i
+     * moduli lo dicono con un messaggio, e questo ferma chi scrive senza
+     * passare da loro (seeder, import futuri). Query builder senza scope: in
+     * un contesto in cui lo strumento non è visibile, Eloquent lo darebbe per
+     * assente e il rifiuto avrebbe il motivo sbagliato.
+     *
+     * ⚠️ **Guarda la sola nascita, e non riscrive l'inizio.** Allineare
+     * `data_inizio` al collaudo in `saving` riallineerebbe in produzione, una
+     * alla volta, le garanzie già registrate che qualcuno tocca per un'altra
+     * ragione — e il riallineamento di quelle si lancia solo col via di Marco
+     * (`easylab:allinea-garanzie-collaudo`). L'inizio lo scrive
+     * `GaranzieDalCollaudo`, che è la strada di tutti i moduli.
+     */
+    protected function esigiCollaudo(): void
+    {
+        if ($this->soggetto !== SoggettoGaranzia::Macchina) {
+            return;
+        }
+
+        $collaudo = DB::table('strumenti')->where('id', $this->strumento_id)->value('data_installazione');
+
+        if ($collaudo === null) {
+            throw new CollaudoMancante(GaranzieDalCollaudo::SENZA_COLLAUDO);
+        }
     }
 
     /**
@@ -235,6 +285,42 @@ class Garanzia extends Model implements ReachesStrumento
     }
 
     /**
+     * Fa contare la garanzia della MACCHINA dal collaudo (🔗 ADR-065). Non salva.
+     *
+     * Nel ramo durata (ADR-019) la scadenza si sposta con l'inizio; nel ramo
+     * dichiarato (ADR-022) resta la data scritta, che è ciò che il fornitore
+     * ha promesso. La scadenza la ricalcola subito `normalizzaScadenza()`, la
+     * stessa del salvataggio: così chi elenca senza scrivere (il comando di
+     * riallineamento) legge la scadenza nuova dalla regola vera e non da una
+     * sua copia.
+     *
+     * ⚠️ **Torna false, e non tocca niente, se la scadenza dichiarata non viene
+     * dopo il collaudo.** Il model esige quel confine, e spostare l'inizio
+     * oltre la scadenza farebbe fallire il gesto che ha cambiato il collaudo:
+     * è la scelta già fatta per il montaggio dei pezzi
+     * (`RicambioUtilizzo::fissaMontaggio()`). Il modulo dello strumento lo
+     * dice prima, e il comando la elenca da guardare a mano.
+     *
+     * 🔴 Solo la macchina: la garanzia di un pezzo conta dal montaggio, e un
+     * collaudo che la spostasse sarebbe la regola di un altro soggetto.
+     */
+    public function contaDalCollaudo(CarbonInterface $collaudo): bool
+    {
+        if ($this->soggetto !== SoggettoGaranzia::Macchina) {
+            throw new LogicException('Garanzia: solo la garanzia della macchina conta dal collaudo; quella di un ricambio conta dal montaggio (ADR-065).');
+        }
+
+        if ($this->data_scadenza_dichiarata !== null && $this->data_scadenza_dichiarata->lte($collaudo)) {
+            return false;
+        }
+
+        $this->data_inizio = Carbon::parse($collaudo)->startOfDay();
+        $this->normalizzaScadenza();
+
+        return true;
+    }
+
+    /**
      * Le garanzie della MACCHINA ancora in vigore: quelle che nessun'altra
      * garanzia della stessa macchina supera con una scadenza successiva.
      *
@@ -247,6 +333,11 @@ class Garanzia extends Model implements ReachesStrumento
      * ⚠️ Superata da una scadenza successiva, non da una che è già cominciata:
      * un rinnovo che parte mesi dopo la fine della vecchia la supera lo stesso.
      * Quel buco di copertura non accende il semaforo; si vede dalle date.
+     *
+     * Dal 23 Nov 2026 (🔗 ADR-065) anche il rinnovo conta dal collaudo:
+     * un'estensione è una garanzia con una durata più lunga (da 24 a 36 mesi)
+     * o con la scadenza dichiarata. La regola non cambia, perché confronta le
+     * sole scadenze e mai gli inizi.
      *
      * Solo per le righe `soggetto = macchina`: la correlazione è su
      * `strumento_id`, NULL sulle garanzie dei pezzi. Gemello PHP:

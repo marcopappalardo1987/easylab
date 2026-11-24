@@ -39,7 +39,21 @@ class ImportStrumenti extends Component
     /** Caratteri di un valore mostrati per una riga scartata. */
     public const ANTEPRIMA_SCARTATE = 100;
 
-    public const COLONNE = ['nome', 'modello', 'matricola', 'data_installazione', 'ubicazione', 'provenienza'];
+    public const COLONNE = ['nome', 'modello', 'matricola', 'data_collaudo', 'ubicazione', 'provenienza'];
+
+    /**
+     * Le intestazioni di prima, che un file valgono ancora (🔗 ADR-065).
+     *
+     * «Data installazione» è diventata «data di collaudo» il 23 Nov 2026, e
+     * il template scaricato porta l'intestazione nuova. I file che i clienti
+     * hanno già preparato col template vecchio devono importare lo stesso:
+     * rifiutarli, o peggio leggerli senza la data, sarebbe far ripetere un
+     * lavoro a chi non ha cambiato niente. Se un file porta tutte e due le
+     * intestazioni vince la nuova.
+     *
+     * @var array<string, string> intestazione vecchia → colonna
+     */
+    public const ALIAS = ['data_installazione' => 'data_collaudo'];
 
     public $file;
 
@@ -245,7 +259,7 @@ class ImportStrumenti extends Component
                 'nome' => $dati['nome'],
                 'modello' => $dati['modello'] ?: null,
                 'matricola' => $dati['matricola'] ?: null,
-                'data_installazione' => $this->parseData($dati['data_installazione']),
+                'data_installazione' => $this->parseData($dati['data_collaudo']),
             ]);
 
             if (filled($dati['provenienza'])) {
@@ -317,6 +331,11 @@ class ImportStrumenti extends Component
             $dati = [];
             foreach (self::COLONNE as $colonna) {
                 $idx = array_search($colonna, $intestazioni, true);
+
+                if ($idx === false && ($vecchia = array_search($colonna, self::ALIAS, true)) !== false) {
+                    $idx = array_search($vecchia, $intestazioni, true);
+                }
+
                 $dati[$colonna] = $idx !== false ? trim((string) ($valori[$idx] ?? '')) : '';
             }
             $righe[] = $dati;
@@ -396,8 +415,8 @@ class ImportStrumenti extends Component
             }
         }
 
-        if ($dati['data_installazione'] !== '' && $this->parseData($dati['data_installazione']) === null) {
-            $errori[] = 'Data non valida (usa AAAA-MM-GG o GG/MM/AAAA)';
+        if ($dati['data_collaudo'] !== '' && $this->parseData($dati['data_collaudo']) === null) {
+            $errori[] = 'Data di collaudo non valida (usa AAAA-MM-GG o GG/MM/AAAA)';
         }
 
         $nodo = null;

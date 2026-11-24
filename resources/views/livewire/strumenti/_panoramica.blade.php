@@ -176,7 +176,7 @@
         <dl class="mt-2 divide-y divide-border text-sm">
             {{-- Il fornitore ha il permesso della PROPRIA area, non quello
                  della card: senza `fornitori.view` sparisce la riga, e
-                 ubicazione e installazione restano. Un solo @can in testa al
+                 ubicazione e collaudo restano. Un solo @can in testa al
                  pannello è l'errore che ADR-024 nomina per non farlo. --}}
             @can('fornitori.view')
                 <div class="flex justify-between gap-4 py-2">
@@ -205,7 +205,7 @@
                 <dd class="text-right text-ink">{{ $percorso }}</dd>
             </div>
             <div class="flex justify-between gap-4 py-2">
-                <dt class="text-ink-3">Installato</dt>
+                <dt class="text-ink-3">Collaudo</dt>
                 <dd class="text-right text-ink">
                     {{ $strumento->data_installazione?->format('m/Y') ?: '—' }}
                     {{-- L'obsolescenza è una segnalazione sull'età e NON tocca il

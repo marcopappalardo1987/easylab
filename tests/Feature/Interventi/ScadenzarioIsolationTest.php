@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\StatoSemaforo;
 use App\Livewire\Interventi\Scadenzario;
 use App\Models\Intervento;
 use App\Models\Strumento;
@@ -57,6 +58,11 @@ it('never lets an Admin see another Ente, in the rows or in the counters', funct
     Intervento::factory()->forStrumento($this->macchinaB)
         ->create(['data_scadenza' => today()->addDays(90)->toDateString(), 'descrizione' => 'Lontano di un altro cliente']);
 
+    // E la macchina dell'altro cliente è non idonea: il quarto riquadro conta
+    // i suoi tre interventi se la sottoquery delle macchine rosse sfugge agli
+    // scope.
+    $this->macchinaB->forzaSemaforo(StatoSemaforo::Rosso, 'Fuori uso');
+
     $componente = Livewire::actingAs($this->admin)->test(Scadenzario::class);
 
     $componente->assertSee('Lavoro del mio Ente')
@@ -69,7 +75,8 @@ it('never lets an Admin see another Ente, in the rows or in the counters', funct
         ->and($componente->viewData('contatori'))->toBe([
             'scaduti' => 1,
             'in_scadenza' => 0,
-            'oltre' => 0,
+            'idonei' => 0,
+            'non_idonei' => 0,
         ])
         // Le righe ci sono davvero: senza questo, «non vede nulla» sarebbe vero
         // anche per un database vuoto.
@@ -95,6 +102,42 @@ it('shows a Responsabile Reparto only its own subtree, in the rows and in the co
         ->and($componente->viewData('contatori')['scaduti'])->toBe(1);
 });
 
+it('never lets a Responsabile count the non idonee machines of a department that is not his', function () {
+    // 🔴 Il negativo del quarto riquadro: la sottoquery delle macchine rosse è
+    // una lettura di `Strumento` in più, e una lettura in più è un posto in più
+    // da cui un reparto non suo può entrare nel numero. Due macchine ferme,
+    // una per reparto: il Responsabile di Microbiologia conta solo la sua, a
+    // qualunque distanza di data, e non vede le righe dell'altra.
+    Intervento::factory()->forStrumento($this->macchinaA)
+        ->create(['data_scadenza' => today()->addDays(90)->toDateString(), 'descrizione' => 'Ferma nel mio reparto']);
+    Intervento::factory()->forStrumento($this->macchinaAltroDeptA)->scaduto()
+        ->create(['descrizione' => 'Ferma in un reparto non mio, scaduta']);
+    Intervento::factory()->forStrumento($this->macchinaAltroDeptA)
+        ->create(['data_scadenza' => today()->addDays(90)->toDateString(), 'descrizione' => 'Ferma in un reparto non mio, lontana']);
+
+    $this->macchinaA->forzaSemaforo(StatoSemaforo::Rosso, 'Fuori uso');
+    $this->macchinaAltroDeptA->forzaSemaforo(StatoSemaforo::Rosso, 'Fuori uso');
+
+    $resp = User::factory()->create(['tenant_id' => $this->enteA->id, 'two_factor_confirmed_at' => now()]);
+    $resp->assignRole('Responsabile Reparto');
+    $resp->unitaResponsabili()->attach($this->deptA->id);
+
+    $componente = Livewire::withQueryParams(['stato' => 'non_idonei'])
+        ->actingAs($resp->fresh())->test(Scadenzario::class);
+
+    $componente->assertSee('Ferma nel mio reparto')
+        ->assertDontSee('Ferma in un reparto non mio');
+
+    expect($componente->viewData('interventi')->total())->toBe(1)
+        ->and($componente->viewData('contatori')['non_idonei'])->toBe(1)
+        ->and($componente->viewData('contatori')['idonei'])->toBe(0);
+
+    // Il positivo, senza cui l'«1» qui sopra sarebbe verde anche se le macchine
+    // rosse non contassero affatto: l'Admin dello stesso Ente le conta tutte.
+    expect(Livewire::actingAs($this->admin)->test(Scadenzario::class)
+        ->viewData('contatori')['non_idonei'])->toBe(3);
+});
+
 it('shows nothing at all to a Responsabile without any node assigned', function () {
     // Fail-safe del livello 2: senza nodi non vede il proprio Ente, vede zero.
     Intervento::factory()->forStrumento($this->macchinaA)->scaduto()->create(['descrizione' => 'Di qualcuno']);
@@ -108,7 +151,8 @@ it('shows nothing at all to a Responsabile without any node assigned', function 
         ->and($componente->viewData('contatori'))->toBe([
             'scaduti' => 0,
             'in_scadenza' => 0,
-            'oltre' => 0,
+            'idonei' => 0,
+            'non_idonei' => 0,
         ]);
 });
 
@@ -131,7 +175,8 @@ it('counts zero, not everything, for an authenticated user without a tenant', fu
         ->and($componente->viewData('contatori'))->toBe([
             'scaduti' => 0,
             'in_scadenza' => 0,
-            'oltre' => 0,
+            'idonei' => 0,
+            'non_idonei' => 0,
         ]);
 });
 
@@ -151,6 +196,11 @@ it('gives a Tecnico portfolio union assignment, and not a whole Ente', function 
     Intervento::factory()->forStrumento($this->macchinaAltroDeptA)->scaduto()
         ->create(['descrizione' => 'Ne mio ne assegnato']);
 
+    // Due macchine non idonee: quella che vede per assegnazione conta, quella
+    // fuori dal suo perimetro no.
+    $this->macchinaA->forzaSemaforo(StatoSemaforo::Rosso, 'Fuori uso');
+    $this->macchinaAltroDeptA->forzaSemaforo(StatoSemaforo::Rosso, 'Fuori uso');
+
     $componente = Livewire::actingAs($tecnico->fresh())->test(Scadenzario::class);
 
     $componente->assertSee('Del portafoglio')
@@ -158,7 +208,8 @@ it('gives a Tecnico portfolio union assignment, and not a whole Ente', function 
         ->assertDontSee('Ne mio ne assegnato');
 
     expect($componente->viewData('interventi')->total())->toBe(2)
-        ->and($componente->viewData('contatori')['scaduti'])->toBe(2);
+        ->and($componente->viewData('contatori')['scaduti'])->toBe(2)
+        ->and($componente->viewData('contatori')['non_idonei'])->toBe(1);
 });
 
 it('never bypasses a global scope in the component', function () {

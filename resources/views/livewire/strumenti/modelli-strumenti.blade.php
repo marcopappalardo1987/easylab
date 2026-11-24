@@ -1,7 +1,7 @@
 <div class="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
 
     <h1 class="text-2xl font-bold tracking-tight text-ink">Strumenti</h1>
-    <p class="mt-1 text-sm text-ink-2">In quali laboratori è installato un modello, e quante unità.</p>
+    <p class="mt-1 text-sm text-ink-2">In quali laboratori si trova un modello, e quante unità.</p>
 
     @include('livewire.strumenti._tabs', ['attiva' => 'strumenti.modelli'])
 

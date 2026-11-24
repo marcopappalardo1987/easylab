@@ -50,7 +50,7 @@
 ])
     <x-ui.card class="w-full max-w-sm">
         <p class="text-sm font-semibold text-ink">Compressore SC-200</p>
-        <p class="mt-1 text-sm text-ink-2">Reparto Stampaggio · installato il 12/03/2019</p>
+        <p class="mt-1 text-sm text-ink-2">Reparto Stampaggio · collaudo del 12/03/2019</p>
         <p class="mt-1 text-xs text-ink-3">Ultimo intervento: 4 giorni fa</p>
     </x-ui.card>
 @endcomponent

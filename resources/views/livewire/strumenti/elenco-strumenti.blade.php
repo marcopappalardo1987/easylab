@@ -147,7 +147,7 @@
                             'modello' => 'Modello',
                             'matricola' => 'Matricola',
                             'ubicazione' => 'Ubicazione',
-                            'data_installazione' => 'Installazione',
+                            'data_installazione' => 'Collaudo',
                             'prossima_scadenza' => 'Prossima scadenza',
                         ] as $col => $label)
                             <th class="px-4 py-3 font-semibold">

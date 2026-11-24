@@ -25,8 +25,8 @@ appena superata.
 la manutenzione e non cambia lo stato delle macchine in Easy Lab.
 
 <x-mail::table>
-| Macchina | Installata il | Età |
-|:---------|:--------------|:----|
+| Macchina | Collaudo | Età |
+|:---------|:---------|:----|
 @foreach ($righe as $riga)
 | [{{ TestoMarkdown::sicuro($riga->strumentoNome) }}]({{ route('strumenti.show', $riga->strumentoId) }}) | {{ $riga->dataInstallazione->format('d/m/Y') }} | {{ $riga->eta() }} {{ $riga->eta() === 1 ? 'anno' : 'anni' }} |
 @endforeach

@@ -111,7 +111,9 @@ it('costs the same with 5 and 50 machines on the other list pages, and no more t
     // se in pagina c'è almeno un Responsabile, come qui.
     'Admin utenti' => ['admin', '/utenti', 12, 'Utente 1'],
     'Tecnico elenco strumenti' => ['tecnico', '/strumenti', 10, 'Macchina 2'],
-    'Superadmin parco scadenzario' => ['superadmin', '/piattaforma/parco/scadenzario', 13, 'Macchina 2'],
+    // 14 e non più 13 dal 23 Nov 2026: il quarto riquadro, «Non idonei», è UN
+    // count per pagina, con la sottoquery delle macchine rosse dentro.
+    'Superadmin parco scadenzario' => ['superadmin', '/piattaforma/parco/scadenzario', 14, 'Macchina 2'],
     'Superadmin parco ricambi' => ['superadmin', '/piattaforma/parco/ricambi', 10, 'Ricambio 2'],
     // 9 e non più 8 dal 6 Ott 2026 (ADR-046): la pagina mostra il ruolo accanto
     // al nome — Tecnico o Gestore — e lo carica in UNA query per tutta la pagina.

@@ -3,10 +3,12 @@
 namespace App\Livewire\Interventi;
 
 use App\Enums\StatoIntervento;
+use App\Enums\StatoSemaforo;
 use App\Enums\TipoIntervento;
 use App\Models\Intervento;
 use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
+use App\Support\Interventi\PartizioniScadenzario;
 use App\Support\Semaforo;
 use App\Support\Tenancy\SediSeguite;
 use Illuminate\Database\Eloquent\Builder;
@@ -32,9 +34,19 @@ use Livewire\WithPagination;
  * non_fatto`), scaduti compresi. Uno scadenzario che nascondesse lo
  * scaduto-non-fatto direbbe «non c'è niente da fare» proprio sulla macchina che
  * sta accendendo l'arancione (ADR-005), e contraddirebbe `/campo` e il digest,
- * che lo mostrano. Le tre partizioni sono le **stesse due domande** del digest
- * (ADR-011 — `Scaduta` / `Imminente`) più il resto: nessuna quarta soglia
+ * che lo mostrano. Le tre finestre di tempo sono le **stesse due domande** del
+ * digest (ADR-011 — `Scaduta` / `Imminente`) più il resto: nessuna soglia
  * inventata.
+ *
+ * ## I quattro riquadri (23 Nov 2026)
+ *
+ * Il terzo riquadro, che era «Oltre», è diventato **«Idonei»**: la stessa
+ * finestra oltre la soglia, senza gli interventi delle macchine non idonee. Quelli
+ * stanno nel quarto, **«Non idonei»**, che non guarda la data: tutti gli aperti
+ * delle macchine col semaforo rosso, cioè forzato a mano (ADR-005 punto 5). Le
+ * regole e il sinonimo `?stato=oltre` stanno in
+ * `App\Support\Interventi\PartizioniScadenzario`, condivisa col parco: qui si
+ * dice soltanto **da quali macchine** partire.
  *
  * ## Chi vede cosa: nessuna regola nuova
  *
@@ -42,22 +54,25 @@ use Livewire\WithPagination;
  * un solo `withoutGlobalScope`: `TenantScope` (criterio Tecnico di ADR-007/030
  * incluso), `DepartmentThroughStrumentoScope` per il Responsabile Reparto e il
  * soft delete. Un utente autenticato **senza tenant** vede zero righe e zero su
- * tutti e tre i contatori — il fail-closed di ADR-018 — e non «tutto».
+ * tutti e quattro i contatori — il fail-closed di ADR-018 — e non «tutto».
  *
  * ⚠️ **I contatori sono la superficie che si dimentica**: un `count()` fuori
  * dagli scope tornerebbe il numero di un altro cliente senza mostrarne una riga.
  * Qui passano dalla stessa `base()` delle righe, quindi non possono divergere.
+ * Vale anche per «Non idonei»: la sottoquery delle macchine rosse parte da
+ * `Strumento::query()`, con gli scope di chi guarda, come quella della `base()`.
  *
  * ## Costo
  *
  * (a) Si parte da `Intervento` e **non** da `Strumento`, quindi non c'è nessuna
  * sottoquery correlata per riga e nessun ordinamento su colonna derivata: il
  * debito OFFSET dichiarato in roadmap (S3, sotto la voce STRETCH) non peggiora.
- * La pagina costa **8 statement costanti** rispetto al numero di righe: 1 count
+ * La pagina costa **9 statement costanti** rispetto al numero di righe: 1 count
  * del paginatore + 1 pagina + 2 eager load + 1 `Strumento::mappaUbicazioni()` +
- * 3 count dei contatori. Le due sottoquery su `Strumento` — quella che tiene
- * fuori le macchine cestinate e quella della ricerca per nome — vivono dentro
- * questi statement e non ne aggiungono.
+ * 4 count dei contatori (erano 3 fino al 23 Nov 2026, prima di «Non idonei»).
+ * Le sottoquery su `Strumento` — quella che tiene fuori le macchine cestinate,
+ * quella della ricerca per nome e quella delle macchine non idonee — vivono
+ * dentro questi statement e non ne aggiungono.
  *
  * L'unica eccezione è il rimbalzo di una pagina oltre l'ultima esistente (vedi
  * `render()`): lì il paginatore gira due volte, ed è il prezzo di non mostrare
@@ -87,9 +102,15 @@ class Scadenzario extends Component
     public string $search = '';
 
     /**
-     * Partizione selezionata. Valori ammessi in `STATI`: è input dell'utente
-     * (arriva dalla query string), quindi si valida contro la whitelist a ogni
-     * `render()` e non solo nell'azione.
+     * Partizione selezionata. Valori ammessi in `PartizioniScadenzario::STATI`,
+     * più il vecchio `oltre` come sinonimo di `idonei`: è input dell'utente
+     * (arriva dalla query string), quindi si normalizza a ogni `render()` e non
+     * solo nell'azione.
+     *
+     * ⚠️ `?string` e non `mixed` come `$sede`, ed è MISURATO: con
+     * `?stato[]=idonei` Livewire scarta il valore prima di idratare la property,
+     * la pagina risponde 200 e `stato` resta null (prova di mutazione del
+     * 23 Nov 2026, test «does not break on a partition it cannot read»).
      */
     #[Url]
     public ?string $stato = null;
@@ -133,16 +154,21 @@ class Scadenzario extends Component
     #[Url]
     public int $perPage = self::PER_PAGE_DEFAULT;
 
-    /**
-     * Le tre partizioni, e sono tre: scaduto, entro la soglia «imminente» di
-     * ADR-005, oltre. Nessuna quarta soglia.
-     */
-    private const STATI = ['scaduti', 'in_scadenza', 'oltre'];
-
     /** Scelte ammesse: il massimo è 100 righe per pagina. */
     private const PER_PAGE = [20, 50, 100];
 
     private const PER_PAGE_DEFAULT = 20;
+
+    /**
+     * Un link salvato con `?stato=oltre` apre «Idonei» e l'indirizzo si
+     * riscrive col nome di oggi, così chi lo copia di nuovo copia quello. Un
+     * valore che non si capisce si toglie dall'indirizzo invece di restarci
+     * senza filtrare niente.
+     */
+    public function mount(): void
+    {
+        $this->stato = PartizioniScadenzario::normalizza($this->stato);
+    }
 
     public function updatingSearch(): void
     {
@@ -176,14 +202,14 @@ class Scadenzario extends Component
     }
 
     /**
-     * Le tre tile in cima sono cliccabili e indirizzano, come i riquadri della
-     * dashboard. `null` («Tutti») è un valore legittimo; qualunque altra cosa
-     * ricade su `null` invece di produrre un elenco che non corrisponde a
-     * nessuna etichetta.
+     * Le quattro tile in cima sono cliccabili e indirizzano, come i riquadri
+     * della dashboard. `null` («Tutti») è un valore legittimo; il vecchio
+     * `oltre` diventa `idonei`; qualunque altra cosa ricade su `null` invece di
+     * produrre un elenco che non corrisponde a nessuna etichetta.
      */
     public function filtra(?string $stato): void
     {
-        $this->stato = in_array($stato, self::STATI, true) ? $stato : null;
+        $this->stato = PartizioniScadenzario::normalizza($stato);
         $this->resetPage();
     }
 
@@ -248,11 +274,11 @@ class Scadenzario extends Component
             || $this->tipoValido() !== null
             || $this->sedeValida() !== null
             || $this->soloMiei
-            || in_array($this->stato, self::STATI, true);
+            || PartizioniScadenzario::normalizza($this->stato) !== null;
     }
 
     /**
-     * Le sedi fra cui filtrare, una volta per richiesta: `base()` gira quattro
+     * Le sedi fra cui filtrare, una volta per richiesta: `base()` gira cinque
      * volte per render. Vuota per chi lavora su una sede sola — niente tendina.
      *
      * `piuClienti()` è solo un risparmio: per chi ha un Ente proprio l'elenco
@@ -319,7 +345,7 @@ class Scadenzario extends Component
 
     /**
      * Gli interventi aperti visibili, con search/tipo/soloMiei applicati ma
-     * **senza** la partizione: serve identica alle righe e ai tre contatori, che
+     * **senza** la partizione: serve identica alle righe e ai quattro contatori, che
      * altrimenti direbbero numeri diversi da ciò che l'elenco mostra.
      *
      * ⚠️ **Colonne sempre qualificate.** Quando l'utente è un Tecnico,
@@ -398,47 +424,39 @@ class Scadenzario extends Component
     }
 
     /**
-     * Applica una delle tre partizioni, o nessuna.
+     * Applica una delle quattro partizioni, o nessuna.
      *
-     * 🔴 **Nessuna delle tre regole è riscritta qui.** «Scaduto-non-fatto» ha
-     * una sola definizione — `Intervento::scopeScadute()`, gemello SQL di
-     * `isScaduto()`, che un test tiene allineati — e il ramo la chiama invece di
-     * ripeterla (che `scadute()` ribadisca `stato = non_fatto` è innocuo:
-     * `base()` lo ha già imposto). Il confine «imminente» arriva da
-     * `scopeApertiEntroSoglia()`, cioè da `Semaforo::giorniImminente()`, mai da
-     * un 30 scritto a mano.
-     *
-     * ⚠️ `$oggi` è calcolato **una volta** e vale per tutto il metodo: `scadute()`
-     * taglia a `< today()` e `in_scadenza` riprende da `>= $oggi`, quindi le due
-     * metà non possono divergere di un giorno e un intervento che scade OGGI sta
-     * fra i non scaduti — che è la regola di `isScaduto()`. È lo stesso taglio,
-     * scritto nella stessa forma, di `NotificaScadenze::righeDaAvvisare()`, dove
-     * è dichiarato «distinzione sua e non del semaforo».
-     *
-     * ⛔ Il confine superiore si esprime SEMPRE come `>= oggi+soglia+1` e mai
-     * come `> oggi+soglia`: su SQLite le colonne `date` sono stringhe
-     * `'Y-m-d 00:00:00'` e il confronto è lessicografico, quindi
-     * `'2026-08-31 00:00:00' > '2026-08-31'` è vero mentre su Postgres è falso.
-     * Con il giorno successivo i due driver dicono la stessa cosa. Le date si
-     * passano come stringa (`->toDateString()`), mai come Carbon.
+     * 🔴 Le regole non sono qui: stanno in `PartizioniScadenzario::applica()`,
+     * la stessa che usa lo scadenzario del parco, perché due copie del taglio
+     * fra «in scadenza» e «idonei» direbbero due cose diverse sulla stessa riga.
+     * Il confine `>= oggi+soglia+1`, il taglio di oggi e il sinonimo `oltre`
+     * sono spiegati là.
      *
      * @param  Builder<Intervento>  $query
      * @return Builder<Intervento>
      */
-    private function partiziona(Builder $query, ?string $stato): Builder
+    private function partiziona(Builder $query, mixed $stato): Builder
     {
-        $oggi = today()->toDateString();
+        return PartizioniScadenzario::applica($query, $stato, fn () => $this->nonIdonee());
+    }
 
-        return match ($stato) {
-            'scaduti' => $query->scadute(),
-            'in_scadenza' => $query->apertiEntroSoglia()->where('interventi.data_scadenza', '>=', $oggi),
-            'oltre' => $query->where(
-                'interventi.data_scadenza',
-                '>=',
-                today()->addDays(Semaforo::giorniImminente() + 1)->toDateString()
-            ),
-            default => $query,
-        };
+    /**
+     * Gli id delle macchine **non idonee** che chi guarda vede: semaforo
+     * effettivo rosso, cioè forzato a mano (🔗 ADR-005 punto 5, ADR-052).
+     *
+     * ⛔ `Strumento::query()` con **tutti** i suoi scope, cioè lo stesso builder
+     * da cui `base()` prende le macchine leggibili: il Responsabile non conta le
+     * macchine rosse di un reparto non suo, il Tecnico quelle fuori dal suo
+     * perimetro, e chi non ha un tenant nessuna. La regola del rosso è
+     * `scopeConStato()`, che sul rosso si ferma alla colonna `forced_state` e non
+     * apre le sottoquery dell'arancione: zero statement in più, e nessun
+     * `EXISTS` correlato per riga.
+     *
+     * @return Builder<Strumento>
+     */
+    private function nonIdonee(): Builder
+    {
+        return Strumento::query()->select('strumenti.id')->conStato(StatoSemaforo::Rosso);
     }
 
     public function render()
@@ -447,7 +465,7 @@ class Scadenzario extends Component
         // arrivare dalla query string senza passare da `updating*`.
         $direzione = $this->direzione();
         $perPage = in_array($this->perPage, self::PER_PAGE, true) ? $this->perPage : self::PER_PAGE_DEFAULT;
-        $stato = in_array($this->stato, self::STATI, true) ? $this->stato : null;
+        $stato = PartizioniScadenzario::normalizza($this->stato);
 
         $pagina = fn () => $this->partiziona($this->base(), $stato)
             ->with(['strumento', 'tecnico'])
@@ -485,14 +503,9 @@ class Scadenzario extends Component
         }
 
         // I contatori portano search/tipo/soloMiei ma **non** la partizione
-        // selezionata: applicandola anche a loro, due tile su tre direbbero zero
-        // appena se ne clicca una, e non si potrebbe più passare dall'una
-        // all'altra leggendo i numeri.
-        $contatori = [
-            'scaduti' => $this->partiziona($this->base(), 'scaduti')->count(),
-            'in_scadenza' => $this->partiziona($this->base(), 'in_scadenza')->count(),
-            'oltre' => $this->partiziona($this->base(), 'oltre')->count(),
-        ];
+        // selezionata (la ragione è nel docblock di
+        // `PartizioniScadenzario::contatori()`), e partono dalla stessa `base()`.
+        $contatori = PartizioniScadenzario::contatori(fn () => $this->base(), fn () => $this->nonIdonee());
 
         return view('livewire.interventi.scadenzario', [
             'interventi' => $interventi,

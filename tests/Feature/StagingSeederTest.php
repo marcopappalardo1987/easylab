@@ -8,6 +8,7 @@ use App\Models\Ricambio;
 use App\Models\SpostamentoStrumento;
 use App\Models\Strumento;
 use App\Models\User;
+use App\Support\Garanzie\GaranzieDalCollaudo;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Database\Seeders\StagingSeeder;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,15 @@ it('fills three EasyLab staging sites and remains idempotent', function () {
     }
 
     expect(DB::table('tecnico_cliente')->whereIn('ente_id', $sedi->pluck('id'))->count())->toBe(3);
+
+    // 🔗 ADR-065: le garanzie della macchina nascono contate dal collaudo, e
+    // il DB dimostrativo ha ancora i tre esiti (finite, in scadenza, attive).
+    $macchina = fn () => Garanzia::withoutGlobalScopes()->where('soggetto', 'macchina');
+
+    expect(GaranzieDalCollaudo::disallineate())->toBeEmpty()
+        ->and($macchina()->where('data_scadenza_effettiva', '<', today()->toDateString())->exists())->toBeTrue()
+        ->and($macchina()->whereBetween('data_scadenza_effettiva', [today()->toDateString(), today()->addDays(30)->toDateString()])->exists())->toBeTrue()
+        ->and($macchina()->where('data_scadenza_effettiva', '>', today()->addDays(60)->toDateString())->exists())->toBeTrue();
 
     $conteggi = [
         Strumento::withoutGlobalScopes()->count(),

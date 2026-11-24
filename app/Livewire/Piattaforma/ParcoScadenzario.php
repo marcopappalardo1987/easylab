@@ -4,6 +4,7 @@ namespace App\Livewire\Piattaforma;
 
 use App\Enums\TipoIntervento;
 use App\Livewire\Piattaforma\Concerns\OffreImpersonazione;
+use App\Support\Interventi\PartizioniScadenzario;
 use App\Support\Piani;
 use App\Support\Piattaforma\Perimetro;
 use App\Support\Piattaforma\Preferiti;
@@ -24,11 +25,11 @@ use Livewire\WithPagination;
  *
  * È la vista che risponde alla domanda per cui il committente ha chiesto questa
  * funzione: «mi occupo della strumentazione di molti Enti e voglio vedere la
- * situazione a colpo d'occhio». Le stesse tre partizioni del scadenzario di un
- * Ente solo (`App\Livewire\Interventi\Scadenzario`) e le stesse regole — scaduto
- * da `Intervento::scopeScadute()`, soglia da `Semaforo` — con due colonne in
- * più che sono la ragione per cui la vista è accettabile: **cliente** e **sede**,
- * su ogni riga.
+ * situazione a colpo d'occhio». Gli stessi quattro riquadri del scadenzario di
+ * un Ente solo (`App\Livewire\Interventi\Scadenzario`) — scaduti, in scadenza,
+ * idonei, non idonei — e la stessa regola, `PartizioniScadenzario`, con due
+ * colonne in più che sono la ragione per cui la vista è accettabile:
+ * **cliente** e **sede**, su ogni riga.
  *
  * 🔴 Tre componenti e non tre schede dentro uno solo: così i tre blocchi si
  * costruiscono su file disgiunti, e nessuno riscrive il lavoro dell'altro. La
@@ -80,13 +81,15 @@ use Livewire\WithPagination;
  *
  * ## Costo
  *
- * Dieci statement **costanti** rispetto al numero di righe: 1 count del
+ * Undici statement **costanti** rispetto al numero di righe: 1 count del
  * paginatore + 1 pagina + 1 macchine + 2 titolari (sedi e clienti) + 2 per i
- * candidati all'impersonazione (pivot e ruoli) + 3 contatori. Si parte da
- * `Intervento` e non da `Strumento`, quindi nessuna sottoquery correlata per
- * riga e nessun ordinamento su colonna derivata.
+ * candidati all'impersonazione (pivot e ruoli) + 4 contatori (erano 3 fino al
+ * 23 Nov 2026, prima di «Non idonei», la cui sottoquery sulle macchine rosse
+ * vive dentro il proprio `count()`). Si parte da `Intervento` e non da
+ * `Strumento`, quindi nessuna sottoquery correlata per riga e nessun
+ * ordinamento su colonna derivata.
  *
- * L'undicesimo — l'elenco dei clienti preferiti — si esegue **solo nel modo in
+ * Il dodicesimo — l'elenco dei clienti preferiti — si esegue **solo nel modo in
  * cui quel blocco è in pagina**: negli altri due sarebbe una lettura scartata a
  * ogni render. Era la stessa disciplina della tendina dei selezionabili che i
  * preferiti hanno sostituito, e vale per la stessa ragione.
@@ -117,7 +120,14 @@ class ParcoScadenzario extends Component
     #[Url]
     public string $search = '';
 
-    /** Partizione selezionata: valori ammessi in `ScadenzarioParco::STATI`. */
+    /**
+     * Partizione selezionata: valori ammessi in `PartizioniScadenzario::STATI`,
+     * più il vecchio `oltre` come sinonimo di `idonei`.
+     *
+     * Un `?stato[]=…` non arriva fin qui: Livewire scarta il valore che non
+     * entra in una `?string` prima di idratarla, e la pagina risponde 200 (lo
+     * prova un test: «shrugs off one it cannot read»).
+     */
     #[Url]
     public ?string $stato = null;
 
@@ -173,6 +183,11 @@ class ParcoScadenzario extends Component
     public function mount(): void
     {
         $this->normalizzaControlli();
+
+        // Un link salvato con `?stato=oltre` apre «Idonei» e l'indirizzo si
+        // riscrive col nome di oggi; un valore che non si capisce si toglie.
+        // Non è una guardia: `render()` normalizza comunque a ogni richiesta.
+        $this->stato = PartizioniScadenzario::normalizza($this->stato);
     }
 
     /**
@@ -338,15 +353,15 @@ class ParcoScadenzario extends Component
     }
 
     /**
-     * Le tre tile in cima indirizzano l'elenco, come nella dashboard.
+     * Le quattro tile in cima indirizzano l'elenco, come nella dashboard.
      *
-     * `null` («Tutti gli aperti») è un valore legittimo; qualunque altra cosa
-     * ricade su `null` invece di produrre un elenco che non corrisponde a
-     * nessuna etichetta.
+     * `null` («Tutti gli aperti») è un valore legittimo; il vecchio `oltre`
+     * diventa `idonei`; qualunque altra cosa ricade su `null` invece di
+     * produrre un elenco che non corrisponde a nessuna etichetta.
      */
     public function filtra(?string $stato): void
     {
-        $this->stato = in_array($stato, ScadenzarioParco::STATI, true) ? $stato : null;
+        $this->stato = PartizioniScadenzario::normalizza($stato);
         $this->resetPage();
     }
 
@@ -384,7 +399,7 @@ class ParcoScadenzario extends Component
     {
         return filled($this->search)
             || $this->tipoValido() !== null
-            || in_array($this->stato, ScadenzarioParco::STATI, true);
+            || PartizioniScadenzario::normalizza($this->stato) !== null;
     }
 
     /**
@@ -445,12 +460,12 @@ class ParcoScadenzario extends Component
         $perimetro = $this->perimetro();
         $direzione = $this->direzione();
         $perPage = in_array($this->perPage, self::PER_PAGE, true) ? $this->perPage : self::PER_PAGE_DEFAULT;
-        $stato = in_array($this->stato, ScadenzarioParco::STATI, true) ? $this->stato : null;
+        $stato = PartizioniScadenzario::normalizza($this->stato);
 
         $base = fn () => ScadenzarioParco::base($perimetro, $this->search, $this->tipoValido());
 
         $pagina = fn () => ScadenzarioParco::ordinata(
-            ScadenzarioParco::partiziona($base(), $stato),
+            ScadenzarioParco::partiziona($base(), $stato, $perimetro),
             $direzione
         )->paginate($perPage)->onEachSide(1);
 
@@ -475,18 +490,15 @@ class ParcoScadenzario extends Component
         ] = ScadenzarioParco::titolari($perimetro, $righe->pluck('tenant_id')->filter()->unique()->values()->all());
 
         // I contatori portano ricerca e tipo ma **non** la partizione
-        // selezionata: applicandola anche a loro, due tile su tre direbbero zero
-        // appena se ne clicca una, e non si potrebbe più passare dall'una
-        // all'altra leggendo i numeri. Passano dalla stessa `base()` delle
-        // righe, quindi non possono divergere da ciò che l'elenco mostra —
+        // selezionata: applicandola anche a loro, tre tile su quattro
+        // direbbero zero appena se ne clicca una, e non si potrebbe più passare
+        // dall'una all'altra leggendo i numeri. Passano dalla stessa `base()`
+        // delle righe, quindi non possono divergere da ciò che l'elenco mostra —
         // compreso il perimetro, che è la superficie che si dimentica: un
         // conteggio fuori dal filtro direbbe il numero di clienti che non sono
-        // in pagina, senza mostrarne una riga.
-        $contatori = [
-            'scaduti' => ScadenzarioParco::partiziona($base(), 'scaduti')->count(),
-            'in_scadenza' => ScadenzarioParco::partiziona($base(), 'in_scadenza')->count(),
-            'oltre' => ScadenzarioParco::partiziona($base(), 'oltre')->count(),
-        ];
+        // in pagina, senza mostrarne una riga. Vale anche per le macchine non
+        // idonee, che arrivano dalla stessa porta (`ScadenzarioParco::nonIdonee()`).
+        $contatori = ScadenzarioParco::contatori($base, $perimetro);
 
         // 🔴 Il titolo dice **su chi** si sta guardando, e la regola è una sola
         // per le tre schede (`TitoloPerimetro`). Fino al 29 Ago 2026 questo H1

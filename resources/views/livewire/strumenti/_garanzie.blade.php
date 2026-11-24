@@ -18,7 +18,13 @@
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div>
             <p class="text-sm font-medium text-ink">Garanzie</p>
-            <p class="text-xs text-ink-3">La scadenza effettiva è ciò che pilota il semaforo.</p>
+            {{-- 🔗 ADR-065: la garanzia della macchina conta dal collaudo, e
+                 l'inizio non è più una colonna: è la stessa data per tutte. --}}
+            @if ($strumento->data_installazione)
+                <p class="text-xs text-ink-3">Contano dal collaudo, il {{ $strumento->data_installazione->format('d/m/Y') }}. La scadenza effettiva è ciò che pilota il semaforo.</p>
+            @else
+                <p class="text-xs text-ink-3">Manca la data di collaudo: la garanzia della macchina conta da lì. La scadenza effettiva è ciò che pilota il semaforo.</p>
+            @endif
         </div>
         @can('garanzie.macchina.manage')
             <x-ui.button variant="secondary" wire:click="openNuovaGaranzia">+ Nuova garanzia</x-ui.button>
@@ -30,7 +36,6 @@
             <thead class="border-b border-border text-xs tracking-wide text-ink-3 uppercase">
                 <tr>
                     <th class="px-4 py-3 font-semibold">Stato</th>
-                    <th class="px-4 py-3 font-semibold">Inizio</th>
                     <th class="px-4 py-3 font-semibold">Durata</th>
                     <th class="px-4 py-3 font-semibold">Scadenza effettiva</th>
                     @can('garanzie.macchina.manage')
@@ -47,8 +52,9 @@
                                 <span aria-hidden="true">{{ $simbolo }}</span> {{ $etichetta }}
                             </x-ui.badge>
                         </td>
-                        <td data-etichetta="Inizio" class="px-4 py-3 tabular-nums text-ink-2">{{ $g->data_inizio->format('d/m/Y') }}</td>
-                        <td data-etichetta="Durata" class="px-4 py-3 text-ink-2">{{ $g->durata_mesi }} mesi</td>
+                        <td data-etichetta="Durata" class="px-4 py-3 text-ink-2">
+                            {{ $g->durata_mesi !== null ? $g->durata_mesi.' mesi' : 'fino al '.$g->data_scadenza_dichiarata->format('d/m/Y') }}
+                        </td>
                         <td data-etichetta="Scadenza effettiva" class="px-4 py-3 font-medium tabular-nums text-ink">
                             {{ $g->data_scadenza_effettiva->format('d/m/Y') }}
                         </td>
@@ -63,7 +69,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5" class="px-4 py-10 text-center text-sm text-ink-3">
+                        <td colspan="4" class="px-4 py-10 text-center text-sm text-ink-3">
                             Nessuna garanzia registrata.
                         </td>
                     </tr>

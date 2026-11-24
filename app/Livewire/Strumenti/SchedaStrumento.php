@@ -3,7 +3,6 @@
 namespace App\Livewire\Strumenti;
 
 use App\Actions\Ricambi\RegistraRicambiIntervento;
-use App\Enums\SoggettoGaranzia;
 use App\Enums\StatoIntervento;
 use App\Enums\StatoSemaforo;
 use App\Enums\TipoIntervento;
@@ -22,6 +21,7 @@ use App\Models\Strumento;
 use App\Models\UnitaOrganizzativa;
 use App\Models\User;
 use App\Rules\NomeRicambio;
+use App\Support\Garanzie\GaranzieDalCollaudo;
 use App\Support\Notifiche\AvvisiIntervento;
 use App\Support\Notifiche\AvvisiStrumento;
 use App\Support\Tenancy\AccessoTecnico;
@@ -115,10 +115,16 @@ class SchedaStrumento extends Component
 
     public ?int $editingGaranziaId = null; // null = nuova
 
-    /** @var array{data_inizio:string,durata_mesi:?int} */
+    /**
+     * Niente inizio dal 23 Nov 2026 (🔗 ADR-065): la garanzia della macchina
+     * conta dal collaudo. Si scrive quanto dura (ADR-019) **oppure** fino a
+     * quando vale (ADR-022), ed è così che si registra un'estensione.
+     *
+     * @var array{durata_mesi:int|string|null,scadenza:string}
+     */
     public array $garanziaForm = [
-        'data_inizio' => '',
         'durata_mesi' => null,
+        'scadenza' => '',
     ];
 
     public ?int $deletingGaranziaId = null; // modale conferma aperta se non null
@@ -159,14 +165,22 @@ class SchedaStrumento extends Component
     {
         $this->authorize('strumenti.update');
         $this->validate(
-            $this->strumentoFormRules(
-                $this->strumento->tenant_id,
-                $this->strumento->fornitore_id, // riammette un fornitore cestinato già associato
-            ),
-            attributes: $this->strumentoFormAttributi(),
+            [
+                ...$this->strumentoFormRules(
+                    $this->strumento->tenant_id,
+                    $this->strumento->fornitore_id, // riammette un fornitore cestinato già associato
+                ),
+                // 🔗 ADR-065: le garanzie della macchina contano dal collaudo.
+                'strumentoForm.data_installazione' => GaranzieDalCollaudo::regolaCollaudo($this->strumento),
+            ],
+            ['strumentoForm.data_installazione.required' => GaranzieDalCollaudo::COLLAUDO_DA_TENERE],
+            $this->strumentoFormAttributi(),
         );
 
-        $this->strumento->update($this->strumentoPayload());
+        // In una transazione: un collaudo cambiato ricalcola le garanzie della
+        // macchina (`Strumento::booted()`), e la macchina non deve restare con
+        // la data nuova e le garanzie vecchie.
+        DB::transaction(fn () => $this->strumento->update($this->strumentoPayload()));
 
         $this->showForm = false;
     }
@@ -702,8 +716,8 @@ class SchedaStrumento extends Component
 
         $this->resetGaranziaForm();
         $this->garanziaForm = [
-            'data_inizio' => $garanzia->data_inizio->toDateString(),
             'durata_mesi' => $garanzia->durata_mesi,
+            'scadenza' => $garanzia->data_scadenza_dichiarata?->toDateString() ?? '',
         ];
         $this->editingGaranziaId = $id;
         $this->showGaranziaForm = true;
@@ -712,23 +726,42 @@ class SchedaStrumento extends Component
     public function saveGaranzia(): void
     {
         $this->authorize('garanzie.macchina.manage');
-        $this->validate($this->garanziaFormRules());
 
-        // `data_scadenza_effettiva` non compare MAI nel payload: la calcola il
-        // model a ogni salvataggio (ed è fuori da $fillable).
-        $payload = [
-            'data_inizio' => $this->garanziaForm['data_inizio'],
-            'durata_mesi' => $this->garanziaForm['durata_mesi'],
-        ];
+        // 🔗 ADR-065: la garanzia della macchina conta dal collaudo, e senza
+        // quella data non ha un inizio. Si dice prima della validazione dei
+        // campi: è il primo motivo, e l'unico che chi scrive deve risolvere
+        // altrove.
+        if ($this->strumento->data_installazione === null) {
+            $this->resetValidation();
+            $this->addError('garanziaForm.collaudo', GaranzieDalCollaudo::SENZA_COLLAUDO);
+
+            return;
+        }
+
+        $this->validate(
+            $this->garanziaFormRules(),
+            [
+                'garanziaForm.durata_mesi.required_without' => 'Scrivi quanti mesi dura dal collaudo, oppure fino a quando vale.',
+                'garanziaForm.durata_mesi.prohibits' => 'Scrivi la durata oppure la scadenza, non tutte e due.',
+                'garanziaForm.scadenza.after' => 'La scadenza deve venire dopo il collaudo, il '.$this->strumento->data_installazione->format('d/m/Y').'.',
+            ],
+            [
+                'garanziaForm.durata_mesi' => 'durata',
+                'garanziaForm.scadenza' => 'scadenza',
+            ],
+        );
+
+        // Mesi o data: le due forme sono alternative, e a scrivere l'inizio,
+        // la scadenza effettiva e soggetto/Ente/strumento è il dominio — mai
+        // il payload (`data_scadenza_*` sono fuori da $fillable).
+        $fine = filled($this->garanziaForm['durata_mesi'])
+            ? (int) $this->garanziaForm['durata_mesi']
+            : Carbon::parse($this->garanziaForm['scadenza'])->startOfDay();
 
         if ($this->editingGaranziaId === null) {
-            // soggetto/tenant/strumento dal contesto, mai dal payload.
-            $this->strumento->garanzie()->create($payload + [
-                'tenant_id' => $this->strumento->tenant_id,
-                'soggetto' => SoggettoGaranzia::Macchina,
-            ]);
+            GaranzieDalCollaudo::registra($this->strumento, $fine);
         } else {
-            $this->strumento->garanzie()->findOrFail($this->editingGaranziaId)->update($payload);
+            GaranzieDalCollaudo::modifica($this->strumento->garanzie()->findOrFail($this->editingGaranziaId), $this->strumento, $fine);
         }
 
         $this->closeGaranziaForm();
@@ -757,23 +790,24 @@ class SchedaStrumento extends Component
     }
 
     /**
-     * Una sola forma di garanzia dopo ADR-019: inizio + durata in mesi.
-     * `data_inizio` nel passato è permessa — registrare una garanzia già finita
-     * è storico legittimo, come per `interventi.data_scadenza`.
+     * Collaudo + durata in mesi (ADR-019), oppure una scadenza dichiarata
+     * (ADR-022): esattamente una delle due, come impone l'XOR del model. Una
+     * garanzia già finita resta storico legittimo, come per
+     * `interventi.data_scadenza`: il solo confine è il collaudo.
      */
     protected function garanziaFormRules(): array
     {
         return [
-            'garanziaForm.data_inizio' => ['required', 'date'],
-            'garanziaForm.durata_mesi' => ['required', 'integer', 'min:1', 'max:600'],
+            'garanziaForm.durata_mesi' => ['nullable', 'required_without:garanziaForm.scadenza', 'prohibits:garanziaForm.scadenza', 'integer', 'min:1', 'max:600'],
+            'garanziaForm.scadenza' => ['nullable', 'date', 'after:'.$this->strumento->data_installazione?->toDateString()],
         ];
     }
 
     protected function resetGaranziaForm(): void
     {
         $this->garanziaForm = [
-            'data_inizio' => today()->toDateString(),
             'durata_mesi' => 24,
+            'scadenza' => '',
         ];
         $this->resetValidation();
     }

@@ -534,11 +534,18 @@ class DemoSeeder extends Seeder
      * insert() a blocchi: gli eventi non scattano, quindi
      * `data_scadenza_effettiva` è precalcolata QUI conforme alla
      * normalizzazione del model — e verificaInvarianti() lo ricontrolla.
+     *
+     * 🔗 ADR-065 (23 Nov 2026): la garanzia della macchina conta dal
+     * collaudo, quindi l'inizio è la `data_installazione` dello strumento e
+     * l'esito voluto si ottiene scegliendo la **durata**. Prima si sceglieva
+     * la scadenza e si retrodatava l'inizio: ogni garanzia del DB
+     * dimostrativo sarebbe uscita fra quelle da riallineare.
      */
     private function creaGaranzie(UnitaOrganizzativa $ente, array $strumentiIds): void
     {
         $righe = [];
         $adesso = now();
+        $collaudi = DB::table('strumenti')->whereIn('id', $strumentiIds)->pluck('data_installazione', 'id');
 
         foreach ($strumentiIds as $strumentoId) {
             // 70% attiva · 15% in scadenza entro la soglia · 15% già finita.
@@ -548,26 +555,8 @@ class DemoSeeder extends Seeder
                 default => 'scaduta',
             };
 
-            $durata = [12, 24, 36, 60][array_rand([12, 24, 36, 60])];
-
-            // Si sceglie prima la scadenza voluta, poi si retrodata l'inizio:
-            // così la normalizzazione (inizio + durata) cade dove serve.
-            $effettiva = match ($esito) {
-                'attiva' => today()->addDays(random_int(31, 1500)),
-                'imminente' => today()->addDays(random_int(0, 30)),
-                default => today()->subDays(random_int(1, 1200)),
-            };
-
-            // ⚠️ La scadenza si RICALCOLA da `data_inizio` con la regola del
-            // model, invece di scrivere il target scelto sopra: `subMonths` non
-            // è l'inverso di `addMonths` quando la data cade in un giorno che
-            // il mese di arrivo non ha (29 febbraio, 31 del mese). Scrivendo il
-            // target si ottenevano righe con `data_inizio + durata ≠
-            // data_scadenza_effettiva` — cioè fuori dalla normalizzazione
-            // ADR-019 — una ogni qualche migliaio, quindi invisibili finché
-            // `verificaInvarianti()` non le ha cercate. Lo spostamento rispetto
-            // al target è di un giorno e non cambia la distribuzione voluta.
-            $inizio = $effettiva->copy()->subMonths($durata);
+            $inizio = Carbon::parse($collaudi[$strumentoId])->startOfDay();
+            $durata = $this->durataPer($esito, $inizio);
 
             $righe[] = [
                 'tenant_id' => $ente->id,
@@ -587,6 +576,39 @@ class DemoSeeder extends Seeder
         }
 
         $this->command?->info('  garanzie: '.count($righe));
+    }
+
+    /**
+     * Quanti mesi dal collaudo danno l'esito voluto (ADR-065).
+     *
+     * ⚠️ La scadenza si calcola in avanti con `addMonths`, la regola del
+     * model, e mai all'indietro: `subMonths` non ne è l'inverso quando il
+     * giorno non esiste nel mese di arrivo (29 febbraio, 31 del mese), ed è
+     * già costato righe fuori normalizzazione, una ogni qualche migliaio, che
+     * solo `verificaInvarianti()` ha trovato. Un esito che il collaudo non
+     * consente — una macchina collaudata il mese scorso non ha una garanzia
+     * già scaduta — ripiega su «attiva».
+     */
+    private function durataPer(string $esito, Carbon $collaudo): int
+    {
+        $oggi = today();
+        $trascorsi = (int) floor($collaudo->diffInMonths($oggi));
+        $fine = fn (int $mesi) => $collaudo->copy()->addMonths($mesi);
+
+        if ($esito === 'scaduta' && $trascorsi >= 2) {
+            return random_int(1, $trascorsi - 1);
+        }
+
+        if ($esito === 'imminente') {
+            foreach ([$trascorsi, $trascorsi + 1] as $mesi) {
+                if ($mesi >= 1 && $fine($mesi)->gte($oggi) && $fine($mesi)->lte($oggi->copy()->addDays(30))) {
+                    return $mesi;
+                }
+            }
+        }
+
+        // Attiva: oltre la soglia dell'arancione, fino a quattro anni più in là.
+        return $trascorsi + random_int(3, 48);
     }
 
     /**
